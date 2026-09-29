@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { convexToJson, jsonToConvex } from "convex/values";
 import { must } from "./smokeRun.mjs";
-import { qualifyVerticalObservation } from "./vertical-eval-observations.mjs";
+import { assessVerticalCase, qualifyVerticalObservation } from "./vertical-eval-observations.mjs";
 import { compileSources, sourceManifest } from "./vertical-eval-sources.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
@@ -71,7 +71,13 @@ export async function collectObservations({
         "VERTICAL_EVAL_CLI_ARGUMENT_LIMIT",
       );
       // Context is fixture INPUT, never expected states or assertions. Actual source bodies stay in Vault.
-      return { pin, provision, text, sourceManifest: sourceManifest(sources) };
+      return {
+        pin,
+        provision,
+        text,
+        expected: fixture.expected ?? {},
+        sourceManifest: sourceManifest(sources),
+      };
     });
   });
   assert(cases.length > 0, "empty run refused");
@@ -88,7 +94,7 @@ export async function collectObservations({
     manifest: cases.map((item) => ({ pin: item.pin, sourceManifest: item.sourceManifest })),
     remoteOutcomeKnown: true,
     observations:
-      /** @type {Array<{caseId:string,caseHash:string,sourceManifest:ReturnType<typeof sourceManifest>,observation:Record<string,unknown>}>} */ ([]),
+      /** @type {Array<{caseId:string,caseHash:string,sourceManifest:ReturnType<typeof sourceManifest>,observation:Record<string,unknown>,assessment:ReturnType<typeof assessVerticalCase>}>} */ ([]),
     cleanup: /** @type {Array<{caseId:string,done:boolean,reason?:string}>} */ ([]),
     outputArchives: /** @type {Array<{caseId:string,outputRef:string,sha256:string}>} */ ([]),
     nativeReceipts: /** @type {Array<{caseId:string,receiptId:string}>} */ ([]),
@@ -181,6 +187,11 @@ export async function collectObservations({
         caseHash: item.pin.caseHash,
         sourceManifest: item.sourceManifest,
         observation: qualified,
+        assessment: assessVerticalCase({
+          expected: item.expected,
+          observation: qualified,
+          provision: item.prepared,
+        }),
       });
       await checkpoint(report);
     }

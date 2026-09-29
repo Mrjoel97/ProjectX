@@ -1,8 +1,9 @@
 ---
 phase: 08-self-improvement
 verified: 2026-07-24T01:40:00Z
-status: passed
-score: 8/8 must-haves verified (all 08-01..08-08 plans)
+status: gaps_found
+score: 7/8 implementation seams evidenced; 08-07 optimizer route fails revalidation
+reverified: 2026-09-29
 human_verification: []
 notes:
   documented_residuals:
@@ -12,6 +13,8 @@ notes:
 ---
 
 # Phase 8: Self-Improvement Verification Report
+
+> **2026-09-29 revalidation supersedes the July full-loop conclusion.** The feedback, export, candidate, eval-gate, rollback and kill-switch seams have focused green tests. Four initial pinned SkillOpt v0.2.0 contract/scoring failures were repaired; seven offline checks now pass against the installed wheel. This proves import, registration, config, split and a narrow candidate-observed structural score—not semantic improvement or a trainer run. The July end-to-end exercise substituted a hand-edited candidate for the optimizer. Thus IMPR-02 and the phase goal are **partial**, and the optimizer must remain disabled. See `08-VALIDATION.md` for the current gap map. The July evidence below remains a historical record, not current approval to run or activate the optimizer.
 
 **Phase Goal:** The system learns from real feedback and improves its own skills (versioned agent
 skill documents, optimized via the SkillOpt held-out-validation loop) under automated evaluation

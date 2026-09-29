@@ -1,5 +1,11 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Last verified: 2026-09-23 — `contacts.isAddressSuppressed` exposes the existing indexed,
+> tenant-scoped suppression lookup to the public web-form adapter. It normalizes the address
+> and returns a boolean without adding a second lead/suppression store or trusting a contact
+> display mirror. The isolated Phase 49 browser matrix exercised the suppressed inbound-form
+> refusal; this creates no automatic follow-up, outbound send, or live provider proof.
+
 > Last verified: 2026-09-12 — Phase 31-04 adds `contacts.recordMarketingLead`, a tenant-authenticated
 > manual-entry adapter over `upsertContactRow`. It accepts email, optional name/company, and optional
 > explicit consent `{ wording, context? }`. Identity uses the existing normalizer/email validator;

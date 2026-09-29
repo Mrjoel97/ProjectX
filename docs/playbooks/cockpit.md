@@ -1,3 +1,140 @@
+> Last verified: 2026-09-28 — the shared public HTTP reader now caps anonymous
+> form bodies at 8,192 actual bytes before parsing or form-state writes. This
+> change does not alter cockpit agent dispatch, approval or provider routes;
+> it only refactors the existing closed commerce preflight reader into a shared
+> bounded helper. Focused public-form and commerce-boundary tests plus backend
+> typecheck pass. It is local ingress evidence, not a live cockpit claim.
+>
+> Last verified: 2026-09-28 — `dispatch.test.ts` now freezes scheduled timeout callbacks
+> per test to keep workflow-backed research ingest from escaping its Vitest file. Its one
+> direct scripted retry/fallback test uses real timers because SDK backoff needs them and
+> does not start ingest. Focused dispatcher 128/128 and full backend 182 files / 4,624
+> tests passed locally. This is a test-harness fix, not a runtime or live-provider claim;
+> other suites still emit scheduler/component warnings.
+>
+> Last verified: 2026-09-28 — the workspace Output card's verified vertical draft control
+> now offers a human edit alongside accept/needs-changes. It loads only the selected owned
+> document text, persists a changed body through a server-side CAS with PDF/workbook
+> replacement where applicable, and records a refs-only user outcome after persistence.
+> Superseded bytes are deleted in that same transaction, so an audit/storage failure
+> rolls back the edit instead of leaving a purported success with an orphaned blob.
+> A generic lost save response is ambiguous: the UI asks the user to reopen the artifact
+> and verify the result, rather than asserting that the original remained unchanged.
+> A disposable authenticated Chromium walkthrough on 2026-09-28 saved a synthetic long-form
+> edit through this card; after reload, the status and inline PDF persisted. Server readback
+> matched the edited text hash, PDF storage presence and one refs-only `review_edited` event.
+> A second disposable Chromium run exercised short-content save (no replacement bytes)
+> and spreadsheet edit: table-free text visibly refused without a stored change or outcome;
+> a valid table saved, survived reload and produced one outcome plus XLSX-MIME ZIP bytes.
+> The original sheet fixture had placeholder storage bytes, so this does not prove an
+> original workbook's parsing or full XLSX semantic equivalence.
+> This is local isolated UAT, not hosted or production acceptance.
+> The control neither sends nor activates a pack. Focused UI/backend tests pass; an
+> authenticated deployed browser walkthrough remains open.
+>
+> Last verified: 2026-09-28 — the Output card now mounts an authenticated vertical-artifact
+> review control only when the server can bind the selected owned document to one ordinary-run
+> native candidate creation event. Accept/needs-changes records a single refs-only user decision;
+> it cannot publish, activate or send. Local component and backend tests pass, but no authenticated
+> browser UAT or semantic quality verdict is inferred.
+>
+> Last verified: 2026-09-27 — the Phase 49 isolated owner-browser qualification now confirms
+> signup JWT persistence and the authenticated backend owner flag before checking the owner-only
+> recipe heading. The targeted integrated browser matrix and isolated audit passed on a fresh
+> disposable stack; the earlier intermittent heading failure is not claimed root-caused. This
+> test-hand-off change does not alter cockpit agent behavior or active skill bodies.
+>
+> Last verified: 2026-09-25 — Plan 20.1-01's two read-only Drive tools retain closed
+> `agentSteps.tool`/workspace VERB parity and `drive=list:`/`drive=find:` SMOKE routes.
+> Refusal copy now distinguishes disconnected, Drive-scope reauth, invalid folder id,
+> refresh failure, and Drive API failure; it never claims a refresh failed when the API did.
+> The structural no-import/no-spend guard turned RED on a temporary import call and returned
+> GREEN after restoration. The active skill body is unchanged; Plan 20.1-02 alone owns
+> teaching, candidate evaluation, activation, and real Drive UAT.
+>
+> Last verified: 2026-09-25 — Phase 17's bounded offline Calendar matrix passed 457/457 in
+> 25.32 seconds; the focused core matrix passed 72/72. The live UAT contract now preserves exact
+> `smoke.calendarLifecycleReadback` rows and distinguishes its audit duplicate signal from separate
+> provider/registry counts. The repo's offline-font Webpack production build passes. The Calendar
+> browser spec provisions a fresh disposable loopback account, finishes local CLI fixtures, then
+> signs in again after session invalidation. Its exact Calendar browser gate passed 1/1 with zero
+> skips and owned stack cleanup. Real-provider and owner UAT evidence remain open.
+>
+> Last verified: 2026-09-24 — Plan 50-05 touches the shared `http.ts` router only for a
+> bounded anonymous commerce cart preflight under `/p/`. It keeps the authenticated
+> cockpit, billing, connector and existing site/landing routes unchanged. Direct HTTP
+> tests prove unsafe-origin and caller-tenancy refusal with no commerce write.
+>
+> 2026-09-20 — BETA-03 first-send cockpit bridge: the fresh-chat surface exposes one ephemeral
+> self-send offer when onboarding is complete. The launcher accepts only an optional existing thread
+> id, derives the recipient from the authenticated projection, and uses the existing approval path;
+> a server-owned marker is checked at proposal and before CAS. `onboarding-first-send.spec.ts` is
+> controlled and opt-in, with no provider, deployment, paid, or Wave 8 claim.
+>
+> Browser-evidence procedure (prepared 2026-09-20) — `cockpit-briefing.spec.ts` has an opt-in
+> `PIKAR_E2E_BROWSER_EVIDENCE_DIR` capture path for its already deterministic, local offline
+> fixture. Only when set, it saves the rendered briefing at 1280×1000 and 390×844 after checking
+> the card, Needs-you section, and no horizontal page overflow. The test still seeds/deletes only
+> its authenticated disposable tenant's fixture inbox and sends `SMOKE::agent::brief=today`; it
+> makes no model or Gmail call. Captures are browser observations, not a founder verdict, deployed
+> proof, mailbox write, or provider evidence.
+>
+> Provisioning diagnostic policy (prepared 2026-09-20) — the local-only E2E owner provisioner
+> bounds each CLI child at 60 seconds and accepts a Windows teardown non-zero exit only after a
+> structured response and the expected durable-id, invite-code, owner-grant, and onboarding-result
+> shapes are verified. Its first and post-signup owner reads use the backend's non-null
+> `findUserIdByEmailForProvisioning` envelope, because the local Convex CLI deliberately suppresses
+> a bare null result; arbitrary empty output is still reduced to a closed transport reason, and
+> malformed JSON or shapes refuse. It never prints child
+> stderr, addresses, passwords, or invite codes into Playwright artifacts. A terminal browser
+> setup failure is not evidence that an invite mutation did or did not land; reconcile state
+> read-only before retrying.
+>
+> Current browser-server qualification (2026-09-20) — the existing Next 16.2.10 `next dev` server
+> on :3111 served the static signup shell but did not attach React state: 20 script responses
+> finished, the password-toggle click dispatched, and the field stayed `type=password`; its only
+> WebSockets were failing HMR sockets. The same synthetic invalid-invite probe against the existing
+> production build via `next start` on :3112 changed the field to `type=text` and reached the honest
+> invalid-invite terminal. Use a verified production build for current browser acceptance until the
+> development-server hydration defect is separately repaired. This is not evidence of a Convex
+> preflight or invite defect, and no provider navigation is implied.
+>
+> Playwright discovery safety (prepared 2026-09-20) — `playwright.config.ts` excludes
+> `**/.auth/**`: storage state and Chrome profiles are runtime artifacts, never source tests. The
+> focused offline discovery regression creates a temporary failing `.auth` spec and proves the
+> direct Node `--list` command ignores it, then removes it. Use direct Node for detached Windows
+> control (`node node_modules/@playwright/test/cli.js test …` from `apps/web`); do not pass a
+> literal `--` through a detached pnpm wrapper, which can turn a narrow spec run into profile
+> discovery. This guard contains malformed invocation discovery only; it does not certify signup
+> preflight, authentication, provider access, or browser acceptance.
+>
+> Last verified: 2026-09-20 — Phase 18's offline document lifecycle now preflights a replacement's
+> server-owned index, tenant ownership, and agent-authored origin before scan, drafting, rendering,
+> or storage. The final mutation repeats those checks for race safety and deletes newly rendered
+> PDF/XLSX bytes on a late refusal, so “nothing was changed” also means no spend or orphaned object.
+> The Output card distinguishes loading, missing artifact,
+> missing download bytes, summary-only partial, and empty-preview states, while retaining the
+> explicit “Saved to your vault. Nothing was sent.” boundary. Focused backend and web regressions
+> are deterministic only; no live model, deployment, founder BRAND verdict, send, or publish is
+> inferred.
+>
+> Last verified: 2026-09-20 — `blueprint-active-spine.spec.ts` now owns the deterministic,
+> authenticated half of the Phase 17.1 founder check. It reads the production no-tool prompt
+> assembler through `llm:__cockpitTurnPrompt`, proves the confirmed Blueprint spine is present,
+> and compares the persisted spine byte-for-byte before and after that read-only turn assembly.
+> The spec makes no provider call and does not infer the founder's qualitative grounding verdict;
+> that exact-candidate judgment remains post-L6 and manual.
+>
+> Last verified: 2026-09-20 — `replyToMessage` now closes the selector-loss failure at both
+> boundaries. Its model schema has a root `anyOf` requiring `sender` or `subject`, and both strings
+> are non-empty. The runtime still fails closed if a malformed direct call crosses that boundary,
+> except when exactly one mailbox message has its full subject, display name, or address visibly
+> present in the trusted raw current user turn. That recovery reads headers only: snippet, message
+> body and conversation history cannot select a target. Zero, multiple, partial, or body-only
+> matches write nothing; an explicit selector always remains authoritative. Focused core and
+> cockpit tests lock the `Account activity` injection case to `no-reply@example.net`, `Re: Account
+> activity`, an inert draft, and zero request/provider writes before Approve.
+>
 > Last verified: 2026-09-14 — research dispatch now carries an explicit deliverable contract:
 > omitted or `memo` preserves the existing markdown result, while `pdf` records a pending
 > `researchDeliverable` on the exact plan. Only after the research result persists does a one-shot,
@@ -2621,10 +2758,14 @@
 > re-consent now. Mutation-proven: gating on `connected` reddens that case.
 >
 > **NO SECOND OAUTH SURFACE WAS ADDED, and a test asserts it** — `microsoftAuth.test.ts` pins
-> `http.route(` at exactly 11 (8 until the 28-09 connector callbacks; the pin is on the TOTAL, so
-> any route appearing or disappearing has to be justified) and at most one Microsoft callback path. 17-06 built the authorize
+> `http.route(` at exactly 14 (8 until the 28-09 connector callbacks, 12 at 31-03 with the
+> approved `/f/` bearer route, 14 after Phase 48's public `GET`/`POST /p/`; the pin is on the TOTAL,
+> so any route appearing or disappearing has to be justified) and at most one Microsoft callback path.
+> 17-06 built the authorize
 > URL, callback, consent page and token row; a plan named "provider lifecycle" is precisely the one
-> that would quietly add a second, so the absence is measured rather than assumed.
+> that would quietly add a second, so the absence is measured rather than assumed. The two `/p/`
+> routes are a published-page read and a CTA/form/cart preflight — no code exchange, no `state`,
+> no token write — so they widen the route count without adding a connection surface.
 >
 > **UNRESOLVED, DELIBERATELY NOT DECIDED HERE:** 17-06 shipped `/connect-microsoft` as its own page
 > beside `/connect-gmail`. Two connection pages is the landed reality. Merging them into one

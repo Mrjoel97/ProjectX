@@ -74,6 +74,16 @@ async function suppressionByAddress(
     .unique();
 }
 
+/** Shared inbound-form guard. The public form adapter uses this indexed lookup rather than
+ * maintaining a second suppression store or trusting the contact display mirror. */
+export async function isAddressSuppressed(
+  ctx: QueryCtx | MutationCtx,
+  tenantId: string,
+  address: string,
+): Promise<boolean> {
+  return (await suppressionByAddress(ctx, tenantId, normalizeAddress(address))) !== null;
+}
+
 /** The comma-joined group recipient string, exploded into normalized members. Empty members are
  *  dropped so a trailing comma cannot produce a `""` lookup that matches nothing meaningful. */
 function recipientMembers(recipient: string): string[] {

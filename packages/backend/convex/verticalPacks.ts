@@ -10,14 +10,146 @@ import {
 import { hasValidPackProvenance } from "@pikar/core/workflowPacks";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalQuery, type QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import { internalMutation, internalQuery, type QueryCtx } from "./_generated/server";
 import { ownerMutation, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { nativePackExposureReady, rollbackVerticalForTenant } from "./skills";
 import { sealedIn } from "./vaultFolders";
-import { verticalEventsFor } from "./verticalPackTelemetry";
+import { verticalArtifactEventsFor, verticalEventsFor } from "./verticalPackTelemetry";
 
 const verticalIdArg = v.union(...VERTICAL_IDS.map((id) => v.literal(id)));
+const RECOMMENDATION_WINDOW_MS = 30 * 60_000;
+
+async function activeEvidenceRefs(row: Doc<"skills">) {
+  try {
+    const provenance = JSON.parse(row.provenance ?? "null") as Record<string, unknown> | null;
+    const evaluation = JSON.parse(row.evidence ?? "null") as Record<string, unknown> | null;
+    const browser = JSON.parse(row.browserEvidence ?? "null") as Record<string, unknown> | null;
+    if (
+      !provenance ||
+      !evaluation ||
+      !browser ||
+      typeof provenance.sourceCommit !== "string" ||
+      !/^[0-9a-f]{40}$/.test(provenance.sourceCommit) ||
+      typeof provenance.bodySha256 !== "string" ||
+      !/^[0-9a-f]{64}$/.test(provenance.bodySha256) ||
+      typeof evaluation.runId !== "string" ||
+      !/^[0-9a-f-]{36}$/.test(evaluation.runId) ||
+      typeof evaluation.issuanceId !== "string" ||
+      !/^[a-zA-Z0-9_-]{1,128}$/.test(evaluation.issuanceId)
+    )
+      return null;
+    return {
+      provenance: {
+        sourceCommit: provenance.sourceCommit,
+        bodySha256: provenance.bodySha256,
+      },
+      eval: { runId: evaluation.runId, issuanceId: evaluation.issuanceId },
+      uat: {
+        evidenceSha256: await contentHash(row.browserEvidence ?? ""),
+        ...(typeof browser.runId === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(browser.runId)
+          ? { runId: browser.runId }
+          : {}),
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+type ReviewDecision = "approve" | "reject" | "edit";
+type ReviewOrigin = {
+  verticalId: VerticalId;
+  candidateId: Id<"skills"> | Id<"tenantSkills">;
+  decision: ReviewDecision | null;
+};
+
+/** Only an exact ordinary-run creation event can authorize a user review metric. */
+async function reviewOriginFor(
+  ctx: QueryCtx,
+  tenantId: string,
+  artifactId: Id<"vaultDocuments">,
+): Promise<{ kind: "missing" | "ambiguous" } | { kind: "found"; value: ReviewOrigin }> {
+  const artifact = await ctx.db.get(artifactId);
+  if (
+    !artifact ||
+    artifact.tenantId !== tenantId ||
+    artifact.status !== "ready" ||
+    artifact.origin !== "agent"
+  )
+    return { kind: "missing" };
+  const history = await verticalArtifactEventsFor(ctx, tenantId, artifactId);
+  if (history.ambiguous) return { kind: "ambiguous" };
+  const origins = history.rows.filter(
+    (row) =>
+      row.payload?.event === "artifact_created" &&
+      row.payload?.artifactId === artifactId &&
+      row.payload?.preview !== true,
+  );
+  if (origins.length === 0) return { kind: "missing" };
+  const first = origins[0]?.payload;
+  if (
+    typeof first?.verticalId !== "string" ||
+    !VERTICAL_IDS.some((id) => id === first.verticalId) ||
+    typeof first.candidateId !== "string"
+  )
+    return { kind: "missing" };
+  const verticalId = first.verticalId as VerticalId;
+  const candidateId =
+    ctx.db.normalizeId("skills", first.candidateId) ??
+    ctx.db.normalizeId("tenantSkills", first.candidateId);
+  if (!candidateId) return { kind: "missing" };
+  if (
+    origins.some(
+      (row) => row.payload?.verticalId !== verticalId || row.payload?.candidateId !== candidateId,
+    )
+  )
+    return { kind: "ambiguous" };
+  const candidate = await ctx.db.get(candidateId);
+  if (
+    !candidate ||
+    candidate.name !== verticalSkillName(verticalId) ||
+    ("tenantId" in candidate && candidate.tenantId !== tenantId)
+  )
+    return { kind: "missing" };
+  const revision = artifact.contentRevision ?? 0;
+  if (!Number.isSafeInteger(revision) || revision < 0) return { kind: "missing" };
+  const reviews = history.rows.filter(
+    (row) =>
+      row.actor === "user" &&
+      (row.payload?.event === "review_approved" ||
+        row.payload?.event === "review_rejected" ||
+        row.payload?.event === "review_edited") &&
+      row.payload?.artifactId === artifactId &&
+      row.payload?.candidateId === candidateId &&
+      row.payload?.verticalId === verticalId &&
+      row.payload?.preview !== true,
+  );
+  if (reviews.length > 1) return { kind: "ambiguous" };
+  if (
+    revision > 0 &&
+    (reviews[0]?.payload?.event !== "review_edited" ||
+      reviews[0]?.payload?.contentRevision !== revision)
+  )
+    return { kind: "missing" };
+  if (revision === 0 && reviews[0]?.payload?.event === "review_edited") return { kind: "missing" };
+  return {
+    kind: "found",
+    value: {
+      verticalId,
+      candidateId,
+      decision:
+        reviews[0]?.payload?.event === "review_approved"
+          ? "approve"
+          : reviews[0]?.payload?.event === "review_rejected"
+            ? "reject"
+            : reviews[0]?.payload?.event === "review_edited"
+              ? "edit"
+              : null,
+    },
+  };
+}
 
 async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
   const profile = await ctx.db
@@ -42,6 +174,7 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
     repeatCounts[id] = new Set([...observed, ...(confirmed?.artifactIds ?? [])]).size;
   }
   const released: VerticalId[] = [];
+  const activeCandidateIds: Partial<Record<VerticalId, Id<"skills">>> = {};
   const states = [];
   for (const id of VERTICAL_IDS) {
     const name = verticalSkillName(id);
@@ -66,15 +199,24 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
       .order("desc")
       .first();
     const candidate = tenantCandidate ?? globalCandidate;
-    const active = overlay ?? global;
-    const ready = active !== null && (await nativePackExposureReady(ctx, active));
-    if (ready) released.push(id);
+    // Ordinary prepare refuses an active tenant overlay until reviewed vertical customization
+    // exists. Discovery must not offer a workflow that the start door will reject.
+    const refs =
+      overlay === null && global !== null && (await nativePackExposureReady(ctx, global))
+        ? await activeEvidenceRefs(global)
+        : null;
+    const ready = global !== null && refs !== null;
+    if (ready && global) {
+      released.push(id);
+      activeCandidateIds[id] = global._id;
+    }
     states.push({
       id,
       disabled: profile?.disabledVerticals?.includes(id) ?? false,
       candidateId: candidate?._id ?? null,
       candidateVersion: candidate?.version ?? null,
-      activeVersion: ready ? (active?.version ?? null) : null,
+      activeVersion: ready && global ? global.version : null,
+      activeEvidenceRefs: refs,
       prerequisite: ready ? null : "native_evidence",
       requiredReview: VERTICAL_PACKS[id].requiredReview,
     });
@@ -83,25 +225,38 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
     profile?.verticalPreferences?.legalPlaybookDocId === undefined
       ? null
       : await ctx.db.get(profile.verticalPreferences.legalPlaybookDocId);
-  const docs = await ctx.db
+  // Confirmation is an exact, bounded source selection (two artifacts for each of six packs).
+  // A five-row catalogue sample must not hide sources the tenant explicitly selected earlier.
+  const confirmedIds = new Set(
+    (profile?.verticalPreferences?.confirmedWorkloads ?? [])
+      .slice(0, VERTICAL_IDS.length)
+      .flatMap((row) => row.artifactIds.slice(0, 2)),
+  );
+  const confirmedDocs = [];
+  for (const id of confirmedIds) {
+    const doc = await ctx.db.get(id);
+    if (doc?.tenantId === tenantId && doc.status === "ready") confirmedDocs.push(doc);
+  }
+  const sampledDocs = await ctx.db
     .query("vaultDocuments")
     .withIndex("by_tenant_status", (q) => q.eq("tenantId", tenantId).eq("status", "ready"))
     .take(5);
+  const docs = [...confirmedDocs, ...sampledDocs.filter((doc) => !confirmedIds.has(doc._id))];
   const sealed = await sealedIn(ctx, docs);
   const readable = docs.filter((doc) => !sealed.has(doc._id));
   const hasSource = readable.some((doc) => Boolean(doc.text?.trim()));
-  const dataSource = readable.find(
-    (doc) =>
-      doc.storageId &&
-      [
-        "text/csv",
-        "application/csv",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      ].includes(doc.mimeType),
+  const stored = [];
+  for (const doc of readable)
+    if (doc.storageId && (await ctx.db.system.get("_storage", doc.storageId)) !== null)
+      stored.push(doc);
+  const dataSource = stored.find((doc) =>
+    [
+      "text/csv",
+      "application/csv",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ].includes(doc.mimeType),
   );
-  const visualSource = readable.find(
-    (doc) => doc.storageId && ["image/png", "image/jpeg"].includes(doc.mimeType),
-  );
+  const visualSource = stored.find((doc) => ["image/png", "image/jpeg"].includes(doc.mimeType));
   const playbookSealed = playbook ? (await sealedIn(ctx, [playbook])).has(playbook._id) : false;
   const evidence = {
     profileConfirmed: profile !== null && profile.tierSource !== "legacy",
@@ -123,6 +278,7 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
   };
   return {
     evidence,
+    activeCandidateIds,
     playbookText: evidence.confirmedLegalPlaybook ? playbook?.text : undefined,
     dataSourceId: dataSource?._id,
     visualSourceId: visualSource?._id,
@@ -137,6 +293,207 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
 export const discover = tenantQuery({
   args: {},
   handler: async (ctx) => (await verticalDiscoveryFor(ctx, ctx.tenantId)).presentation,
+});
+
+/** The Output card receives no candidate id from the browser: origin is derived server-side. */
+export const reviewTarget = tenantQuery({
+  args: { artifactId: v.id("vaultDocuments") },
+  handler: async (ctx, { artifactId }) => {
+    const origin = await reviewOriginFor(ctx, ctx.tenantId, artifactId);
+    return origin.kind === "found"
+      ? { verticalId: origin.value.verticalId, decision: origin.value.decision }
+      : null;
+  },
+});
+
+/** One authenticated decision for one ordinary artifact, not a release or publication verdict. */
+export const recordReview = tenantMutation({
+  args: {
+    artifactId: v.id("vaultDocuments"),
+    decision: v.union(v.literal("approve"), v.literal("reject")),
+  },
+  handler: async (ctx, { artifactId, decision }) => {
+    const artifact = await ctx.db.get(artifactId);
+    if (!artifact || artifact.tenantId !== ctx.tenantId) throw new Error("NOT_FOUND");
+    const origin = await reviewOriginFor(ctx, ctx.tenantId, artifactId);
+    if (origin.kind === "ambiguous") throw new Error("ARTIFACT_ORIGIN_AMBIGUOUS");
+    if (origin.kind !== "found") throw new Error("ARTIFACT_ORIGIN_UNVERIFIED");
+    if (origin.value.decision !== null) {
+      if (origin.value.decision !== decision) throw new Error("REVIEW_ALREADY_RECORDED");
+      return { recorded: false, decision };
+    }
+    await ctx.runMutation(internal.verticalPackTelemetry.record, {
+      tenantId: ctx.tenantId,
+      verticalId: origin.value.verticalId,
+      candidateId: origin.value.candidateId,
+      artifactId,
+      event: decision === "approve" ? "review_approved" : "review_rejected",
+      actor: "user",
+    });
+    return { recorded: true, decision };
+  },
+});
+
+/** The action's read-side pin. Content stays in the authenticated Vault text query, not audit. */
+export const editPreparation = internalQuery({
+  args: { tenantId: v.string(), artifactId: v.id("vaultDocuments") },
+  handler: async (ctx, { tenantId, artifactId }) => {
+    const origin = await reviewOriginFor(ctx, tenantId, artifactId);
+    if (origin.kind !== "found" || origin.value.decision !== null) return null;
+    const artifact = await ctx.db.get(artifactId);
+    if (!artifact || artifact.tenantId !== tenantId || !artifact.text) return null;
+    const form: "short" | "long" | "sheet" =
+      artifact.kind === "created_content"
+        ? "short"
+        : artifact.storedMimeType ===
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ? "sheet"
+          : "long";
+    return { title: artifact.title, text: artifact.text, contentHash: artifact.contentHash, form };
+  },
+});
+
+/** Atomic compare-and-swap of the human-edited body, rendered bytes and refs-only outcome. */
+export const commitEdit = internalMutation({
+  args: {
+    tenantId: v.string(),
+    artifactId: v.id("vaultDocuments"),
+    expectedContentHash: v.string(),
+    markdown: v.string(),
+    contentHash: v.string(),
+    form: v.union(v.literal("short"), v.literal("long"), v.literal("sheet")),
+    storageId: v.optional(v.id("_storage")),
+  },
+  handler: async (ctx, a) => {
+    const origin = await reviewOriginFor(ctx, a.tenantId, a.artifactId);
+    if (origin.kind !== "found" || origin.value.decision !== null)
+      throw new Error("ARTIFACT_ORIGIN_UNVERIFIED");
+    const artifact = await ctx.db.get(a.artifactId);
+    if (
+      !artifact ||
+      artifact.tenantId !== a.tenantId ||
+      artifact.contentHash !== a.expectedContentHash ||
+      (artifact.contentRevision ?? 0) !== 0 ||
+      artifact.text === a.markdown
+    )
+      throw new Error("ARTIFACT_EDIT_STALE_OR_UNCHANGED");
+    const form =
+      artifact.kind === "created_content"
+        ? "short"
+        : artifact.storedMimeType ===
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ? "sheet"
+          : "long";
+    if (form !== a.form || (form === "short") !== (a.storageId === undefined))
+      throw new Error("ARTIFACT_EDIT_FORMAT_MISMATCH");
+    const oldStorageId = artifact.storageId;
+    await ctx.db.patch(a.artifactId, {
+      text: a.markdown,
+      size: new TextEncoder().encode(a.markdown).length,
+      contentHash: a.contentHash,
+      contentRevision: 1,
+      storageId: a.storageId,
+      storedMimeType:
+        form === "short"
+          ? undefined
+          : form === "long"
+            ? "application/pdf"
+            : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    await ctx.runMutation(internal.verticalPackTelemetry.record, {
+      tenantId: a.tenantId,
+      verticalId: origin.value.verticalId,
+      candidateId: origin.value.candidateId,
+      artifactId: a.artifactId,
+      event: "review_edited",
+      actor: "user",
+      contentRevision: 1,
+    });
+    // Convex storage deletion is transactional with this mutation. If cleanup fails, the
+    // text/bytes swap and review event roll back together; the action removes its staged blob.
+    if (
+      oldStorageId &&
+      oldStorageId !== a.storageId &&
+      (await ctx.db.system.get("_storage", oldStorageId)) !== null
+    )
+      await ctx.storage.delete(oldStorageId);
+    return { saved: true };
+  },
+});
+
+/** One card-render impression for the exact current server selection. This is observational
+ * telemetry, never evidence that a body earned release or authority to start. */
+export const recordShown = tenantMutation({
+  args: { verticalIds: v.array(verticalIdArg) },
+  handler: async (ctx, { verticalIds }) => {
+    const { presentation, activeCandidateIds } = await verticalDiscoveryFor(ctx, ctx.tenantId);
+    const current = presentation.recommendations.map((item) => item.id);
+    if (
+      verticalIds.length === 0 ||
+      verticalIds.length > 2 ||
+      JSON.stringify(verticalIds) !== JSON.stringify(current)
+    )
+      throw new Error("RECOMMENDATION_STALE");
+    const history = await verticalEventsFor(ctx, ctx.tenantId);
+    let recorded = 0;
+    for (const verticalId of verticalIds) {
+      const candidateId = activeCandidateIds[verticalId];
+      if (!candidateId) throw new Error("RECOMMENDATION_STALE");
+      if (
+        history.rows.some(
+          (row) =>
+            row.ts >= Date.now() - RECOMMENDATION_WINDOW_MS &&
+            row.payload?.event === "recommendation_shown" &&
+            row.payload?.verticalId === verticalId &&
+            row.payload?.candidateId === candidateId,
+        )
+      )
+        continue;
+      await ctx.runMutation(internal.verticalPackTelemetry.record, {
+        tenantId: ctx.tenantId,
+        candidateId,
+        verticalId,
+        event: "recommendation_shown",
+      });
+      recorded++;
+    }
+    return { recorded };
+  },
+});
+
+/** A user chose Start on a still-available recommendation. Direct cockpit/API starts do not
+ * masquerade as recommendation acceptance; this event never starts a model or workflow. */
+export const recordAccepted = tenantMutation({
+  args: { verticalId: verticalIdArg },
+  handler: async (ctx, { verticalId }) => {
+    const { presentation, activeCandidateIds } = await verticalDiscoveryFor(ctx, ctx.tenantId);
+    if (
+      !presentation.recommendations.some(
+        (item) => item.id === verticalId && item.state === "available",
+      )
+    )
+      throw new Error("RECOMMENDATION_STALE");
+    const candidateId = activeCandidateIds[verticalId];
+    if (!candidateId) throw new Error("RECOMMENDATION_STALE");
+    const history = await verticalEventsFor(ctx, ctx.tenantId);
+    if (
+      !history.rows.some(
+        (row) =>
+          row.ts >= Date.now() - RECOMMENDATION_WINDOW_MS &&
+          row.payload?.event === "recommendation_shown" &&
+          row.payload?.verticalId === verticalId &&
+          row.payload?.candidateId === candidateId,
+      )
+    )
+      throw new Error("RECOMMENDATION_STALE");
+    await ctx.runMutation(internal.verticalPackTelemetry.record, {
+      tenantId: ctx.tenantId,
+      candidateId,
+      verticalId,
+      event: "recommendation_accepted",
+    });
+    return { recorded: true };
+  },
 });
 
 /** Small native pages bound full-document reads; an empty filtered page can still have a cursor. */
@@ -258,9 +615,11 @@ export const configure = tenantMutation({
       if (previous < 0) confirmedWorkloads.push(value);
       else confirmedWorkloads[previous] = value;
     }
+    const legalPlaybookDocId =
+      args.legalPlaybookDocId ?? profile.verticalPreferences?.legalPlaybookDocId;
     await ctx.db.patch(profile._id, {
       verticalPreferences: {
-        ...(args.legalPlaybookDocId ? { legalPlaybookDocId: args.legalPlaybookDocId } : {}),
+        ...(legalPlaybookDocId ? { legalPlaybookDocId } : {}),
         confirmedWorkloads,
         needs: [...new Set(args.needs)],
         reviewReady: [...new Set(args.reviewReady)],

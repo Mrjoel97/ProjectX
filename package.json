@@ -16,6 +16,7 @@
     "test": "turbo run test",
     "gate": "pnpm typecheck --force && pnpm test --force --concurrency=1 && pnpm build --force",
     "gate:lint": "biome ci . --diagnostic-level=error --max-diagnostics=none",
+    "check:free-gates": "node scripts/check-free-gates.mjs",
     "test:e2e": "pnpm --filter @pikar/web test:e2e",
     "eval:golden": "pnpm --filter @pikar/backend eval:golden",
     "eval:vertical": "pnpm --filter @pikar/backend eval:vertical",
@@ -23,7 +24,9 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.3",
+    "convex": "1.42.1",
     "turbo": "2.10.4",
+    "typescript-ast": "npm:typescript@5.9.3",
     "typescript": "^7.0.2"
   },
   "pnpm": {

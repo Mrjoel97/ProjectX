@@ -8,10 +8,13 @@
 // All payloads are synthetic (`{ note: "synthetic" }`) — never raw content.
 import type { WorkflowId } from "@convex-dev/workflow";
 import {
+  type BlueprintDiffRow,
   type BusinessBlueprint,
+  type BusinessProfile,
   type EvidenceVerdict,
   isPackEvalSandboxTenant,
   serializeBlueprint,
+  serializeProfile,
 } from "@pikar/core";
 import { categoryFor } from "@pikar/vault";
 import {
@@ -36,6 +39,9 @@ import { DAILY_BUDGET_CENTS, rateLimiter } from "./guardrails";
 import { workflow } from "./index";
 import { contentHash } from "./lib/hash";
 import { reviewEventValidator } from "./review";
+
+// NOTE: Phase 48's browser fixture helpers live at the end of this file. They are internal-only,
+// local acceptance seams and never render, publish, or send content on behalf of a tenant.
 
 // --- Pattern 1: dead-letter via onComplete ---------------------------------
 
@@ -482,6 +488,211 @@ export const seedGoldenEvalBlueprint = internalMutation({
       blueprintConfirmedAt: now,
     });
     return { docId, sourceDocCount: sourceDocIds.length, needle: GOLDEN_BLUEPRINT_NEEDLE };
+  },
+});
+
+// --- 17.1-11: authenticated Blueprint active-spine browser fixture ----------
+
+const ACTIVE_SPINE_FIXTURE_NAME = "Northwind Pedal Works";
+const ACTIVE_SPINE_TYPED_CUSTOMER = "Independent city bicycle couriers";
+const ACTIVE_SPINE_DERIVED_CUSTOMER = "Regional fleet operators";
+const ACTIVE_SPINE_SOURCE_TITLE = "Active-spine market evidence";
+const ACTIVE_SPINE_PROFILE_TITLE = `${ACTIVE_SPINE_FIXTURE_NAME} — E2E profile`;
+
+/**
+ * Seed the one deterministic profile/live-Blueprint/draft shape used by
+ * `blueprint-active-spine.spec.ts`. This is deliberately an internal smoke writer, not a product
+ * mutation: the browser resolves its authenticated tenant id, then the CLI invokes this function
+ * on the already-running local stack. Re-runs reuse the fixture rows by exact marker rather than
+ * stacking documents.
+ *
+ * `withDraft: false` resets the accepted baseline; `withDraft: true` overlays one contradiction
+ * without changing that live row. No model, embedding, provider, or workflow is entered.
+ */
+export const seedBlueprintActiveSpineFixture = internalMutation({
+  args: { tenantId: v.string(), withDraft: v.boolean() },
+  handler: async (
+    ctx,
+    { tenantId, withDraft },
+  ): Promise<{
+    profileDocId: Id<"vaultDocuments">;
+    sourceDocId: Id<"vaultDocuments">;
+    blueprintDocId: Id<"vaultDocuments">;
+    typedTargetCustomer: string;
+    derivedTargetCustomer: string;
+  }> => {
+    const now = Date.now();
+    const profile: BusinessProfile = {
+      name: ACTIVE_SPINE_FIXTURE_NAME,
+      oneLineDescription: "Repairs and dispatches bicycles for time-sensitive city deliveries.",
+      persona: "startup",
+      stage: "growing",
+      offering: "Same-day bicycle repair and fleet maintenance",
+      targetCustomer: ACTIVE_SPINE_TYPED_CUSTOMER,
+      primaryGoals: ["Cut courier fleet downtime"],
+      knownConstraints: ["One workshop location"],
+    };
+    const profileText = serializeProfile(profile);
+    const profileDocs = await ctx.db
+      .query("vaultDocuments")
+      .withIndex("by_tenant_kind", (q) => q.eq("tenantId", tenantId).eq("kind", "business_profile"))
+      .collect();
+    const existingProfile = profileDocs.find((doc) => doc.title === ACTIVE_SPINE_PROFILE_TITLE);
+    let profileDocId: Id<"vaultDocuments">;
+    if (existingProfile) {
+      await ctx.db.patch(existingProfile._id, {
+        text: profileText,
+        contentHash: await contentHash(profileText),
+        size: new TextEncoder().encode(profileText).length,
+        status: "ready",
+        createdAt: now,
+      });
+      profileDocId = existingProfile._id;
+    } else {
+      profileDocId = await ctx.db.insert("vaultDocuments", {
+        tenantId,
+        title: ACTIVE_SPINE_PROFILE_TITLE,
+        kind: "business_profile",
+        category: categoryFor({ source: "agent" }),
+        source: "agent",
+        mimeType: "text/markdown",
+        size: new TextEncoder().encode(profileText).length,
+        contentHash: await contentHash(profileText),
+        text: profileText,
+        status: "ready",
+        createdAt: now,
+      });
+    }
+
+    const sourceText =
+      "Interview notes propose regional fleet operators as a new audience. This contradicts the founder-authored courier focus and must never be accepted implicitly.";
+    const sourceDocs = await ctx.db
+      .query("vaultDocuments")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .collect();
+    const existingSource = sourceDocs.find((doc) => doc.title === ACTIVE_SPINE_SOURCE_TITLE);
+    let sourceDocId: Id<"vaultDocuments">;
+    if (existingSource) {
+      await ctx.db.patch(existingSource._id, {
+        text: sourceText,
+        contentHash: await contentHash(sourceText),
+        size: new TextEncoder().encode(sourceText).length,
+        status: "ready",
+      });
+      sourceDocId = existingSource._id;
+    } else {
+      sourceDocId = await ctx.db.insert("vaultDocuments", {
+        tenantId,
+        title: ACTIVE_SPINE_SOURCE_TITLE,
+        kind: "document",
+        category: categoryFor({ source: "upload" }),
+        source: "upload",
+        mimeType: "text/plain",
+        size: new TextEncoder().encode(sourceText).length,
+        contentHash: await contentHash(sourceText),
+        text: sourceText,
+        status: "ready",
+        createdAt: now,
+      });
+    }
+
+    const typedTarget = { values: [ACTIVE_SPINE_TYPED_CUSTOMER], origin: "stated" as const };
+    const derivedTarget = {
+      values: [ACTIVE_SPINE_DERIVED_CUSTOMER],
+      origin: "derived" as const,
+      source: ACTIVE_SPINE_SOURCE_TITLE,
+    };
+    const live: BusinessBlueprint = {
+      name: { values: [ACTIVE_SPINE_FIXTURE_NAME], origin: "stated" },
+      oneLineDescription: { values: [profile.oneLineDescription], origin: "stated" },
+      stage: { values: [profile.stage], origin: "stated" },
+      tier: { values: [profile.persona], origin: "stated" },
+      offering: { values: [profile.offering], origin: "stated" },
+      targetCustomer: typedTarget,
+      revenueModel: {
+        values: ["Monthly fleet-care retainers"],
+        origin: "derived",
+        source: ACTIVE_SPINE_SOURCE_TITLE,
+      },
+      bindingConstraint: {
+        values: ["Workshop capacity"],
+        origin: "derived",
+        source: ACTIVE_SPINE_SOURCE_TITLE,
+      },
+      primaryGoals: { values: profile.primaryGoals, origin: "stated" },
+      knownConstraints: { values: profile.knownConstraints, origin: "stated" },
+      entities: null,
+    };
+    const liveText = serializeBlueprint(live);
+    const existingBlueprint = sourceDocs.find(
+      (doc) =>
+        doc.kind === "business_blueprint" &&
+        typeof doc.text === "string" &&
+        doc.text.includes(ACTIVE_SPINE_FIXTURE_NAME),
+    );
+    let blueprintDocId: Id<"vaultDocuments">;
+    if (existingBlueprint) {
+      await ctx.db.patch(existingBlueprint._id, {
+        title: "Business blueprint",
+        text: liveText,
+        contentHash: await contentHash(liveText),
+        size: new TextEncoder().encode(liveText).length,
+        status: "ready",
+      });
+      blueprintDocId = existingBlueprint._id;
+    } else {
+      blueprintDocId = await ctx.db.insert("vaultDocuments", {
+        tenantId,
+        title: "Business blueprint",
+        kind: "business_blueprint",
+        category: categoryFor({ source: "agent" }),
+        source: "agent",
+        mimeType: "text/markdown",
+        size: new TextEncoder().encode(liveText).length,
+        contentHash: await contentHash(liveText),
+        text: liveText,
+        status: "ready",
+        createdAt: now,
+      });
+    }
+
+    const diff: BlueprintDiffRow[] = [
+      {
+        kind: "contradiction",
+        field: "targetCustomer",
+        stated: typedTarget,
+        derived: derivedTarget,
+      },
+    ];
+    const draftJson = JSON.stringify({
+      blueprint: live,
+      diff,
+      sourceDocIds: [profileDocId, sourceDocId],
+    });
+    const tenantProfile = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .unique();
+    const blueprintFields = {
+      tier: "startup" as const,
+      tierSource: "confirmed" as const,
+      derivedAt: now,
+      blueprintSourceDocIds: [profileDocId, sourceDocId],
+      blueprintDocId,
+      blueprintConfirmedAt: now,
+      blueprintDraft: withDraft ? draftJson : undefined,
+      blueprintDraftAt: withDraft ? now : undefined,
+    };
+    if (tenantProfile) await ctx.db.patch(tenantProfile._id, blueprintFields);
+    else await ctx.db.insert("tenantProfiles", { tenantId, ...blueprintFields });
+
+    return {
+      profileDocId,
+      sourceDocId,
+      blueprintDocId,
+      typedTargetCustomer: ACTIVE_SPINE_TYPED_CUSTOMER,
+      derivedTargetCustomer: ACTIVE_SPINE_DERIVED_CUSTOMER,
+    };
   },
 });
 
@@ -2343,5 +2554,247 @@ export const modelsForPlan = internalQuery({
       }
     }
     return { models: [...models].sort(), rowCount, runs: runIds.length };
+  },
+});
+
+// --- Phase 48: disposable local web-runtime acceptance ----------------------
+
+/** Seed only the competing host/slug binding needed to prove fail-closed tenant isolation. */
+export const seedPhase48Collision = internalMutation({
+  args: { tenantId: v.string(), slug: v.string() },
+  handler: async (ctx, { tenantId, slug }) => {
+    const foreignTenantId = `phase48-foreign-${tenantId}`;
+    let publicHost = "pikar-platform";
+    try {
+      publicHost = new URL(process.env.CONVEX_SITE_URL ?? "").hostname.toLowerCase() || publicHost;
+    } catch {}
+    const existing = await ctx.db
+      .query("webProjects")
+      .withIndex("by_tenant_slug", (q) => q.eq("tenantId", foreignTenantId).eq("slug", slug))
+      .first();
+    if (existing) return { projectId: existing._id, foreignTenantId, publicHost };
+    const now = Date.now();
+    const projectId = await ctx.db.insert("webProjects", {
+      tenantId: foreignTenantId,
+      kind: "landing",
+      slug,
+      title: "PHASE48::collision",
+      publicHost,
+      domainMode: "platform_path",
+      hostingDeclaration: { hosting: "pikar_platform_path", source: "tenant_structured_content" },
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { projectId, foreignTenantId, publicHost };
+  },
+});
+
+export const cleanupPhase48Collision = internalMutation({
+  args: { tenantId: v.string(), slug: v.string() },
+  handler: async (ctx, { tenantId, slug }) => {
+    const foreignTenantId = `phase48-foreign-${tenantId}`;
+    const project = await ctx.db
+      .query("webProjects")
+      .withIndex("by_tenant_slug", (q) => q.eq("tenantId", foreignTenantId).eq("slug", slug))
+      .first();
+    if (project?.title === "PHASE48::collision") await ctx.db.delete(project._id);
+    return { ok: true };
+  },
+});
+
+export const seedPhase48Suppression = internalMutation({
+  args: { tenantId: v.string(), email: v.string() },
+  handler: async (ctx, { tenantId, email }) => {
+    const address = email.trim().toLowerCase();
+    const existing = await ctx.db
+      .query("suppressions")
+      .withIndex("by_tenant_address", (q) => q.eq("tenantId", tenantId).eq("address", address))
+      .unique();
+    if (existing) return { ok: true };
+    await ctx.db.insert("suppressions", {
+      tenantId,
+      address,
+      suppressedAt: Date.now(),
+      source: "user-marked",
+    });
+    return { ok: true };
+  },
+});
+
+export const expirePhase48SubmissionWindows = internalMutation({
+  args: { tenantId: v.string(), projectId: v.id("webProjects") },
+  handler: async (ctx, { tenantId, projectId }) => {
+    const rows = await ctx.db
+      .query("webSubmissions")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .collect();
+    let count = 0;
+    for (const row of rows)
+      if (row.projectId === projectId) {
+        await ctx.db.patch(row._id, { expiresAt: 0, abuseWindowExpiresAt: 0 });
+        count += 1;
+      }
+    return { count };
+  },
+});
+
+/** Bounded evidence readback for the exact disposable projects used by the browser matrix. */
+export const inspectPhase48Acceptance = internalQuery({
+  args: { tenantId: v.string(), projectIds: v.array(v.id("webProjects")) },
+  handler: async (ctx, { tenantId, projectIds }) => {
+    const wanted = new Set(projectIds.map(String));
+    const projects = (await Promise.all(projectIds.map((id) => ctx.db.get(id))))
+      .filter((row): row is NonNullable<typeof row> =>
+        Boolean(row && (row.tenantId === tenantId || row.title === "PHASE48::collision")),
+      )
+      .map((row) => ({
+        id: String(row._id),
+        tenantId: row.tenantId,
+        kind: row.kind,
+        slug: row.slug,
+        publicHost: row.publicHost,
+        revision: row.revision,
+        publishedVersion: row.publishedVersion,
+        publishedContentHash: row.publishedContentHash,
+      }));
+    const versions = (
+      await ctx.db
+        .query("webProjectVersions")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+        .collect()
+    )
+      .filter((row) => wanted.has(String(row.projectId)))
+      .map((row) => ({
+        projectId: String(row.projectId),
+        version: row.version,
+        contentHash: row.contentHash,
+        artifacts:
+          row.artifacts?.map((artifact) => ({
+            pageSlug: artifact.pageSlug,
+            byteLength: artifact.byteLength,
+            html: artifact.html,
+          })) ?? [],
+      }));
+    const metrics = (
+      await ctx.db
+        .query("webMetrics")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+        .collect()
+    )
+      .filter((row) => wanted.has(String(row.projectId)))
+      .map((row) => ({
+        projectId: String(row.projectId),
+        version: row.version,
+        kind: row.kind,
+        count: row.count,
+      }));
+    const submissions = (
+      await ctx.db
+        .query("webSubmissions")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+        .collect()
+    )
+      .filter((row) => wanted.has(String(row.projectId)))
+      .map((row) => ({
+        projectId: String(row.projectId),
+        version: row.version,
+        formId: row.formId,
+        outcome: row.outcome,
+        attribution: row.attribution,
+      }));
+    return { projects, versions, metrics, submissions };
+  },
+});
+
+/** Deliberately corrupt only a disposable private Phase 49 storefront pointer. The public
+ * resolver must refuse it even when the stored row looks published. */
+export const seedPhase49MalformedStorefrontPointer = internalMutation({
+  args: { tenantId: v.string(), projectId: v.id("webProjects") },
+  handler: async (ctx, { tenantId, projectId }) => {
+    if (process.env.PIKAR_OFFLINE_FIXTURES !== "1") throw new Error("PHASE49_FIXTURE_DISABLED");
+    const project = await ctx.db.get(projectId);
+    if (
+      !project ||
+      project.tenantId !== tenantId ||
+      project.kind !== "storefront" ||
+      project.title !== "Private catalogue" ||
+      !project.slug.startsWith("phase49-private-") ||
+      project.publishedVersion !== undefined
+    )
+      throw new Error("PHASE49_STOREFRONT_FIXTURE_INVALID");
+    await ctx.db.patch(projectId, {
+      publishedVersion: 999_999,
+      publishedContentHash: "sha256:malformed-phase49-fixture",
+      revision: project.revision + 1,
+    });
+    return { projectId, revision: project.revision + 1 };
+  },
+});
+
+/** Deterministic cleanup for Phase 48's disposable rows. Append-only audit receipts stay intact. */
+export const cleanupPhase48Acceptance = internalMutation({
+  args: {
+    tenantId: v.string(),
+    projectIds: v.array(v.id("webProjects")),
+    contactEmails: v.array(v.string()),
+  },
+  handler: async (ctx, { tenantId, projectIds, contactEmails }) => {
+    let deleted = 0;
+    for (const projectId of projectIds) {
+      const project = await ctx.db.get(projectId);
+      if (!project || (project.tenantId !== tenantId && project.title !== "PHASE48::collision"))
+        continue;
+      const versions = await ctx.db
+        .query("webProjectVersions")
+        .withIndex("by_tenant_project_version", (q) =>
+          q.eq("tenantId", project.tenantId).eq("projectId", projectId),
+        )
+        .collect();
+      for (const row of versions) {
+        await ctx.db.delete(row._id);
+        deleted += 1;
+      }
+      const metrics = await ctx.db
+        .query("webMetrics")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", project.tenantId))
+        .collect();
+      for (const row of metrics)
+        if (row.projectId === projectId) {
+          await ctx.db.delete(row._id);
+          deleted += 1;
+        }
+      const submissions = await ctx.db
+        .query("webSubmissions")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", project.tenantId))
+        .collect();
+      for (const row of submissions)
+        if (row.projectId === projectId) {
+          await ctx.db.delete(row._id);
+          deleted += 1;
+        }
+      await ctx.db.delete(projectId);
+      deleted += 1;
+    }
+    for (const email of contactEmails) {
+      const address = email.trim().toLowerCase();
+      const contact = await ctx.db
+        .query("contacts")
+        .withIndex("by_tenant_email", (q) => q.eq("tenantId", tenantId).eq("email", address))
+        .unique();
+      if (contact?.origin === "inbound") {
+        await ctx.db.delete(contact._id);
+        deleted += 1;
+      }
+      const suppression = await ctx.db
+        .query("suppressions")
+        .withIndex("by_tenant_address", (q) => q.eq("tenantId", tenantId).eq("address", address))
+        .unique();
+      if (suppression?.source === "user-marked") {
+        await ctx.db.delete(suppression._id);
+        deleted += 1;
+      }
+    }
+    return { ok: true, deleted };
   },
 });

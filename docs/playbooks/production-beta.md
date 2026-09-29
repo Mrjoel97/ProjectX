@@ -1,5 +1,35 @@
 # Playbook: Production Beta Readiness (25-10)
 
+Last verified: 2026-09-28 — after `vercel pull`, the opt-in production
+workflow now refuses unless `.vercel/project.json` names the root-linked
+`pikar-ai-convex` project (`prj_WmCtlmOX0ZsIxusuSc6Zwad3otN0`), matches
+the reviewed organization ID (`team_A2KUgi8LeCYzoSNiQNKhy2CQ`), and declares `apps/web` as its root
+directory. The local root link provides the reviewed pin but is not current
+provider proof. The workflow therefore makes a read-only authenticated
+[Vercel project lookup](https://vercel.com/docs/rest-api/projects/find-a-project-by-id-or-name)
+with the protected production token and requires the live `id`, `accountId`,
+`name` and `rootDirectory` to match before any build or production mutation.
+HTTP/network/parse failures also refuse, without printing token or response.
+The separate `apps/web/.vercel/project.json` names a different `web` project
+and is an adverse test. The offline self-test exercises local and provider
+mismatches, failed reads and workflow placement. The provider read is not run
+by CI or by this local edit; live ownership and domains remain unverified
+until the production workflow succeeds. No deployment was attempted.
+
+Last verified: 2026-09-28 — the opt-in `[deploy]` workflow now compares its
+CI-qualified `DEPLOY_SHA` with the live `refs/heads/main` before release work,
+again before any Convex production mutation, and again before Vercel promotion.
+An older CI run that finishes after a newer main push refuses instead of
+promoting stale code. `scripts/check-production-head.mjs --self-test` covers
+matching, stale, missing, malformed and ambiguous refs, plus all three workflow
+placements; the free-gate registry runs it in CI. A failed remote read also
+refuses. These are point-in-time checks, not a lock on main. If main advances
+after the Convex step but before web promotion, the last check stops promotion:
+record that as a partial release, compare the exact backend/web identities and
+use the newest qualified release or a reviewed rollback. Do not infer that
+the previous web and newly deployed backend are an accepted exact pair.
+No production workflow, DNS, OAuth or provider action was run by this change.
+
 Last verified: 2026-09-12 — the free-gate registry also runs the Phase 23 mutation harness's
 lightweight patch-engine/anchor self-check. Its isolated full mutation replay requires explicit
 `--run`; CI does not start that replay, models or operator actions through the free mode.

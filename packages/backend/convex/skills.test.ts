@@ -22,6 +22,12 @@ import {
   USER_AUTHORABLE_SKILLS,
   USER_SKILL_ADAPTATION_MAX_BYTES,
   USER_SKILL_ADAPTATION_SECTION,
+  WEB_RECIPE_BROWSER_EVIDENCE_OUTCOME_REFS,
+  WEB_RECIPE_BROWSER_EVIDENCE_REVISION,
+  WEB_RECIPE_BROWSER_RUNNER,
+  WEB_RECIPE_EVAL_SUITE,
+  WEB_RECIPE_REQUIRED_VIEWPORTS,
+  WEB_RECIPE_SKILL_NAMES,
 } from "@pikar/contracts/skill";
 import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachmentExtractor";
 import { businessProfileSkillBody } from "@pikar/contracts/skills/businessProfile";
@@ -42,9 +48,18 @@ import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { revenueSkillBodies } from "@pikar/contracts/skills/revenueBodies";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
-import { packCustomizationFields, WORKFLOW_PACK_IDS, WORKFLOW_PACK_SKILL_NAMES } from "@pikar/core";
+import {
+  hashWebRecipeDefinition,
+  packCustomizationFields,
+  sha256Bytes,
+  WEB_DESIGN_RENDERER_VERSION,
+  WEB_RECIPE_BUNDLE_HASH,
+  WEB_RECIPE_DEFINITIONS,
+  WORKFLOW_PACK_IDS,
+  WORKFLOW_PACK_SKILL_NAMES,
+} from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 // 21-02: `publishUserCandidate` writes ONE refs-only audit row, and `audit.log` mirrors every
 // insert into the auditCounts aggregate (OPSG-01). Register the component (relative import — the
 // package blocks the deep specifier) so the REAL audit path runs instead of throwing
@@ -52,10 +67,11 @@ import { describe, expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import skillsLock from "../skills-lock.json";
 import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { contentHash } from "./lib/hash";
 import schema from "./schema";
-import { loadEffectiveSkill, loadSkill } from "./skills";
+import { browserTranscriptHash, loadEffectiveSkill, loadSkill } from "./skills";
+import { evaluateWebRecipeCandidate } from "./webRecipeEvals";
 
 // Register every convex module so internal.* function references resolve.
 // `import.meta.glob` is a Vite feature; its type is not in the Convex tsconfig
@@ -65,6 +81,120 @@ const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
 );
 
+function browserEvidenceFor(
+  row: { _id: unknown; name: string; version: number; body: string },
+  runId = "web-recipe-browser-local",
+  extra: Record<string, unknown> = {},
+): string {
+  return JSON.stringify({
+    runner: WEB_RECIPE_BROWSER_RUNNER,
+    runId,
+    pass: true,
+    authenticated: true,
+    skillId: String(row._id),
+    name: row.name,
+    version: row.version,
+    bodyHash: sha256Bytes(new TextEncoder().encode(row.body)),
+    definitionHash: hashWebRecipeDefinition(JSON.parse(row.body)),
+    bundleHash: WEB_RECIPE_BUNDLE_HASH,
+    evidenceRevision: WEB_RECIPE_BROWSER_EVIDENCE_REVISION,
+    viewports: WEB_RECIPE_REQUIRED_VIEWPORTS,
+    casesPassed: 20,
+    casesTotal: 20,
+    actorClass: "owner",
+    route: "/ops",
+    rendered: true,
+    revision: 1,
+    transcriptHash: "a".repeat(64),
+    outcomeRefs: [
+      "selected",
+      "partial",
+      "refusal",
+      "recovery",
+      "edit",
+      "preview",
+      "storefront-private",
+    ],
+    ts: 1,
+    ...extra,
+  });
+}
+
+/** Structural fixture for gate tests; protocol tests below exercise the owner mutations. */
+async function issueTestBrowserEvidence(
+  t: TestConvex<typeof schema>,
+  row: Doc<"skills">,
+  runId = "gate-fixture-run",
+) {
+  const observations = (viewport: "desktop" | "mobile") => [
+    { outcome: "selected" as const },
+    {
+      outcome: "partial" as const,
+      inputHash: `${viewport}-partial`,
+      documentHash: "1".repeat(64),
+      artifactHash: "2".repeat(64),
+      byteLength: 100,
+    },
+    { outcome: "refusal" as const, inputHash: `${viewport}-refusal` },
+    {
+      outcome: "recovery" as const,
+      inputHash: `${viewport}-recovery`,
+      documentHash: "3".repeat(64),
+      artifactHash: "4".repeat(64),
+      byteLength: 100,
+    },
+    {
+      outcome: "edit" as const,
+      inputHash: `${viewport}-edit`,
+      documentHash: "5".repeat(64),
+      artifactHash: "6".repeat(64),
+      byteLength: 100,
+    },
+    {
+      outcome: "preview" as const,
+      inputHash: `${viewport}-edit`,
+      documentHash: "5".repeat(64),
+      artifactHash: "6".repeat(64),
+      byteLength: 100,
+    },
+  ];
+  const transcript: NonNullable<Doc<"skills">["browserQualification"]> = {
+    runId,
+    challengeHash: "challenge",
+    ownerId: "test-owner",
+    route: "/ops",
+    revision: 12,
+    candidateName: row.name,
+    candidateVersion: row.version,
+    bodyHash: sha256Bytes(new TextEncoder().encode(row.body)),
+    definitionHash: hashWebRecipeDefinition(JSON.parse(row.body)),
+    bundleHash: WEB_RECIPE_BUNDLE_HASH,
+    rendererVersion: WEB_DESIGN_RENDERER_VERSION,
+    lanes: [
+      { viewport: "desktop", observations: observations("desktop") },
+      { viewport: "mobile", observations: observations("mobile") },
+    ],
+    updatedAt: 1,
+  };
+  await t.run((ctx) => ctx.db.patch(row._id, { browserQualification: transcript }));
+  const stored = await t.run((ctx) => ctx.db.get(row._id));
+  const storedTranscript = stored?.browserQualification;
+  if (!storedTranscript) throw new Error("fixture transcript missing");
+  const finalizedHash = await browserTranscriptHash(storedTranscript, String(row._id));
+  await t.run((ctx) =>
+    ctx.db.patch(row._id, {
+      browserQualification: { ...storedTranscript, finalizedHash },
+    }),
+  );
+  const evidence = browserEvidenceFor(row, runId, { revision: 12, transcriptHash: finalizedHash });
+  await t.mutation(internal.skills.recordWebRecipeBrowserEvidence, {
+    name: row.name,
+    version: row.version,
+    browserEvidence: evidence,
+  });
+  return evidence;
+}
+
 // A seeded, NON-gated skill for the generic loader/activation cases.
 const SKILL_NAME = "executive-router";
 const CLASSIFIER = "executive-agent.classifier";
@@ -72,6 +202,18 @@ const CLASSIFIER = "executive-agent.classifier";
 // Normalize line endings so a CRLF checkout of the .md never drifts from the
 // LF-authored .ts constant (and vice versa).
 const lf = (s: string) => s.replace(/\r\n/g, "\n");
+
+async function withOfflineQualificationFixtures<T>(run: () => Promise<T>): Promise<T> {
+  vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "1");
+  vi.stubEnv("OPENAI_API_KEY", "");
+  vi.stubEnv("OPENROUTER_API_KEY", "");
+  vi.stubEnv("CONVEX_SITE_URL", "http://localhost:3211");
+  try {
+    return await run();
+  } finally {
+    vi.unstubAllEnvs();
+  }
+}
 
 describe("Phase 28 revenue candidate publication", () => {
   const manifest = skillsLock.revenueCandidates.candidates;
@@ -4463,6 +4605,843 @@ describe("workflow-pack candidate lifecycle", () => {
       expect(isGatedSkill(`pack-${id}`), `pack-${id} is gated`).toBe(false);
       expect(seeds.includes(`pack-${id}`), `pack-${id} is in SEEDS`).toBe(false);
     }
+  });
+});
+
+describe("web-recipe candidate lifecycle", () => {
+  test("qualification fixtures require offline consent and a valid loopback site URL", async () => {
+    const t = convexTest(schema, modules);
+    try {
+      vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "");
+      vi.stubEnv("OPENAI_API_KEY", "");
+      vi.stubEnv("OPENROUTER_API_KEY", "");
+      vi.stubEnv("CONVEX_SITE_URL", "http://localhost:3211");
+      await expect(
+        t.mutation(internal.skills.seedWebRecipeQualificationCandidates, {}),
+      ).rejects.toThrow(/WEB_RECIPE_FIXTURE_DEPLOYMENT_REQUIRED/);
+      vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "1");
+      vi.stubEnv("CONVEX_SITE_URL", "https://example.convex.site");
+      await expect(
+        t.mutation(internal.skills.seedWebRecipeQualificationCandidates, {}),
+      ).rejects.toThrow(/WEB_RECIPE_FIXTURE_DEPLOYMENT_REQUIRED/);
+      delete process.env.CONVEX_SITE_URL;
+      await expect(
+        t.mutation(internal.skills.seedWebRecipeQualificationCandidates, {}),
+      ).rejects.toThrow(/WEB_RECIPE_FIXTURE_DEPLOYMENT_REQUIRED/);
+      vi.stubEnv("CONVEX_SITE_URL", "http://localhost:not-a-port");
+      await expect(
+        t.mutation(internal.skills.seedWebRecipeQualificationCandidates, {}),
+      ).rejects.toThrow(/WEB_RECIPE_FIXTURE_DEPLOYMENT_REQUIRED/);
+      vi.stubEnv("CONVEX_SITE_URL", "http://user@localhost:3211");
+      await expect(
+        t.mutation(internal.skills.seedWebRecipeQualificationCandidates, {}),
+      ).rejects.toThrow(/WEB_RECIPE_FIXTURE_DEPLOYMENT_REQUIRED/);
+      vi.stubEnv("OPENROUTER_API_KEY", "configured");
+      await expect(
+        t.mutation(internal.skills.seedWebRecipeQualificationCandidates, {}),
+      ).rejects.toThrow(/WEB_RECIPE_FIXTURE_DEPLOYMENT_REQUIRED/);
+      await expect(
+        t.mutation(internal.skills.cleanupWebRecipeQualification, {
+          qualificationFixtureRunId: "run",
+          createdIds: [],
+        }),
+      ).rejects.toThrow(/WEB_RECIPE_FIXTURE_DEPLOYMENT_REQUIRED/);
+      vi.stubEnv("OPENROUTER_API_KEY", "");
+      vi.stubEnv("CONVEX_SITE_URL", "http://127.0.0.1:3211");
+      const seeded = await t.mutation(internal.skills.seedWebRecipeQualificationCandidates, {});
+      expect(seeded.createdIds).toHaveLength(3);
+      await expect(
+        t.mutation(internal.skills.cleanupWebRecipeQualification, {
+          qualificationFixtureRunId: seeded.qualificationFixtureRunId,
+          createdIds: seeded.createdIds,
+        }),
+      ).resolves.toEqual({ removed: 3 });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  test("cleanup rejects preexisting and foreign rows without changing their exact state", async () => {
+    const t = convexTest(schema, modules);
+    await withOfflineQualificationFixtures(async () => {
+      await t.mutation(internal.skills.seedWebRecipeCandidates, {});
+      const preexisting = await t.run((ctx) =>
+        ctx.db
+          .query("skills")
+          .withIndex("by_name_version", (q) =>
+            q.eq("name", "web-recipe-business-site").eq("version", 1),
+          )
+          .unique(),
+      );
+      if (!preexisting) throw new Error("preexisting recipe row missing");
+      await t.run((ctx) =>
+        ctx.db.patch(preexisting._id, {
+          status: "active",
+          evidence: "baseline-eval-evidence",
+          browserEvidence: "baseline-browser-evidence",
+          browserQualification: {
+            runId: "baseline-run",
+            challengeHash: "baseline-challenge",
+            ownerId: "baseline-owner",
+            route: "/ops",
+            revision: 9,
+            candidateName: preexisting.name,
+            candidateVersion: preexisting.version,
+            bodyHash: "baseline-body",
+            definitionHash: "baseline-definition",
+            bundleHash: WEB_RECIPE_BUNDLE_HASH,
+            rendererVersion: WEB_DESIGN_RENDERER_VERSION,
+            lanes: [{ viewport: "desktop", observations: [{ outcome: "selected" }] }],
+            updatedAt: 1,
+          },
+        }),
+      );
+      const baseline = await t.run((ctx) => ctx.db.get(preexisting._id));
+      await expect(
+        t.mutation(internal.skills.cleanupWebRecipeQualification, {
+          qualificationFixtureRunId: "wrong-run",
+          createdIds: [],
+        }),
+      ).rejects.toThrow(/WEB_RECIPE_CLEANUP_UNCAPTURED_ROWS/);
+      await expect(
+        t.mutation(internal.skills.cleanupWebRecipeQualification, {
+          qualificationFixtureRunId: "wrong-run",
+          createdIds: [preexisting._id],
+        }),
+      ).rejects.toThrow(/WEB_RECIPE_CLEANUP_ID_INVALID/);
+      expect(await t.run((ctx) => ctx.db.get(preexisting._id))).toEqual(baseline);
+      await expect(
+        t.mutation(internal.skills.seedWebRecipeQualificationCandidates, {}),
+      ).rejects.toThrow(/WEB_RECIPE_FIXTURE_REQUIRES_EMPTY_REGISTRY/);
+      expect(await t.run((ctx) => ctx.db.get(preexisting._id))).toEqual(baseline);
+    });
+  });
+
+  test("fixture markers bind v2 seeding and cleanup to exact server-created ids", async () => {
+    const t = convexTest(schema, modules);
+    await withOfflineQualificationFixtures(async () => {
+      const v1 = await t.mutation(internal.skills.seedWebRecipeQualificationCandidates, {});
+      expect(v1.createdIds).toHaveLength(3);
+      const v1Rows = await t.run(async (ctx) =>
+        Promise.all(v1.createdIds.map((id) => ctx.db.get(id))),
+      );
+      expect(
+        v1Rows.every((row) => row?.qualificationFixtureRunId === v1.qualificationFixtureRunId),
+      ).toBe(true);
+      const beforeDuplicateCleanup = await t.run((ctx) =>
+        Promise.all(v1.createdIds.map((id) => ctx.db.get(id))),
+      );
+      await expect(
+        t.mutation(internal.skills.cleanupWebRecipeQualification, {
+          qualificationFixtureRunId: v1.qualificationFixtureRunId,
+          createdIds: [v1.createdIds[0]!, v1.createdIds[0]!],
+        }),
+      ).rejects.toThrow(/WEB_RECIPE_CLEANUP_DUPLICATE_ID/);
+      await expect(
+        t.mutation(internal.skills.cleanupWebRecipeQualification, {
+          qualificationFixtureRunId: v1.qualificationFixtureRunId,
+          createdIds: Array.from({ length: 7 }, () => v1.createdIds[0]!),
+        }),
+      ).rejects.toThrow(/WEB_RECIPE_CLEANUP_TOO_MANY_IDS/);
+      expect(await t.run((ctx) => Promise.all(v1.createdIds.map((id) => ctx.db.get(id))))).toEqual(
+        beforeDuplicateCleanup,
+      );
+      const ordinaryId = await t.run((ctx) =>
+        ctx.db.insert("skills", {
+          name: "executive-router",
+          version: 99,
+          body: "ordinary skill",
+          status: "candidate",
+          createdAt: 1,
+        }),
+      );
+      const ordinaryBefore = await t.run((ctx) => ctx.db.get(ordinaryId));
+      await expect(
+        t.mutation(internal.skills.cleanupWebRecipeQualification, {
+          qualificationFixtureRunId: v1.qualificationFixtureRunId,
+          createdIds: [...v1.createdIds, ordinaryId],
+        }),
+      ).rejects.toThrow(/WEB_RECIPE_CLEANUP_ID_INVALID/);
+      expect(await t.run((ctx) => ctx.db.get(ordinaryId))).toEqual(ordinaryBefore);
+
+      await expect(
+        t.mutation(internal.skills.seedWebRecipeQualificationCandidates, {
+          qualificationFixtureRunId: "wrong-run",
+        }),
+      ).rejects.toThrow(/WEB_RECIPE_FIXTURE_V1_STATE_INVALID/);
+      await expect(
+        t.mutation(internal.skills.cleanupWebRecipeQualification, {
+          qualificationFixtureRunId: "wrong-run",
+          createdIds: v1.createdIds,
+        }),
+      ).rejects.toThrow(/WEB_RECIPE_CLEANUP_ID_INVALID/);
+
+      for (const row of v1Rows) {
+        if (!row) throw new Error("fixture v1 row missing");
+        await t.run((ctx) =>
+          ctx.db.patch(row._id, {
+            status: "active",
+            evidence: JSON.stringify(evaluateWebRecipeCandidate(row, "fixture-v1", 1)),
+            browserEvidence: browserEvidenceFor(row, "fixture-v1-browser"),
+          }),
+        );
+      }
+      const v2 = await t.mutation(internal.skills.seedWebRecipeQualificationCandidates, {
+        qualificationFixtureRunId: v1.qualificationFixtureRunId,
+      });
+      expect(v2.createdIds).toHaveLength(3);
+      const before = await t.run(async (ctx) => {
+        const rows = [];
+        for (const name of WEB_RECIPE_SKILL_NAMES)
+          rows.push(
+            ...(await ctx.db
+              .query("skills")
+              .withIndex("by_name_status", (q) => q.eq("name", name))
+              .collect()),
+          );
+        return rows;
+      });
+      await expect(
+        t.mutation(internal.skills.cleanupWebRecipeQualification, {
+          qualificationFixtureRunId: v1.qualificationFixtureRunId,
+          createdIds: v1.createdIds,
+        }),
+      ).rejects.toThrow(/WEB_RECIPE_CLEANUP_UNCAPTURED_ROWS/);
+      expect(await t.run((ctx) => Promise.all(before.map((row) => ctx.db.get(row._id))))).toEqual(
+        before,
+      );
+
+      await expect(
+        t.mutation(internal.skills.cleanupWebRecipeQualification, {
+          qualificationFixtureRunId: v1.qualificationFixtureRunId,
+          createdIds: [...v1.createdIds, ...v2.createdIds],
+        }),
+      ).resolves.toEqual({ removed: 6 });
+      const leftovers = await t.run(async (ctx) => {
+        const rows = [];
+        for (const name of WEB_RECIPE_SKILL_NAMES)
+          rows.push(
+            ...(await ctx.db
+              .query("skills")
+              .withIndex("by_name_status", (q) => q.eq("name", name))
+              .collect()),
+          );
+        return rows;
+      });
+      expect(leftovers).toEqual([]);
+    });
+  });
+
+  test("publishes exactly three immutable dormant candidates and never seeds them", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedSkills, {});
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query("skills")
+          .withIndex("by_name_status", (q) => q.eq("name", "web-recipe-business-site"))
+          .collect(),
+      ),
+    ).toEqual([]);
+    const out = await t.mutation(internal.skills.seedWebRecipeCandidates, {});
+    expect(out.map((entry) => entry.name)).toEqual([...WEB_RECIPE_SKILL_NAMES]);
+    expect(out.every((entry) => entry.version === 1 && entry.inserted)).toBe(true);
+    const rows = await t.query(internal.skills.inspectWebRecipeCandidates, {});
+    expect(rows).toHaveLength(3);
+    expect(rows.every((row) => row.present && row.status === "candidate")).toBe(true);
+    expect(rows.every((row) => row.present && row.provenanceValid)).toBe(true);
+    expect(rows.every((row) => row.present && !row.evidenceValid && !row.browserValid)).toBe(true);
+  });
+
+  test("re-seeding is idempotent and activation fails closed per missing plane", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedWebRecipeCandidates, {});
+    const again = await t.mutation(internal.skills.seedWebRecipeCandidates, {});
+    expect(again.every((entry) => !entry.inserted && entry.version === 1)).toBe(true);
+    await expect(
+      t.mutation(internal.skills.activateSkill, {
+        name: "web-recipe-business-site",
+        version: 1,
+      }),
+    ).rejects.toThrow(/WEB_RECIPE_GATE.*(eval|browser)/);
+  });
+
+  test("publisher derives identity from canonical body and rejects noncanonical or mispinned input", async () => {
+    const t = convexTest(schema, modules);
+    const definition = WEB_RECIPE_DEFINITIONS[0]!;
+    const body = JSON.stringify(definition);
+    await expect(
+      t.mutation(internal.skills.publishWebRecipeCandidate, {
+        body: `${body} `,
+        provenance: "{}",
+      }),
+    ).rejects.toThrow(/NON_CANONICAL|PROVENANCE|DEFINITION/);
+    await t.mutation(internal.skills.seedWebRecipeCandidates, {});
+    const row = await t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) => q.eq("name", definition.registryName).eq("version", 1))
+        .unique(),
+    );
+    if (!row) throw new Error("candidate row missing");
+    const duplicate = await t.mutation(internal.skills.publishWebRecipeCandidate, {
+      body: row.body,
+      provenance: row.provenance ?? "",
+      name: definition.registryName,
+      recipeId: definition.id,
+    });
+    expect(duplicate).toEqual({ name: definition.registryName, version: 1, inserted: false });
+    const provenanceWithPayload = {
+      ...JSON.parse(row.provenance ?? "{}"),
+      prompt: "must not be accepted",
+    };
+    await expect(
+      t.mutation(internal.skills.publishWebRecipeCandidate, {
+        body: row.body,
+        provenance: JSON.stringify(provenanceWithPayload),
+      }),
+    ).rejects.toThrow(/PROVENANCE/);
+    await expect(
+      t.mutation(internal.skills.publishWebRecipeCandidate, {
+        body: row.body,
+        provenance: row.provenance?.replace('"version":1', '"version":2') ?? "",
+      }),
+    ).rejects.toThrow(/PROVENANCE_PIN/);
+  });
+
+  test("complete exact evidence activates only through the owner wrapper", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedWebRecipeCandidates, {});
+    const row = await t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) =>
+          q.eq("name", "web-recipe-business-site").eq("version", 1),
+        )
+        .unique(),
+    );
+    if (!row) throw new Error("candidate row missing");
+    const refs = evaluateWebRecipeCandidate(row, "run-exact", 1);
+    await t.mutation(internal.skills.recordWebRecipeEvalEvidence, {
+      name: row.name,
+      version: row.version,
+      evidence: JSON.stringify(refs),
+    });
+    await issueTestBrowserEvidence(t, row, "browser-exact");
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const userId = await t.run((ctx) => ctx.db.insert("users", {}));
+    await expect(
+      t.withIdentity({ subject: `${userId}|session` }).mutation(api.skills.activateCandidate, {
+        name: row.name,
+        version: row.version,
+      }),
+    ).rejects.toThrow(/OWNER_REQUIRED/);
+    await t.withIdentity({ subject: `${ownerId}|session` }).mutation(api.skills.activateCandidate, {
+      name: row.name,
+      version: row.version,
+    });
+    const active = await t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", row.name).eq("status", "active"))
+        .unique(),
+    );
+    expect(active?._id).toBe(row._id);
+  });
+
+  test("owner review is refs-only and exact-id web activation stays behind the same gate", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedWebRecipeCandidates, {});
+    const row = await t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) =>
+          q.eq("name", "web-recipe-business-site").eq("version", 1),
+        )
+        .unique(),
+    );
+    if (!row) throw new Error("candidate row missing");
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const userId = await t.run((ctx) => ctx.db.insert("users", {}));
+    const owner = t.withIdentity({ subject: `${ownerId}|session` });
+    const nonOwner = t.withIdentity({ subject: `${userId}|session` });
+    await expect(nonOwner.query(api.skills.webRecipeCandidatesForReview, {})).rejects.toThrow(
+      /OWNER_REQUIRED/,
+    );
+    const review = await owner.query(api.skills.webRecipeCandidatesForReview, {});
+    expect(review).toHaveLength(3);
+    const business = review.find((entry) => entry.name === row.name);
+    expect(business?.candidate).toMatchObject({
+      id: row._id,
+      version: 1,
+      status: "candidate",
+      provenanceValid: true,
+      evalValid: false,
+      browserValid: false,
+    });
+    expect(business?.candidate).not.toHaveProperty("body");
+    expect(business?.candidate).not.toHaveProperty("evidence");
+    expect(business?.candidate).not.toHaveProperty("provenance");
+    expect(business?.candidate).not.toHaveProperty("browserEvidence");
+    await t.run((ctx) =>
+      ctx.db.patch(row._id, {
+        evidence: JSON.stringify({ runId: "RAW-EVAL-NEEDLE-MUST-NOT-LEAK" }),
+        browserEvidence: JSON.stringify({ runId: "RAW-BROWSER-NEEDLE-MUST-NOT-LEAK" }),
+      }),
+    );
+    const malformed = await owner.query(api.skills.webRecipeCandidatesForReview, {});
+    expect(JSON.stringify(malformed)).not.toContain("RAW-EVAL-NEEDLE-MUST-NOT-LEAK");
+    expect(JSON.stringify(malformed)).not.toContain("RAW-BROWSER-NEEDLE-MUST-NOT-LEAK");
+    expect(malformed.find((entry) => entry.name === row.name)?.candidate).toMatchObject({
+      evalValid: false,
+      browserValid: false,
+      eval: null,
+      browser: null,
+    });
+    await expect(
+      owner.mutation(api.skills.activateWebRecipeCandidate, { candidateId: row._id }),
+    ).rejects.toThrow(/WEB_RECIPE_GATE/);
+  });
+
+  test("exact-id global web rollback restores only a previously-live web recipe row", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedWebRecipeCandidates, {});
+    const v1 = await t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) =>
+          q.eq("name", "web-recipe-business-site").eq("version", 1),
+        )
+        .unique(),
+    );
+    if (!v1) throw new Error("candidate row missing");
+    await t.mutation(internal.skills.recordWebRecipeEvalEvidence, {
+      name: v1.name,
+      version: 1,
+      evidence: JSON.stringify(evaluateWebRecipeCandidate(v1, "rollback-v1", 1)),
+    });
+    await issueTestBrowserEvidence(t, v1, "rollback-browser-v1");
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const owner = t.withIdentity({ subject: `${ownerId}|session` });
+    await owner.mutation(api.skills.activateWebRecipeCandidate, { candidateId: v1._id });
+
+    const provenanceV2 = {
+      ...(JSON.parse(v1.provenance ?? "{}") as Record<string, unknown>),
+      version: 2,
+      skillVersions: { [v1.name]: 2 },
+    };
+    const v2Id = await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: v1.name,
+        version: 2,
+        body: v1.body,
+        status: "candidate",
+        provenance: JSON.stringify(provenanceV2),
+        createdAt: 2,
+      }),
+    );
+    const v2 = await t.run((ctx) => ctx.db.get(v2Id));
+    if (!v2) throw new Error("v2 row missing");
+    await t.mutation(internal.skills.recordWebRecipeEvalEvidence, {
+      name: v2.name,
+      version: 2,
+      evidence: JSON.stringify(evaluateWebRecipeCandidate(v2, "rollback-v2", 2)),
+    });
+    await issueTestBrowserEvidence(t, v2, "rollback-browser-v2");
+    await owner.mutation(api.skills.activateWebRecipeCandidate, { candidateId: v2Id });
+    expect((await t.run((ctx) => ctx.db.get(v1._id)))?.status).toBe("archived");
+    const review = await owner.query(api.skills.webRecipeCandidatesForReview, {});
+    const target = review
+      .find((entry) => entry.name === v1.name)
+      ?.rollbackTargets.find((entry) => entry.id === v1._id);
+    expect(target?.version).toBe(1);
+    await owner.mutation(api.skills.rollbackWebRecipe, { targetId: v1._id });
+    expect((await t.run((ctx) => ctx.db.get(v1._id)))?.status).toBe("active");
+    expect((await t.run((ctx) => ctx.db.get(v2Id)))?.status).toBe("archived");
+
+    const otherId = await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: "cockpit-agent",
+        version: 99,
+        body: "not a web recipe",
+        status: "archived",
+        createdAt: 3,
+      }),
+    );
+    await expect(
+      owner.mutation(api.skills.rollbackWebRecipe, { targetId: otherId }),
+    ).rejects.toThrow(/WEB_RECIPE_ROLLBACK_NOT_ELIGIBLE/);
+  });
+
+  test("browser evidence requires the exact owner run, both viewports, and current revision", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedWebRecipeCandidates, {});
+    const row = await t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) =>
+          q.eq("name", "web-recipe-business-site").eq("version", 1),
+        )
+        .unique(),
+    );
+    const other = await t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) =>
+          q.eq("name", "web-recipe-campaign-landing").eq("version", 1),
+        )
+        .unique(),
+    );
+    if (!row || !other) throw new Error("candidate rows missing");
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const owner = t.withIdentity({ subject: `${ownerId}|session` });
+    await expect(
+      owner.mutation(api.skills.advanceWebRecipeBrowserQualification, {
+        candidateId: row._id,
+        runId: "missing-run",
+        revision: 0,
+        viewport: "desktop",
+      }),
+    ).rejects.toThrow(/RUN_REQUIRED/);
+    const run = await owner.mutation(api.skills.beginWebRecipeBrowserQualification, {
+      candidateId: row._id,
+    });
+    const foreignId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const foreign = t.withIdentity({ subject: `${foreignId}|session` });
+    await expect(
+      foreign.mutation(api.skills.advanceWebRecipeBrowserQualification, {
+        candidateId: row._id,
+        runId: run.runId,
+        revision: 0,
+        viewport: "desktop",
+      }),
+    ).rejects.toThrow(/REVISION_MISMATCH/);
+    await expect(
+      owner.mutation(api.skills.advanceWebRecipeBrowserQualification, {
+        candidateId: other._id,
+        runId: run.runId,
+        revision: 0,
+        viewport: "desktop",
+      }),
+    ).rejects.toThrow(/REVISION_MISMATCH|RUN_REQUIRED/);
+    await expect(
+      owner.mutation(api.skills.advanceWebRecipeBrowserQualification, {
+        candidateId: row._id,
+        runId: run.runId,
+        revision: 999,
+        viewport: "desktop",
+      }),
+    ).rejects.toThrow(/REVISION_MISMATCH/);
+    let revision = (
+      await owner.mutation(api.skills.advanceWebRecipeBrowserQualification, {
+        candidateId: row._id,
+        runId: run.runId,
+        revision: 0,
+        viewport: "desktop",
+      })
+    ).revision;
+    await expect(
+      owner.mutation(api.skills.finalizeWebRecipeBrowserQualification, {
+        candidateId: row._id,
+        runId: run.runId,
+        revision,
+      }),
+    ).rejects.toThrow(/TRANSCRIPT_INCOMPLETE/);
+    await expect(
+      t.mutation(internal.skills.recordWebRecipeBrowserEvidence, {
+        name: row.name,
+        version: row.version,
+        browserEvidence: browserEvidenceFor(row, run.runId),
+      }),
+    ).rejects.toThrow(/TRANSCRIPT/);
+    const preview = async (viewport: "desktop" | "mobile", values: Record<string, unknown>) => {
+      const previewRef = (api as unknown as { webRecipes: Record<string, unknown> }).webRecipes
+        .previewWebRecipeCandidate;
+      const result = await (
+        owner.mutation as unknown as (
+          fn: unknown,
+          args: unknown,
+        ) => Promise<{ revision: number; kind: string }>
+      )(previewRef, {
+        candidateId: row._id,
+        runId: run.runId,
+        revision,
+        viewport,
+        values,
+      });
+      revision = result.revision;
+      return result;
+    };
+    const partial = { brandName: "Phase 49", headline: "Partial" };
+    const recovery = { ...partial, summary: "Recovery text" };
+    const edited = { ...recovery, headline: "Edited text" };
+    expect((await preview("desktop", partial)).kind).toBe("rendered");
+    expect((await preview("desktop", { ...partial, brandName: "<script>no</script>" })).kind).toBe(
+      "refusal",
+    );
+    expect((await preview("desktop", recovery)).kind).toBe("rendered");
+    await expect(preview("desktop", recovery)).rejects.toThrow(/EDIT_UNCHANGED/);
+    expect((await preview("desktop", edited)).kind).toBe("rendered");
+    expect((await preview("desktop", edited)).kind).toBe("rendered");
+    await expect(
+      owner.mutation(api.skills.advanceWebRecipeBrowserQualification, {
+        candidateId: row._id,
+        runId: run.runId,
+        revision: 0,
+        viewport: "mobile",
+      }),
+    ).rejects.toThrow(/REVISION_MISMATCH/);
+    revision = (
+      await owner.mutation(api.skills.advanceWebRecipeBrowserQualification, {
+        candidateId: row._id,
+        runId: run.runId,
+        revision,
+        viewport: "mobile",
+      })
+    ).revision;
+    expect((await preview("mobile", partial)).kind).toBe("rendered");
+    expect((await preview("mobile", { ...partial, brandName: "<script>no</script>" })).kind).toBe(
+      "refusal",
+    );
+    expect((await preview("mobile", recovery)).kind).toBe("rendered");
+    expect((await preview("mobile", edited)).kind).toBe("rendered");
+    expect((await preview("mobile", edited)).kind).toBe("rendered");
+    const frozen = await owner.mutation(api.skills.finalizeWebRecipeBrowserQualification, {
+      candidateId: row._id,
+      runId: run.runId,
+      revision,
+    });
+    expect(frozen.status).toBe("awaiting_runner_review");
+    expect((await t.run((ctx) => ctx.db.get(row._id)))?.browserEvidence).toBeUndefined();
+    await expect(preview("mobile", edited)).rejects.toThrow(/RUN_REQUIRED/);
+    await expect(
+      owner.mutation(api.skills.advanceWebRecipeBrowserQualification, {
+        candidateId: row._id,
+        runId: run.runId,
+        revision,
+        viewport: "desktop",
+      }),
+    ).rejects.toThrow(/REVISION_MISMATCH/);
+    await expect(
+      t.mutation(internal.skills.recordWebRecipeBrowserEvidence, {
+        name: row.name,
+        version: row.version,
+        browserEvidence: browserEvidenceFor(row, run.runId, {
+          revision,
+          transcriptHash: "c".repeat(64),
+        }),
+      }),
+    ).rejects.toThrow(/TRANSCRIPT/);
+    await t.mutation(internal.skills.recordWebRecipeBrowserEvidence, {
+      name: row.name,
+      version: row.version,
+      browserEvidence: browserEvidenceFor(row, run.runId, {
+        revision,
+        transcriptHash: frozen.transcriptHash,
+      }),
+    });
+    const replacement = await owner.mutation(api.skills.beginWebRecipeBrowserQualification, {
+      candidateId: row._id,
+    });
+    expect(replacement.runId).not.toBe(run.runId);
+    expect((await t.run((ctx) => ctx.db.get(row._id)))?.browserEvidence).toBeUndefined();
+    await expect(
+      t.mutation(internal.skills.recordWebRecipeBrowserEvidence, {
+        name: row.name,
+        version: row.version,
+        browserEvidence: browserEvidenceFor(row, run.runId, {
+          revision,
+          transcriptHash: frozen.transcriptHash,
+        }),
+      }),
+    ).rejects.toThrow(/TRANSCRIPT/);
+    await expect(
+      (owner.mutation as unknown as (fn: unknown, args: unknown) => Promise<unknown>)(
+        api.skills.advanceWebRecipeBrowserQualification,
+        {
+          candidateId: row._id,
+          runId: replacement.runId,
+          revision: replacement.revision,
+          viewport: "desktop",
+          outcomeRefs: [...WEB_RECIPE_BROWSER_EVIDENCE_OUTCOME_REFS],
+        },
+      ),
+    ).rejects.toThrow();
+    await t.run((ctx) => ctx.db.patch(row._id, { body: `${row.body} ` }));
+    await expect(
+      owner.mutation(api.skills.advanceWebRecipeBrowserQualification, {
+        candidateId: row._id,
+        runId: replacement.runId,
+        revision: replacement.revision,
+        viewport: "desktop",
+      }),
+    ).rejects.toThrow(/REVISION_MISMATCH/);
+  });
+
+  test("all three families prove v1 to v2 to v1 without changing v2 project bytes", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedWebRecipeCandidates, {});
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const owner = t.withIdentity({ subject: `${ownerId}|session` });
+    const names = [...WEB_RECIPE_SKILL_NAMES];
+    const rowFor = async (name: string, version: number) => {
+      const row = await t.run((ctx) =>
+        ctx.db
+          .query("skills")
+          .withIndex("by_name_version", (q) => q.eq("name", name).eq("version", version))
+          .unique(),
+      );
+      if (!row) throw new Error(`missing ${name} v${version}`);
+      return row;
+    };
+    const qualify = async (version: number, run: string) => {
+      for (const name of names) {
+        const row = await rowFor(name, version);
+        await t.mutation(internal.skills.recordWebRecipeEvalEvidence, {
+          name,
+          version,
+          evidence: JSON.stringify(evaluateWebRecipeCandidate(row, `${run}-eval`, version)),
+        });
+        await issueTestBrowserEvidence(t, row, `${run}-browser`);
+      }
+    };
+    await qualify(1, "all-families-v1");
+    for (const name of names)
+      await owner.mutation(api.skills.activateWebRecipeCandidate, {
+        candidateId: (await rowFor(name, 1))._id,
+      });
+
+    await t.mutation(internal.skills.seedWebRecipeCandidates, {});
+    await qualify(2, "all-families-v2");
+    for (const name of names)
+      await owner.mutation(api.skills.activateWebRecipeCandidate, {
+        candidateId: (await rowFor(name, 2))._id,
+      });
+
+    const webRecipes = (internal as unknown as { webRecipes: Record<string, unknown> }).webRecipes;
+    const projectIds: string[] = [];
+    const beforeRollback = new Map<string, unknown>();
+    for (const [index, name] of names.entries()) {
+      const recipeId = name.replace("web-recipe-", "");
+      const created = await (
+        owner.mutation as unknown as (
+          fn: unknown,
+          args: unknown,
+        ) => Promise<{ projectId: string; version: number }>
+      )(
+        recipeId === "storefront-catalogue"
+          ? webRecipes.qualifyStorefront
+          : webRecipes.createProjectFromRecipe,
+        recipeId === "storefront-catalogue"
+          ? {
+              recipeId,
+              values: {
+                brandName: `Private ${index}`,
+                items: [{ id: "item-1", name: "Item", description: "Description" }],
+              },
+              slug: `phase49-private-${index}`,
+              title: `Private ${index}`,
+              expectedAvailability: "private_qualification",
+            }
+          : {
+              recipeId,
+              values:
+                recipeId === "campaign-landing"
+                  ? {
+                      brandName: `Campaign ${index}`,
+                      headline: "A campaign",
+                      formConsent: "I agree",
+                    }
+                  : { brandName: `Site ${index}`, headline: "A site" },
+              slug: `phase49-v2-${index}`,
+              title: `Phase 49 v2 ${index}`,
+              expectedAvailability: "tenant_discoverable",
+            },
+      );
+      projectIds.push(created.projectId);
+      beforeRollback.set(
+        String(created.projectId),
+        await t.run((ctx) => ctx.db.get(created.projectId as never)),
+      );
+      beforeRollback.set(
+        `${created.projectId}:version`,
+        await t.run((ctx) =>
+          ctx.db
+            .query("webProjectVersions")
+            .withIndex("by_tenant_project_version", (q) =>
+              q
+                .eq("tenantId", String(ownerId))
+                .eq("projectId", created.projectId as never)
+                .eq("version", created.version),
+            )
+            .unique(),
+        ),
+      );
+    }
+
+    const review = await owner.query(api.skills.webRecipeCandidatesForReview, {});
+    for (const name of names) {
+      const v1 = await rowFor(name, 1);
+      const target = review
+        .find((entry) => entry.name === name)
+        ?.rollbackTargets.find((entry) => entry.id === v1._id);
+      expect(target?.version).toBe(1);
+      await owner.mutation(api.skills.rollbackWebRecipe, { targetId: v1._id });
+      expect((await t.run((ctx) => ctx.db.get(v1._id)))?.status).toBe("active");
+      const v2 = await rowFor(name, 2);
+      expect((await t.run((ctx) => ctx.db.get(v2._id)))?.status).toBe("archived");
+    }
+    for (const projectId of projectIds) {
+      expect(await t.run((ctx) => ctx.db.get(projectId as never))).toEqual(
+        beforeRollback.get(projectId),
+      );
+      expect(
+        await t.run((ctx) =>
+          ctx.db
+            .query("webProjectVersions")
+            .withIndex("by_tenant_project_version", (q) =>
+              q.eq("tenantId", String(ownerId)).eq("projectId", projectId as never),
+            )
+            .first(),
+        ),
+      ).toEqual(beforeRollback.get(`${projectId}:version`));
+    }
+    const available = await (
+      owner.query as unknown as (fn: unknown, args: unknown) => Promise<readonly { id: string }[]>
+    )(webRecipes.listAvailable, {});
+    expect(available.map((item) => item.id).sort()).toEqual(["business-site", "campaign-landing"]);
+  });
+
+  test("wrong suite, body and version evidence cannot activate a candidate", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedWebRecipeCandidates, {});
+    const row = await t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) =>
+          q.eq("name", "web-recipe-business-site").eq("version", 1),
+        )
+        .unique(),
+    );
+    if (!row) throw new Error("candidate row missing");
+    const refs = evaluateWebRecipeCandidate(row, "run-stale", 1);
+    await expect(
+      t.mutation(internal.skills.recordWebRecipeEvalEvidence, {
+        name: row.name,
+        version: row.version,
+        evidence: JSON.stringify({
+          ...refs,
+          suite: { ...WEB_RECIPE_EVAL_SUITE, casesHash: "stale" },
+        }),
+      }),
+    ).rejects.toThrow(/EVIDENCE_INVALID/);
+    await expect(
+      t.mutation(internal.skills.recordWebRecipeBrowserEvidence, {
+        name: row.name,
+        version: row.version,
+        browserEvidence: browserEvidenceFor({ ...row, version: 2 }),
+      }),
+    ).rejects.toThrow(/EVIDENCE_INVALID/);
   });
 });
 

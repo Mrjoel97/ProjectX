@@ -1,3 +1,46 @@
+> Last verified: 2026-09-28 — the local golden runner now checks no-payload
+> TCP/443 reachability to its OpenRouter and Tavily endpoints before the free
+> readiness query and budget path. A sandboxed diagnostic had one unresolved
+> embedding reservation, zero observed spend and no case verdict; sandboxed
+> TCP was unavailable while the unsandboxed route was reachable. The closed
+> `local_provider_egress_unavailable` refusal prevents the same local
+> configuration from opening a new budget. This does not settle the historical
+> attempt or establish cloud-backend egress or a paid golden pass.
+
+> Last verified: 2026-09-28 — the golden runner binds its quiet-window settlement read to the
+> opened budget and refuses malformed count/cost snapshots. This is an offline evidence-integrity
+> guard, not a live model verdict; the named non-production target remains unavailable.
+
+> Last verified: 2026-09-27 — the golden evaluator's free named-target preflight now checks
+> that explicit local/cloud URLs and ambient/file declarations agree with the selected
+> `CONVEX_DEPLOYMENT`. The 17 offline preflight controls pass. Its current real invocation
+> still refuses before a budget or model call because no named non-production target is
+> configured. A declaration check does not replace `/instance_name` and source review.
+
+> Last verified: 2026-09-23 — Phase 49's local-only `smoke:seedPhase49MalformedStorefrontPointer`
+> fixture is available only with `PIKAR_OFFLINE_FIXTURES=1`, for an exact disposable private
+> storefront project belonging to the supplied tenant. It deliberately seeds a malformed
+> published pointer so the resolver and anonymous HTTP boundary can prove refusal; it does
+> not publish or enable commerce. Phase 48's internal collision, suppression, submission-window,
+> inspection and cleanup seams remain disposable browser fixtures, not ordinary tenant actions.
+> The fresh isolated desktop/mobile matrix passed with exact fixture cleanup and owned-root
+> removal; no hosted or production acceptance is inferred.
+
+> Last verified: 2026-09-20 — a terminal golden provider failure is never replayed and no longer
+> strands its budget. The low-level reservation settles at its full ceiling with the explicit
+> `conservative_ceiling` basis, the durable Workflow remains `failed`, and the runner closes the
+> settled budget before stopping while retaining the failed tenant for diagnosis. This is
+> conservative accounting, not a passing case or observed provider usage.
+> Its existing terminal error adds only a closed code-owned suffix: bounded SDK HTTP status,
+> `PARSE`, `SCHEMA`, `TIMEOUT`, `ABORT`, or `UNKNOWN`. It never carries provider messages, bodies,
+> headers, URLs, or arbitrary error names; no schema or diagnostic table was added.
+>
+> Last verified: 2026-09-20 — `smoke:seedBlueprintActiveSpineFixture` is the idempotent local-only
+> data seam for the authenticated Phase 17.1 browser contract. It writes one exact typed profile,
+> confirmed Blueprint, cited source, and optional contradiction draft for the signed-in tenant;
+> it enters no model, embedding, provider, or workflow path. The spec uses it only on an
+> already-running local stack and never treats its deterministic assertions as founder acceptance.
+>
 > Last verified: 2026-09-14 — the native vertical evidence path exposes a closed owner review
 > console for one exact run UUID. Sealed receipts bind the output's SHA-256 and UTF-8 byte length;
 > mechanically observable outcome, required-source and forbidden-operation criteria are resolved
@@ -207,6 +250,13 @@ evaluation, semantic acceptance, owner activation or rollback is implied by thes
 > the regex is identical, and `workflowPacks.test.ts` pins it against seven near misses.)
 
 # Playbook: Agent Runtime (the Executive Agent platform)
+
+> Last verified: 2026-09-20 — after evaluator-owned Blueprint/document lifecycle sources
+> changed, the current golden evaluator revision was refreshed to
+> `2026-09-11.budgeted-evaluator.6d27a8201a51e1ed81b18c32c510b18bcc0926d0100a16fdb7bf95ec305f22b6`.
+> The fixture corpus remains 46 executable cases with its existing manifest hash; older
+> evidence is deliberately retired. This identity refresh is free and does not itself run a
+> provider call, issue evidence, or establish a live verdict.
 
 > Last verified: 2026-09-04 (33.2-02 — **`smoke:storyboardFactsForPlan`**: the storyboard bake-off's
 > ONE read. The parser's verdict off the plan row as counts and codes — `two` / `salvaged` / `one` /
@@ -2226,20 +2276,64 @@ alongside the ordinary text prompt, and reuses the same bytes for an explicit fa
 bytes are never inserted into the system prompt or audit metadata. The reader and shared loop
 both enforce a 1 MiB ceiling. Offline provider-wire tests verify the resulting image data URI
 and MIME type; live visual quality and release evidence still require their separate gates.
-## Phase 23 golden-run recovery (2026-09-10)
+## Golden-run durable paid attempts (2026-09-20)
 
-Golden evaluator model-driving CLI calls use `goldenPaidAttempt.mjs` to persist a refs/hash-only
-started receipt before invoking the action once. A missing, malformed or failed response leaves an
-unresolved receipt and stops with exit 2; it cannot trigger the ordinary failed-case retry, passing
-evidence, or successful-run cleanup. A response receipt records only a response hash and known
-returned cost. These local files under `.tmp/golden-paid-attempts` are recovery aids, not a new
-spend ledger or outcome evidence. Read the attempted turn's native state before deciding whether a
-new paid attempt is appropriate; never treat an unresolved receipt as a zero-cost failure.
+Every golden evaluator provider-driving call now enters through `goldenEvalAttempts:start`, keyed
+by the caller-minted `attemptId` and SHA-256 of the exact operation+arguments. The refs/hash-only
+`goldenEvalAttempts` row names one Workflow execution. A repeated start with the same identity
+returns that execution; a changed hash or operation is a conflict. Prompt, fixture, reply and error
+content never enter the table.
+
+The Workflow has exactly one wrapper action step and explicitly sets `{ retry: false }`. That step
+selects one of the closed allowlist (`runCockpitAgent`, revenue candidate evaluation, live vault
+seed, or the identity-less act-on-gap path) and calls it once. The CLI may retry only the free,
+idempotent start/status functions after empty stdout or a classified transport/backend loss. Status
+returns the exact completed Convex JSON value or a code-owned `failed`/`canceled` state; a bounded
+client wait reports `timeout` separately.
+Never restart a failed/canceled/timed-out Workflow and never infer a result from the spend ledger.
+
+Ledger settlement remains a second, accounting-only barrier after Workflow completion. It cannot
+manufacture a missing action result, and `closeEvalBudget` remains the authoritative terminal fence
+against every late provider reservation. A non-completed attempt still stops the run before failed-
+fixture retry, evidence, or cleanup.
 
 The golden runner's $2 post-turn stop remains distinct from a hard aggregate cap: embedding,
 Tavily, and paid child-action reservations are not yet complete. The Phase 23 continuation preflight
 reports this explicitly. See `23-EXECUTION-PREPARATION.md` in the phase directory for the current
 paid-call graph and prerequisites. No new paid evaluation is certified by these offline checks.
+
+## Wave 1A fail-closed current-release run (2026-09-19)
+
+> Last verified: 2026-09-19 — one shared invocation failed closed before spend or writes.
+
+One authorized shared current golden command targeted the synchronized non-production deployment
+`local:local-joel_feruzi-pikar_ai_50c69-1` with exact pins `cockpit-agent@26` and `inbox-digest@2`,
+`--no-retry`, and no `--only` filter. The free self-check passed for all 57 fixtures, then
+`guardrails:openEvalBudget` refused with `GOLDEN_PROVIDER_BILLING_UNVERIFIED` before its first insert,
+fixture seeding, or provider call. Reconciliation: one command invocation; zero paid/full-run
+attempts; zero of 57 cases started; zero retries; USD 0.00; no run id, budget/evidence rows, or fixture
+tenant; cleanup not applicable prewrite. The immutable log is
+`.planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN.log`.
+
+This is a RED/open live gate, not a free pass and not live briefing evidence. The one-command
+authorization is consumed even though spend stayed at zero. Never retry it automatically or reuse
+that authority. Resolve and verify the provider-billing contract without weakening the spend rail,
+then obtain fresh explicit one-run authority before another golden command. Founder/browser
+verification remains gated until certifying current-run evidence exists.
+
+### Fresh configuration attempt (2026-09-19)
+
+A separately authorized local-only attempt configured the two provider keys and three billing
+attestations without printing values, upgraded the required local backend by transferring its
+existing snapshot, and re-proved the exact pins, evaluator revision, 57-fixture self-check, and
+provider DNS/TCP readiness. The one unfiltered `--no-retry` command still failed at
+`openEvalBudget` before spend or writes. Diagnosis after the consumed command found the initial
+PowerShell stdin method had appended carriage returns to every value: names-only checks passed,
+but the server's exact comparison correctly refused. The values were corrected with no-newline
+stdin and the command was not repeated. Result: 0 attempts, 0/57 cases, 0 retries, USD 0.00, and
+zero new audit/plan/spend/vault rows. Future configuration gates must verify exact bytes without
+printing them; names-only validation is necessary but not sufficient.
+
 > Last verified: 2026-09-12 — typed research requests may admit a bounded page-attempt allowance
 > through the authenticated cockpit driver. The server creates one tenant/request control and
 > every `readPage` extraction claims it atomically before provider egress; failed or ambiguous
@@ -2247,3 +2341,24 @@ paid-call graph and prerequisites. No new paid evaluation is certified by these 
 > refs-only tombstone after replay retention. Omitted options retain the legacy six-page
 > compatibility behavior. The control is an attempt ceiling, not semantic evidence or a
 > currency budget; live acceptance remains required.
+## Wave 1A conditional-run reconciliation (2026-09-20)
+
+After a green free preflight, one unfiltered `--no-retry` command opened run `bc1d1a74` and budget
+`ps7f497nf881se330r2jncnzr18epwfx`. The manifest had 57 entries but the executor excluded 11
+revenue-candidate fixtures and announced 46 executable cases. Seven passed; case 8 ended
+`GOLDEN_PAID_CALL_UNRESOLVED`. Later read-only reconciliation found all 93 provider reservations
+settled and the budget closed at USD `0.06745454`, without breach. This does not turn the interrupted
+runner into a completed corpus: no retry, no registry evidence, no cleanup, and no founder
+checkpoint. Always record manifest size and executable scope separately.
+
+## Wave 1A final preflight refusal (2026-09-20)
+
+> Last verified: 2026-09-20 — exact local target identity and offline runner self-check passed;
+> standalone provider-readiness did not.
+
+An already-functions-ready local target may still refuse `eval:golden -- --preflight`. Treat its
+canonical secret-safe `REFUSED`/exit-2 result as terminal for that authorization: it has opened no
+budget, loaded no corpus, called no provider, or created cleanup work. A conditional `--no-retry`
+corpus authority does not become eligible until the same preflight emits `PASSED`; do not diagnose by
+printing deployed configuration, and do not run a second preflight or corpus command under the
+consumed authorization.

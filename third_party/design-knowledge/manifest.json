@@ -1,0 +1,434 @@
+{
+  "schemaVersion": 1,
+  "compilerSchemaVersion": "design-knowledge-v1",
+  "runtimeAuthority": "data-only-offline",
+  "repositories": [
+    {
+      "id": "ui-ux-pro-max",
+      "repo": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+      "commit": "dcc40ff5133ef78276117db0cc34e7b83cc8aeba",
+      "treeSha": "c03629e2ecd9ccab3a39dbceaadf60458e2de5d0",
+      "license": {
+        "id": "MIT",
+        "sourcePath": "LICENSE",
+        "redistributedPath": "third_party/design-knowledge/LICENSES/ui-ux-pro-max.LICENSE",
+        "redistributedSha256": "738f69dfa83db5c347c678fb9d90e560877059f0de93a327c39001bff92dc014"
+      },
+      "files": [
+        {
+          "path": "LICENSE",
+          "snapshotPath": "source-snapshot/ui-ux-pro-max/LICENSE",
+          "bytes": 1075,
+          "sha256": "738f69dfa83db5c347c678fb9d90e560877059f0de93a327c39001bff92dc014",
+          "gitBlobSha": "1e71cbf26660f31903807d099fe902c098fc7e4c",
+          "role": "license",
+          "disposition": "license"
+        },
+        {
+          "path": ".claude/skills/ui-ux-pro-max/data/styles.csv",
+          "snapshotPath": "source-snapshot/ui-ux-pro-max/.claude/skills/ui-ux-pro-max/data/styles.csv",
+          "bytes": 149478,
+          "sha256": "a93a4d9d7025856575d7b7583bda020be9043013432c5af7c58af9dbdfb206b7",
+          "gitBlobSha": "d1eb2c216e453005ffa8232ffb94491c183afe3c",
+          "role": "style-taxonomy",
+          "disposition": "included"
+        },
+        {
+          "path": ".claude/skills/ui-ux-pro-max/data/colors.csv",
+          "snapshotPath": "source-snapshot/ui-ux-pro-max/.claude/skills/ui-ux-pro-max/data/colors.csv",
+          "bytes": 37940,
+          "sha256": "8162429222bce22df62b564085946a30d07cc9722c58d0a3a494bd0d1d00841c",
+          "gitBlobSha": "5d2bf7389105f8a824b504b57cc93c00dc1d7e0a",
+          "role": "palette-taxonomy",
+          "disposition": "included"
+        },
+        {
+          "path": ".claude/skills/ui-ux-pro-max/data/typography.csv",
+          "snapshotPath": "source-snapshot/ui-ux-pro-max/.claude/skills/ui-ux-pro-max/data/typography.csv",
+          "bytes": 49997,
+          "sha256": "321fc446e89024488ebae96dda93efc4d2307bd8bddb240857ad51364f6782c8",
+          "gitBlobSha": "70d107d107de30150863c965767320ec33ef29ad",
+          "role": "typography-taxonomy",
+          "disposition": "included"
+        },
+        {
+          "path": ".claude/skills/ui-ux-pro-max/data/ux-guidelines.csv",
+          "snapshotPath": "source-snapshot/ui-ux-pro-max/.claude/skills/ui-ux-pro-max/data/ux-guidelines.csv",
+          "bytes": 27516,
+          "sha256": "ff81ec613f70ba9fc3fcce52dbe4ae35d44b2079dbe6dc066d2d6e38c28facd5",
+          "gitBlobSha": "4e7d52b296537a03513b18b2c3f2b946cc802051",
+          "role": "form-and-accessibility-rules",
+          "disposition": "included"
+        },
+        {
+          "path": ".claude/skills/ui-ux-pro-max/data/landing.csv",
+          "snapshotPath": "source-snapshot/ui-ux-pro-max/.claude/skills/ui-ux-pro-max/data/landing.csv",
+          "bytes": 25449,
+          "sha256": "9a2edd3bb676c2a58f00ade7a062e285222d4297bfd847c8d5b056f0dbbf52d0",
+          "gitBlobSha": "34858160aa2789c49dca274d48bb116d51dd3f0a",
+          "role": "landing-patterns",
+          "disposition": "included"
+        }
+      ]
+    },
+    {
+      "id": "taste-skill",
+      "repo": "https://github.com/leonxlnx/taste-skill",
+      "commit": "5217fb45be2c0b302f29c9cd31cbd3237501c684",
+      "treeSha": "b2b06b063de0511b27de4d1f497200573d0af336",
+      "license": {
+        "id": "MIT",
+        "sourcePath": "LICENSE",
+        "redistributedPath": "third_party/design-knowledge/LICENSES/taste-skill.LICENSE",
+        "redistributedSha256": "4575a543ab88dad12ccea7d97e563d0bce5b448b06072e65d3264497dad326df"
+      },
+      "files": [
+        {
+          "path": "LICENSE",
+          "snapshotPath": "source-snapshot/taste-skill/LICENSE",
+          "bytes": 1065,
+          "sha256": "4575a543ab88dad12ccea7d97e563d0bce5b448b06072e65d3264497dad326df",
+          "gitBlobSha": "48a2f6640b81ff8eca9ce7f6a96337692713ef5b",
+          "role": "license",
+          "disposition": "license"
+        },
+        {
+          "path": "skills/taste-skill/SKILL.md",
+          "snapshotPath": "source-snapshot/taste-skill/skills/taste-skill/SKILL.md",
+          "bytes": 87253,
+          "sha256": "aa194351b246b8b4799099d4ed7b033d29eab6e6e3d58d8d2172978be7b3ec89",
+          "gitBlobSha": "b72132fcd466da605623ffe96e370b3991fc5285",
+          "role": "brief-dials-preservation-review",
+          "disposition": "included",
+          "excludedSections": [
+            "instructions",
+            "code",
+            "package-operations",
+            "prompting"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "nexscope-ecommerce",
+      "repo": "https://github.com/nexscope-ai/eCommerce-Skills",
+      "commit": "ee0fb29433d02ccc22e3e6cea9ab4586d49fd42e",
+      "treeSha": "e12da108464664ed9b85b177577c7fcfe21a30bb",
+      "license": {
+        "id": "MIT",
+        "sourcePath": "LICENSE",
+        "redistributedPath": "third_party/design-knowledge/LICENSES/ecommerce-skills.LICENSE",
+        "redistributedSha256": "ea4c0fa8d65010101a252d82ac6ac399a5000dcaaa5d6bc116383b6f5488bfbf"
+      },
+      "files": [
+        {
+          "path": "LICENSE",
+          "snapshotPath": "source-snapshot/nexscope-ecommerce/LICENSE",
+          "bytes": 1067,
+          "sha256": "ea4c0fa8d65010101a252d82ac6ac399a5000dcaaa5d6bc116383b6f5488bfbf",
+          "gitBlobSha": "87a40598bec6f6d53d1704216d9e9931af2c98b2",
+          "role": "license",
+          "disposition": "license"
+        },
+        {
+          "path": "ecommerce-landing-page/SKILL.md",
+          "snapshotPath": "source-snapshot/nexscope-ecommerce/ecommerce-landing-page/SKILL.md",
+          "bytes": 2486,
+          "sha256": "b3685198fa75b407bb97467438bf758a50f1d895bdbee0441e1ca4345ab77bf7",
+          "gitBlobSha": "725d21bc1988216800dcc012420970b04ddedab9",
+          "role": "landing-conversion-review",
+          "disposition": "included",
+          "excludedSections": [
+            "install",
+            "network",
+            "platform-authority",
+            "commerce-operations"
+          ]
+        },
+        {
+          "path": "product-description-generator/SKILL.md",
+          "snapshotPath": "source-snapshot/nexscope-ecommerce/product-description-generator/SKILL.md",
+          "bytes": 13629,
+          "sha256": "2c868d8c6d436d2f10c48da44ae92ae76aa1e68cb5dcc0ca4122c9ee4beccc69",
+          "gitBlobSha": "1370d32d6d84dd21ef325d56d73e6399306d937f",
+          "role": "bounded-product-copy-review",
+          "disposition": "included",
+          "excludedSections": [
+            "install",
+            "network",
+            "competitor-fetch",
+            "platform-commerce"
+          ]
+        },
+        {
+          "path": "conversion-rate-optimization/SKILL.md",
+          "snapshotPath": "source-snapshot/nexscope-ecommerce/conversion-rate-optimization/SKILL.md",
+          "bytes": 1135,
+          "sha256": "8c8815336665c4d585b14b1bbbdb72185a108e1b98740074181be419e4ed97c6",
+          "gitBlobSha": "ca193f57f8104c95f6caec152d1d51f4bc372bc3",
+          "role": "conversion-heuristics-review",
+          "disposition": "included",
+          "excludedSections": [
+            "install",
+            "checkout",
+            "payment",
+            "commerce-operations"
+          ]
+        }
+      ]
+    }
+  ],
+  "records": [
+    {
+      "id": "minimal-swiss",
+      "kind": "designProfile",
+      "sourceRefs": [
+        {
+          "repository": "ui-ux-pro-max",
+          "path": ".claude/skills/ui-ux-pro-max/data/styles.csv"
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "repository": "ui-ux-pro-max",
+          "path": ".claude/skills/ui-ux-pro-max/data/styles.csv",
+          "byteStart": 0,
+          "byteEnd": 128,
+          "sha256": "c94c2028f631d479c9fbeebca364ed29a4f79f1990166ecec77274128e6e2a23"
+        }
+      ],
+      "data": {
+        "label": "Minimal Swiss",
+        "style": "spacious-grid",
+        "variance": 5,
+        "motion": 3,
+        "density": 2,
+        "accessibility": "high-contrast-keyboard-focus"
+      }
+    },
+    {
+      "id": "trust-commerce",
+      "kind": "paletteProfile",
+      "sourceRefs": [
+        {
+          "repository": "ui-ux-pro-max",
+          "path": ".claude/skills/ui-ux-pro-max/data/colors.csv"
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "repository": "ui-ux-pro-max",
+          "path": ".claude/skills/ui-ux-pro-max/data/colors.csv",
+          "byteStart": 0,
+          "byteEnd": 128,
+          "sha256": "4d82418ff3b56548eee5e8c11c572d61eecfea0570a28d95f573076c1fdbe6a0"
+        }
+      ],
+      "data": {
+        "label": "Trust Commerce",
+        "productType": "e-commerce",
+        "primaryRole": "calm-success",
+        "accentRole": "clear-action"
+      }
+    },
+    {
+      "id": "modern-professional",
+      "kind": "typographyProfile",
+      "sourceRefs": [
+        {
+          "repository": "ui-ux-pro-max",
+          "path": ".claude/skills/ui-ux-pro-max/data/typography.csv"
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "repository": "ui-ux-pro-max",
+          "path": ".claude/skills/ui-ux-pro-max/data/typography.csv",
+          "byteStart": 0,
+          "byteEnd": 128,
+          "sha256": "72249677920ee425c604393948b6feae6e2916a96f1ebe6152767e6166db8452"
+        }
+      ],
+      "data": {
+        "label": "Modern Professional",
+        "heading": "Poppins",
+        "body": "Open Sans",
+        "mood": "clear-approachable"
+      }
+    },
+    {
+      "id": "hero-features-cta",
+      "kind": "landingPattern",
+      "sourceRefs": [
+        {
+          "repository": "ui-ux-pro-max",
+          "path": ".claude/skills/ui-ux-pro-max/data/landing.csv"
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "repository": "ui-ux-pro-max",
+          "path": ".claude/skills/ui-ux-pro-max/data/landing.csv",
+          "byteStart": 0,
+          "byteEnd": 128,
+          "sha256": "d6bc768a10bff583c67af83c773fff546b0cdcdd23ea037d88dd6d8735be21c3"
+        }
+      ],
+      "data": {
+        "label": "Hero Features CTA",
+        "sections": [
+          "hero",
+          "value",
+          "features",
+          "action",
+          "footer"
+        ],
+        "cta": "hero-and-lower-page",
+        "accessibility": "focus-visible-reduced-motion"
+      }
+    },
+    {
+      "id": "forms-first",
+      "kind": "formRule",
+      "sourceRefs": [
+        {
+          "repository": "ui-ux-pro-max",
+          "path": ".claude/skills/ui-ux-pro-max/data/ux-guidelines.csv"
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "repository": "ui-ux-pro-max",
+          "path": ".claude/skills/ui-ux-pro-max/data/ux-guidelines.csv",
+          "byteStart": 0,
+          "byteEnd": 128,
+          "sha256": "cf710b69f4a706a14717178dd1b2a657bed7cb6413b9bdc4a1b155b909640a55"
+        }
+      ],
+      "data": {
+        "label": "Forms First",
+        "requirement": "visible-labels-keyboard-focus-associated-errors"
+      }
+    },
+    {
+      "id": "taste-baseline",
+      "kind": "tasteDial",
+      "sourceRefs": [
+        {
+          "repository": "taste-skill",
+          "path": "skills/taste-skill/SKILL.md"
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "repository": "taste-skill",
+          "path": "skills/taste-skill/SKILL.md",
+          "byteStart": 0,
+          "byteEnd": 128,
+          "sha256": "ab5f2dce9ee7437b19c4e338a5cc112fe805462993b93de81f93201345e050de"
+        }
+      ],
+      "data": {
+        "label": "Taste Baseline",
+        "variance": 8,
+        "motion": 6,
+        "density": 4,
+        "preservation": "brief-first-and-preserve-existing-brand-assets"
+      }
+    },
+    {
+      "id": "landing-proof",
+      "kind": "catalogueCopy",
+      "sourceRefs": [
+        {
+          "repository": "nexscope-ecommerce",
+          "path": "ecommerce-landing-page/SKILL.md"
+        },
+        {
+          "repository": "nexscope-ecommerce",
+          "path": "conversion-rate-optimization/SKILL.md"
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "repository": "nexscope-ecommerce",
+          "path": "ecommerce-landing-page/SKILL.md",
+          "byteStart": 0,
+          "byteEnd": 128,
+          "sha256": "9cd1dfbae1b99433c6998bfebed314b795db0cb6141451cf44c1159aea16371f"
+        },
+        {
+          "repository": "nexscope-ecommerce",
+          "path": "conversion-rate-optimization/SKILL.md",
+          "byteStart": 0,
+          "byteEnd": 128,
+          "sha256": "31f574a5aa5aaa00607d74eb2d437c7eb6a946fb85bff02d7fb5a27e3a27c3e0"
+        }
+      ],
+      "data": {
+        "label": "Landing Proof",
+        "fields": [
+          "headline",
+          "summary",
+          "benefit",
+          "publisher-proof",
+          "clear-action"
+        ],
+        "proofRequired": true
+      }
+    },
+    {
+      "id": "product-copy",
+      "kind": "catalogueCopy",
+      "sourceRefs": [
+        {
+          "repository": "nexscope-ecommerce",
+          "path": "product-description-generator/SKILL.md"
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "repository": "nexscope-ecommerce",
+          "path": "product-description-generator/SKILL.md",
+          "byteStart": 0,
+          "byteEnd": 128,
+          "sha256": "be2f8c9d257be06b4456e2093a31a2ee2db2a5b6b0ad11a8aac43276b9ec1d86"
+        }
+      ],
+      "data": {
+        "label": "Product Copy",
+        "fields": [
+          "name",
+          "description",
+          "features",
+          "audience",
+          "tone"
+        ],
+        "proofRequired": true
+      }
+    }
+  ],
+  "exclusions": [
+    {
+      "source": "all",
+      "excluded": [
+        "raw prose",
+        "scripts",
+        "package installers",
+        "network fetches",
+        "prompt overrides",
+        "tool grants",
+        "secrets",
+        "HTML",
+        "CSS",
+        "JavaScript",
+        "commerce operations"
+      ],
+      "disposition": "never compiled or executed"
+    }
+  ],
+  "updatePolicy": "Manual review only: change commit/tree/file hashes and records together; rerun the offline verifier and compiler. No updater or runtime network authority exists.",
+  "compilerSha256": "aeb133e61bff104d3635ee80c4c925bff5ba6f0c1eab4bf19b4344068dc4436e",
+  "compiledBundleHash": "d818e4d9ab6fcf85b3725d578edf2fbace642dc0472e1d94922c030f7df016a8",
+  "compiledInputHash": "cc6ba41543fec188a611c9c66c76cad1e97b46ad132374c68b33c0a43b15bec8"
+}

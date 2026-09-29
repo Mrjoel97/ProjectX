@@ -343,6 +343,62 @@ export const saveInstruction = internalMutation({
 // FOLDER ingest on the $25 window).
 const vRail = v.optional(v.literal("ingest"));
 
+type GoldenProviderReadiness = {
+  openrouterKey: "ready" | "missing" | "invalid_format";
+  tavilyKey: "ready" | "missing" | "invalid_format";
+  openrouterBilling: "standard" | "invalid";
+  tavilyBilling: "free" | "invalid";
+  tavilyCreditUsd: "canonical_zero" | "invalid";
+  ready: boolean;
+};
+
+/**
+ * Secret-safe readiness classification for the one-run golden evaluator.
+ *
+ * Never add a value, length, prefix, suffix, or hash to this result. Even a hash or length would
+ * turn a read-only deployment check into a credential fingerprinting endpoint. Keys are accepted
+ * only when nonblank and byte-clean for shell/env transport: whitespace (including CR/LF and
+ * trailing spaces) and control characters fail closed instead of reaching a paid command.
+ */
+export function goldenProviderReadinessFor(
+  env: Readonly<Record<string, string | undefined>>,
+): GoldenProviderReadiness {
+  const keyState = (value: string | undefined): "ready" | "missing" | "invalid_format" => {
+    if (value === undefined || value.trim() === "") return "missing";
+    const hasControl = [...value].some((character) => {
+      const code = character.codePointAt(0) ?? 0;
+      return code <= 31 || (code >= 127 && code <= 159);
+    });
+    return /\s/u.test(value) || hasControl ? "invalid_format" : "ready";
+  };
+  const result: GoldenProviderReadiness = {
+    openrouterKey: keyState(env.OPENROUTER_API_KEY),
+    tavilyKey: keyState(env.TAVILY_API_KEY),
+    openrouterBilling: env.GOLDEN_OPENROUTER_BILLING === "standard" ? "standard" : "invalid",
+    tavilyBilling: env.GOLDEN_TAVILY_BILLING === "free" ? "free" : "invalid",
+    tavilyCreditUsd: env.GOLDEN_TAVILY_CREDIT_USD === "0" ? "canonical_zero" : "invalid",
+    ready: false,
+  };
+  result.ready =
+    result.openrouterKey === "ready" &&
+    result.tavilyKey === "ready" &&
+    result.openrouterBilling === "standard" &&
+    result.tavilyBilling === "free" &&
+    result.tavilyCreditUsd === "canonical_zero";
+  return result;
+}
+
+/**
+ * Free, read-only, secret-safe preflight for `run-eval-golden.mjs`. This query deliberately reads
+ * no database state and returns only closed readiness enums plus the aggregate verdict. The runner
+ * calls it before opening an evaluation budget; operators may call it separately with
+ * `eval:golden -- --preflight` without consuming the authorized full-corpus invocation.
+ */
+export const goldenProviderReadiness = internalQuery({
+  args: {},
+  handler: async () => goldenProviderReadinessFor(process.env),
+});
+
 // Evaluation is a bounded additional constraint over the SAME reasoning rails and spend ledger.
 // A persisted start + explicit expiry prevents the fixed window from ever replenishing this cap.
 export const openEvalBudget = internalMutation({
@@ -570,8 +626,10 @@ export const settleEvalCall = internalMutation({
     reservationId: v.id("spendEvents"),
     costUsd: v.number(),
     tavilyCredits: v.optional(v.number()),
+    settlementBasis: v.optional(v.union(v.literal("observed"), v.literal("conservative_ceiling"))),
   },
-  handler: async (ctx, { tenantId, reservationId, costUsd, tavilyCredits }) => {
+  handler: async (ctx, { tenantId, reservationId, costUsd, tavilyCredits, settlementBasis }) => {
+    const basis = settlementBasis ?? "observed";
     const actualCents = evalActualCents(costUsd);
     const reservation = await ctx.db.get(reservationId);
     if (
@@ -589,11 +647,25 @@ export const settleEvalCall = internalMutation({
       .take(4);
     const settled = siblings.find((row) => row.evalActualUsd !== undefined);
     if (settled) {
-      if (settled.evalActualUsd !== costUsd || settled.evalTavilyCredits !== tavilyCredits)
+      if (
+        settled.evalActualUsd !== costUsd ||
+        settled.evalTavilyCredits !== tavilyCredits ||
+        (settled.evalSettlementBasis ?? "observed") !== basis
+      )
         throw new Error("EVAL_SETTLEMENT_MISMATCH");
-      return { actualUsd: costUsd, settled: true, breached: settled.evalBreach === true };
+      return {
+        actualUsd: costUsd,
+        basis,
+        settled: true,
+        breached: settled.evalBreach === true,
+      };
     }
     const isTavily = ["tavily-search", "tavily-extract"].includes(reservation.model ?? "");
+    if (
+      basis === "conservative_ceiling" &&
+      (isTavily || tavilyCredits !== undefined || actualCents !== reservation.amountCents)
+    )
+      throw new Error("EVAL_CONSERVATIVE_SETTLEMENT_INVALID");
     if (
       isTavily
         ? tavilyCredits === undefined ||
@@ -660,6 +732,7 @@ export const settleEvalCall = internalMutation({
         ...(actualCents === 0
           ? {
               evalActualUsd: costUsd,
+              evalSettlementBasis: basis,
               ...(tavilyCredits === undefined ? {} : { evalTavilyCredits: tavilyCredits }),
             }
           : {}),
@@ -677,10 +750,11 @@ export const settleEvalCall = internalMutation({
         createdAt: Date.now(),
         evalBudgetId: reservation.evalBudgetId,
         evalActualUsd: costUsd,
+        evalSettlementBasis: basis,
         ...(tavilyCredits === undefined ? {} : { evalTavilyCredits: tavilyCredits }),
         ...(breached ? { evalBreach: true } : {}),
       });
-    return { actualUsd: costUsd, settled: true, breached };
+    return { actualUsd: costUsd, basis, settled: true, breached };
   },
 });
 
@@ -695,6 +769,9 @@ export const evalBudgetStatus = internalQuery({
     if (rows.length > 1501) throw new Error("EVAL_LEDGER_LIMIT");
     const reserved = rows.filter((row) => row.phase === "reserved");
     const settled = rows.filter((row) => row.evalActualUsd !== undefined);
+    const conservative = settled.filter(
+      (row) => row.evalSettlementBasis === "conservative_ceiling",
+    );
     const settledIds = new Set(settled.map((row) => row.correlationId));
     const outstanding = reserved.filter((row) => !settledIds.has(row.correlationId));
     const expired = Date.now() >= (envelope.evalEnvelope?.expiresAt ?? 0);
@@ -710,6 +787,11 @@ export const evalBudgetStatus = internalQuery({
       breached: rows.some((row) => row.evalBreach === true),
       remainingCents: expired ? 0 : Math.max(0, Math.floor(window.value)),
       actualUsd: settled.reduce((sum, row) => sum + (row.evalActualUsd ?? 0), 0),
+      observedUsd: settled
+        .filter((row) => row.evalSettlementBasis !== "conservative_ceiling")
+        .reduce((sum, row) => sum + (row.evalActualUsd ?? 0), 0),
+      conservativeUsd: conservative.reduce((sum, row) => sum + (row.evalActualUsd ?? 0), 0),
+      conservativeCount: conservative.length,
       callCount: reserved.length,
       settledCount: settled.length,
       unsettledCount: outstanding.length,

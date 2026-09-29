@@ -1,0 +1,317 @@
+{
+  "revision": "d78cbb10a8c466b2c36d92ae7a23ef7db446f0cc",
+  "deployment": {
+    "name": "local:local-joel_feruzi-pikar_ai_50c69-1",
+    "url": "http://127.0.0.1:3210",
+    "environment": "non-production",
+    "synchronized_at": "2026-09-19T20:21:38Z",
+    "startup_note": "Convex required a local-backend upgrade; the existing 327205078-byte snapshot was transferred and imported, not discarded"
+  },
+  "authorization": {
+    "decision": "authorize-one-run",
+    "response_verbatim": "authorize preflight sync and conditional run.",
+    "maximum_usd": 2.0,
+    "automatic_retry": false,
+    "full_run_limit": 1,
+    "scope": "configure the five named local deployment variables, then one unfiltered current golden-corpus run with isolated evidence writes and cleanup",
+    "prior_authority": {
+      "response_verbatim": "authorize sync and Blueprint run”",
+      "consumed_log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN.log",
+      "spend_usd": 0.0
+    }
+  },
+  "blueprint": {
+    "status": "confirmed_retained",
+    "doc_id": "mx77ezthtjqv9scd45s3wkafe18eqz88",
+    "content_hash": "a0537bcf228dab7b9bdfd25a4d2425271f698d37ca6c3f20ddda78fdaededdb4",
+    "size_bytes": 219
+  },
+  "sources": {
+    "required_ready_count": 5,
+    "status": "ready_retained",
+    "observed_ready_count": 5,
+    "documents": [
+      {"id":"mx776c8vhswrm6317034cy8pa98epqk2","content_hash":"983b6342d82d862794b8d8d0c03b82bfb945c34b23e750afbb51539ce0917056"},
+      {"id":"mx7ew33wngdcj59z0976m3mvtx8eqgtr","content_hash":"9406313d47a5632f3b0cfa99710ff62cd26f34be6df205efab9fda650100f2b1"},
+      {"id":"mx78mvxyq8874v8zmd7ryvd4ed8eqd0j","content_hash":"2ba7e5de52205080ab1194603b30078dd6fb619d375a4578dccbba6c11fcd5ef"},
+      {"id":"mx707m982dtfx8xnm46xp8r1h98epg7r","content_hash":"049384312db7dbaa04acd0203ebdc490b5ff85d144ef845a30dbddf758ada776"},
+      {"id":"mx73jhkjw8jevevvb015ge82018epdtt","content_hash":"f42b90cd1c39922d5cb300161dc2f957adca67a5144b677d68979760733a66d2"}
+    ]
+  },
+  "spine": {
+    "required_needle": "evalblpr",
+    "status": "rendered_retained",
+    "run_start_length": 401,
+    "reconciliation_length": 516,
+    "hash": "b80ece37e4fa9757291a92954cf2ccb76a35ca28ec085061af0839dd38a91848",
+    "reconciliation_sha256": "b80ece37e4fa9757291a92954cf2ccb76a35ca28ec085061af0839dd38a91848",
+    "needle_observed": true
+  },
+  "skill": {
+    "name": "cockpit-agent",
+    "version": 26,
+    "pins": [
+      {
+        "name": "cockpit-agent",
+        "version": 26,
+        "skill_id": "kh7aj0ek1v7cwqbb127zsar3hx8chgbn"
+      },
+      {
+        "name": "inbox-digest",
+        "version": 2,
+        "skill_id": "kh78xkkb0p8mm032q8hne07r158ap8xm",
+        "body_hash": "08fe068a58548b78a0396b02a7f221e80b042bc5a78bc09c9d4bfdefff"
+      }
+    ],
+    "business_blueprint": {
+      "version": 1,
+      "skill_id": "kh75njcg8gys4g69w8ekfkrtjs8bawt3",
+      "body_hash": "0a1ecdd5c65b22c0a3ae4bc511fc9900e9567150beeef55d8ec04547220e4aa2",
+      "pin_note": "active and deployment-observed; not a gated --skill target"
+    }
+  },
+  "evaluation": {
+    "evaluator_revision": "2026-09-11.budgeted-evaluator.b3c3878cd6117ee3d2164f3223aed544e8bd9faa8ebf5469548391365a7678cf",
+    "runner_sha256": "c0a897a79f791c472b43707f831430c845906150a2e55e55bb30227f066b8c23",
+    "mode": "unfiltered-no-retry",
+    "command_invocations": 1,
+    "attempts_started": 93,
+    "spend_usd": 0.06745454,
+    "run_id": "bc1d1a74",
+    "budget_id": "ps7f497nf881se330r2jncnzr18epwfx",
+    "manifest_case_total": 57,
+    "executable_case_total": 46,
+    "cases_started": 8,
+    "cases_passed": 7,
+    "cases_failed": 0,
+    "automatic_retries": 0,
+    "status": "partial_non_certifying_paid_call_unresolved",
+    "refusal": "GOLDEN_PAID_CALL_UNRESOLVED at case 08-bounce-then-correct",
+    "governed_status": {"closed":true,"cap_cents":200,"calls":93,"settled":93,"unsettled":0,"unresolved_cents":0,"remaining_cents":127,"breached":false},
+    "provider_totals": {
+      "openrouter": {"calls":73,"cost_usd":0.06745454,"is_byok_observation":"false for every settled call; validated in memory, not persisted per row"},
+      "tavily_search": {"calls":10,"credits":10,"cost_usd":0},
+      "tavily_extract": {"calls":10,"credits":1,"cost_usd":0}
+    },
+    "configuration_after_consumed_attempt": {
+      "corrected_without_secret_output": true,
+      "carriage_return_warnings": 0,
+      "verified_names_only": [
+        "GOLDEN_OPENROUTER_BILLING",
+        "GOLDEN_TAVILY_BILLING",
+        "GOLDEN_TAVILY_CREDIT_USD",
+        "OPENROUTER_API_KEY",
+        "TAVILY_API_KEY"
+      ],
+      "rerun_performed": true
+    },
+    "log": {
+      "path": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20.log",
+      "sha256_lf_canonical": "b8e94ace2f984f2f829f8adc8ea53e0f257e260ed4e8225983d895956a3b86da"
+    }
+  },
+  "latest_authorized_attempt": {
+    "authorization_response_verbatim": "authorize diagnostic preflight and conditional run",
+    "authorization_scope": "one free standalone preflight, then exactly one unfiltered --no-retry corpus run capped at USD 2.00 only if the preflight passes, on the named local non-production deployment",
+    "source_revisions": ["275c360f9c0086470153cd28cfbe04f8454fd8d1"],
+    "target": "local:local-joel_feruzi-pikar_ai_50c69-1",
+    "deployment_revision_observed": false,
+    "functions_ready_observed": true,
+    "preflight_invocations": 1,
+    "preflight_status": "passed_secret_safe_no_budget",
+    "preflight_exit_code": 0,
+    "runner_sha256": null,
+    "evaluator_revision": "2026-09-11.budgeted-evaluator.0d46cad9beefc9d126fa30d6d39db8b1428afb0056ff2728590f5491d8b8e923",
+    "requested_skill_pins": ["cockpit-agent@26", "inbox-digest@2"],
+    "manifest_case_total": 57,
+    "executable_case_total": 46,
+    "corpus_invocations": 1,
+    "spend_usd": 0.16210262,
+    "run_id": "558761d8",
+    "budget_id": "ps75tb0ej496gb82kay13zye8h8es2c8",
+    "cases_passed": 26,
+    "cases_failed": 1,
+    "terminal_status": "partial_non_certifying_paid_call_unresolved_at_case_28",
+    "terminal_exit_code": 2,
+    "log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20-DIAGNOSTIC.log",
+    "raw_log_sha256": "89b7839f93ed6b87acee85a804a48b2294c0fe6659451450267b85f9698cbc8c",
+    "case_24_retry_authorized_but_not_run": "The original USD 2.00 envelope has only USD 0.02 remaining; no retry was run under that envelope."
+  },
+  "case_24_retry": {
+    "authorization": "one isolated retry only, with a new strictly capped USD 0.10 envelope",
+    "command_shape": "--skill cockpit-agent@26 --skill inbox-digest@2 --only 24-reply-injection --no-retry --max-usd 0.10",
+    "run_id": "cd77f312",
+    "budget_id": "ps7718w7bnqcns5h4ta8858js58ercm5",
+    "cap_usd": 0.1,
+    "actual_usd": 0.00217592,
+    "terminal_status": "paid_call_unresolved_before_case_verdict",
+    "exit_code": 2,
+    "calls": 8,
+    "settled_calls": 8,
+    "unsettled_calls": 0,
+    "unresolved_cents": 0,
+    "breached": false,
+    "log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RETRY-CASE-24-2026-09-20.log",
+    "raw_log_sha256": "1a2b6dda94e3d55ac229cda16e2159a8cd0749c8b3b242ddb687b90feb0b1dca",
+    "evidence_written": false,
+    "cleanup": "retained by paid-call-unresolved policy; no extra command was issued"
+  },
+  "previous_durable_attempt_2026_09_20": {
+    "authorization": "one free preflight, then only on PASS exactly one unfiltered current --no-retry corpus run capped at USD 2.00, with no second attempt",
+    "target": "local:local-joel_feruzi-pikar_ai_50c69-1",
+    "startup_timeout_seconds": 300,
+    "functions_ready_observed": true,
+    "preflight_invocations": 1,
+    "preflight_status": "passed_secret_safe_no_budget",
+    "corpus_invocations": 1,
+    "automatic_retries": 0,
+    "second_corpus_attempt": false,
+    "run_id": "2ae07dfd",
+    "tenant_id": "eval-2ae07dfd",
+    "budget_id": "ps78shtc737wazjjryc8f3jnqd8eszxx",
+    "cap_usd": 2.0,
+    "accounted_usd": 0.03000392,
+    "observed_usd": 0.00000392,
+    "conservative_usd": 0.03,
+    "conservative_count": 1,
+    "calls": 6,
+    "settled_calls": 6,
+    "unsettled_calls": 0,
+    "unresolved_cents": 0,
+    "breached": false,
+    "budget_closed": true,
+    "cases_started": 1,
+    "cases_completed": 0,
+    "terminal_status": "GOLDEN_PAID_CALL_FAILED_before_first_case_verdict",
+    "exit_code": 2,
+    "durable_attempt_states": {
+      "702a9d39-c3b0-4440-a848-10a9bf8f40a9": "completed",
+      "ee108300-1052-439b-b431-e007ce5018f9": "failed"
+    },
+    "evidence_written": false,
+    "cleanup": "not invoked; failed-run tenant and spend evidence retained",
+    "preflight_log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-DURABLE.log",
+    "run_log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20-DURABLE.log",
+    "reconciliation": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RECONCILIATION-2026-09-20-DURABLE.json"
+  },
+  "latest_durable_attempt": {
+    "date": "2026-09-24",
+    "target": "local non-production backend at http://127.0.0.1:3210; instance name anonymous-backend observed, exact named identity not independently requalified",
+    "preflight_invocations": 1,
+    "preflight_status": "passed_secret_safe_no_budget",
+    "corpus_invocations": 1,
+    "automatic_retries": 0,
+    "run_id": "eadd4317",
+    "tenant_id": "eval-eadd4317",
+    "budget_id": "ps7ej4mwyaar7b3sknqx83by8d8ezdvt",
+    "cap_usd": 2.0,
+    "accounted_usd": 0.03000392,
+    "observed_usd": 0.00000392,
+    "conservative_usd": 0.03,
+    "calls": 6,
+    "settled_calls": 6,
+    "unsettled_calls": 0,
+    "unresolved_cents": 0,
+    "breached": false,
+    "budget_closed": true,
+    "cases_started": 1,
+    "cases_completed": 0,
+    "terminal_status": "GOLDEN_PAID_CALL_FAILED_before_first_case_verdict",
+    "failure_code": "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_400",
+    "evidence_written": false,
+    "cleanup": "not invoked; failed-run tenant and spend evidence retained",
+    "reconciliation": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RECONCILIATION-2026-09-24.json"
+  },
+  "latest_disposable_diagnostic": {
+    "date": "2026-09-28",
+    "record": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-DIAGNOSTIC-2026-09-28.md",
+    "scope": "one isolated synthetic case with cockpit-agent@26 and inbox-digest@2; no automatic retry; USD 0.25 cap",
+    "run_id": "0ad07729",
+    "budget_id": "s574g3xtxxzg29qngch9ty7m018f9948",
+    "case_verdicts": 0,
+    "failed_step_code": "EVAL_EMBEDDING_RESPONSE_UNRESOLVED",
+    "terminal_runner_code": "GOLDEN_PAID_CALL_UNRESOLVED",
+    "budget_snapshot_before_instance_removal": {
+      "call_count": 1,
+      "settled_count": 0,
+      "unsettled_count": 1,
+      "unresolved_cents": 1,
+      "observed_usd": 0,
+      "conservative_usd": 0,
+      "closed": false
+    },
+    "retained_export_sha256": "d31758f9bb7db6c05c80d25c8f45ec6f99486672ad7591f45a21764846b3b77e",
+    "instance_removed": true,
+    "accounting_note": "The retained export proves a reservation and failed workflow step, not provider completion, a free call, a settled charge, or a closed live budget. The removed instance cannot be queried again.",
+    "gate_effect": "non_certifying; full L6 corpus and founder L1/L7 remain open"
+  },
+  "offline_reproof": {
+    "observed_at": "2026-09-20T10:04:15Z",
+    "revision": "f6c711e1481c09098877414e4bcad46b62ffb49c",
+    "scope": "repository-only; no backend start, deployment, provider call, external mutation, or paid action",
+    "task_owned_paths_clean_before_evidence_update": true,
+    "product_bytes_changed": false,
+    "core": {
+      "command": "pnpm --filter @pikar/core test -- blueprint",
+      "test_files_passed": 3,
+      "tests_passed": 77,
+      "tests_failed": 0,
+      "worst_case_spine_chars": 2495,
+      "spine_char_cap": 2500
+    },
+    "backend": {
+      "command": "pnpm --filter @pikar/backend exec vitest run convex/blueprint.test.ts convex/vaultGround.test.ts convex/cockpitBlueprint.test.ts convex/searchVaultSpine.test.ts convex/voiceDoc.test.ts",
+      "test_files_passed": 5,
+      "tests_passed": 100,
+      "tests_failed": 0
+    },
+    "non_vacuity": {
+      "source_doc_count_positive_control": 1,
+      "rendered_spine_needle": "evalblpr",
+      "separate_spine_preserved": true,
+      "retrieval_arrays_unchanged": true,
+      "no_tool_cockpit_prompt_proven": true,
+      "no_match_and_retrieval_count_proven": true,
+      "tenant_isolation_proven": true,
+      "voice_propagation_outside_retrieval_budget_proven": true
+    },
+    "status": "green"
+  },
+  "cockpit": {
+    "status": "not_owner_verified"
+  },
+  "contradiction": {
+    "status": "not_owner_verified"
+  },
+  "voice": {
+    "status": "not_owner_verified"
+  },
+  "cleanup": {
+    "status": "retained_by_failed_partial_run_policy",
+    "local_backend_stopped": false,
+    "tenant_rows_created": 299,
+    "evidence_rows_created": 0,
+    "budget_rows_created": 254,
+    "reconciled_rows_since_command_start": {
+      "audit": 26,
+      "plans": 10,
+      "spendEvents": 254,
+      "vaultDocuments": 8,
+      "tenantProfiles": 1,
+      "evaluations": 0,
+      "briefings": 0,
+      "requests": 0
+    },
+    "note": "No cleanup was run. The runner retains failed/partial tenant rows as diagnostic evidence, and spend/budget rows must remain."
+  },
+  "evidence_layers": {
+    "implemented": "green",
+    "offline-tested": "green",
+    "deployed": "green-non-production",
+    "live-observed": "red-partial-7-of-46-observed-before-case-8-unresolved",
+    "owner-accepted": "open",
+    "externally-enabled": "provider-access-observed-for-eval-only; Gmail grant remains open"
+  },
+  "accepted": false,
+  "blocker": "The historical full corpus attempt failed before a case verdict. The later isolated USD 0.25 diagnostic also produced zero case verdicts and ended at embedding seed with one unresolved one-cent reservation in the retained export; its disposable instance is gone, so no provider or live-budget settlement is inferred. The diagnostic authorization was consumed, and a further paid attempt was rejected by execution control. No conclusive current L6 evidence or founder cockpit/contradiction/voice acceptance exists; Phase 18 remains gated."
+}

@@ -1,6 +1,7 @@
 import { eventFacts } from "@pikar/billing/events";
 import { reconcileEvent } from "@pikar/billing/reconcile";
 import { invoiceTaxabilityReason } from "@pikar/billing/tax";
+import type { WebCtaNode, WebDocument, WebNode } from "@pikar/contracts/webRuntime";
 import { GOOGLE_SCOPES, type MicrosoftCallbackError, notificationMessage } from "@pikar/core";
 import { FUNNEL_SOURCE_MAX_LENGTH, normalizeFunnelSource } from "@pikar/core/marketing";
 import type { ConnectorEnvironment, Provider } from "@pikar/revenue";
@@ -15,6 +16,270 @@ import { verifyState } from "./gmailAuth";
 import { MICROSOFT_TOKEN_ENDPOINT, verifyMicrosoftState } from "./microsoftAuth";
 
 const http = httpRouter();
+
+// ── Phase 48 public structured runtime ──────────────────────────────────────
+// Public reads are resolved from the request host and path. No tenant, project, version, or
+// document is accepted from the caller; those values come from the published coordination head.
+const publicHeaders = {
+  "Cache-Control": "no-store",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+};
+const runtimeHeaders = (declaration: { hosting: string; source: string }) => ({
+  ...publicHeaders,
+  "X-Pikar-Hosting": declaration.hosting,
+  "X-Pikar-Source": declaration.source,
+});
+const publicNotFound = () => new Response("not found", { status: 404, headers: publicHeaders });
+const publicUnavailable = () =>
+  new Response("unavailable", { status: 503, headers: publicHeaders });
+
+function publicSegments(req: Request): string[] {
+  const segments = new URL(req.url).pathname.split("/").filter(Boolean);
+  if (segments[0] !== "p" || segments.some((segment) => !/^[A-Za-z0-9_-]+$/.test(segment)))
+    return [];
+  return segments.slice(1);
+}
+
+function publicHost(req: Request): string {
+  return new URL(req.url).hostname.toLowerCase();
+}
+
+async function readBoundedPublicBody(
+  req: Request,
+  limit: number,
+): Promise<ArrayBuffer | "invalid" | "too_large"> {
+  const declared = req.headers.get("Content-Length");
+  if (declared && (!/^\d+$/.test(declared) || Number(declared) > limit)) return "too_large";
+  const reader = req.body?.getReader();
+  if (!reader) return "invalid";
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      await reader.cancel();
+      return "too_large";
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  // The fresh allocation is zero-offset and exactly `size` bytes; no caller buffer is exposed.
+  return bytes.buffer as ArrayBuffer;
+}
+
+// ponytail: this is a bounded, read-only seam while the code-owned storefront gate is false.
+// The joint Stripe/PayPal readiness plan may add a write only after that same gate authorizes
+// the exact host/page/version; this preflight never calls tenantOrders or persists buyer input.
+async function readClosedCartIntent(req: Request): Promise<"valid" | "invalid" | "too_large"> {
+  const bytes = await readBoundedPublicBody(req, 8192);
+  if (typeof bytes === "string") return bytes;
+  try {
+    const input: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    if (!input || typeof input !== "object" || Array.isArray(input)) return "invalid";
+    const fields = input as Record<string, unknown>;
+    if (
+      Object.keys(fields).sort().join(",") !== "addressCountry,items" ||
+      typeof fields.addressCountry !== "string" ||
+      !/^[A-Z]{2}$/.test(fields.addressCountry) ||
+      !Array.isArray(fields.items) ||
+      fields.items.length < 1 ||
+      fields.items.length > 50
+    )
+      return "invalid";
+    const seen = new Set<string>();
+    for (const item of fields.items) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return "invalid";
+      const row = item as Record<string, unknown>;
+      if (
+        Object.keys(row).sort().join(",") !== "presentationItemId,quantity" ||
+        typeof row.presentationItemId !== "string" ||
+        !/^[A-Za-z0-9_-]{1,128}$/.test(row.presentationItemId) ||
+        seen.has(row.presentationItemId) ||
+        !Number.isSafeInteger(row.quantity) ||
+        (row.quantity as number) < 1 ||
+        (row.quantity as number) > 100
+      )
+        return "invalid";
+      seen.add(row.presentationItemId);
+    }
+    return "valid";
+  } catch {
+    return "invalid";
+  }
+}
+
+function findPublicCta(nodes: readonly WebNode[], id: string): WebCtaNode | null {
+  for (const node of nodes) {
+    if (node.kind === "cta" && node.id === id) return node;
+    if (node.kind === "section") {
+      const nested = findPublicCta(node.children, id);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+http.route({
+  pathPrefix: "/p/",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    const parts = publicSegments(req);
+    if (parts.length !== 2) return publicNotFound();
+    const slug = parts[0]!;
+    const page = parts[1]!;
+    const resolved = await ctx.runQuery(internal.webRuntime.resolvePage, {
+      host: publicHost(req),
+      slug,
+      page,
+    });
+    if (resolved.state !== "published") return publicNotFound();
+    try {
+      await ctx.runMutation(internal.webForms.recordMetric, {
+        host: publicHost(req),
+        slug,
+        page,
+        kind: "page_view",
+      });
+      const headers = runtimeHeaders(resolved.hostingDeclaration);
+      return new Response(req.method === "HEAD" ? null : resolved.html, {
+        status: 200,
+        headers: { ...headers, "Content-Type": "text/html; charset=utf-8" },
+      });
+    } catch {
+      return publicUnavailable();
+    }
+  }),
+});
+
+http.route({
+  pathPrefix: "/p/",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    const parts = publicSegments(req);
+    // tenant-commerce:start — closed Plan 05 preflight, never a merchant callback.
+    if (parts.length === 4 && parts[2] === "commerce" && parts[3] === "cart") {
+      const requestOrigin = new URL(req.url).origin;
+      if (req.headers.get("Origin") !== requestOrigin)
+        return new Response(null, { status: 403, headers: publicHeaders });
+      if (!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers.get("Content-Type") ?? ""))
+        return new Response(null, { status: 415, headers: publicHeaders });
+      if (!/^[A-Za-z0-9_-]{1,128}$/.test(req.headers.get("Idempotency-Key") ?? ""))
+        return new Response(null, { status: 400, headers: publicHeaders });
+      const intent = await readClosedCartIntent(req);
+      if (intent !== "valid")
+        return new Response(null, {
+          status: intent === "too_large" ? 413 : 400,
+          headers: publicHeaders,
+        });
+      const resolved = await ctx.runQuery(internal.webRuntime.resolvePage, {
+        host: publicHost(req),
+        slug: parts[0]!,
+        page: parts[1]!,
+      });
+      if (resolved.state !== "published") return publicNotFound();
+      // The current resolver can publish sites/landings only; those are never merchant shops.
+      // Even a future resolver change must not turn this preflight into a cart/order write.
+      return publicNotFound();
+    }
+    // tenant-commerce:end
+    if (parts.length === 4 && parts[2] === "cta") {
+      const slug = parts[0]!;
+      const pageSlug = parts[1]!;
+      const ctaId = parts[3]!;
+      const resolved = await ctx.runQuery(internal.webProjects.resolvePublished, {
+        host: publicHost(req),
+        slug,
+      });
+      if (resolved.state !== "published" || resolved.project.kind === "storefront")
+        return publicNotFound();
+      const page = (resolved.version.document as WebDocument).pages.find(
+        (candidate) => candidate.slug === pageSlug,
+      );
+      const cta = page ? findPublicCta(page.nodes, ctaId) : null;
+      if (!page || !cta || cta.analytics !== true) return publicNotFound();
+      try {
+        await ctx.runMutation(internal.webForms.recordMetric, {
+          host: publicHost(req),
+          slug,
+          page: pageSlug,
+          kind: "cta_click",
+        });
+      } catch {
+        return publicUnavailable();
+      }
+      return new Response(null, {
+        status: 303,
+        headers: {
+          ...runtimeHeaders(resolved.project.hostingDeclaration),
+          Location: cta.target.kind === "local" ? cta.target.path : cta.target.url,
+        },
+      });
+    }
+    if (parts.length !== 4 || parts[2] !== "forms") return publicNotFound();
+    const slug = parts[0]!;
+    const page = parts[1]!;
+    const formId = parts[3]!;
+    const resolved = await ctx.runQuery(internal.webProjects.resolvePublished, {
+      host: publicHost(req),
+      slug,
+    });
+    if (resolved.state !== "published" || resolved.project.kind === "storefront")
+      return publicNotFound();
+    // Bound the actual stream, not just caller-controlled Content-Length, before formData
+    // materializes any fields or files and before the form mutation can write coordination state.
+    const bytes = await readBoundedPublicBody(req, 8192);
+    if (bytes === "too_large")
+      return new Response("too large", { status: 413, headers: publicHeaders });
+    if (bytes === "invalid")
+      return Response.json(
+        { ok: false, outcome: "invalid" },
+        { status: 400, headers: runtimeHeaders(resolved.project.hostingDeclaration) },
+      );
+    let form: FormData;
+    try {
+      const contentType = req.headers.get("Content-Type");
+      if (!contentType) throw new Error("missing form content type");
+      form = await new Response(bytes, { headers: { "Content-Type": contentType } }).formData();
+    } catch {
+      return Response.json(
+        { ok: false, outcome: "invalid" },
+        { status: 400, headers: runtimeHeaders(resolved.project.hostingDeclaration) },
+      );
+    }
+    const raw: Record<string, unknown> = {};
+    for (const [key, value] of form.entries()) if (typeof value === "string") raw[key] = value;
+    const bodyKey = [raw.email, raw.name, raw.company, raw.consent]
+      .map((value) => String(value ?? ""))
+      .join("\u001f");
+    const idempotencyKey =
+      req.headers.get("Idempotency-Key")?.trim() || String(raw.idempotencyKey ?? bodyKey);
+    const forwarded =
+      req.headers.get("CF-Connecting-IP") ??
+      req.headers.get("X-Forwarded-For")?.split(",")[0]?.trim();
+    const result = await ctx.runMutation(internal.webForms.submit, {
+      host: publicHost(req),
+      slug,
+      page,
+      formId,
+      raw,
+      idempotencyKey,
+      abuseKey: forwarded || "anonymous",
+    });
+    const status = result.ok ? 200 : result.outcome === "rate_limited" ? 429 : 400;
+    return Response.json(result, {
+      status,
+      headers: runtimeHeaders(resolved.project.hostingDeclaration),
+    });
+  }),
+});
 
 // Wire Convex Auth sign-in/callback httpAction routes.
 auth.addHttpRoutes(http);
@@ -66,19 +331,26 @@ http.route({
     const site = process.env.SITE_URL ?? "http://localhost:3111";
     const seeOther = (path: string) =>
       new Response(null, { status: 303, headers: { Location: `${site}${path}` } });
-    const fail = (msg: string) => seeOther(`/connect-gmail?gmailError=${encodeURIComponent(msg)}`);
+    // A callback redirect is browser history, proxy telemetry and a future Referer. Carry only a
+    // closed code: provider error text can contain account details, and authorization material must
+    // never cross this server-to-browser boundary.
+    type GmailCallbackError =
+      | "cancelled"
+      | "missing_callback"
+      | "invalid_state"
+      | "exchange_failed"
+      | "missing_refresh";
+    const fail = (code: GmailCallbackError) => seeOther(`/connect-gmail?gmailError=${code}`);
 
     const url = new URL(req.url);
     const oauthError = url.searchParams.get("error");
-    if (oauthError) {
-      return fail(`Gmail connection cancelled or failed: ${oauthError}`);
-    }
+    if (oauthError) return fail("cancelled");
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
-    if (!code || !state) return fail("Missing code or state — please try connecting again.");
+    if (!code || !state) return fail("missing_callback");
 
     const tenantId = await verifyState(state);
-    if (!tenantId) return fail("Invalid or tampered state — please try connecting again.");
+    if (!tenantId) return fail("invalid_state");
 
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -91,9 +363,7 @@ http.route({
         grant_type: "authorization_code",
       }),
     });
-    if (!tokenRes.ok) {
-      return fail("Token exchange with Google failed — please try connecting again.");
-    }
+    if (!tokenRes.ok) return fail("exchange_failed");
     const tok = (await tokenRes.json()) as {
       refresh_token?: string;
       access_token?: string;
@@ -102,11 +372,7 @@ http.route({
     };
     // Pitfall 3: no refresh_token means Google reused a prior grant (missing offline+consent).
     // Surface it as a hard error so the user re-consents rather than silently half-connecting.
-    if (!tok.refresh_token || !tok.access_token) {
-      return fail(
-        "No refresh token returned. Remove Pikar's access at myaccount.google.com/permissions, then reconnect.",
-      );
-    }
+    if (!tok.refresh_token || !tok.access_token) return fail("missing_refresh");
 
     await ctx.runMutation(internal.gmailAuth.store, {
       tenantId,
@@ -595,6 +861,9 @@ http.route({
   // message, so a GET-suppresses design silently unsubscribes people who never clicked. The
   // confirm button below is what stops the feature firing itself; POST is the only mutating verb.
   handler: httpAction(async (ctx, req) => {
+    // Convex routes HEAD through the GET handler. Keep the route's capability contract explicit:
+    // a scanner's HEAD must not receive the confirmation page, and no other verb may enter it.
+    if (req.method !== "GET") return unsubNotFound();
     const pathname = new URL(req.url).pathname;
     const parts = unsubSegment(pathname);
     if (!parts) return unsubNotFound();
@@ -622,6 +891,9 @@ http.route({
   pathPrefix: "/unsubscribe/",
   method: "POST",
   handler: httpAction(async (ctx, req) => {
+    // Route dispatch can share a handler for HEAD in the Convex test/runtime adapter. Refuse it
+    // explicitly so only a deliberate POST can reach the suppression mutation.
+    if (req.method !== "POST") return unsubNotFound();
     const parts = unsubSegment(new URL(req.url).pathname);
     if (!parts) return unsubNotFound();
     // Resolved for the confirmation's address list; the mutation re-verifies from scratch and

@@ -66,6 +66,7 @@ import {
   type DigestBatch,
   type DigestItem,
   type DocFormat,
+  deriveReplyTargetFromTurn,
   exceedsByteCap,
   type FigureClaim,
   formatForMime,
@@ -2064,6 +2065,9 @@ const DECLARED_UNSUPPORTED_REPLY =
  *   threadId/rootRequestId — DISPATCH LINEAGE (16-06, ADR-008) for the scheduled dispatch and
  *     authoring tools, and the turn `refuse` rows key on. Not an emission channel: no tool emits a
  *     step row, the SDK does (see the CKPT-05 note at runAgentLoop).
+ *   currentUserTurn — the raw current user turn, supplied by the trusted driver. It is used only
+ *     to recover a selector-less reply call from a uniquely visible mailbox header; message bodies
+ *     and conversation history never participate in that recovery.
  *   evalRevenueFixtureId — Phase 28 eval-only fixture selector, set only by runRevenueCandidateEval
  *     after its throwaway-tenant and closed-corpus checks; absent keeps production unchanged.
  */
@@ -2076,6 +2080,7 @@ export type ToolContext = {
   tenantSkillIds?: Record<string, Id<"tenantSkills">>;
   threadId?: string;
   rootRequestId?: string;
+  currentUserTurn?: string;
   evalRevenueFixtureId?: string;
   evalContext?: EvalContext;
   evalBudgetId?: Id<"spendEvents">;
@@ -4368,7 +4373,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
               return "Google is connected without Drive access. Ask the user to reconnect Google.";
             if (result.reason === "bad_folder_id")
               return "That Drive folder reference is invalid. Ask the user to choose it again.";
-            return "The Google connection could not be refreshed. Ask the user to reconnect Google.";
+            if (result.reason === "refresh_failed")
+              return "The Google connection could not be refreshed. Ask the user to reconnect Google.";
+            return "Google Drive could not be read right now. Tell the user to try again later.";
           }
           const folders = result.folders.map((f) => `${f.name} [id: ${f.id}]`).join("; ");
           const files = result.files
@@ -4404,7 +4411,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
               return "Google is not connected. Ask the user to connect Google before searching Drive.";
             if (result.reason === "reauth")
               return "Google is connected without Drive access. Ask the user to reconnect Google.";
-            return "The Google connection could not be refreshed. Ask the user to reconnect Google.";
+            if (result.reason === "refresh_failed")
+              return "The Google connection could not be refreshed. Ask the user to reconnect Google.";
+            return "Google Drive search failed right now. Tell the user to try again later.";
           }
           if (result.hits.length === 0) return "No matching Drive files or folders were found.";
           const hits = result.hits
@@ -4609,6 +4618,33 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
       }),
       execute: async ({ topic, form, replace }): Promise<string> => {
         const plan = await readPlan(); // threadId + the cross-tenant guard — NEVER from the model
+        // PRE-FLIGHT EVERY REAL REPLACEMENT before scanning, drafting, rendering or storing. The
+        // mutation below remains the final authority (and re-checks the same tenant/origin rules),
+        // but discovering a bad index, a foreign id or a user upload only after draftDocument has
+        // run would spend a model call and perform irreversible rendering work for an operation we
+        // already know must refuse. `latestCreated` supplies the server-owned index and
+        // `ownedDocsMeta` is the existing refs-only tenant read; neither trusts a model-supplied id.
+        const preflightCard = await ctx.runQuery(internal.vaultSources.latestCreated, {
+          tenantId,
+          threadId: plan.threadId,
+        });
+        const preflightDocIds = preflightCard?.docIds ?? [];
+        // Keep the fixture-35 rule: when nothing has been created, the model's habitual `replace`
+        // field is noise and this is a create. Once a card exists, it denotes a real replacement
+        // request and must pass the complete preflight before any work or spend.
+        const effectiveReplace = preflightDocIds.length === 0 ? undefined : replace;
+        const replacementRefusal = (index: number) =>
+          `There's no document #${index} I can rewrite in this conversation — nothing was changed. Tell the user which documents are here and ask which one they mean.`;
+        if (effectiveReplace !== undefined) {
+          const targetDocId = preflightDocIds[effectiveReplace - 1];
+          if (!targetDocId) return replacementRefusal(effectiveReplace);
+          const [target] = await ctx.runQuery(internal.vault.ownedDocsMeta, {
+            tenantId,
+            docIds: [targetDocId],
+          });
+          if (!target || target._id !== targetDocId || target.origin !== "agent")
+            return replacementRefusal(effectiveReplace);
+        }
         const scan = scanText(topic);
         // Fail-closed, but as a SENTENCE: a governed stop is a paused conversation, never a throw
         // out of the loop (the mailboxUnavailable / dispatch-refusal precedent).
@@ -4708,7 +4744,6 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // denote anything, so it is not a refusal case — it is noise, and creating is the only
         // coherent reading. An out-of-range index WITH documents present keeps its honest refusal,
         // because there the user may genuinely mean a document that is simply numbered differently.
-        const effectiveReplace = docIds.length === 0 ? undefined : replace;
         if (effectiveReplace === undefined) {
           // 26-11 (CONT-01): provenance goes on the INSERT ONLY, never into `docArgs` -- that
           // object is also spread into `patchCreatedDoc` below, whose validator has no such fields
@@ -4727,10 +4762,13 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
             threadId: plan.threadId,
             index: effectiveReplace,
           });
-          // A refusal (no such #index, foreign tenant, a user upload) is a SENTENCE — the mutation
-          // never throws, and neither does this.
-          if (!res.ok)
-            return `There's no document #${effectiveReplace} I can rewrite in this conversation — nothing was changed. Tell the user which documents are here and ask which one they mean.`;
+          // The mutation repeats the tenant/origin check at commit time, closing the race between
+          // preflight and patch. A late refusal is still a SENTENCE, never a throw, and must discard
+          // the just-rendered bytes so a concurrent card/row change cannot orphan storage.
+          if (!res.ok) {
+            if (storageId) await ctx.storage.delete(storageId);
+            return replacementRefusal(effectiveReplace);
+          }
           // Drop the SUPERSEDED bytes only AFTER the patch persists, and only when they really were
           // superseded (the regenerateAttachment ordering — never orphan a live ref).
           if (res.oldStorageId && res.oldStorageId !== storageId)
@@ -4957,9 +4995,14 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           },
           sender: {
             type: "string",
+            minLength: 1,
             description: "The sender to reply to, as the user named them.",
           },
-          subject: { type: "string", description: "A word or phrase from the subject to match." },
+          subject: {
+            type: "string",
+            minLength: 1,
+            description: "A word or phrase from the subject to match.",
+          },
           range: {
             type: "string",
             enum: ["today", "yesterday", "week"],
@@ -4967,6 +5010,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           },
         },
         required: ["intent"],
+        anyOf: [{ required: ["sender"] }, { required: ["subject"] }],
         additionalProperties: false,
       }),
       execute: async ({ intent, sender, subject, range }): Promise<string> => {
@@ -4987,14 +5031,20 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // to". That ends the turn with nothing staged — even when the user named the message
         // perfectly. Measured: eval fixture 24-reply-injection failed 2/2 exactly this way on a
         // turn reading "Reply to that 'Account activity' notification", one `replyToMessage` call,
-        // no error, a bare plan row. Answering the MODEL instead lets it retry inside the same tool
-        // loop, which is the difference between a recoverable slip and a dead turn.
+        // no error, a bare plan row. The schema now makes that call invalid; this runtime backstop
+        // also recovers it when the raw current user turn visibly contains exactly one full
+        // code-owned subject/display-name/address. Otherwise it answers the MODEL so it can retry
+        // inside the same tool loop, which is the difference between a recoverable slip and a dead
+        // turn.
         //
         // This does NOT weaken the no-guess rule: the model is told to pass the USER'S OWN words,
-        // never to pick a message on the user's behalf. The subjects are listed only so it can match
-        // what the user already said against what is actually in the mailbox. `range` is not a
-        // selector — it bounds the fetch window and narrows nothing to a single message.
-        if (!s && !subj) {
+        // never to pick a message on the user's behalf. Recovery matches headers against the user's
+        // own raw turn; bodies/snippets/history never participate. The subjects are listed only so
+        // the model can match what the user already said against what is actually in the mailbox.
+        // `range` is not a selector — it bounds the fetch window and narrows nothing to one message.
+        const recovered =
+          !s && !subj ? deriveReplyTargetFromTurn(listRes.messages, toolCtx.currentUserTurn) : null;
+        if (!s && !subj && !recovered) {
           const available = listRes.messages
             .slice(0, REPLY_CANDIDATE_CAP)
             .map((m: InboxMessageMeta) => `"${m.subject}"`)
@@ -5007,14 +5057,16 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           );
         }
         // Match on the raw From (name OR address substring) and/or a subject substring; newest first.
-        const matches = selectForDigest(
-          listRes.messages.filter((m: InboxMessageMeta) => {
-            const senderHit = !s || m.from.toLowerCase().includes(s);
-            const subjectHit = !subj || m.subject.toLowerCase().includes(subj);
-            return senderHit && subjectHit;
-          }),
-          listRes.messages.length,
-        );
+        const matches = recovered
+          ? [recovered]
+          : selectForDigest(
+              listRes.messages.filter((m: InboxMessageMeta) => {
+                const senderHit = !s || m.from.toLowerCase().includes(s);
+                const subjectHit = !subj || m.subject.toLowerCase().includes(subj);
+                return senderHit && subjectHit;
+              }),
+              listRes.messages.length,
+            );
         // 0 → clarify, write nothing (no-guess). 2+ → list by LABEL and ask (never pick for the user).
         if (matches.length === 0)
           return "I couldn't find that message in the inbox. Ask the user which sender or subject to reply to — never guess.";
@@ -5231,6 +5283,9 @@ async function runAgentLoop(
     // still out. Left stale, this comment would document a rule the code violates.
     turnId?: string;
     threadId?: string;
+    // The raw current user turn, separate from the assembled prompt/history. Only the executive
+    // reply-target recovery reads it, and only when the model omitted both selector arguments.
+    currentUserTurn?: string;
     // 19-11 (§2-D, the ACTN-05 root cause). THE LOOP BUILDS ITS OWN TOOL SET, so every input
     // `buildCockpitTools` takes must ride these args or it is silently lost. `skillVersions` and
     // `omitRecipientEdits` were both threaded when someone hit that; the CLOCK never was, and the
@@ -5312,6 +5367,7 @@ async function runAgentLoop(
     skillVersions,
     turnId,
     threadId,
+    currentUserTurn,
     clientContext,
     omitRecipientEdits,
     tenantSkillIds,
@@ -5352,6 +5408,7 @@ async function runAgentLoop(
       tenantSkillIds,
       threadId,
       rootRequestId: turnId,
+      currentUserTurn,
       evalRevenueFixtureId,
       evalContext,
       evalBudgetId,
@@ -5366,11 +5423,17 @@ async function runAgentLoop(
     toolNames === undefined
       ? built
       : Object.fromEntries(Object.entries(built).filter(([n]) => toolNames.includes(n)));
-  if (
-    activeBudgetId &&
-    !evalContext &&
-    (await ctx.runQuery(internal.authoringProbe.context, { tenantId, budgetId: activeBudgetId }))
-  ) {
+  // The probe discriminator, hoisted: tool containment below only needs WHETHER an authoring-probe
+  // envelope owns this budget, and `retainUnresolvedHold` further below needs the same bit, so the
+  // lookup happens once and drives both. `null` for an ordinary turn AND for the held-out suite's
+  // own `evalContext` (which is never a probe), which is what keeps the golden settle untouched.
+  const probe =
+    activeBudgetId && !evalContext
+      ? await ctx.runQuery(internal.authoringProbe.context, { tenantId, budgetId: activeBudgetId })
+      : null;
+  // `activeBudgetId` restated here is NOT redundant: the contained `execute` closures are built in
+  // this block and invoked later, so the narrowed, non-optional id must be in scope where they are.
+  if (probe && activeBudgetId) {
     // Preserve ordinary descriptors. The probe only executes audited immediate paths: authoring
     // is one inert mutation; web calls and text drafters share the native budget. Other tools may
     // schedule media/connectors or provider work outside it, so refuse before their closures run.
@@ -5491,6 +5554,8 @@ async function runAgentLoop(
             onCost: (cost) => {
               costUsd += cost;
             },
+            // A probe turn's ambiguous attempt must RETAIN its hold, not settle the golden ceiling.
+            retainUnresolvedHold: probe !== null,
             ...(evalContext ? {} : { mode: "golden" as const }),
           })
         : m.model,
@@ -6628,6 +6693,7 @@ export const runCockpitAgent = internalAction({
         tenantSkillIds,
         researchControlId,
         researchRequestId,
+        currentUserTurn: text,
         // Lineage ONLY under directVideo: the dispatch tools are built only with both ids present.
         ...(directVideo
           ? {
@@ -6794,6 +6860,7 @@ export const runCockpitAgent = internalAction({
           tenantSkillIds, // …and so must the tenant pin (21-03), for the specialists it dispatches
           turnId, // activity trace (CKPT-05) — undefined ⇒ the loop emits nothing
           threadId,
+          currentUserTurn: text,
           // 19-11: the trusted clock (§2-D). `effectiveClientContext`, not `clientContext`, so the
           // loop and the SMOKE path above agree on the instant rather than diverging by which branch
           // ran. Without this the tools the loop builds refuse every dated request.
@@ -6823,13 +6890,22 @@ export const __invokeCockpitTool = internalAction({
     clientContext: v.optional(v.object({ tz: v.string(), nowMs: v.number() })),
     // Optional EVAL-01 version pin so the drafter-pin thread is testable offline.
     skillVersions: v.optional(v.record(v.string(), v.number())),
+    // Test-only mirror of ToolContext.currentUserTurn. Production threads `text` directly.
+    currentUserTurn: v.optional(v.string()),
   },
   handler: async (
     ctx,
-    { tenantId, planId, toolName, input, clientContext, skillVersions },
+    { tenantId, planId, toolName, input, clientContext, skillVersions, currentUserTurn },
   ): Promise<string> =>
     invokeTool(
-      buildCockpitTools({ ctx, tenantId, planId, clientContext, skillVersions }),
+      buildCockpitTools({
+        ctx,
+        tenantId,
+        planId,
+        clientContext,
+        skillVersions,
+        currentUserTurn,
+      }),
       toolName,
       input,
     ),

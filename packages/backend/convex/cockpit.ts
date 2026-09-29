@@ -22,6 +22,7 @@ import {
   beyondHorizon,
   classifyReviewDecision,
   type FigureClaim,
+  microsoftMailReady,
   normalizeAddress,
   notificationMessage,
   parseChannel,
@@ -844,6 +845,20 @@ export const proposeEmailPlan = internalMutation({
     { planId, recipients, mode, subject, body, skillVersion: pinnedVersion },
   ): Promise<{ escalated: true } | undefined> => {
     const plan = await ctx.db.get(planId);
+    if (plan?.firstSendRecipient !== undefined) {
+      const owner = await ctx.db.get(plan.tenantId as Id<"users">);
+      const ownerEmail = owner?.email?.trim() ?? "";
+      const expected = normalizeAddress(plan.firstSendRecipient);
+      const actual = recipients.map(normalizeAddress);
+      if (
+        !ownerEmail ||
+        actual.length !== 1 ||
+        actual[0] !== expected ||
+        actual[0] !== normalizeAddress(ownerEmail)
+      ) {
+        throw new ConvexError("FIRST_SEND_RECIPIENT_MISMATCH");
+      }
+    }
     // Skill-version attribution (08 IMPR-01): stamp the plan with the cockpit-agent version that
     // is drafting it, so a later feedback rating (copied plan→requests at executePlan) resolves to
     // the EXACT skill version that produced the response. Read the active row directly (this is a
@@ -911,6 +926,51 @@ export const proposeEmailPlan = internalMutation({
   },
 });
 
+/**
+ * BETA-03 launcher: create one normal cockpit thread/plan and route its proposal through the
+ * existing internal proposal seam. The recipient is never accepted from the client; it comes from
+ * the authenticated onboarding projection and is re-checked from the owner row in the marker
+ * mutation and again by executePlan immediately before its approval CAS.
+ */
+export const startFirstSend = tenantAction({
+  args: { threadId: v.optional(v.string()) },
+  handler: async (ctx, { threadId }): Promise<{ threadId: string; planId: Id<"plans"> }> => {
+    const offer = await ctx.runQuery(api.onboarding.firstSendOffer, {});
+    if (!offer.eligible || !offer.recipient)
+      throw new ConvexError(`FIRST_SEND_${offer.reason.toUpperCase()}`);
+    const ensured = await ensureThreadAndPlan(ctx, threadId, "Send a first message to myself");
+    await ctx.runMutation(internal.cockpit.markFirstSendPlan, { planId: ensured.planId });
+    await ctx.runMutation(internal.cockpit.proposeEmailPlan, {
+      planId: ensured.planId,
+      recipients: [offer.recipient],
+      mode: "individual",
+      subject: "A first message from Pikar-AI",
+      body: "This is a governed first-send check. Review this draft before approving it.",
+    });
+    await ctx.runMutation(internal.betaJourney.record, {
+      tenantId: ctx.tenantId,
+      eventType: "first_offer_started",
+      idempotencyKey: `first-offer:started:${String(ensured.planId)}`,
+      occurredAt: Date.now(),
+      planId: ensured.planId,
+    });
+    return ensured;
+  },
+});
+
+export const markFirstSendPlan = internalMutation({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const plan = await ctx.db.get(planId);
+    if (!plan) throw new Error("plan not found");
+    if (plan.status !== "collecting") throw new Error("FIRST_SEND_PLAN_NOT_COLLECTING");
+    const owner = await ctx.db.get(plan.tenantId as Id<"users">);
+    const email = owner?.email?.trim() ?? "";
+    if (!email) throw new ConvexError("FIRST_SEND_NO_ADDRESS");
+    await ctx.db.patch(planId, { firstSendRecipient: email });
+  },
+});
+
 /** The args frozen at Approve and carried to the fan-out (immediately OR via the scheduler). */
 type FanoutArgs = {
   planId: Id<"plans">;
@@ -953,6 +1013,22 @@ async function startFanout(
   );
   await ctx.db.patch(planId, { status: "delivering", correlationId: planCid, workflowId });
   return workflowId;
+}
+
+/** One refs-only journey receipt for every successful human plan approval arm. */
+async function recordJourneyPlanApproval(
+  ctx: MutationCtx,
+  tenantId: string,
+  planId: Id<"plans">,
+): Promise<void> {
+  await ctx.runMutation(internal.betaJourney.record, {
+    tenantId,
+    eventType: "approval_decided",
+    idempotencyKey: `plan-approval:${String(planId)}`,
+    occurredAt: Date.now(),
+    approvalId: planId,
+    planId,
+  });
 }
 
 /**
@@ -1254,6 +1330,9 @@ export const executePlan = tenantMutation({
         ok: false;
         reason:
           | "gmail_not_connected"
+          | "microsoft_not_connected"
+          | "mail_scope_missing"
+          | "first_send_recipient_mismatch"
           | "send_time_too_far"
           | "review_escalated"
           // 20-07 MEDIA-01. Every one of these is a GOVERNED STOP that names a lever the user can
@@ -1286,6 +1365,23 @@ export const executePlan = tenantMutation({
     // guard BEFORE the CAS flip / seed / start, so an escalated plan seeds no rows, starts no workflow.
     if (plan.escalated) return { ok: false, reason: "review_escalated" };
 
+    // BETA-03 defense in depth: the first-send marker is server-owned and must still point at the
+    // authenticated owner's current address immediately before the approval CAS. A stale profile,
+    // tampered plan row or recipient rewrite therefore refuses without seeding requests/workflow.
+    if (plan.firstSendRecipient !== undefined) {
+      const owner = await ctx.db.get(ctx.tenantId as Id<"users">);
+      const ownerEmail = owner?.email?.trim() ?? "";
+      const recipients = plan.recipients ?? [];
+      if (
+        !ownerEmail ||
+        recipients.length !== 1 ||
+        normalizeAddress(plan.firstSendRecipient) !== normalizeAddress(ownerEmail) ||
+        normalizeAddress(recipients[0] ?? "") !== normalizeAddress(ownerEmail)
+      ) {
+        return { ok: false, reason: "first_send_recipient_mismatch" };
+      }
+    }
+
     // ACTN-01: executePlan is the DISPATCHER. Each action type is one arm; adding a type without an
     // arm is a COMPILE error (`armFor`'s `satisfies Record<ActionType, Arm>` table in @pikar/core,
     // re-bound below), which is a stronger guarantee than any test. The arms are the EXISTING code
@@ -1310,6 +1406,7 @@ export const executePlan = tenantMutation({
         if (actionTypeOf(plan.kind) === "crm_write") {
           await applyCrmOperations(ctx, plan.tenantId, plan.crmOperations);
           await ctx.db.patch(planId, { status: "done" });
+          await recordJourneyPlanApproval(ctx, ctx.tenantId, planId);
           return { ok: true };
         }
         // 2026-08-10: the arm's THIRD occupant, and the same shape as `crm_write` above —
@@ -1328,6 +1425,7 @@ export const executePlan = tenantMutation({
           // written — `applyFinanceClaims` validates the whole claim list before writing any of it.
           if (!applied.ok) return { ok: false, reason: applied.reason };
           await ctx.db.patch(planId, { status: "done" });
+          await recordJourneyPlanApproval(ctx, ctx.tenantId, planId);
           // The COUNT, not a boolean: `applied: 0` is a real outcome (every claim older than what
           // is stored), and a card that says "approved" over zero writes is the same dishonesty
           // the figure tiles exist to avoid.
@@ -1361,6 +1459,7 @@ export const executePlan = tenantMutation({
             },
           );
           await ctx.db.patch(planId, { status: "scheduled", scheduledFunctionId });
+          await recordJourneyPlanApproval(ctx, ctx.tenantId, planId);
           return { ok: true, scheduled: true };
         }
 
@@ -1371,16 +1470,19 @@ export const executePlan = tenantMutation({
         // `discardPlan` on `proposed`, so a `done` parent is unreachable from both doors.
         if (settled.armed > 0) {
           await ctx.db.patch(planId, { status: "scheduled" });
+          await recordJourneyPlanApproval(ctx, ctx.tenantId, planId);
           return { ok: true, scheduled: true };
         }
         if (settled.published > 0) {
           await ctx.db.patch(planId, { status: "done" });
+          await recordJourneyPlanApproval(ctx, ctx.tenantId, planId);
           return { ok: true };
         }
 
         // (3) The ordinary single memo, byte-identical to what it always was.
         await ctx.db.patch(planId, { status: "done" });
         await persistNextStepMemo(ctx, plan);
+        await recordJourneyPlanApproval(ctx, ctx.tenantId, planId);
         return { ok: true };
       }
       case "externalAction": {
@@ -1469,6 +1571,7 @@ export const executePlan = tenantMutation({
           // name. Set in the same patch as `approved` so there is no window where it is neither.
           ...(externalType === "media" ? { renderStatus: "pending" as const } : {}),
         });
+        await recordJourneyPlanApproval(ctx, ctx.tenantId, planId);
         const correlationId = crypto.randomUUID(); // server-minted, never client-supplied
         const runId = await EXTERNAL_TARGETS[externalType](ctx, {
           planId,
@@ -1493,10 +1596,20 @@ export const executePlan = tenantMutation({
         return assertNever(armType);
     }
 
-    // No mailbox → no send (design: stop before any delivery). Reuse the existing token reader;
-    // the row is checked for existence ONLY and never logged (crown jewels — CLAUDE.md §4).
-    const tokens = await ctx.runQuery(internal.gmailAuth.getTokens, { tenantId: ctx.tenantId });
-    if (!tokens) return { ok: false, reason: "gmail_not_connected" };
+    // No selected mailbox → no send (design: stop before any delivery). Check only the provider
+    // persisted on this plan. Microsoft needs the Mail.Send scope as well as a token row; a
+    // calendar-only legacy grant is real but cannot deliver mail and must route to re-consent.
+    const mailProvider = plan.mailProvider ?? "google";
+    if (mailProvider === "google") {
+      const tokens = await ctx.runQuery(internal.gmailAuth.getTokens, { tenantId: ctx.tenantId });
+      if (!tokens) return { ok: false, reason: "gmail_not_connected" };
+    } else {
+      const scope = await ctx.runQuery(internal.microsoftAuth.grantedScope, {
+        tenantId: ctx.tenantId,
+      });
+      if (scope === null) return { ok: false, reason: "microsoft_not_connected" };
+      if (!microsoftMailReady(scope)) return { ok: false, reason: "mail_scope_missing" };
+    }
 
     // 19-05 SC#6 (CAN-SPAM): every product email must carry the tenant's physical postal address,
     // and `gmail.send` refuses to build a footer without one. Refuse HERE — at the human gate,
@@ -1548,6 +1661,7 @@ export const executePlan = tenantMutation({
 
     // CAS: flip first. A second concurrent tx re-reads "approved" above and no-ops.
     await ctx.db.patch(planId, { status: "approved" });
+    await recordJourneyPlanApproval(ctx, ctx.tenantId, planId);
 
     // 27-07: the ONE place a pack-staged plan can be approved. `proposePlan` is granted to exactly
     // one pack (`customer-complaint`) and it writes an EMAIL plan, so this arm is the only reachable

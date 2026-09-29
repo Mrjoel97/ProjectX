@@ -7,6 +7,10 @@ export default defineConfig({
     environment: "edge-runtime",
     server: { deps: { inline: ["convex-test"] } },
     include: ["convex/**/*.test.ts"],
+    // Convex in-memory backends are expensive to boot. The unconstrained root run completed all
+    // 4,598 assertions but lost a Vitest worker RPC under aggregate package load; the same
+    // backend suite passed with two workers. Keep CI's ordinary `pnpm test` on that proven path.
+    maxWorkers: 2,
     // Vitest's default is 5_000ms, which is too tight for THIS suite and produced a recurring
     // load-dependent flake: `runCockpitAgent.test.ts > mock loop` and `voice.test.ts > storeBrief`
     // both take ~3.4s ISOLATED (each convex-test instance boots an in-memory backend, registers

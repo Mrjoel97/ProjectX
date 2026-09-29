@@ -15,7 +15,7 @@ async function prepareProfile(
   tenantId: string,
   sourceDocId: Id<"vaultDocuments">,
   hasHeader = false,
-): Promise<DataProfile> {
+): Promise<{ profile: DataProfile; sourceStorageId: Id<"_storage">; sourceMimeType: string }> {
   const doc = await ctx.runQuery(internal.vault.getDocForExtraction, {
     tenantId,
     vaultDocId: sourceDocId,
@@ -38,15 +38,19 @@ async function prepareProfile(
   if (blob.size > DATA_PROFILE_LIMITS.fileBytes) throw new Error("DATA_FILE_TOO_LARGE");
   const buffer = await blob.arrayBuffer();
   const workbook = readDataWorkbook(new Uint8Array(buffer), format, hasHeader);
-  return profileDataset({
-    source: {
-      fileId: sourceDocId,
-      contentHash: await contentHash(buffer),
-      byteLength: buffer.byteLength,
-      format,
-    },
-    ...workbook,
-  });
+  return {
+    profile: profileDataset({
+      source: {
+        fileId: sourceDocId,
+        contentHash: await contentHash(buffer),
+        byteLength: buffer.byteLength,
+        format,
+      },
+      ...workbook,
+    }),
+    sourceStorageId: doc.storageId,
+    sourceMimeType: doc.mimeType,
+  };
 }
 
 /** Native pack callers must apply their own exact-version evidence and capability gates first. */
@@ -57,7 +61,7 @@ export const profileOwnedDataset = internalAction({
     hasHeader: v.optional(v.boolean()),
   },
   handler: async (ctx, { tenantId, sourceDocId, hasHeader }): Promise<DataProfile> =>
-    prepareProfile(ctx, tenantId, sourceDocId, hasHeader),
+    (await prepareProfile(ctx, tenantId, sourceDocId, hasHeader)).profile,
 });
 
 /** Engineering verification: exact owned file, existing owner auth, no model/warehouse authority.
@@ -73,7 +77,12 @@ export const previewDataset = ownerAction({
     rowCount: number;
     warningCount: number;
   }> => {
-    const profile = await prepareProfile(ctx, ctx.tenantId, sourceDocId, hasHeader);
+    const { profile, sourceStorageId, sourceMimeType } = await prepareProfile(
+      ctx,
+      ctx.tenantId,
+      sourceDocId,
+      hasHeader,
+    );
     const markdown = [
       "# Data profile — operator preview",
       "",
@@ -93,6 +102,7 @@ export const previewDataset = ownerAction({
         form: "long",
         markdown,
         contentHash: await contentHash(markdown),
+        sourceCheck: { sourceDocId, storageId: sourceStorageId, mimeType: sourceMimeType },
       },
     );
     return {

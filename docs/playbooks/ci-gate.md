@@ -1,5 +1,95 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
+> Last verified: 2026-09-28 — the hand-written free-gate registry includes
+> `check-production-head.mjs --self-test` and
+> `check-production-vercel-project.mjs --self-test`, so CI verifies the
+> release-head comparison, its three workflow placements, and the Vercel
+> project-identity guard's synthetic local/API responses without querying
+> GitHub, Vercel or touching production. The live main-ref and post-`vercel
+> pull` authenticated project read run only inside an opted-in production
+> workflow and fail closed on missing or mismatched readback.
+
+> Last verified: 2026-09-28 — CI now runs the disabled Wave 6 recurrence candidate
+> through its own edge-runtime Vitest config and TypeScript project after checking the
+> exact accepted stage inventory. Default backend discovery still excludes the six-file
+> candidate, and the workflow does not deploy or activate it. This closes a synthetic
+> test-coverage gap, not the independent source review, real limiter, D6 or live gates.
+>
+> Last verified: 2026-09-28 - `check-model-provider-boundary.mjs` is a registered free gate.
+> It parses production Convex modules and refuses direct provider-SDK imports/re-exports,
+> including subpaths and computed dynamic imports, outside `lib/models.ts` and `llm.ts`.
+> Eleven synthetic controls and the real tree run in CI. Root `package.json` pins a stable
+> TypeScript 5 AST API as `typescript-ast` because TypeScript 7's top-level export no longer
+> exposes `createSourceFile`. This is an SDK-import boundary, not a proof against raw HTTP or
+> every possible indirect model route.
+>
+> Last verified: 2026-09-27 - `biome.json`'s `files.includes` gained two exclusions, and this is the
+> gate-level reason they are correct rather than a convenience. `compile-design-knowledge.mjs` writes
+> `packages/core/src/designKnowledge.generated.ts` AND `third_party/design-knowledge/manifest.json`
+> in a form `biome check --write` then rewrites — each undoing the other, so the compiler's
+> `compilerSha256` and `compiledBundleHash` could never satisfy both `compile-design-knowledge.mjs
+> --check` and `biome ci` at the same time. That is a gate red for a non-reason, which is worse than
+> no gate: the aggregate's "offline compiler" plane and the lint step could not both be green, so
+> the Phase 49 digest could never settle. Both files are generator-owned and integrity-checked —
+> `compilerSha256` is literally the hash of the compiler, and `--check` demands a deterministic
+> recompile — so a consumer formatter must not own their bytes. This follows the convention already in
+> the same list for `**/_generated` and the assembly fixtures. Biome now checks 1142 files instead of
+> 1144. What this does NOT do is relax lint: the files are still fully covered by the compiler's own
+> `--check`, its provenance verifier, and the Phase 49 aggregate's provenance and compiler planes, so
+> coverage moved to the tool that can actually enforce it. Note the ordering this imposes: run
+> `pnpm format` BEFORE the generators, and the recipe implementation pin LAST, or the pins are
+> computed against bytes that are about to be rewritten.
+
+> Last verified: 2026-09-23 - strict qualification is explicit with `--exit-code` for both local
+> corpus checkers. Missing Git/root/diff discovery, absent or invalid watch data, and missing or
+> empty planning inputs now fail with structured `status: failed`; a successful qualification emits
+> `status: passed`. Editor-hook skips emit `status: skipped` and remain nonblocking. Subprocess
+> fixtures cover these outcomes, existing planning contradictions, valid corpora, and uncovered
+> playbook changes. Run `node --test scripts/check-planning.test.mjs scripts/check-playbooks.test.mjs`.
+> This check validates local corpus consistency; it does not accept or close a phase.
+
+> Last verified: 2026-09-20 — the source-anchored capability-claim checker is registered in the
+> hand-maintained free-gate allowlist, exposed as `pnpm check:free-gates`, and invoked by normal CI.
+> Its mutation suite rejects deleted claim inventory and positive invite, legal, or social copy
+> when the named capability is unavailable. The checker proves repository copy alignment only; it
+> does not claim deployment, provider approval, legal formation, or Wave 8 qualification.
+
+> Last verified: 2026-09-19 (37.1 closeout — **planning completion is semantic, not a filename
+> count**, and the verified route now advances to Wave 1A). `node --test scripts/check-planning.test.mjs` passed **11/11** focused tests. The
+> fixtures mutation-prove exact PLAN-to-SUMMARY identity, explicit open statuses, named
+> supersession as a non-completion disposition, open body evidence overriding nominal `complete`
+> frontmatter, present VERIFICATION vetoes, completed-only
+> `x/y` counts, STATE/ROADMAP/GSD-ROUTING agreement, and one-owner SITE/LAND/SHOP traceability.
+> `node scripts/check-free-gates.mjs --self-test` passed all eight self-checks; `git diff --check`
+> passed for the checker and test.
+>
+> The current-corpus command, `'{}' | node scripts/check-planning.mjs --exit-code`, correctly
+> returned **1** at this point in Wave 0. It named eight pre-existing contradictions: Phase 2's
+> missing canonical 02-08/02-09 summaries under a Complete row; `human_needed` verification under
+> Complete rows for Phases 5, 15.3, and 25.1; stale 10/10 versus 11/11 completion for Phase 19 plus
+> its non-final `Code complete` disposition; and stale 17/20 versus 19/20 completion for Phase 20.
+> Phase 37.1 Plan 06 owns the ROADMAP/supersession reconciliation and must make this exact command
+> green before Phase 37.1 can close. Do not add an allowlist or weaken a diagnostic to obtain green.
+>
+> Canonical completion means an exact `<plan-id>-SUMMARY.md` with explicit `complete`/`completed`,
+> or a legacy statusless summary with no structured open evidence. Auxiliary FIX/TAIL/REVIEW names
+> never count. `superseded` requires a named successor, stays outside the completed numerator, and
+> can justify only an explicit Superseded phase disposition. A present verification with `partial`,
+> `in_progress`, `blocked`, `draft`, `human_needed`, `gaps_found`, `awaiting_*`, or `defer` blocks a
+> Complete row. A missing historical VERIFICATION is not fabricated as passed or failed here; the
+> closure ledger owns that remediation.
+>
+> The checker deliberately uses Node stdlib plus regexes for repository-owned Markdown/frontmatter
+> shapes. When a status field, progress cell, current-pointer line, traceability row, or routing JSON
+> shape changes, add a red/green fixture first and then adjust the narrow matcher. That format change
+> is the Ponytail upgrade trigger; speculative YAML/Markdown parsing, auto-rewrites, and planning
+> services remain outside this gate.
+>
+> This is both a local Stop-hook guard (`.claude/settings.json`) and an actual CI step
+> (`.github/workflows/ci.yml`, “Planning evidence”). The fixture test and `--exit-code` invocation
+> are the CI evidence. They are not deployment, browser, live-provider, owner-acceptance, or
+> external-enablement evidence; those layers remain separate.
+
 > 2026-09-12: backend declares the existing TypeScript 7.0.2 compiler directly. Convex 1.42.1
 > checks `node_modules/typescript/bin/tsc` relative to the backend; a root-only declaration
 > let its default `try` mode skip the compiler even while workspace `tsc` passed. Production

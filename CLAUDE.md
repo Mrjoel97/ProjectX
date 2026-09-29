@@ -123,3 +123,31 @@ Rules:
   Convex cross-module edges (`internal.*`/`api.*` — without them the delivery spine is invisible),
   per-table nodes with `db_read`/`db_write` edges (schema blast-radius queries), and removal of
   `.planning//.claude//config` noise nodes. A SessionStart hook also re-runs it each session.
+
+## 11. Thin-root build orchestration for substantial implementation
+
+This is an internal contributor workflow for building Pikar AI, not an application feature.
+Do not add Astra to the runtime skill registry, customer-facing builders, or product dependencies.
+The default route remains native OpenAI/account models: Astra orchestrates; Luna, Sol and the
+host-advertised Terra build according to `docs/agent-work/pikar-build-routing.json`. The owner
+additionally approved an opt-in development-only DeepSeek V4 Flash route through the existing
+OpenRouter key in `.env`; see `docs/agent-work/pikar-flash-routing.json` and
+`docs/playbooks/dev-orchestration.md`. This does not change app routing, install a global Router,
+or change the native root/worker defaults. Never expose or copy the key.
+
+For a substantial multi-file build, migration, or refactor, use the project workflow in
+`docs/agent-work/pikar-build-orchestration.md`. Preserve an existing approved GSD/spec plan instead
+of creating a competing plan. The root owns architecture, security/tenancy/payment decisions,
+acceptance criteria, dependency order, and final acceptance. Delegate one coherent, bounded plan
+or vertical slice to one native lower-cost implementation worker when an appropriate role/model is
+actually available; the worker owns in-scope discovery, implementation, tests, debugging, and
+routine browser QA. Do not delegate trivial edits or explicitly single-agent work.
+
+Use one writer in the shared workspace by default, with exact file ownership and no recursive
+agents. Do not poll a healthy worker or duplicate its investigation. Worker completion means ready
+for review, never accepted: the root reviews actual changed/new files against the captured baseline
+for specification compliance and quality/security, then sends one consolidated correction request
+if needed. Never claim a worker route/provider from instructions or self-report, silently fall back
+to another model, or claim savings without comparable measured usage. The opt-in Flash CLI may run
+only with its pinned, verified route and bounded task; the root retains the final review. Commits, pushes, deploys,
+production migrations, and costs remain separately governed.

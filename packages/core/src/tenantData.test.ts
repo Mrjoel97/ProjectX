@@ -1,11 +1,214 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import {
+  commerceDeletionBlocker,
+  commerceExportView,
   deletableTables,
+  isCommerceTable,
   STORAGE_ID_FIELDS,
   storageIdsIn,
   TENANT_TABLE_CLASSIFICATION,
 } from "./tenantData";
+
+describe("Plan 50-19 closed commerce field classification", () => {
+  test("unused buyer-free rows erase, but orders, attempts and linked holds refuse by name", () => {
+    expect(commerceDeletionBlocker("tenantProducts", { sku: "unused" })).toBeNull();
+    expect(commerceDeletionBlocker("tenantCommercePolicies", { revision: 7 })).toBeNull();
+    expect(commerceDeletionBlocker("tenantReservations", { status: "held" })).toBeNull();
+    expect(commerceDeletionBlocker("tenantOrders", {})).toBe(
+      "COMMERCE_RETENTION_POLICY_REQUIRED:ORDER_FINANCIAL_FULFILMENT_REFUND_BUYER",
+    );
+    expect(commerceDeletionBlocker("tenantOrderAttempts", {})).toBe(
+      "COMMERCE_RETENTION_POLICY_REQUIRED:ATTEMPT_HISTORY",
+    );
+    expect(commerceDeletionBlocker("tenantReservations", { orderId: "linked" })).toBe(
+      "COMMERCE_RETENTION_POLICY_REQUIRED:LINKED_RESERVATION",
+    );
+    expect(commerceDeletionBlocker("tenantReservations", { attemptId: "linked" })).toBe(
+      "COMMERCE_RETENTION_POLICY_REQUIRED:LINKED_RESERVATION",
+    );
+  });
+  const physical = {
+    shippingSourceRef: "ship-v1",
+    shippingMinor: 300,
+    returnsPolicyRef: "returns-v1",
+    taxSourceRef: "tax-physical",
+    taxBasisPoints: 1000,
+    refundPolicyRef: "refund-physical",
+    buyerRetentionRef: "retain-physical",
+  };
+  const digital = {
+    deliveryRef: "delivery-v1",
+    revocationRef: "revoke-v1",
+    noShipping: true,
+    taxSourceRef: "tax-digital",
+    taxBasisPoints: 500,
+    refundPolicyRef: "refund-digital",
+    buyerRetentionRef: "retain-digital",
+  };
+  const policy = {
+    _id: "policy-1",
+    _creationTime: 1,
+    tenantId: "tenant-a",
+    projectId: "site-a",
+    revision: 2,
+    sellerOfRecordRef: "seller-v1",
+    currency: "USD",
+    countries: ["TZ"],
+    taxRounding: "half_up",
+    physical,
+    digital,
+    createdAt: 1,
+  };
+  const line = {
+    presentationItemId: "card-1",
+    productId: "product-1",
+    sku: "lamp",
+    goodsKind: "physical",
+    taxSourceRef: "tax-physical",
+    refundPolicyRef: "refund-physical",
+    buyerRetentionRef: "retain-physical",
+    productRevision: 2,
+    stockRevision: 3,
+    unitMinor: 1000,
+    quantity: 1,
+    lineMinor: 1000,
+  };
+  const order = {
+    _id: "order-1",
+    _creationTime: 1,
+    tenantId: "tenant-a",
+    projectId: "site-a",
+    cartId: "cart-1",
+    cartRevision: 1,
+    snapshot: {
+      tenantId: "tenant-a",
+      projectId: "site-a",
+      currency: "USD",
+      country: "TZ",
+      policyId: "policy-1",
+      policyRevision: 2,
+      sellerOfRecordRef: "seller-v1",
+      taxRounding: "half_up",
+      physicalPolicy: physical,
+      digitalPolicy: digital,
+      lines: [line],
+      subtotalMinor: 1000,
+      taxMinor: 100,
+      shippingMinor: 300,
+      totalMinor: 1400,
+      hash: "sha256:snapshot",
+    },
+    snapshotHash: "sha256:snapshot",
+    status: "pending",
+    expiresAt: 1000,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+
+  test("exports exact merchant-owned kinds, branch provenance, amounts and metadata", () => {
+    expect(commerceExportView("tenantCommercePolicies", policy)).toMatchObject({
+      _id: "policy-1",
+      _creationTime: 1,
+      revision: 2,
+      physical: { shippingMinor: 300, buyerRetentionRef: "retain-physical" },
+      digital: { noShipping: true, deliveryRef: "delivery-v1" },
+    });
+    expect(commerceExportView("tenantOrders", order)).toMatchObject({
+      snapshot: {
+        policyRevision: 2,
+        shippingMinor: 300,
+        lines: [{ goodsKind: "physical", unitMinor: 1000 }],
+      },
+    });
+    expect(
+      commerceExportView("tenantProducts", {
+        _id: "product-1",
+        _creationTime: 1,
+        tenantId: "tenant-a",
+        sku: "lamp",
+        variant: "one",
+        currency: "USD",
+        priceMinor: 1000,
+        status: "active",
+        goodsKind: "physical",
+        revision: 2,
+        createdAt: 1,
+        updatedAt: 1,
+      }),
+    ).toMatchObject({ goodsKind: "physical", revision: 2 });
+  });
+
+  test("omits retry-key hashes and names legacy unclassified rows", () => {
+    expect(
+      commerceExportView("tenantOrderAttempts", {
+        _id: "attempt-1",
+        _creationTime: 1,
+        tenantId: "tenant-a",
+        orderId: "order-1",
+        cartId: "cart-1",
+        cartRevision: 1,
+        retryKeyHash: "secret-hash",
+        snapshotHash: "sha256:snapshot",
+        status: "local_pending",
+        createdAt: 1,
+        updatedAt: 1,
+      }),
+    ).not.toHaveProperty("retryKeyHash");
+    expect(
+      commerceExportView("tenantProducts", {
+        _id: "legacy",
+        _creationTime: 1,
+        tenantId: "tenant-a",
+        sku: "legacy",
+        variant: "one",
+        currency: "USD",
+        priceMinor: 100,
+        status: "active",
+        revision: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      }),
+    ).toMatchObject({ goodsKind: null, classification: "legacy_unclassified" });
+    expect(
+      commerceExportView("tenantCommercePolicies", {
+        ...policy,
+        physical: undefined,
+        digital: undefined,
+      }),
+    ).toMatchObject({ classification: "legacy_policy_branches_missing" });
+  });
+
+  test("unknown commerce table and top-level or nested buyer/credential fields fail closed", () => {
+    expect(isCommerceTable("tenantMerchantAccounts")).toBe(true);
+    expect(() => commerceExportView("tenantMerchantAccounts", { tenantId: "tenant-a" })).toThrow(
+      "COMMERCE_TABLE_UNCLASSIFIED",
+    );
+    expect(() =>
+      commerceExportView("tenantProducts", { _id: "p", buyerEmail: "buyer@example.test" }),
+    ).toThrow("COMMERCE_FIELD_UNCLASSIFIED:tenantProducts.buyerEmail");
+    expect(() =>
+      commerceExportView("tenantCommercePolicies", {
+        ...policy,
+        physical: { ...physical, credentialCiphertextB64: "secret" },
+      }),
+    ).toThrow(
+      "COMMERCE_FIELD_UNCLASSIFIED:tenantCommercePolicies.physical.credentialCiphertextB64",
+    );
+    expect(() =>
+      commerceExportView("tenantOrders", {
+        ...order,
+        snapshot: { ...order.snapshot, buyerEmail: "buyer@example.test" },
+      }),
+    ).toThrow("COMMERCE_FIELD_UNCLASSIFIED:tenantOrders.snapshot.buyerEmail");
+    expect(() =>
+      commerceExportView("tenantOrders", {
+        ...order,
+        snapshot: { ...order.snapshot, lines: [{ ...line, buyerName: "Buyer" }] },
+      }),
+    ).toThrow("COMMERCE_FIELD_UNCLASSIFIED:tenantOrders.snapshot.lines[].buyerName");
+  });
+});
 
 const schemaSource = readFileSync(
   new URL("../../backend/convex/schema.ts", import.meta.url),
@@ -51,9 +254,48 @@ describe("tenant table classification registry", () => {
     // schema.test.ts against the same source) are two readers of one file that now agree.
     // + funnels (31-01): tenant-owned fixed-source aggregate links = 61.
     // + researchControls (2026-09-12 request controls): tenant-owned bounded attempt state = 62.
-    expect(schemaTables).toHaveLength(62);
+    // + goldenEvalAttempts (2026-09-20): refs/hash-only paid-workflow recovery journal = 63.
+    // + betaJourneyEvents (25-15): tenant-owned refs-only product journey measurements = 64.
+    // + webProjects, webProjectVersions, webMetrics and webSubmissions (48-02) = 68.
+    // + tenantProducts, tenantStock and tenantReservations (50-02) = 71.
+    // + five provider-independent local policy/mapping/cart/order/attempt rows (50-04) = 76.
+    expect(schemaTables).toHaveLength(76);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
+  });
+
+  test("Phase 48 rows are tenant-owned and rendered artifacts are reachable", () => {
+    expect(TENANT_TABLE_CLASSIFICATION.webProjects).toBe("tenant_owned");
+    expect(TENANT_TABLE_CLASSIFICATION.webProjectVersions).toBe("tenant_owned");
+    expect(TENANT_TABLE_CLASSIFICATION.webMetrics).toBe("tenant_owned");
+    expect(TENANT_TABLE_CLASSIFICATION.webSubmissions).toBe("tenant_owned");
+    expect(deletableTables()).toEqual(
+      expect.arrayContaining(["webProjects", "webProjectVersions", "webMetrics", "webSubmissions"]),
+    );
+    expect(STORAGE_ID_FIELDS.webProjectVersions).toEqual(["artifactStorageId"]);
+    expect(storageIdsIn("webProjectVersions", { artifactStorageId: "web-artifact" })).toEqual([
+      "web-artifact",
+    ]);
+  });
+
+  test("Phase 50 buyer-free catalogue, stock and reservation rows are exported and erased", () => {
+    for (const table of ["tenantProducts", "tenantStock", "tenantReservations"] as const) {
+      expect(TENANT_TABLE_CLASSIFICATION[table]).toBe("tenant_owned");
+      expect(deletableTables()).toContain(table);
+    }
+  });
+
+  test("Plan 50-04 local order content and coordination rows are tenant-owned", () => {
+    for (const table of [
+      "tenantCommercePolicies",
+      "tenantCommerceMappings",
+      "tenantCarts",
+      "tenantOrders",
+      "tenantOrderAttempts",
+    ] as const) {
+      expect(TENANT_TABLE_CLASSIFICATION[table]).toBe("tenant_owned");
+      expect(deletableTables()).toContain(table);
+    }
   });
 
   test("makes credential tables an explicit closed set", () => {
@@ -164,6 +406,7 @@ describe("tenant table classification registry", () => {
       "billingCoverage",
       "billingEvents",
       "deadLetters",
+      "goldenEvalAttempts",
       "workflowPackEvents",
     ]);
 

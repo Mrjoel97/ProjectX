@@ -79,4 +79,8 @@ crons.daily(
   internal.billingRollup.tick,
   {},
 );
+// Phase 48: remove short-lived anonymous form coordination rows without retaining raw request
+// bodies, addresses, IPs, or user agents. The mutation discovers tenants through a tenant-leading
+// index and deletes only rows whose explicit expiry has passed.
+crons.interval("web-form-retention", { minutes: 60 }, internal.webForms.cleanupAll, {});
 export default crons;

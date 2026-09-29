@@ -1,0 +1,225 @@
+{
+  "version": "1.0",
+  "exact_head": "3b315e5f64caadcb8d54733714c43ce61263930f",
+  "generated_at": "2026-09-19T15:42:24.3258325Z",
+  "required_commands": [
+    "node --test scripts/check-planning.test.mjs",
+    "'{}' | node scripts/check-planning.mjs --exit-code",
+    "node scripts/check-free-gates.mjs --self-test",
+    "node scripts/check-playbooks.mjs --exit-code",
+    "node --test packages/backend/scripts/goldenPaidAttempt.test.mjs packages/backend/scripts/goldenEvaluatorIdentity.test.mjs .planning/phases/23-agent-authored-skills/phase23-operator.test.mjs scripts/smoke-quickbooks-read.test.mjs",
+    "pnpm typecheck --force",
+    "pnpm lint",
+    "pnpm test --force --concurrency=1",
+    "pnpm build --force",
+    "graphify update .",
+    "node scripts/extract-convex-edges.mjs",
+    "git diff --check"
+  ],
+  "results": [
+    {
+      "command": "node --test scripts/check-planning.test.mjs",
+      "timestamp": "2026-09-19T15:43:51.9384563Z",
+      "exit_code": 0,
+      "result": "green"
+    },
+    {
+      "command": "'{}' | node scripts/check-planning.mjs --exit-code",
+      "timestamp": "2026-09-19T15:44:06.2490339Z",
+      "exit_code": 0,
+      "result": "green"
+    },
+    {
+      "command": "node scripts/check-free-gates.mjs --self-test",
+      "timestamp": "2026-09-19T15:44:23.0134901Z",
+      "exit_code": 0,
+      "result": "green"
+    },
+    {
+      "command": "node scripts/check-playbooks.mjs --exit-code",
+      "timestamp": "2026-09-19T15:44:42.5735813Z",
+      "exit_code": 0,
+      "result": "green"
+    },
+    {
+      "command": "node --test packages/backend/scripts/goldenPaidAttempt.test.mjs packages/backend/scripts/goldenEvaluatorIdentity.test.mjs .planning/phases/23-agent-authored-skills/phase23-operator.test.mjs scripts/smoke-quickbooks-read.test.mjs",
+      "timestamp": "2026-09-19T15:45:00.7207795Z",
+      "exit_code": 0,
+      "result": "green"
+    },
+    {
+      "command": "pnpm typecheck --force",
+      "timestamp": "2026-09-19T15:46:03.1629817Z",
+      "exit_code": 0,
+      "result": "green"
+    },
+    {
+      "command": "pnpm lint",
+      "timestamp": "2026-09-19T15:46:46.3901585Z",
+      "exit_code": 0,
+      "result": "green"
+    },
+    {
+      "command": "pnpm test --force --concurrency=1",
+      "timestamp": "2026-09-19T15:53:26.4100614Z",
+      "exit_code": 0,
+      "result": "green"
+    },
+    {
+      "command": "pnpm build --force",
+      "timestamp": "2026-09-19T15:56:00.0892282Z",
+      "exit_code": 0,
+      "result": "green"
+    },
+    {
+      "command": "graphify update .",
+      "timestamp": "2026-09-19T16:20:11.4217578Z",
+      "exit_code": 0,
+      "result": "green"
+    },
+    {
+      "command": "node scripts/extract-convex-edges.mjs",
+      "timestamp": "2026-09-19T16:20:32.3484521Z",
+      "exit_code": 0,
+      "result": "green"
+    },
+    {
+      "command": "git diff --check",
+      "timestamp": "2026-09-19T16:20:51.9814986Z",
+      "exit_code": 0,
+      "result": "green"
+    }
+  ],
+  "attempt_history": [
+    {
+      "command": "pnpm build --force",
+      "timestamp": "2026-09-19T15:54:12.8328168Z",
+      "exit_code": 1,
+      "environment": "sandbox",
+      "classification": "sandbox_network_denial",
+      "detail": "Next.js could not reach fonts.googleapis.com for three declared Google Fonts."
+    },
+    {
+      "command": "pnpm build --force",
+      "timestamp": "2026-09-19T15:56:00.0892282Z",
+      "exit_code": 0,
+      "environment": "approved_network_retry",
+      "classification": "canonical_final_attempt",
+      "detail": "The exact command completed after network access was allowed; no source change was made."
+    }
+  ],
+  "graphify_reconciliation": {
+    "owner": "37.1-07",
+    "provenance": {
+      "plan_01_pre_edit_inventory": {
+        "captured_at": "2026-09-19T12:11:00Z",
+        "source": "37.1-PRE-EDIT-DIFF-INVENTORY.json",
+        "paths": {
+          "graphify-out/.graphify_labels.json": "92cc3070ddf34171401430df7b26d61ce8fe9e9f23180a5eab0814157b360f0c",
+          "graphify-out/GRAPH_REPORT.md": "347d90bc524ed0b57d363bf6536035d77407192911fd3403e2386f988f31f738",
+          "graphify-out/graph.json": "fe52b25a4dee9569aed345d480293b6f87b9715ed575c8b336eb3785a8241e92",
+          "graphify-out/manifest.json": "42e90aa425f806443fd956ded11cbbe99ad37497580d25bcd8174344c8643cb2"
+        }
+      },
+      "plan_01_documented_post_hook": {
+        "source": "37.1-01-SUMMARY.md",
+        "paths": {
+          "graphify-out/.graphify_labels.json": "a926aa5503a2a507219e589b24d4533e6d2cce409fba8aeee4411545bcd4558a",
+          "graphify-out/GRAPH_REPORT.md": "dddab432e5f40dc5dfb379ab76aecaeb55bd305ba2bdea6945921fb38bd13bfe",
+          "graphify-out/graph.json": "e9236d20d8183fbb7a9c7175a47a74c71a8f14296bd91449ef7622d824c59aa2",
+          "graphify-out/manifest.json": "196b345d8a1cad4c2804531186f0dcd6a100cc1806861cb6a85e6351d076446b"
+        }
+      },
+      "prior_snapshots": [
+        ".tmp/37.1-07-graphify-639417c68d5b4291af3240d7c9eb64b5",
+        ".tmp/37.1-07-graphify-ecc3ac20c9684388b0a35396c9cd2525"
+      ],
+      "current_pre_run_snapshot": {
+        "path": ".tmp/37.1-07-graphify-final-3b315e5-20260919T1557Z",
+        "timestamp": "2026-09-19T15:57:42.6126930Z",
+        "git_status_sha256": "36238114ddbf608afcb71937e525c7cfbe941769ac3d3ebe674bae1cdbf56239",
+        "graphify_diff_sha256": "8b22a078734a341594e38e3833db33be147420b7cbe92fe6800efee3beee4109",
+        "active_graph_or_python_writers": [],
+        "stable_hashes_confirmed": true
+      }
+    },
+    "pre_run": [
+      {
+        "path": "graphify-out/.graphify_labels.json",
+        "status": " M graphify-out/.graphify_labels.json",
+        "sha256": "796ea072bf8849fb15ebfa3f0d5d2e2365155243a97d60501d5fae3a143f909f",
+        "diff_sha256": "b4ca83c007c589108dfc5dca97e88ac0e2b5b7e712fe2031f2862973b82e7cb8"
+      },
+      {
+        "path": "graphify-out/GRAPH_REPORT.md",
+        "status": " M graphify-out/GRAPH_REPORT.md",
+        "sha256": "c0983a220baa969c4eb96ed697c6ec1350b8a93c24bd3569bf02e6deb55bda7a",
+        "diff_sha256": "09c1328229385f3499da0f2574f39f0d89893b1e6cdd499702cdbeafc93990f2"
+      },
+      {
+        "path": "graphify-out/graph.json",
+        "status": " M graphify-out/graph.json",
+        "sha256": "4ec6fa75cc445339cc68fa66f305b579aef4f7d4520c2662ffdd298fdd0284df",
+        "diff_sha256": "5b93abc0feab481993bdd179390938d27a723d75f7ec8d94b27418487f7a2727"
+      },
+      {
+        "path": "graphify-out/manifest.json",
+        "status": " M graphify-out/manifest.json",
+        "sha256": "a73f81fea313c7ff7400e54aa32474a92980cbc7b1059a910052080b2b9c1d6d",
+        "diff_sha256": "d096d27b9108329dbb61aa3649a2bc6126c541c63e6aa739715219f568876055"
+      }
+    ],
+    "post_run": [
+      {
+        "path": "graphify-out/.graphify_labels.json",
+        "status": " M graphify-out/.graphify_labels.json",
+        "sha256": "bd2397b69e3b03867d67ce3bb2874fb683cb8d6a065f5a30e3e05cdfb6d2f49d",
+        "diff_sha256": "7180d2f82d6a967a3ee2beafc502675de89afb3f668bc44f3e0f3fa0ebe27643"
+      },
+      {
+        "path": "graphify-out/GRAPH_REPORT.md",
+        "status": " M graphify-out/GRAPH_REPORT.md",
+        "sha256": "a52d4877883b379d3bb8d04fd093b45e7fdbfb33a3f981eeff159da0221a9aea",
+        "diff_sha256": "89b52ba8b3f639ef822ef46826222dcbdfc91e9d0e25f9ac56481f0c79d1d320"
+      },
+      {
+        "path": "graphify-out/graph.json",
+        "status": " M graphify-out/graph.json",
+        "sha256": "9ae23f6fff26819b271070adb82444f03259e39735acd83292cefc854c3f9fc1",
+        "diff_sha256": "161c75ea4ddf726bd19d4c650112dbbf5a8f1794de19557b9f19c88bb81f3af3"
+      },
+      {
+        "path": "graphify-out/manifest.json",
+        "status": " M graphify-out/manifest.json",
+        "sha256": "a73f81fea313c7ff7400e54aa32474a92980cbc7b1059a910052080b2b9c1d6d",
+        "diff_sha256": "d096d27b9108329dbb61aa3649a2bc6126c541c63e6aa739715219f568876055"
+      }
+    ],
+    "update_exit_code": 0,
+    "fixup_exit_code": 0,
+    "exclusion_proof": {
+      "brag-output_entries": 0,
+      "brag-series_entries": 0,
+      "graph_built_at_commit": "3b315e5f64caadcb8d54733714c43ce61263930f",
+      "report_built_from_commit": "3b315e5f",
+      "expected_head": "3b315e5f64caadcb8d54733714c43ce61263930f"
+    },
+    "unrelated_hunks_preserved": true,
+    "result": "green"
+  },
+  "scope_reconciliation": {
+    "before_timestamp": "2026-09-19T15:42:24.3258325Z",
+    "before_non_owned_status_sha256": "5e661307094d8eeaf0d6ea2d299b3899f07be1eecbacb6321b20812b51b9d728",
+    "after_timestamp": "2026-09-19T16:21:45.0368574Z",
+    "after_non_owned_status_sha256": "5e661307094d8eeaf0d6ea2d299b3899f07be1eecbacb6321b20812b51b9d728",
+    "non_owned_status_unchanged": true
+  },
+  "external_evidence": {
+    "remote_ci": "open",
+    "deployment": "open",
+    "browser": "open",
+    "live_observed": "open",
+    "owner_accepted": "open_pending_checkpoint",
+    "externally_enabled": "open"
+  }
+}

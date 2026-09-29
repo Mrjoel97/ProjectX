@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "scope": "development-only",
+  "status": "opt-in",
+  "root": "astra-planning-and-batched-review",
+  "worker": {
+    "provider": "openrouter",
+    "transport": "responses",
+    "model": "deepseek/deepseek-v4-flash-0731",
+    "entrypoint": "scripts/dev-orchestration/flash-worker.mjs",
+    "keySource": ".env:OPEN_ROUTER_API_KEY",
+    "keyHandling": "process-memory-only",
+    "defaultMode": "read-only",
+    "writeModeRequiresExplicitFlag": true,
+    "providerRetries": 0,
+    "tasks": [
+      "bounded-low-risk-implementation",
+      "focused-tests-and-mechanical-fixes",
+      "offline-dev-tooling",
+      "scoped-read-only-analysis"
+    ],
+    "excludedTasks": [
+      "architecture-and-acceptance-decisions",
+      "secrets-or-customer-data",
+      "authentication-tenancy-payments-and-security-decisions",
+      "production-or-provider-operations"
+    ]
+  },
+  "fallback": "no-silent-fallback-to-native-or-another-external-model",
+  "evidence": {
+    "probeBeforeClaimingRoute": true,
+    "usageCountersRequired": true,
+    "costSavingsRequireComparableMeasuredBaseline": true,
+    "rootReviewRequired": true
+  },
+  "application": {
+    "runtimeModelRoutingChanged": false,
+    "openRouterDeploymentVariableChanged": false,
+    "productDependencyAdded": false
+  }
+}

@@ -50,11 +50,12 @@ def _pin_candidate(skill_content: str, *, name: str = SKILL_NAME) -> int:
     """Materialize `skill_content` as a pinnable registry version and return its number.
 
     The only body->version seam that exists is POST /skillopt/writeback (08-05), which inserts a
-    gated CANDIDATE (never active). ponytail: writeback also writes an audit row + owner notification
-    per call, so a long train run mints several candidates — acceptable for the dormant dry-run
-    (low edit budget, one run_batch -> one candidate). Upgrade path: a dedicated ephemeral no-notify
-    dev-pin seam, decided at the 08-08 dry-run if a real cadence makes the noise matter.
+    gated CANDIDATE (never active). Training can mint many such rows, so this path is restricted to
+    a separate disposable evaluation deployment. Only the final accepted body may be written back
+    to the source deployment after the optimizer finishes and its later gates pass.
     """
+    if os.environ.get("SKILLOPT_EVAL_ISOLATED") != "true":
+        raise RuntimeError("SkillOpt candidate pin requires an isolated evaluation deployment")
     base = os.environ["SKILLOPT_HTTP_URL"].rstrip("/")
     token = os.environ["SKILLOPT_TOKEN"]
     payload = {
@@ -76,30 +77,25 @@ def _pin_candidate(skill_content: str, *, name: str = SKILL_NAME) -> int:
 
 
 def _user_turns(item: dict) -> list[str]:
-    """The user-role turns to feed runCockpitAgent, from the scrubbed export item."""
+    """Replay the originating goal, not the later rating/comment as a new instruction.
+
+    The export's trailing user turn is feedback about the historical response. Sending it to the
+    candidate cockpit agent would change the task and contaminate the observed outcome.
+    """
     conv = item.get("conversation")
     if isinstance(conv, list) and conv:
-        turns = [
-            c.get("content", "")
-            for c in conv
-            if isinstance(c, dict) and c.get("role") == "user" and c.get("content")
-        ]
-        if turns:
-            return turns
-        strs = [c for c in conv if isinstance(c, str) and c.strip()]
-        if strs:
-            return strs
+        for turn in conv:
+            if isinstance(turn, dict) and turn.get("role") == "user" and turn.get("content"):
+                return [turn["content"]]
     td = item.get("task_description")
     return [td] if td else []
 
 
 def _plan_health(plan: dict) -> float:
-    """A [0,1] plan-state proxy scored with the SAME shape eval:golden asserts (status/subject/
-    body/recipients). ponytail: `hard` (the exported thumbs, RESEARCH OQ1) is the primary reward;
-    `soft` is this light rollout-completeness signal, refined when real feedback volume exists."""
-    order = ["collecting", "proposed", "approved", "scheduled", "delivering", "done", "canceled"]
+    """A [0,1] candidate-observed structural proxy, not a semantic quality verdict."""
+    productive = {"proposed", "approved", "scheduled", "delivering", "done"}
     checks = [
-        order.index(plan.get("status", "collecting")) >= order.index("proposed"),
+        plan.get("status") in productive,
         bool(plan.get("subject")),
         bool(plan.get("body")),
         len(plan.get("recipients", []) or []) > 0,
@@ -142,7 +138,11 @@ def _score_item(item: dict, version: int, out_root: str, *, name: str = SKILL_NA
         encoding="utf-8",
     )
 
-    return {"id": item["id"], "hard": item.get("hard", 0), "soft": _plan_health(plan)}
+    # Historical thumbs are feedback on the old skill, not a reward for this candidate. A fixed
+    # imported hard score made every edit score identically. This structural signal is deliberately
+    # narrow: the separate golden eval and owner review must decide semantic suitability.
+    health = _plan_health(plan)
+    return {"id": item["id"], "hard": int(health == 1.0), "soft": health}
 
 
 def run_batch(

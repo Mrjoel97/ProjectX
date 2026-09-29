@@ -29,10 +29,14 @@ import {
   hasPassingEvidence,
   hasPassingPackEvalEvidence,
   hasPassingTenantEvidence,
+  hasPassingWebRecipeBrowserEvidence,
+  hasPassingWebRecipeEvidence,
+  hasValidWebRecipeProvenance,
   INBOX_DIGEST_SKILL,
   isAgentAuthorableSkill,
   isGatedSkill,
   isUserAuthorableSkill,
+  isWebRecipeSkill,
   KNOWLEDGE_QUERY_PLANNER_SKILL,
   KNOWLEDGE_SYNTHESIZER_SKILL,
   LEAD_ENGINE_SKILL,
@@ -55,6 +59,14 @@ import {
   USER_AUTHORABLE_SKILL_METADATA,
   VOICE_BRIEF_SKILL,
   VOICE_SESSION_SKILL,
+  WEB_RECIPE_BROWSER_EVIDENCE_OUTCOME_REFS,
+  WEB_RECIPE_BROWSER_EVIDENCE_REVISION,
+  WEB_RECIPE_BROWSER_LANE_OUTCOMES,
+  WEB_RECIPE_BROWSER_ROUTE,
+  WEB_RECIPE_PROVENANCE_SCHEMA,
+  WEB_RECIPE_REQUIRED_VIEWPORTS,
+  WEB_RECIPE_SKILL_NAMES,
+  WEB_RECIPE_UPSTREAM_PROVENANCE,
 } from "@pikar/contracts/skill";
 import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachmentExtractor";
 import { bmcSkillBody } from "@pikar/contracts/skills/bmc";
@@ -105,14 +117,21 @@ import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
 import {
   type CustomizationError,
   canonicalCustomization,
+  canonicalWebRecipeDefinition,
   checkBaseVersion,
   customizationSchemaFor,
+  hashWebRecipeDefinition,
   hasPassingPackBrowserEvidence,
   hasPassingTenantPackBrowserEvidence,
   hasValidPackProvenance,
   isWorkflowPackSkill,
+  parseWebRecipeDefinition,
   renderCustomization,
   validateCustomization,
+  WEB_DESIGN_RENDERER_VERSION,
+  WEB_RECIPE_BUNDLE_HASH,
+  WEB_RECIPE_COMPILER_ID,
+  WEB_RECIPE_DEFINITIONS,
   WORKFLOW_PACK_SKILL_NAMES,
 } from "@pikar/core";
 import { verticalIdForSkill } from "@pikar/core/verticalPacks";
@@ -128,7 +147,9 @@ import {
 } from "./_generated/server";
 import { ownerMutation, ownerQuery, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { offlineSeamAvailable } from "./lib/models";
 import { hasNativeVerticalEvidence } from "./verticalEvalEvidence";
+import { evaluateWebRecipeCandidate as evaluateExactWebRecipeCandidate } from "./webRecipeEvals";
 
 /**
  * Load the currently active skill by name. Reads the single status==="active"
@@ -257,6 +278,15 @@ async function planGlobalActivation(
     await assertPackActivationEvidence(ctx, target, name, version);
   }
 
+  // WEB RECIPE GATE (Phase 49). Recipes are deterministic structured definitions, not agent
+  // prompts, so the generic golden predicate is deliberately not used here. A candidate must
+  // carry the exact offline provenance, complete current zero-cost suite evidence and exact
+  // authenticated desktop/mobile evidence. Archived/rolled_back rows remain exempt by the
+  // existing status rule, which keeps incident rollback independent of a healthy evaluator.
+  if (isWebRecipeSkill(name) && target.status === "candidate") {
+    await assertWebRecipeActivationEvidence(ctx, target, name, version);
+  }
+
   const current = await ctx.db
     .query("skills")
     .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
@@ -275,6 +305,56 @@ async function planGlobalActivation(
     ownerApproval: null,
     provenActive: {},
   };
+}
+
+type WebRecipeRowTarget = {
+  skillId: string;
+  name: (typeof WEB_RECIPE_SKILL_NAMES)[number];
+  version: number;
+  bodyHash: string;
+  definitionHash: string;
+};
+
+async function webRecipeTarget(row: Doc<"skills">): Promise<WebRecipeRowTarget> {
+  if (!isWebRecipeSkill(row.name)) throw new Error(`WEB_RECIPE_NAME_INVALID: ${row.name}`);
+  let definition: ReturnType<typeof parseWebRecipeDefinition>;
+  try {
+    definition = parseWebRecipeDefinition(JSON.parse(row.body));
+  } catch {
+    throw new Error(`WEB_RECIPE_BODY_INVALID: ${row.name} v${row.version}`);
+  }
+  if (definition.registryName !== row.name) {
+    throw new Error(`WEB_RECIPE_NAME_MISMATCH: ${row.name} v${row.version}`);
+  }
+  return {
+    skillId: String(row._id),
+    name: row.name,
+    version: row.version,
+    bodyHash: await contentHash(row.body),
+    definitionHash: hashWebRecipeDefinition(definition),
+  };
+}
+
+async function assertWebRecipeActivationEvidence(
+  _ctx: QueryCtx,
+  target: Doc<"skills">,
+  name: (typeof WEB_RECIPE_SKILL_NAMES)[number],
+  version: number,
+): Promise<void> {
+  const identity = await webRecipeTarget(target);
+  const missing = [
+    hasValidWebRecipeProvenance(target.provenance, identity, {
+      bundleHash: WEB_RECIPE_BUNDLE_HASH,
+      compilerId: WEB_RECIPE_COMPILER_ID,
+    })
+      ? null
+      : "provenance",
+    hasPassingWebRecipeEvidence(target.evidence, identity) ? null : "eval",
+    hasPassingWebRecipeBrowserEvidence(target.browserEvidence, identity) ? null : "browser",
+  ].filter((plane): plane is string => plane !== null);
+  if (missing.length > 0) {
+    throw new Error(`WEB_RECIPE_GATE: ${name} v${version} lacks ${missing.join(", ")} evidence`);
+  }
 }
 
 /**
@@ -1102,6 +1182,725 @@ async function publishPack(
 export const publishPackCandidate = internalMutation({
   args: { name: v.string(), body: v.string(), provenance: v.string() },
   handler: async (ctx, { name, body, provenance }) => publishPack(ctx, name, body, provenance),
+});
+
+/**
+ * Phase 49's candidate-only publication door. The body is the exact canonical recipe definition;
+ * it is parsed and its registry name is derived from that row, so callers cannot publish arbitrary
+ * prompt text under a recipe name. Provenance is immutable and must pin the version allocated by
+ * this invocation, the body bytes, the compiled design bundle and every selected upstream source.
+ */
+async function newestWebRecipeRow(
+  ctx: MutationCtx,
+  name: (typeof WEB_RECIPE_SKILL_NAMES)[number],
+): Promise<Doc<"skills"> | null> {
+  const rows = await ctx.db
+    .query("skills")
+    .withIndex("by_name_status", (q) => q.eq("name", name))
+    .collect();
+  return rows.length === 0 ? null : rows.reduce((a, b) => (b.version > a.version ? b : a));
+}
+
+function assertLocalWebRecipeQualificationDeployment() {
+  const siteUrl = process.env.CONVEX_SITE_URL;
+  const match = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):([0-9]{1,5})$/i.exec(siteUrl ?? "");
+  const port = match === null ? Number.NaN : Number(match[2]);
+  if (
+    !offlineSeamAvailable() ||
+    match === null ||
+    !Number.isInteger(port) ||
+    port < 1 ||
+    port > 65_535
+  )
+    throw new Error("WEB_RECIPE_FIXTURE_DEPLOYMENT_REQUIRED");
+}
+
+async function webRecipeQualificationRows(
+  ctx: MutationCtx,
+  name: (typeof WEB_RECIPE_SKILL_NAMES)[number],
+): Promise<Doc<"skills">[]> {
+  const rows = await ctx.db
+    .query("skills")
+    .withIndex("by_name_status", (q) => q.eq("name", name))
+    .take(7);
+  if (rows.length > 6) throw new Error("WEB_RECIPE_FIXTURE_ROW_LIMIT");
+  return rows;
+}
+
+function webRecipeProvenanceFor(
+  name: (typeof WEB_RECIPE_SKILL_NAMES)[number],
+  version: number,
+  bodySha256: string,
+  definitionHash: string,
+): string {
+  return JSON.stringify({
+    schemaVersion: WEB_RECIPE_PROVENANCE_SCHEMA,
+    name,
+    version,
+    bodySha256,
+    definitionHash,
+    bundleHash: WEB_RECIPE_BUNDLE_HASH,
+    compilerId: WEB_RECIPE_COMPILER_ID,
+    skillVersions: { [name]: version },
+    upstream: WEB_RECIPE_UPSTREAM_PROVENANCE[name],
+  });
+}
+
+async function publishWebRecipe(
+  ctx: MutationCtx,
+  body: string,
+  provenance: string,
+  suppliedName?: string,
+  suppliedRecipeId?: string,
+  qualificationFixtureRunId?: string,
+): Promise<{ name: string; version: number; inserted: boolean }> {
+  let definition: ReturnType<typeof parseWebRecipeDefinition>;
+  try {
+    definition = parseWebRecipeDefinition(JSON.parse(body));
+  } catch {
+    throw new Error("WEB_RECIPE_DEFINITION_INVALID");
+  }
+  const name = definition.registryName;
+  if (suppliedName !== undefined && suppliedName !== name) {
+    throw new Error(`WEB_RECIPE_NAME_MISMATCH: expected ${name}`);
+  }
+  if (suppliedRecipeId !== undefined && suppliedRecipeId !== definition.id) {
+    throw new Error(`WEB_RECIPE_DEFINITION_MISMATCH: expected ${definition.id}`);
+  }
+  const canonicalBody = canonicalWebRecipeDefinition(definition);
+  if (body !== canonicalBody) throw new Error("WEB_RECIPE_BODY_NON_CANONICAL");
+  if (!isWebRecipeSkill(name)) throw new Error(`WEB_RECIPE_NAME_INVALID: ${name}`);
+
+  const newest = await newestWebRecipeRow(ctx, name);
+  const bodyHash = await contentHash(body);
+  const definitionHash = hashWebRecipeDefinition(definition);
+  const duplicate = newest !== null && newest.body === body && newest.provenance === provenance;
+  const { version, inserted } = allocateImmutableVersion(newest, duplicate);
+  if (!inserted) return { name, version, inserted: false };
+
+  const target = {
+    skillId: "pending",
+    name,
+    version,
+    bodyHash,
+    definitionHash,
+  } satisfies WebRecipeRowTarget;
+  if (
+    !hasValidWebRecipeProvenance(provenance, target, {
+      bundleHash: WEB_RECIPE_BUNDLE_HASH,
+      compilerId: WEB_RECIPE_COMPILER_ID,
+    })
+  ) {
+    throw new Error(`WEB_RECIPE_PROVENANCE_PIN: provenance must pin ${name} v${version}`);
+  }
+  await ctx.db.insert("skills", {
+    name,
+    version,
+    body,
+    provenance,
+    status: "candidate",
+    ...(qualificationFixtureRunId === undefined ? {} : { qualificationFixtureRunId }),
+    createdAt: Date.now(),
+  });
+  return { name, version, inserted: true };
+}
+
+export const publishWebRecipeCandidate = internalMutation({
+  args: {
+    body: v.string(),
+    provenance: v.string(),
+    name: v.optional(v.string()),
+    recipeId: v.optional(v.string()),
+  },
+  handler: async (ctx, { body, provenance, name, recipeId }) =>
+    publishWebRecipe(ctx, body, provenance, name, recipeId),
+});
+
+async function seedWebRecipeRows(
+  ctx: MutationCtx,
+  qualificationFixtureRunId?: string,
+  capturedExistingRows?: Doc<"skills">[],
+): Promise<{ name: string; version: number; inserted: boolean }[]> {
+  const out: { name: string; version: number; inserted: boolean }[] = [];
+  for (const definition of WEB_RECIPE_DEFINITIONS) {
+    const body = canonicalWebRecipeDefinition(definition);
+    const name = definition.registryName;
+    const familyRows = capturedExistingRows?.filter((row) => row.name === name);
+    const newest =
+      familyRows === undefined
+        ? await newestWebRecipeRow(ctx, name)
+        : familyRows.length === 0
+          ? null
+          : familyRows.reduce((left, right) => (right.version > left.version ? right : left));
+    const version =
+      newest === null
+        ? 1
+        : newest.body === body && newest.status === "candidate"
+          ? newest.version
+          : newest.version + 1;
+    const provenance = webRecipeProvenanceFor(
+      name,
+      version,
+      await contentHash(body),
+      hashWebRecipeDefinition(definition),
+    );
+    out.push(
+      await publishWebRecipe(
+        ctx,
+        body,
+        provenance,
+        undefined,
+        undefined,
+        qualificationFixtureRunId,
+      ),
+    );
+  }
+  return out;
+}
+
+/** Publish all three code-owned definitions as dormant candidates; no seed/activation path. */
+export const seedWebRecipeCandidates = internalMutation({
+  args: {},
+  handler: async (ctx) => seedWebRecipeRows(ctx),
+});
+
+/** Local-only fixture seeder; its marker is stamped atomically on rows inserted by this call. */
+export const seedWebRecipeQualificationCandidates = internalMutation({
+  args: { qualificationFixtureRunId: v.optional(v.string()) },
+  handler: async (ctx, { qualificationFixtureRunId }) => {
+    assertLocalWebRecipeQualificationDeployment();
+    const existing: Doc<"skills">[] = [];
+    for (const name of WEB_RECIPE_SKILL_NAMES)
+      existing.push(...(await webRecipeQualificationRows(ctx, name)));
+
+    let runId = qualificationFixtureRunId;
+    if (runId === undefined) {
+      if (existing.length > 0) throw new Error("WEB_RECIPE_FIXTURE_REQUIRES_EMPTY_REGISTRY");
+      runId = crypto.randomUUID();
+    } else {
+      if (existing.length !== WEB_RECIPE_SKILL_NAMES.length)
+        throw new Error("WEB_RECIPE_FIXTURE_V1_STATE_INVALID");
+      for (const name of WEB_RECIPE_SKILL_NAMES) {
+        const rows = existing.filter((row) => row.name === name);
+        const row = rows[0];
+        if (rows.length !== 1 || !row) throw new Error("WEB_RECIPE_FIXTURE_V1_STATE_INVALID");
+        const identity = await webRecipeTarget(row);
+        if (
+          row.version !== 1 ||
+          row.status !== "active" ||
+          row.qualificationFixtureRunId !== runId ||
+          !hasPassingWebRecipeEvidence(row.evidence, identity) ||
+          !hasPassingWebRecipeBrowserEvidence(row.browserEvidence, identity)
+        )
+          throw new Error("WEB_RECIPE_FIXTURE_V1_STATE_INVALID");
+      }
+    }
+
+    const candidates = await seedWebRecipeRows(ctx, runId, existing);
+    const createdIds: Id<"skills">[] = [];
+    for (const candidate of candidates) {
+      if (!candidate.inserted) throw new Error("WEB_RECIPE_FIXTURE_INSERT_REQUIRED");
+      const row = await ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) =>
+          q.eq("name", candidate.name).eq("version", candidate.version),
+        )
+        .unique();
+      if (row?.qualificationFixtureRunId !== runId)
+        throw new Error("WEB_RECIPE_FIXTURE_MARKER_MISSING");
+      createdIds.push(row._id);
+    }
+    return { qualificationFixtureRunId: runId, candidates, createdIds };
+  },
+});
+
+/** Refs-only read-back for evaluator/browser tooling; never returns canonical body bytes. */
+export const inspectWebRecipeCandidates = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return Promise.all(
+      WEB_RECIPE_SKILL_NAMES.map(async (name) => {
+        const row = await newestWebRecipeRow(ctx as MutationCtx, name);
+        if (row === null) {
+          return { name, present: false as const };
+        }
+        const identity = await webRecipeTarget(row);
+        return {
+          name,
+          present: true as const,
+          skillId: identity.skillId,
+          version: row.version,
+          status: row.status,
+          versionCount: (
+            await ctx.db
+              .query("skills")
+              .withIndex("by_name_status", (q) => q.eq("name", name))
+              .collect()
+          ).length,
+          bodyHash: identity.bodyHash,
+          definitionHash: identity.definitionHash,
+          provenanceValid: hasValidWebRecipeProvenance(row.provenance, identity, {
+            bundleHash: WEB_RECIPE_BUNDLE_HASH,
+            compilerId: WEB_RECIPE_COMPILER_ID,
+          }),
+          evidenceValid: hasPassingWebRecipeEvidence(row.evidence, identity),
+          browserValid: hasPassingWebRecipeBrowserEvidence(row.browserEvidence, identity),
+          browserRun: row.browserQualification
+            ? {
+                runId: row.browserQualification.runId,
+                revision: row.browserQualification.revision,
+                transcriptHash: row.browserQualification.finalizedHash ?? null,
+                lanes: row.browserQualification.lanes.map((lane) => ({
+                  viewport: lane.viewport,
+                  outcomes: lane.observations.map((observation) => observation.outcome),
+                })),
+              }
+            : null,
+        };
+      }),
+    );
+  },
+});
+
+function webRecipeEvalRefs(evidence: string | undefined) {
+  if (evidence === undefined) return null;
+  try {
+    const parsed = JSON.parse(evidence) as Record<string, unknown>;
+    const suite = parsed.suite as Record<string, unknown> | undefined;
+    return {
+      runId: typeof parsed.runId === "string" ? parsed.runId : null,
+      casesPassed: typeof parsed.casesPassed === "number" ? parsed.casesPassed : null,
+      casesTotal: typeof parsed.casesTotal === "number" ? parsed.casesTotal : null,
+      casesHash: typeof suite?.casesHash === "string" ? suite.casesHash : null,
+      costUsd: typeof parsed.costUsd === "number" ? parsed.costUsd : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function webRecipeBrowserRefs(evidence: string | undefined) {
+  if (evidence === undefined) return null;
+  try {
+    const parsed = JSON.parse(evidence) as Record<string, unknown>;
+    return {
+      runId: typeof parsed.runId === "string" ? parsed.runId : null,
+      casesPassed: typeof parsed.casesPassed === "number" ? parsed.casesPassed : null,
+      casesTotal: typeof parsed.casesTotal === "number" ? parsed.casesTotal : null,
+      viewports: Array.isArray(parsed.viewports)
+        ? parsed.viewports.filter((item): item is string => typeof item === "string")
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function webRecipeReviewRow(row: Doc<"skills">) {
+  const identity = await webRecipeTarget(row);
+  const provenanceValid = hasValidWebRecipeProvenance(row.provenance, identity, {
+    bundleHash: WEB_RECIPE_BUNDLE_HASH,
+    compilerId: WEB_RECIPE_COMPILER_ID,
+  });
+  const evalValid = hasPassingWebRecipeEvidence(row.evidence, identity);
+  const browserValid = hasPassingWebRecipeBrowserEvidence(row.browserEvidence, identity);
+  return {
+    id: row._id,
+    name: identity.name,
+    version: row.version,
+    status: row.status,
+    bodyHash: identity.bodyHash,
+    definitionHash: identity.definitionHash,
+    provenanceValid,
+    evalValid,
+    browserValid,
+    // Never reflect fields out of a malformed evidence blob into the owner UI. The strict
+    // predicate must pass before even refs/counts are projected.
+    eval: evalValid ? webRecipeEvalRefs(row.evidence) : null,
+    browser: browserValid ? webRecipeBrowserRefs(row.browserEvidence) : null,
+    bundleHash: WEB_RECIPE_BUNDLE_HASH,
+    compilerId: WEB_RECIPE_COMPILER_ID,
+  };
+}
+
+/**
+ * Owner review model for the three global web-recipe rows. It is intentionally refs-only: no
+ * canonical body, provenance JSON, eval payload, browser payload, fixture or business content is
+ * returned. Candidate activation and rollback controls receive only exact rows from this model.
+ */
+export const webRecipeCandidatesForReview = ownerQuery({
+  args: {},
+  handler: async (ctx) => {
+    // Each family's exact-row read is independent. Parallelize the bounded three-family
+    // projection so browser transcript updates do not queue six body/definition hashes behind
+    // one another on every live owner subscription refresh.
+    return Promise.all(
+      WEB_RECIPE_SKILL_NAMES.map(async (name) => {
+        const rows = await ctx.db
+          .query("skills")
+          .withIndex("by_name_status", (q) => q.eq("name", name))
+          .collect();
+        const active = rows.find((row) => row.status === "active") ?? null;
+        const candidates = rows
+          .filter((row) => row.status === "candidate")
+          .sort((left, right) => right.version - left.version);
+        const candidate = candidates[0] ?? null;
+        const rollbackRows = rows
+          .filter((row) => row.status === "archived" || row.status === "rolled_back")
+          .sort((left, right) => right.version - left.version)
+          .slice(0, 5);
+        const [candidateRef, activeRef, rollbackTargets] = await Promise.all([
+          candidate === null ? null : webRecipeReviewRow(candidate),
+          active === null ? null : webRecipeReviewRow(active),
+          Promise.all(rollbackRows.map(webRecipeReviewRow)),
+        ]);
+        return {
+          name,
+          candidate: candidateRef,
+          active: activeRef,
+          rollbackTargets,
+        };
+      }),
+    );
+  },
+});
+
+/** Exact-id owner activation door for a web-recipe candidate; the shared global gate still rules. */
+export const activateWebRecipeCandidate = ownerMutation({
+  args: { candidateId: v.id("skills") },
+  handler: async (ctx, { candidateId }) => {
+    const row = await ctx.db.get(candidateId);
+    if (!row || !isWebRecipeSkill(row.name) || row.status !== "candidate")
+      throw new Error("WEB_RECIPE_CANDIDATE_UNAVAILABLE");
+    return transitionSkillActivation(ctx, {
+      scope: "global",
+      name: row.name,
+      version: row.version,
+    });
+  },
+});
+
+/** Exact-id incident rollback for a previously-live global web-recipe row. */
+export const rollbackWebRecipe = ownerMutation({
+  args: { targetId: v.id("skills") },
+  handler: async (ctx, { targetId }) => {
+    const row = await ctx.db.get(targetId);
+    if (
+      !row ||
+      !isWebRecipeSkill(row.name) ||
+      (row.status !== "archived" && row.status !== "rolled_back")
+    )
+      throw new Error("WEB_RECIPE_ROLLBACK_NOT_ELIGIBLE");
+    return transitionSkillActivation(ctx, {
+      scope: "global",
+      name: row.name,
+      version: row.version,
+    });
+  },
+});
+
+const browserViewport = v.union(v.literal("desktop"), v.literal("mobile"));
+type BrowserTranscript = NonNullable<Doc<"skills">["browserQualification"]>;
+
+function browserTranscriptComplete(transcript: BrowserTranscript): boolean {
+  return (
+    transcript.lanes.length === WEB_RECIPE_REQUIRED_VIEWPORTS.length &&
+    WEB_RECIPE_REQUIRED_VIEWPORTS.every((viewport) => {
+      const lane = transcript.lanes.find((item) => item.viewport === viewport);
+      if (!lane || lane.observations.length !== WEB_RECIPE_BROWSER_LANE_OUTCOMES.length)
+        return false;
+      return (
+        lane.observations.every((observation, index) => {
+          if (observation.outcome !== WEB_RECIPE_BROWSER_LANE_OUTCOMES[index]) return false;
+          if (index === 0) return true;
+          if (!observation.inputHash) return false;
+          if (observation.outcome === "refusal")
+            return !observation.documentHash && !observation.artifactHash;
+          return (
+            !!observation.documentHash &&
+            !!observation.artifactHash &&
+            typeof observation.byteLength === "number" &&
+            observation.byteLength > 0
+          );
+        }) &&
+        lane.observations[4]?.inputHash !== lane.observations[3]?.inputHash &&
+        lane.observations[4]?.artifactHash !== lane.observations[3]?.artifactHash
+      );
+    })
+  );
+}
+
+export function browserTranscriptHash(input: BrowserTranscript, candidateId: string) {
+  return contentHash(
+    JSON.stringify({
+      runId: input.runId,
+      candidateId,
+      challengeHash: input.challengeHash,
+      ownerId: input.ownerId,
+      route: input.route,
+      revision: input.revision,
+      candidateName: input.candidateName,
+      candidateVersion: input.candidateVersion,
+      bodyHash: input.bodyHash,
+      definitionHash: input.definitionHash,
+      bundleHash: input.bundleHash,
+      rendererVersion: input.rendererVersion,
+      lanes: input.lanes,
+    }),
+  );
+}
+
+/** Begin an exact candidate-bound owner browser run. The caller cannot choose the challenge. */
+export const beginWebRecipeBrowserQualification = ownerMutation({
+  args: { candidateId: v.id("skills") },
+  handler: async (ctx, { candidateId }) => {
+    const row = await ctx.db.get(candidateId);
+    if (!row || !isWebRecipeSkill(row.name) || row.status !== "candidate")
+      throw new Error("WEB_RECIPE_CANDIDATE_UNAVAILABLE");
+    const identity = await webRecipeTarget(row);
+    const runId = `web-recipe-browser-${crypto.randomUUID()}`;
+    const challengeHash = await contentHash(
+      `${runId}:${String(candidateId)}:${row.version}:${identity.bodyHash}:${identity.definitionHash}:${WEB_RECIPE_BUNDLE_HASH}`,
+    );
+    await ctx.db.patch(candidateId, {
+      browserQualification: {
+        runId,
+        challengeHash,
+        ownerId: ctx.userId,
+        route: WEB_RECIPE_BROWSER_ROUTE,
+        revision: 0,
+        candidateName: row.name,
+        candidateVersion: row.version,
+        bodyHash: identity.bodyHash,
+        definitionHash: identity.definitionHash,
+        bundleHash: WEB_RECIPE_BUNDLE_HASH,
+        rendererVersion: WEB_DESIGN_RENDERER_VERSION,
+        lanes: [],
+        updatedAt: Date.now(),
+      },
+      browserEvidence: undefined,
+    });
+    return {
+      runId,
+      challengeHash,
+      candidateId: String(candidateId),
+      name: row.name,
+      version: row.version,
+      bodyHash: identity.bodyHash,
+      definitionHash: identity.definitionHash,
+      bundleHash: WEB_RECIPE_BUNDLE_HASH,
+      rendererVersion: WEB_DESIGN_RENDERER_VERSION,
+      revision: 0,
+      route: WEB_RECIPE_BROWSER_ROUTE,
+    };
+  },
+});
+
+/** Open one requested lane. Its label is not a claim about the actual browser width. */
+export const advanceWebRecipeBrowserQualification = ownerMutation({
+  args: {
+    candidateId: v.id("skills"),
+    runId: v.string(),
+    revision: v.number(),
+    viewport: browserViewport,
+  },
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get(args.candidateId);
+    const transcript = row?.browserQualification;
+    if (!row || !transcript || row.status !== "candidate")
+      throw new Error("WEB_RECIPE_BROWSER_RUN_REQUIRED");
+    const identity = await webRecipeTarget(row);
+    if (
+      transcript.runId !== args.runId ||
+      transcript.ownerId !== ctx.userId ||
+      transcript.revision !== args.revision ||
+      transcript.route !== WEB_RECIPE_BROWSER_ROUTE ||
+      transcript.finalizedHash !== undefined ||
+      transcript.candidateName !== row.name ||
+      transcript.candidateVersion !== row.version ||
+      transcript.bodyHash !== identity.bodyHash ||
+      transcript.definitionHash !== identity.definitionHash ||
+      transcript.bundleHash !== WEB_RECIPE_BUNDLE_HASH ||
+      transcript.rendererVersion !== WEB_DESIGN_RENDERER_VERSION
+    )
+      throw new Error("WEB_RECIPE_BROWSER_REVISION_MISMATCH");
+    if (
+      transcript.lanes.some((lane) => lane.viewport === args.viewport) ||
+      transcript.lanes.length >= WEB_RECIPE_REQUIRED_VIEWPORTS.length
+    )
+      throw new Error("WEB_RECIPE_BROWSER_LANE_EXISTS");
+    const lanes = [
+      ...transcript.lanes,
+      { viewport: args.viewport, observations: [{ outcome: "selected" as const }] },
+    ];
+    const revision = transcript.revision + 1;
+    await ctx.db.patch(args.candidateId, {
+      browserQualification: {
+        ...transcript,
+        revision,
+        lanes,
+        updatedAt: Date.now(),
+      },
+    });
+    return {
+      candidateId: String(args.candidateId),
+      runId: args.runId,
+      revision,
+      viewport: args.viewport,
+    };
+  },
+});
+
+/** Freeze the owner transcript for runner review; this does not issue browser evidence. */
+export const finalizeWebRecipeBrowserQualification = ownerMutation({
+  args: { candidateId: v.id("skills"), runId: v.string(), revision: v.number() },
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get(args.candidateId);
+    const transcript = row?.browserQualification;
+    if (!row || !transcript || row.status !== "candidate")
+      throw new Error("WEB_RECIPE_BROWSER_RUN_REQUIRED");
+    const identity = await webRecipeTarget(row);
+    if (
+      transcript.runId !== args.runId ||
+      transcript.ownerId !== ctx.userId ||
+      transcript.revision !== args.revision ||
+      transcript.finalizedHash !== undefined ||
+      transcript.route !== WEB_RECIPE_BROWSER_ROUTE ||
+      transcript.candidateName !== row.name ||
+      transcript.candidateVersion !== row.version ||
+      transcript.bodyHash !== identity.bodyHash ||
+      transcript.definitionHash !== identity.definitionHash ||
+      transcript.bundleHash !== WEB_RECIPE_BUNDLE_HASH ||
+      transcript.rendererVersion !== WEB_DESIGN_RENDERER_VERSION
+    )
+      throw new Error("WEB_RECIPE_BROWSER_REVISION_MISMATCH");
+    if (!browserTranscriptComplete(transcript))
+      throw new Error("WEB_RECIPE_BROWSER_TRANSCRIPT_INCOMPLETE");
+    const transcriptHash = await browserTranscriptHash(transcript, String(args.candidateId));
+    await ctx.db.patch(args.candidateId, {
+      browserQualification: { ...transcript, finalizedHash: transcriptHash, updatedAt: Date.now() },
+    });
+    return {
+      candidateId: String(args.candidateId),
+      runId: transcript.runId,
+      revision: transcript.revision,
+      transcriptHash,
+      status: "awaiting_runner_review" as const,
+    };
+  },
+});
+
+/** Local qualification harness cleanup. Only captured fixture ids are eligible, and any
+ * uncaptured row in a recipe family makes the whole operation fail before the first delete.
+ * The browser drill establishes an empty baseline before creating those ids. */
+export const cleanupWebRecipeQualification = internalMutation({
+  args: {
+    qualificationFixtureRunId: v.string(),
+    createdIds: v.array(v.id("skills")),
+  },
+  handler: async (ctx, { qualificationFixtureRunId, createdIds }) => {
+    assertLocalWebRecipeQualificationDeployment();
+    if (createdIds.length > 6) throw new Error("WEB_RECIPE_CLEANUP_TOO_MANY_IDS");
+    const created = new Set(createdIds.map(String));
+    if (created.size !== createdIds.length) throw new Error("WEB_RECIPE_CLEANUP_DUPLICATE_ID");
+
+    const rowsById = new Map<string, Doc<"skills">>();
+    for (const id of createdIds) {
+      const row = await ctx.db.get(id);
+      if (row !== null) {
+        if (
+          !isWebRecipeSkill(row.name) ||
+          row.qualificationFixtureRunId !== qualificationFixtureRunId
+        )
+          throw new Error("WEB_RECIPE_CLEANUP_ID_INVALID");
+        rowsById.set(String(row._id), row);
+      }
+    }
+
+    for (const name of WEB_RECIPE_SKILL_NAMES) {
+      const rows = await webRecipeQualificationRows(ctx, name);
+      if (
+        rows.some(
+          (row) =>
+            !created.has(String(row._id)) ||
+            row.qualificationFixtureRunId !== qualificationFixtureRunId,
+        )
+      )
+        throw new Error("WEB_RECIPE_CLEANUP_UNCAPTURED_ROWS");
+    }
+
+    for (const id of createdIds) if (rowsById.has(String(id))) await ctx.db.delete(id);
+    return { removed: rowsById.size };
+  },
+});
+
+export const recordWebRecipeEvalEvidence = internalMutation({
+  args: { name: v.string(), version: v.number(), evidence: v.string() },
+  handler: async (ctx, { name, version, evidence }) => {
+    if (!isWebRecipeSkill(name)) throw new Error("WEB_RECIPE_NAME_INVALID");
+    const row = await ctx.db
+      .query("skills")
+      .withIndex("by_name_version", (q) => q.eq("name", name).eq("version", version))
+      .unique();
+    if (row === null) throw new Error(`${NO_SUCH_SKILL_VERSION_ERROR}: ${name} v${version}`);
+    const identity = await webRecipeTarget(row);
+    if (!hasPassingWebRecipeEvidence(evidence, identity))
+      throw new Error("WEB_RECIPE_EVIDENCE_INVALID");
+    await ctx.db.patch(row._id, { evidence });
+  },
+});
+
+export const recordWebRecipeBrowserEvidence = internalMutation({
+  args: { name: v.string(), version: v.number(), browserEvidence: v.string() },
+  handler: async (ctx, { name, version, browserEvidence }) => {
+    if (!isWebRecipeSkill(name)) throw new Error("WEB_RECIPE_NAME_INVALID");
+    const row = await ctx.db
+      .query("skills")
+      .withIndex("by_name_version", (q) => q.eq("name", name).eq("version", version))
+      .unique();
+    if (row === null) throw new Error(`${NO_SUCH_SKILL_VERSION_ERROR}: ${name} v${version}`);
+    const identity = await webRecipeTarget(row);
+    if (!hasPassingWebRecipeBrowserEvidence(browserEvidence, identity))
+      throw new Error("WEB_RECIPE_BROWSER_EVIDENCE_INVALID");
+    const parsed = JSON.parse(browserEvidence) as Record<string, unknown>;
+    const transcript = row.browserQualification;
+    if (
+      !transcript ||
+      transcript.runId !== parsed.runId ||
+      !transcript.finalizedHash ||
+      !browserTranscriptComplete(transcript) ||
+      transcript.candidateName !== row.name ||
+      transcript.candidateVersion !== row.version ||
+      transcript.bodyHash !== identity.bodyHash ||
+      transcript.definitionHash !== identity.definitionHash ||
+      transcript.bundleHash !== WEB_RECIPE_BUNDLE_HASH ||
+      transcript.rendererVersion !== WEB_DESIGN_RENDERER_VERSION ||
+      parsed.transcriptHash !== transcript.finalizedHash ||
+      parsed.revision !== transcript.revision ||
+      parsed.bundleHash !== transcript.bundleHash ||
+      parsed.definitionHash !== transcript.definitionHash ||
+      parsed.evidenceRevision !== WEB_RECIPE_BROWSER_EVIDENCE_REVISION ||
+      transcript.finalizedHash !== (await browserTranscriptHash(transcript, String(row._id)))
+    )
+      throw new Error("WEB_RECIPE_BROWSER_TRANSCRIPT_INVALID");
+    await ctx.db.patch(row._id, { browserEvidence });
+  },
+});
+
+/** Server-side exact-row evaluator alias kept on the registry module for generated API compatibility. */
+export const evaluateWebRecipe = internalMutation({
+  args: { name: v.string(), version: v.number(), runId: v.string() },
+  handler: async (ctx, { name, version, runId }) => {
+    const row = await ctx.db
+      .query("skills")
+      .withIndex("by_name_version", (q) => q.eq("name", name).eq("version", version))
+      .unique();
+    if (row === null) throw new Error(`${NO_SUCH_SKILL_VERSION_ERROR}: ${name} v${version}`);
+    if (!isWebRecipeSkill(name)) throw new Error("WEB_RECIPE_NAME_INVALID");
+    const evidence = evaluateExactWebRecipeCandidate(row, runId);
+    await ctx.db.patch(row._id, { evidence: JSON.stringify(evidence) });
+    return { name, version, skillId: String(row._id), cases: evidence.casesTotal, costUsd: 0 };
+  },
 });
 
 /**

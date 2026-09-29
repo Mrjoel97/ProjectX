@@ -10,6 +10,8 @@
 //
 // Invocation (locked): pnpm eval:golden [--skill <name>@<version>]
 //                                       [--tenant-skill <tenantSkillsId>] [--only <id-substring>]
+//                                       [--no-retry] [--max-usd <0.01-2.00>]
+//                                       [--preflight]
 //   --skill      pin that GLOBAL skill version on every turn; an all-green pinned
 //                run records refs/counts-only evidence via skills:recordEvalEvidence
 //                (the EVAL_GATE input for activateSkill).
@@ -21,6 +23,14 @@
 //                assertion still runs under the throwaway `eval-<runId>` tenant.
 //   --only       DIAGNOSTIC ONLY — run just the fixtures whose id contains this
 //                substring. A filtered run is NOT the gate and records NO evidence.
+//   --no-retry   run each selected fixture exactly once. This is the fail-closed mode for an
+//                authorization that forbids automatic failed-fixture retries; omission preserves
+//                the locked one-retry flake policy.
+//   --max-usd    lower the hard per-run cap for one explicitly bounded run. It can never raise
+//                the $2.00 default and is rejected unless it is an exact positive cent amount.
+//   --preflight  one FREE, read-only Convex readiness query. It validates deployment credentials
+//                and billing attestations without opening a budget, loading/seeding the corpus,
+//                calling a provider, writing evidence, or consuming the authorized full run.
 //   --self-check offline validation (ZERO convex calls): fixture vocabulary,
 //                cap/pin/filter logic — the ponytail one-runnable-check.
 //
@@ -47,7 +57,19 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { computeEvaluatorRevision } from "./goldenEvaluatorIdentity.mjs";
-import { invokePaidOnce, PaidCallUnresolved } from "./goldenPaidAttempt.mjs";
+import {
+  invokePaidOnce,
+  PaidCallFailed,
+  PaidCallUnresolved,
+  waitForPaidSettlement,
+} from "./goldenPaidAttempt.mjs";
+import {
+  assertGoldenLocalProviderEgress,
+  assertGoldenNonProductionTarget,
+  PREFLIGHT_PASSED_LINE,
+  ProviderPreflightRefusal,
+  runStandaloneProviderPreflight,
+} from "./goldenProviderPreflight.mjs";
 import { must } from "./smokeRun.mjs";
 
 const parse = (out) => JSON.parse(out);
@@ -57,19 +79,17 @@ const parse = (out) => JSON.parse(out);
 // retry bills a second model turn) or skills:recordEvalEvidence (a duplicate evidence row).
 const RETRY_READ = { retryOnEmpty: true };
 
-// Phase 23: an empty/failed paid response is an unresolved charge, never a free failed case.
-// Checkpoint before the action; retain refs/hash receipts and abort without retry or evidence.
-const paidAttemptDirectory = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "../../../.tmp/golden-paid-attempts",
-);
+// A paid operation is one durable server-side Workflow step. Only its free, idempotent start and
+// status calls may retry after lost CLI stdout; the provider-driving action itself has retry:false.
 const mustPaid = (fn, args) =>
   invokePaidOnce({
     invoke: must,
-    directory: paidAttemptDirectory,
     fn,
     args,
     attemptId: args.turnId ?? randomUUID(),
+    sleep: sleepSync,
+    timeoutMs: DISPATCH_TIMEOUT_MS,
+    pollMs: DISPATCH_POLL_MS,
   });
 const casesDir = resolve(dirname(fileURLToPath(import.meta.url)), "eval-cases");
 const costSrcPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../cost/src/cost.ts");
@@ -177,6 +197,7 @@ function revenueArtifactPaths() {
 // retry — so the old 1.0 would abort the very run ACTN-03 needs the evidence row from, after paying
 // for most of it. 2.0 is a real ceiling for the honest total, not a licence to spend more.
 const COST_CAP_USD = 2.0;
+let activeCostCapUsd = COST_CAP_USD;
 
 /**
  * The model every evidence row records — **DERIVED FROM `DEFAULT_MODEL`, NEVER HAND-COPIED.**
@@ -1230,6 +1251,104 @@ function applyOnly(fixtures, filters) {
   return fixtures.filter((f) => filters.some((s) => f.id.includes(s)));
 }
 
+/** Default stays compatible with the established flake policy. The explicit flag is used by
+ *  one-run authorizations where a failed fixture must remain failed rather than spend a second
+ *  model turn automatically. */
+const automaticRetryEnabled = (argv) => !argv.includes("--no-retry");
+const shouldRetryFailedFixture = (outcome, automaticRetry) =>
+  outcome.pass === false && automaticRetry;
+
+/** Explicit lower cap for a one-off authorization. This parser accepts cents only and can never
+ * raise the code-owned $2.00 ceiling; malformed or repeated flags stop before any live work. */
+function parseMaxUsd(argv) {
+  const values = argv.flatMap((value, index) => (value === "--max-usd" ? [argv[index + 1]] : []));
+  if (values.length === 0) return COST_CAP_USD;
+  if (values.length !== 1 || !/^\d+(?:\.\d{1,2})?$/.test(values[0] ?? ""))
+    throw new Error("--max-usd requires one positive cent value, e.g. 0.10");
+  const cents = Math.round(Number(values[0]) * 100);
+  if (!Number.isSafeInteger(cents) || cents < 1 || cents > Math.round(COST_CAP_USD * 100))
+    throw new Error(`--max-usd must be between 0.01 and ${COST_CAP_USD.toFixed(2)}`);
+  return cents / 100;
+}
+
+const PROVIDER_READINESS_KEYS = [
+  "openrouterBilling",
+  "openrouterKey",
+  "ready",
+  "tavilyBilling",
+  "tavilyCreditUsd",
+  "tavilyKey",
+].sort();
+
+/** Convert a secret-free readiness response into closed, operator-safe reason codes. Unknown
+ * fields or values fail as `schema_invalid`; they are NEVER echoed because a future endpoint bug
+ * must not turn this runner into a secret printer. */
+function providerReadinessReason(readiness) {
+  if (
+    readiness === null ||
+    typeof readiness !== "object" ||
+    Array.isArray(readiness) ||
+    !isDeepStrictEqual(Object.keys(readiness).sort(), PROVIDER_READINESS_KEYS)
+  )
+    return "readiness_response_invalid";
+  if (!["ready", "missing", "invalid_format"].includes(readiness.openrouterKey))
+    return "readiness_response_invalid";
+  if (!["ready", "missing", "invalid_format"].includes(readiness.tavilyKey))
+    return "readiness_response_invalid";
+  if (!["standard", "invalid"].includes(readiness.openrouterBilling))
+    return "readiness_response_invalid";
+  if (!["free", "invalid"].includes(readiness.tavilyBilling)) return "readiness_response_invalid";
+  if (!["canonical_zero", "invalid"].includes(readiness.tavilyCreditUsd))
+    return "readiness_response_invalid";
+  if (typeof readiness.ready !== "boolean") return "readiness_response_invalid";
+  if (readiness.openrouterKey !== "ready") return "openrouter_key_missing_or_invalid";
+  if (readiness.tavilyKey !== "ready") return "tavily_key_missing_or_invalid";
+  if (readiness.openrouterBilling !== "standard") return "openrouter_billing_attestation_invalid";
+  if (readiness.tavilyBilling !== "free") return "tavily_billing_attestation_invalid";
+  if (readiness.tavilyCreditUsd !== "canonical_zero") return "tavily_credit_attestation_invalid";
+  if (!readiness.ready) return "readiness_response_invalid";
+  return null;
+}
+
+function assertProviderReadiness(readiness) {
+  const reason = providerReadinessReason(readiness);
+  if (reason) throw new ProviderPreflightRefusal(reason);
+  return true;
+}
+
+function checkProviderReadiness() {
+  assertGoldenNonProductionTarget();
+  assertGoldenLocalProviderEgress();
+  let output;
+  try {
+    output = must(
+      "guardrails:goldenProviderReadiness",
+      {},
+      {
+        ...RETRY_READ,
+        redactErrors: true,
+        timeoutMs: 20_000,
+      },
+    );
+  } catch (error) {
+    throw new ProviderPreflightRefusal(
+      error?.safeReason === "backend_unavailable" ? "backend_unavailable" : "transport_error",
+    );
+  }
+  let readiness;
+  try {
+    readiness = parse(output);
+  } catch {
+    throw new ProviderPreflightRefusal("readiness_response_invalid");
+  }
+  assertProviderReadiness(readiness);
+}
+
+function requireProviderReadiness() {
+  checkProviderReadiness();
+  console.log(PREFLIGHT_PASSED_LINE);
+}
+
 // ── 21-03: the read-only inspection mode + the evidence-suppression rule ─────
 
 /** Every flag this script understands. An argument NOT in here aborts — a typo must never fall
@@ -1239,6 +1358,9 @@ const KNOWN_FLAGS = new Set([
   "--skill",
   "--tenant-skill",
   "--only",
+  "--no-retry",
+  "--max-usd",
+  "--preflight",
   "--self-check",
   "--inspect-tenant-skill",
   "--foreign-tenant",
@@ -1260,6 +1382,7 @@ const VALUED_FLAGS = new Set([
   "--skill",
   "--tenant-skill",
   "--only",
+  "--max-usd",
   "--inspect-tenant-skill",
   "--foreign-tenant",
   "--inspect-agent-source",
@@ -1287,6 +1410,16 @@ function assertKnownArgs(argv) {
       throw new Error(`unknown argument "${a}" (known: ${[...KNOWN_FLAGS].sort().join(" ")})`);
     }
     if (VALUED_FLAGS.has(flag) && !a.includes("=")) i++; // skip the value
+  }
+  return true;
+}
+
+function assertStandalonePreflightArgs(argv) {
+  if (!argv.includes("--preflight")) return true;
+  if (argv.length !== 1) {
+    throw new Error(
+      "--preflight is a standalone read-only mode and cannot be combined with run flags",
+    );
   }
   return true;
 }
@@ -2287,7 +2420,7 @@ async function runRevenueCandidateMode(mode) {
 
 // ── cost cap ─────────────────────────────────────────────────────────────────
 
-function overCap(totalCost, cap = COST_CAP_USD) {
+function overCap(totalCost, cap = activeCostCapUsd) {
   return totalCost > cap;
 }
 
@@ -3290,6 +3423,14 @@ function selfCheck() {
   const under = [0.05, 0.1].reduce((sum, c) => sum + c * COST_CAP_USD, 0); // 15% of cap
   assert.ok(!overCap(under), "15% of the cap must not trip it");
   assert.ok(!overCap(COST_CAP_USD), "exactly the cap does not trip (strictly greater-than)");
+  assert.equal(parseMaxUsd([]), COST_CAP_USD, "default cap remains $2.00");
+  assert.equal(parseMaxUsd(["--max-usd", "0.10"]), 0.1, "cent cap is parsed exactly");
+  assert.throws(() => parseMaxUsd(["--max-usd", "2.01"]), /between/, "cap cannot rise");
+  assert.throws(
+    () => parseMaxUsd(["--max-usd", "0.10", "--max-usd", "0.10"]),
+    /requires one/,
+    "repeated cap is rejected",
+  );
 
   // 4. --skill pin parsing.
   assert.deepEqual(parseSkillPin("cockpit-agent@3"), { name: "cockpit-agent", version: 3 });
@@ -3822,6 +3963,21 @@ function selfCheck() {
     runnerSource.slice(abortAt, abortAt + 400).includes("process.exit(2)"),
     "abortEnv must EXIT — a governed stop that returned would fall through to the evidence write",
   );
+  const settleBeforePlanAt = liveSource.indexOf("settlePaidCalls();");
+  const planObservationAt = liveSource.indexOf(
+    'plan = parse(must("plans:getById", { planId }, RETRY_READ));',
+  );
+  const finalSettlementAt = liveSource.indexOf("const budgetStatus = settlePaidCalls();");
+  const budgetCloseAt = liveSource.lastIndexOf(
+    'must("guardrails:closeEvalBudget", { budgetId: evalBudgetId });',
+  );
+  assert.ok(
+    settleBeforePlanAt > 0 &&
+      planObservationAt > settleBeforePlanAt &&
+      finalSettlementAt > planObservationAt &&
+      budgetCloseAt > finalSettlementAt,
+    "paid calls must settle before case observation, and again before the budget closes",
+  );
 
   // 8e. The evidence BODY: refs and counts only, with the exact tenant target. A fixture prompt, a
   //     model reply or a skill body reaching this object is a §4 breach, and offline is where that
@@ -4041,6 +4197,81 @@ function selfCheck() {
   assert.throws(() => parseRevenueCandidateMode(["--all-candidates"]), /exactly one/);
   assert.ok(assertKnownArgs(["--skill", "cockpit-agent@9", "--only", "research"]));
   assert.ok(
+    assertKnownArgs(["--no-retry"]),
+    "the explicitly authorized one-run mode must be accepted before any paid work",
+  );
+  assert.ok(assertKnownArgs(["--preflight"]), "the free deployment preflight flag is known");
+  assert.equal(assertStandalonePreflightArgs(["--preflight"]), true);
+  assert.throws(
+    () => assertStandalonePreflightArgs(["--preflight", "--no-retry"]),
+    /standalone read-only mode/,
+    "the preflight cannot accidentally consume or alter full-run semantics",
+  );
+  const canonicalReadiness = {
+    openrouterKey: "ready",
+    tavilyKey: "ready",
+    openrouterBilling: "standard",
+    tavilyBilling: "free",
+    tavilyCreditUsd: "canonical_zero",
+    ready: true,
+  };
+  assert.equal(assertProviderReadiness(canonicalReadiness), true, "canonical readiness passes");
+  for (const [field, state, reason] of [
+    ["openrouterKey", "missing", "openrouter_key_missing_or_invalid"],
+    ["openrouterKey", "invalid_format", "openrouter_key_missing_or_invalid"],
+    ["tavilyKey", "missing", "tavily_key_missing_or_invalid"],
+    ["tavilyKey", "invalid_format", "tavily_key_missing_or_invalid"],
+    ["openrouterBilling", "invalid", "openrouter_billing_attestation_invalid"],
+    ["tavilyBilling", "invalid", "tavily_billing_attestation_invalid"],
+    ["tavilyCreditUsd", "invalid", "tavily_credit_attestation_invalid"],
+  ]) {
+    let refusal;
+    try {
+      assertProviderReadiness({ ...canonicalReadiness, [field]: state, ready: false });
+    } catch (error) {
+      refusal = error;
+    }
+    assert.ok(refusal instanceof ProviderPreflightRefusal);
+    assert.equal(refusal.reason, reason, `${field} fails with a safe closed reason`);
+  }
+  let malformedReadiness;
+  try {
+    assertProviderReadiness({ ...canonicalReadiness, unexpected: "do-not-echo" });
+  } catch (error) {
+    malformedReadiness = error;
+  }
+  assert.ok(malformedReadiness instanceof ProviderPreflightRefusal);
+  assert.equal(
+    malformedReadiness.reason,
+    "readiness_response_invalid",
+    "unexpected response fields fail without being echoed",
+  );
+  assert.equal(
+    automaticRetryEnabled([]),
+    true,
+    "existing invocations retain the locked one-retry flake policy",
+  );
+  assert.equal(
+    automaticRetryEnabled(["--no-retry"]),
+    false,
+    "--no-retry must suppress the failed-fixture rerun",
+  );
+  assert.equal(
+    shouldRetryFailedFixture({ pass: false }, false),
+    false,
+    "a failed fixture remains final in the explicitly authorized no-retry mode",
+  );
+  assert.equal(
+    shouldRetryFailedFixture({ pass: false }, true),
+    true,
+    "a default run retains its single failed-fixture rerun",
+  );
+  assert.equal(
+    shouldRetryFailedFixture({ pass: true }, true),
+    false,
+    "a passing fixture is never rerun",
+  );
+  assert.ok(
     assertKnownArgs(["--inspect-tenant-skill", "k57rowA", "--json", "--expect-status=candidate"]),
   );
   assert.throws(
@@ -4108,6 +4339,32 @@ function selfCheck() {
   assert.ok(
     inspectCallAt < liveCallAt,
     "--inspect-tenant-skill must be dispatched BEFORE runLive — a read-only mode that seeds fixtures is not read-only",
+  );
+  const liveBody = runnerSource.slice(
+    runnerSource.lastIndexOf("async function runLive("),
+    runnerSource.lastIndexOf(marker("21-03: the read-only inspection command")),
+  );
+  const providerPreflightAt = liveBody.indexOf("requireProviderReadiness();");
+  const corpusLoadAt = liveBody.indexOf("loadFixtures()");
+  const budgetOpenAt = liveBody.indexOf("guardrails:openEvalBudget");
+  assert.ok(
+    providerPreflightAt > 0 && corpusLoadAt > providerPreflightAt && budgetOpenAt > corpusLoadAt,
+    "the secret-safe deployment preflight must precede corpus loading and budget opening",
+  );
+  const preflightDispatchAt = entry.indexOf('argv.includes("--preflight")');
+  assert.ok(
+    preflightDispatchAt > 0 && preflightDispatchAt < liveCallAt,
+    "the standalone preflight exits before the full-run invocation",
+  );
+  const preflightBranch = entry.slice(
+    preflightDispatchAt,
+    entry.indexOf('argv.includes("--write-suite-manifest")'),
+  );
+  assert.ok(
+    preflightBranch.includes("process.exit(runStandaloneProviderPreflight(") &&
+      preflightBranch.includes("check: checkProviderReadiness") &&
+      !/openEvalBudget|loadFixtures|seedInboxFixture/.test(preflightBranch),
+    "standalone preflight must emit a terminal verdict/exit code before every budget or corpus path",
   );
   const inspectBody = runnerSource.slice(
     runnerSource.lastIndexOf(marker("21-03: the read-only inspection command")),
@@ -4456,7 +4713,9 @@ let totalCost = 0;
  *  Throws EnvironmentAbort (via abortEnv) on governed stops / cost cap — never a case failure. */
 function abortEnv(message) {
   console.error(`\n[eval:golden] ${message}`);
-  console.error(`[eval:golden] total cost so far: $${totalCost.toFixed(4)}`);
+  console.error(
+    `[eval:golden] total cost so far: $${totalCost.toFixed(4)} / $${activeCostCapUsd.toFixed(2)}`,
+  );
   process.exit(2);
 }
 
@@ -4515,7 +4774,15 @@ function waitForResearchLanding(planId, tenantId, threadId) {
 const authoringTenantFor = (runTenant, fixture, attempt) =>
   fixture.authoring === true ? `${runTenant}-${fixture.id.slice(0, 24)}-a${attempt}` : runTenant;
 
-function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1, evalBudgetId) {
+function attemptCase(
+  fixture,
+  runTenant,
+  pins,
+  tenantSkillIds = {},
+  attempt = 1,
+  evalBudgetId,
+  settlePaidCalls,
+) {
   // THE ATTEMPT NUMBER IS PART OF THE TENANT, and it has to be. The flake policy re-runs a failed
   // case once; on an authoring case the first attempt has already left an immutable pending
   // candidate, and the v1 writer correctly refuses a changed draft while one is pending — so a
@@ -4599,10 +4866,17 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1,
     caseCost += res.costUsd ?? 0;
     totalCost += res.costUsd ?? 0;
     if (overCap(totalCost)) {
-      abortEnv(`COST CAP EXCEEDED ($${totalCost.toFixed(4)} > $${COST_CAP_USD.toFixed(2)})`);
+      abortEnv(`COST CAP EXCEEDED ($${totalCost.toFixed(4)} > $${activeCostCapUsd.toFixed(2)})`);
     }
     history.push({ role: "user", content: text }, { role: "assistant", content: res.reply ?? "" });
+    // Settle each turn before a later turn can depend on its durable tool effects. The final turn's
+    // wait is also the case-level barrier before plan observation below.
+    settlePaidCalls();
   }
+  // A valid action response is not a durable completion signal for nested/scheduled calls. The
+  // final turn has now remained settled through a quiet window BEFORE plan state is observed. This
+  // is what case 08 exposed: its memo reached `proposed` only after the old runner had read it and
+  // aborted on a single unsettled snapshot. The wait is read-only and never replays a turn.
   // 15-06 (DISP-01): the "Act on this" tap, between the turns and the assertions. This drives the
   // REAL user path — evaluations.actOnGap's shared implementation stages `collecting` and schedules
   // internal.dispatch.runSpecialist — through the identity-less twin, because `npx convex run`
@@ -4637,6 +4911,7 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1,
     );
     if (!tap.ok) {
       // Nothing dispatched (`gap_not_found`) → no specialist money, and no read to pay for.
+      settlePaidCalls();
       return {
         pass: false,
         failures: [{ key: "actOnGap", expected: "ok", actual: tap.reason }],
@@ -4674,6 +4949,10 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1,
     // the thread's briefings rows — skipped otherwise, so non-briefing cases cost no extra hop.
     plan = parse(must("plans:getById", { planId }, RETRY_READ));
   }
+  // Dispatches can add their own provider reservations after the executive turn has settled. Do
+  // not evaluate their durable output or permit the outer loop to start another case until those
+  // reservations have also settled through a complete quiet window.
+  if (dispatched) settlePaidCalls();
   // The specialist bill, charged off the audit trail now that the dispatch poll has settled (one
   // read, hung off the EXISTING poll — no second loop). Same skip-unless-asked discipline as every
   // other read below: a non-dispatch case pays no extra hop and its numbers are unchanged.
@@ -4685,7 +4964,7 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1,
     totalCost += specialistCost;
     // The cap is a governed stop and outranks a case failure — check BEFORE returning one.
     if (overCap(totalCost)) {
-      abortEnv(`COST CAP EXCEEDED ($${totalCost.toFixed(4)} > $${COST_CAP_USD.toFixed(2)})`);
+      abortEnv(`COST CAP EXCEEDED ($${totalCost.toFixed(4)} > $${activeCostCapUsd.toFixed(2)})`);
     }
   }
   if (dispatchFailures) {
@@ -4892,7 +5171,13 @@ function suiteIdentityFor() {
   return { revision: codeOwnedSuite().revision, casesHash, caseCount };
 }
 
-async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
+async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetry = true, maxUsd) {
+  activeCostCapUsd = maxUsd;
+  totalCost = 0;
+  // FIRST deployment interaction and before even loading the corpus: malformed secrets or billing
+  // attestations must not open a budget, mint a tenant, seed a fixture, or consume an authorized
+  // full-run attempt. The same query is available separately through `--preflight`.
+  requireProviderReadiness();
   // Revenue fixtures run only through the explicit all-candidates path. Feeding them into this
   // legacy cockpit gate would bill the wrong body and produce an `expectedState` with no oracle.
   const allFixtures = loadFixtures().filter((fixture) => fixture.candidate === undefined);
@@ -4925,35 +5210,57 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
     ...new Set([
       tenant,
       ...fixtures.flatMap((fixture) =>
-        [1, 2].map((attempt) => authoringTenantFor(tenant, fixture, attempt)),
+        (automaticRetry ? [1, 2] : [1]).map((attempt) =>
+          authoringTenantFor(tenant, fixture, attempt),
+        ),
       ),
     ]),
   ];
   const evalBudgetId = parse(
     must("guardrails:openEvalBudget", {
       tenantIds,
-      capCents: Math.round(COST_CAP_USD * 100),
+      capCents: Math.round(activeCostCapUsd * 100),
       family: "golden",
     }),
   );
   console.log(`[eval:golden] budget ${evalBudgetId}; unresolved calls retain their reservation`);
-  const assertSettledBudget = () => {
-    const status = parse(
-      must("guardrails:evalBudgetStatus", { budgetId: evalBudgetId }, RETRY_READ),
+  const settlePaidCalls = () =>
+    waitForPaidSettlement({
+      expectedBudgetId: evalBudgetId,
+      readStatus: () =>
+        parse(must("guardrails:evalBudgetStatus", { budgetId: evalBudgetId }, RETRY_READ)),
+      sleep: sleepSync,
+      timeoutMs: DISPATCH_TIMEOUT_MS,
+      pollMs: DISPATCH_POLL_MS,
+      // Two full poll intervals without a ledger change distinguish durable quiet from the brief
+      // zero-reservation gap before scheduled work registers its first call.
+      quietMs: DISPATCH_POLL_MS * 2,
+    });
+  const closeAfterTerminalPaidFailure = (error) => {
+    const status = settlePaidCalls();
+    must("guardrails:closeEvalBudget", { budgetId: evalBudgetId });
+    console.error(
+      `[eval:golden] closed budget ${evalBudgetId} after terminal paid failure; ` +
+        `accounted $${status.actualUsd.toFixed(6)}` +
+        (status.conservativeUsd > 0
+          ? ` ($${status.conservativeUsd.toFixed(6)} conservative ceiling, not observed usage)`
+          : ""),
     );
-    if (status.unsettledCount || status.breached || status.expired || status.closed)
-      throw new PaidCallUnresolved("GOLDEN_BUDGET_UNRESOLVED");
-    return status;
+    teardownEvalTenant(tenant, false);
+    throw error;
   };
 
   console.log(
-    `[eval:golden] run ${runId} — ${fixtures.length} cases, tenant ${tenant}, cap $${COST_CAP_USD.toFixed(2)}` +
+    `[eval:golden] run ${runId} — ${fixtures.length} cases, tenant ${tenant}, cap $${activeCostCapUsd.toFixed(2)}` +
       (pins.length ? `, pins ${pins.map((p) => `${p.name}@${p.version}`).join(" ")}` : "") +
       (tenantTargets.length
         ? `, tenant pins ${tenantTargets.map((t) => `${t.name}@${t.version}#${t.candidateId}`).join(" ")}`
         : "") +
       (filters.length
         ? `\n[eval:golden] PARTIAL RUN — --only ${filters.join(" ")} (${fixtures.length}/${allFixtures.length} fixtures). Diagnostic only: NO evidence will be recorded.`
+        : "") +
+      (!automaticRetry
+        ? "\n[eval:golden] NO-RETRY RUN — every fixture receives exactly one attempt; a failure remains final."
         : ""),
   );
 
@@ -4974,9 +5281,16 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
   // an internalAction callable via `convex run` (identity-less, explicit tenantId) that embeds two
   // "Northwind-evalgrd" logistics briefs. The eval tenant is throwaway (`eval-${runId}`) — no purge
   // (the inbox seed isn't purged either). Needs the deployment OPENAI_API_KEY the eval already requires.
-  const { docIds: vaultDocIds } = parse(
-    mustPaid("vaultSmoke:seedCorpus", { tenantId: tenant, needle: VAULT_NEEDLE, evalBudgetId }),
-  );
+  let vaultSeed;
+  try {
+    vaultSeed = parse(
+      mustPaid("vaultSmoke:seedCorpus", { tenantId: tenant, needle: VAULT_NEEDLE, evalBudgetId }),
+    );
+  } catch (error) {
+    if (error instanceof PaidCallFailed) closeAfterTerminalPaidFailure(error);
+    throw error;
+  }
+  const { docIds: vaultDocIds } = vaultSeed;
   console.log(`[eval:golden] seeded vault corpus: ${vaultDocIds.length} doc(s), live embed`);
 
   // 17.1-10: the original L6 premise was false — the runner minted an eval tenant but never gave
@@ -5006,9 +5320,21 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
     let outcome;
     let retried = false;
     try {
-      outcome = attemptCase(fixture, tenant, pins, tenantSkillIds, 1, evalBudgetId);
+      outcome = attemptCase(
+        fixture,
+        tenant,
+        pins,
+        tenantSkillIds,
+        1,
+        evalBudgetId,
+        settlePaidCalls,
+      );
     } catch (e) {
+      if (e instanceof PaidCallFailed) closeAfterTerminalPaidFailure(e);
       if (e instanceof PaidCallUnresolved) throw e;
+      // If a read/assertion failed after a paid turn, still prevent a retry or the next case from
+      // starting while that turn has unsettled reservations.
+      settlePaidCalls();
       outcome = {
         pass: false,
         failures: [{ key: "error", expected: "run", actual: e.message.split("\n")[0] }],
@@ -5016,15 +5342,24 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
         specialistCost: 0,
       };
     }
-    assertSettledBudget();
-    if (!outcome.pass) {
+    if (shouldRetryFailedFixture(outcome, automaticRetry)) {
       // Flake policy (locked): exactly ONE automatic re-run on a FRESH seeded plan.
       retried = true;
       let second;
       try {
-        second = attemptCase(fixture, tenant, pins, tenantSkillIds, 2, evalBudgetId);
+        second = attemptCase(
+          fixture,
+          tenant,
+          pins,
+          tenantSkillIds,
+          2,
+          evalBudgetId,
+          settlePaidCalls,
+        );
       } catch (e) {
+        if (e instanceof PaidCallFailed) closeAfterTerminalPaidFailure(e);
         if (e instanceof PaidCallUnresolved) throw e;
+        settlePaidCalls();
         second = {
           pass: false,
           failures: [{ key: "error", expected: "run", actual: e.message.split("\n")[0] }],
@@ -5032,7 +5367,6 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
           specialistCost: 0,
         };
       }
-      assertSettledBudget();
       // Both attempts' money is real — the specialist half of it too.
       const merged = {
         caseCost: outcome.caseCost + second.caseCost,
@@ -5075,7 +5409,7 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
     }
   }
 
-  const budgetStatus = assertSettledBudget();
+  const budgetStatus = settlePaidCalls();
   // Closing is a required evidence gate, not best-effort cleanup. Scheduled late callers are
   // refused by this same durable envelope, and unresolved work prevents closure/evidence.
   must("guardrails:closeEvalBudget", { budgetId: evalBudgetId });
@@ -5376,9 +5710,16 @@ const argv = stripSeparator(process.argv.slice(2));
 try {
   // 21-03: a typo aborts HERE, before anything is parsed, seeded, read or billed.
   assertKnownArgs(argv);
+  assertStandalonePreflightArgs(argv);
   if (argv.includes("--self-check")) {
     selfCheck();
     process.exit(0);
+  }
+  if (argv.includes("--preflight")) {
+    // The only live/deployment read in this mode. No budget, corpus load/seed, provider call,
+    // evidence write, or cleanup follows; success exits before every full-run parser.
+    selfCheck();
+    process.exit(runStandaloneProviderPreflight({ check: checkProviderReadiness }));
   }
   // 23-04: mechanical, and deliberately BEFORE every other mode — it writes one file and exits,
   // and it must be runnable when the self-check is red (a stale manifest is exactly when you need
@@ -5402,11 +5743,17 @@ try {
   // A live run inherits every free fixture/vocabulary/cost/registry guard. Keep this immediately
   // before runLive: no fixture seed, Convex call or model/provider work may precede the preflight.
   selfCheck();
-  await runLive(parseSkillPins(argv), parseOnlyFilters(argv), parseTenantSkillIds(argv));
+  await runLive(
+    parseSkillPins(argv),
+    parseOnlyFilters(argv),
+    parseTenantSkillIds(argv),
+    automaticRetryEnabled(argv),
+    parseMaxUsd(argv),
+  );
 } catch (e) {
   if (e instanceof PaidCallUnresolved) {
     console.error(
-      "[eval:golden] GOLDEN_PAID_CALL_UNRESOLVED; retained recovery checkpoints; no retry, evidence, or cleanup.",
+      `[eval:golden] ${e.message}; durable attempt retained; no paid replay, evidence, or cleanup.`,
     );
     process.exit(2);
   }

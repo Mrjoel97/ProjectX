@@ -1,5 +1,12 @@
 # Playbook: Live Voice Sessions
 
+> Last verified: 2026-09-20 (17.1-11 deterministic active-spine coverage). Voice instruction
+> assembly now has one internal read-only proof seam, `voiceToken:__voiceInstructionsForTest`,
+> sharing the exact helper used by `mintClientSecret`. The authenticated Blueprint browser spec
+> proves an explicitly accepted contradiction reaches those instructions while the typed profile
+> remains unchanged. The seam stops before API-key access and `fetch`; it is offline evidence only,
+> never a substitute for the founder's post-L6 spoken-response judgment.
+>
 > Last verified: 2026-09-06 (36-01, G24 — `voiceDoc.ts`'s review seam moved from `offlineSeamAvailable()`
 > to `fixtureSeamFor(tenantId)`, and `draftVoiceBrief`'s `SMOKE::route=` transcript sentinel goes through
 > `parseSmoke(text, tenantId)`. Every `SMOKE::` gate on a production path is now `prefix && fixtureSeamFor(tenantId)` (36-01, ADR-035): the string only SELECTS a fixture; WHETHER one may run is an operator fact — the keyless opt-in `PIKAR_OFFLINE_FIXTURES=1`, or this tenant listed in `PIKAR_FIXTURE_TENANT_IDS` (a comma-separated allowlist, set only by `convex env set`, which is how the browser and smoke suites keep their seams against the KEYED dev deployment). Production carries neither, and `ops.envCheck` reports NOT ready while any fixture-tier name is set. `voice.test.ts` plants its Realtime key with `vi.stubEnv` now (the
@@ -1340,3 +1347,20 @@ grounding failure. It was not. `pnpm start` serves a **frozen production build**
 bundle had been compiled 4h14m BEFORE the first Phase-14 commit, so no picker, no `?doc=`, no
 `docId` at the mint, and therefore no document scope. **Rebuild (`pnpm build`) before any voice
 UAT, and check the build timestamp against `git log` before believing a UI-level symptom.**
+> Last verified: 2026-09-19 (17.1-11 L6 prerequisite — **NO NEW LIVE VOICE
+> EVIDENCE**). The single authorized shared golden invocation stopped before spend at
+> `GOLDEN_PROVIDER_BILLING_UNVERIFIED`: no case, fixture tenant, confirmed eval
+> Blueprint, or rendered standing spine was created. Therefore the voice-spine
+> founder check was not opened and no voice behavior is inferred from deployment or
+> offline evidence.
+
+> Fresh-authority follow-up, 2026-09-19: the newly configured values contained hidden
+> carriage-return bytes from the non-echoing PowerShell pipeline, so the exact server
+> attestation refused before spend. They were corrected after the one-command authority
+> was consumed, with no retry. No Blueprint/spine or voice evidence was produced.
+## Wave 1A conditional-run voice disposition (2026-09-20)
+
+The five-source Blueprint and `evalblpr` standing spine were proven before the paid fixture loop,
+but the corpus stopped on case 8 after seven observed passes. It never produced a complete L6 gate
+and did not enter a live voice session. Voice-spine owner acceptance therefore remains OPEN; a
+retained Blueprint prerequisite is not live voice evidence.

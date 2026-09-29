@@ -14,6 +14,8 @@
 // would assert on an empty string and prove nothing.
 import { RECONNECT } from "@pikar/core";
 import { describe, expect, test } from "vitest";
+import { gmailCallbackMessage } from "../connect-gmail/page";
+import { googleDisconnectMessage } from "./DisconnectGoogle";
 import { reconnectLines } from "./ReconnectBanner";
 
 const hold = (mailProvider?: "google" | "microsoft") => ({ mailProvider });
@@ -92,5 +94,29 @@ describe("reconnectLines — the line names the mailbox that actually held the s
     expect(RECONNECT.google.holdMessage).not.toMatch(/microsoft|outlook/i);
     expect(RECONNECT.microsoft.holdMessage).not.toMatch(/gmail|google/i);
     expect(RECONNECT.microsoft.message).not.toMatch(/gmail|google/i);
+  });
+});
+
+describe("Google connection browser copy", () => {
+  test("every callback code maps to bounded copy and unknown input is never echoed", () => {
+    const messages = [
+      "cancelled",
+      "missing_callback",
+      "invalid_state",
+      "exchange_failed",
+      "missing_refresh",
+    ].map(gmailCallbackMessage);
+    expect(messages.every((message) => (message?.length ?? 0) > 20)).toBe(true);
+    expect(new Set(messages).size).toBe(messages.length);
+    expect(gmailCallbackMessage("<img src=x onerror=alert(1)>")).toBe(
+      "Google connection failed. Please try again.",
+    );
+  });
+
+  test("disconnect copy distinguishes a partial provider revoke from an unchanged connection", () => {
+    expect(googleDisconnectMessage("partial")).toMatch(/token is deleted/i);
+    expect(googleDisconnectMessage("partial")).toMatch(/Google did not confirm/i);
+    expect(googleDisconnectMessage("failed")).toMatch(/connection is unchanged/i);
+    expect(googleDisconnectMessage("failed")).not.toMatch(/token is deleted/i);
   });
 });

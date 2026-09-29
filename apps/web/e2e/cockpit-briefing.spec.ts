@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
@@ -37,6 +38,36 @@ const LEDE_SYNOPSIS = "Offline briefing synopsis.";
 // appear in the chat reply: briefInbox returns COUNTS ONLY, so not even a gist reaches the loop.
 const BODY_NEEDLE = "attacker@evil.example";
 const GIST_NEEDLE = "Offline digest";
+const BROWSER_EVIDENCE_DIR = process.env.PIKAR_E2E_BROWSER_EVIDENCE_DIR;
+
+async function captureResponsiveEvidence(page: Page, card: ReturnType<Page["getByTestId"]>) {
+  if (!BROWSER_EVIDENCE_DIR) return;
+  mkdirSync(BROWSER_EVIDENCE_DIR, { recursive: true });
+  for (const viewport of [
+    { name: "desktop", width: 1280, height: 1000 },
+    { name: "mobile", width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    // setViewportSize resolves before CSS reflow; measure after two frames so a transient old
+    // layout cannot make visual evidence look valid when the settled card actually clips.
+    await page.evaluate(
+      () =>
+        new Promise<void>((done) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => done())),
+        ),
+    );
+    await expect(card).toBeVisible();
+    await expect(card.getByTestId("briefing-needs-you")).toBeVisible();
+    expect(
+      await page.locator("html").evaluate((element) => element.scrollWidth - element.clientWidth),
+      `briefing page overflows at ${viewport.width}px`,
+    ).toBeLessThanOrEqual(1);
+    await page.screenshot({
+      path: resolve(BROWSER_EVIDENCE_DIR, `briefing-${viewport.name}.png`),
+      fullPage: true,
+    });
+  }
+}
 
 // Mirrors scripts/smokeRun.mjs: invoke the convex CLI through node (no shell) so Windows quoting
 // can never mangle the JSON arg — the tenantId contains a `|`, which a cmd.exe shell would treat as
@@ -170,4 +201,6 @@ test("seeded inbox → SMOKE brief=today → grouped BRIEFING card (Needs-you is
   await expect(reply).toContainText("Briefing ready:");
   await expect(reply).not.toContainText(BODY_NEEDLE);
   await expect(reply).not.toContainText(GIST_NEEDLE);
+
+  await captureResponsiveEvidence(page, card);
 });

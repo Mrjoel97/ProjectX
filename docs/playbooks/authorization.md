@@ -1,5 +1,34 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-09-24 — Plan 50-05 adds a direct anonymous HTTP cart-preflight
+> refusal and a production-adapter cross-tenant cart test. A caller-supplied product,
+> tenant, account or cart id is refused before a write; authenticated A cannot place B's
+> cart, and both paths create no order or stock hold. This does not open storefront auth.
+
+> Last verified: 2026-09-24 — Plan 50-03 drives the real `tenantCatalogue` query and
+> mutations with two authenticated tenants, a separate owner identity and an anonymous
+> caller. Product, stock and reservation ids cannot be swapped across tenants; an owner
+> remains scoped to their own catalogue, and rejected calls add no audit receipt. The
+> dashboard sites catalogue mounts only inside the authenticated app route. This is
+> repository/local proof, not public storefront or merchant-provider authorization.
+
+> Last verified: 2026-09-20 — the runtime-derived isolation suite now exercises non-empty A/B
+> tenant rows through production APIs and the tenant export surface. Direct HTTP-router tests cover
+> malformed/tampered funnel and unsubscribe capabilities, valid anonymous/other-tenant public
+> bearers, unsupported methods, and the internal SkillOpt bearer refusal. Public bearer scope is
+> the signed token/domain/stage—not the visitor's tenant identity—and no authorization rule was
+> broadened for the tests.
+
+> Last verified: 2026-09-20 — the local browser provisioner now calls
+> `owner.findUserIdByEmailForProvisioning`, a private read-only envelope around the same exact
+> resolver as nullable `findUserIdByEmail`. This preserves the established operator contract
+> (`{ userId, owner } | null`) and its duplicate refusal, while ensuring a missing user is emitted
+> as `{ result: null }`: the installed Convex CLI intentionally suppresses a bare `null` return.
+> Neither query selects a duplicate row, grants owner, or exposes an address; `bootstrapOwner`
+> remains a separate exact-id internal mutation. Do not make a CLI client interpret arbitrary empty
+> stdout as absence—use this structured envelope only where an observable provisioning absence is
+> required.
+
 > Last verified: 2026-09-10 — `isolation.test.ts` now discovers `ownerAction` exports alongside
 > owner queries/mutations and invokes the action lane with a real typed Vault-id fixture.
 > The Data operator preview is covered by the derived non-owner rejection test; its own tests

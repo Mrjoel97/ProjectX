@@ -4,6 +4,7 @@ import { api } from "@pikar/backend/api";
 import { useMutation, useQuery } from "convex/react";
 import { type ReactNode, useState } from "react";
 import { BellIcon, BoltIcon, MailIcon, ShieldIcon, WalletIcon } from "../../(auth)/icons";
+import { WebRecipeQualification } from "./WebRecipeQualification";
 
 // Visual chrome shared with the Command Center (globals.css .stat-tile): white card,
 // 1rem radius, soft diffuse shadow — anchored on the canvas, not a floating outline.
@@ -876,6 +877,10 @@ export function ComplianceView({ headingLevel = "h1" }: { headingLevel?: "h1" | 
             Tenant skill candidates
           </p>
           <TenantCandidatesPanel />
+          <p className="caps-label" style={{ margin: "0.5rem 0 0" }}>
+            Web recipe qualification
+          </p>
+          <WebRecipeQualification />
         </section>
       )}
 

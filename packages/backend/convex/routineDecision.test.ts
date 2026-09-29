@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -13,6 +14,9 @@ import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
+  acceptedD6EvidenceAdr,
+  acceptedStageAdr,
+  acceptedSweepAdr,
   DECIDERS,
   DECISIONS,
   DEPENDENCY_MANIFESTS,
@@ -26,9 +30,12 @@ import {
   REQUIRED_LIVE_ROWS,
   ROW_IDS,
   SCHEDULING_DEPENDENCY_RE,
+  STAGE_CANDIDATE_FILES,
   STATUSES,
+  stageSourceBoundary,
   validateDecision,
   validateMatrix,
+  validateStage,
 } from "../scripts/check-routine-gate.mjs";
 import { renderArtifact } from "../scripts/collect-recurrence-evidence.mjs";
 
@@ -60,6 +67,10 @@ const SCRIPT = join(repoRoot, "packages/backend/scripts/check-routine-gate.mjs")
 const ARTIFACT = join(
   repoRoot,
   ".planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md",
+);
+const STAGE = join(
+  repoRoot,
+  ".planning/phases/47-the-schedule-row-that-re-arms/47-14-STAGE-DECISION.md",
 );
 const artifactText = () => readFileSync(ARTIFACT, "utf8");
 
@@ -674,7 +685,7 @@ describe("the `defer` absence checks, observed FIRING", () => {
     expect(r.errors.join("\n")).toContain("no ADR may be minted");
   });
 
-  test("today the REAL repo root is clean", () => {
+  test("the REAL repo admits only the three exact accepted governance ADRs", () => {
     const r = deferAbsenceChecks({ repoRoot });
     expect(r.errors).toEqual([]);
     // Positive control: the real ADR directory was read and is not empty, and 013 is taken by the
@@ -682,7 +693,178 @@ describe("the `defer` absence checks, observed FIRING", () => {
     const adrs = readdirSync(join(repoRoot, "docs/decisions"));
     expect(adrs.length).toBeGreaterThan(20);
     expect(adrs).toContain("013-the-render-worker.md");
-    expect(adrs.filter((f) => /routine|recurrence|schedul/i.test(f))).toEqual([]);
+    expect(adrs.filter((f) => /routine|recurrence|schedul/i.test(f))).toEqual([
+      "050-recurrence-build-for-evidence.md",
+      "051-sweep-only-pause-fencing-for-recurring-routines.md",
+      "052-sweep-only-recurrence-d6-evidence-reconciliation.md",
+    ]);
+  });
+
+  test("ADR-052 has its own exact predicate; the current stage and eligibility do not inherit it", () => {
+    expect(acceptedD6EvidenceAdr({ repoRoot })).toBe(true);
+    expect(validateStage(readFileSync(STAGE, "utf8"), { repoRoot, artifactPath: STAGE }).ok).toBe(
+      true,
+    );
+    expect(eligibility(artifactText(), { repoRoot }).ok).toBe(false);
+  });
+
+  test("spawned defer CLI accepts only exact ADR-052 and refuses altered or additional recurrence ADRs", () => {
+    const root = newRoot();
+    const decisions = join(root, "docs/decisions");
+    const script = join(root, "packages/backend/scripts/check-routine-gate.mjs");
+    const decision = join(
+      root,
+      ".planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md",
+    );
+    mkdirSync(decisions, { recursive: true });
+    mkdirSync(dirname(script), { recursive: true });
+    mkdirSync(dirname(decision), { recursive: true });
+    copyFileSync(SCRIPT, script);
+    copyFileSync(
+      join(repoRoot, "packages/backend/scripts/collect-recurrence-evidence.mjs"),
+      join(dirname(script), "collect-recurrence-evidence.mjs"),
+    );
+    let deferFixture = greenFixture().replace("decision: enable-safe", "decision: defer");
+    for (const id of ROW_IDS) deferFixture = patchRow(deferFixture, id, "status", "missing");
+    writeFileSync(decision, deferFixture);
+    const adrNames = [
+      "050-recurrence-build-for-evidence.md",
+      "051-sweep-only-pause-fencing-for-recurring-routines.md",
+      "052-sweep-only-recurrence-d6-evidence-reconciliation.md",
+    ];
+    const adrPath = (name: string) => join(decisions, name);
+    const restore = (name: string) =>
+      copyFileSync(join(repoRoot, "docs/decisions", name), adrPath(name));
+    for (const name of adrNames) restore(name);
+    const run = () => {
+      const result = spawnSync(process.execPath, [script, decision, "--validate-decision"], {
+        encoding: "utf8",
+      });
+      expect(result.error).toBeUndefined();
+      return { code: result.status, out: `${result.stdout}${result.stderr}` };
+    };
+    const initial = run();
+    expect(initial.code, initial.out).toBe(0); // Positive control: the copied checker sees three genuine accepted identities.
+
+    rmSync(adrPath(adrNames[2]!));
+    expect(run()).toMatchObject({ code: 0 }); // Optional while absent; no hidden ADR-052 requirement.
+    writeFileSync(
+      adrPath(adrNames[2]!),
+      "# forged\n- **Status:** Accepted as a conditional D6 evidence-wording amendment on 2026-09-25; operational recurrence remains deferred.\n",
+    );
+    expect(run()).toMatchObject({ code: 1 });
+    restore(adrNames[2]!);
+    const valid = readFileSync(adrPath(adrNames[2]!), "utf8");
+    for (const altered of [
+      valid.replace("**Status:** Accepted", "**Status:** Proposed"),
+      valid.replace(
+        "**Accepted path:** `docs/decisions/052-sweep-only-recurrence-d6-evidence-reconciliation.md`",
+        "**Accepted path:** `docs/decisions/052-recurrence-elsewhere.md`",
+      ),
+      valid.replace("SHA-256 `665fdedc", "SHA-256 `665fdead"),
+      valid + "\n",
+    ]) {
+      writeFileSync(adrPath(adrNames[2]!), altered);
+      const result = run();
+      expect(result.code, result.out).toBe(1);
+      expect(result.out).toContain(adrNames[2]);
+    }
+    restore(adrNames[2]!);
+
+    const renamed = adrPath("052-recurrence-renamed.md");
+    rmSync(adrPath(adrNames[2]!));
+    writeFileSync(renamed, valid);
+    expect(run()).toMatchObject({ code: 1 });
+    rmSync(renamed);
+    restore(adrNames[2]!);
+    const extra = adrPath("053-scheduled-extra.md");
+    writeFileSync(extra, "# unreviewed\n");
+    expect(run()).toMatchObject({ code: 1 });
+    rmSync(extra);
+    for (const name of adrNames.slice(0, 2)) {
+      writeFileSync(adrPath(name), "# tampered\n");
+      const result = run();
+      expect(result.code, `${name}: ${result.out}`).toBe(1);
+      expect(result.out).toContain(name);
+      restore(name);
+    }
+    expect(run()).toMatchObject({ code: 0 });
+
+    const stage = join(
+      root,
+      ".planning/phases/47-the-schedule-row-that-re-arms/47-14-STAGE-DECISION.md",
+    );
+    mkdirSync(dirname(stage), { recursive: true });
+    copyFileSync(STAGE, stage);
+    const runStage = () => {
+      const result = spawnSync(process.execPath, [script, stage, "--validate-stage"], {
+        encoding: "utf8",
+      });
+      expect(result.error).toBeUndefined();
+      return { code: result.status, out: `${result.stdout}${result.stderr}` };
+    };
+    expect(runStage()).toMatchObject({ code: 0 });
+    const originalStage = readFileSync(stage, "utf8");
+    for (const altered of [
+      originalStage.replace("status: accepted", ""),
+      originalStage.replace("stage: build-for-evidence", "unknown: yes\nstage: build-for-evidence"),
+      originalStage.replace(
+        "stage: build-for-evidence",
+        "stage: build-for-evidence\nstage: build-for-evidence",
+      ),
+      originalStage.replace(STAGE_CANDIDATE_FILES[0]!, "packages/backend/convex/routines.ts"),
+      originalStage.replace("tenantActivation: disabled", "tenantActivation: enabled"),
+    ]) {
+      writeFileSync(stage, altered);
+      const result = runStage();
+      expect(result.code, result.out).toBe(1);
+    }
+    copyFileSync(STAGE, stage);
+    expect(runStage()).toMatchObject({ code: 0 });
+  });
+
+  test("two separately pinned governance ADRs pass, but neither supplies eligibility", () => {
+    const root = cleanRoot();
+    const adr50 = "050-recurrence-build-for-evidence.md";
+    const adr51 = "051-sweep-only-pause-fencing-for-recurring-routines.md";
+    const copy = (name: string) =>
+      writeFileSync(
+        join(root, "docs/decisions", name),
+        readFileSync(join(repoRoot, "docs/decisions", name)),
+      );
+    copy(adr50);
+    copy(adr51);
+    expect(acceptedStageAdr({ repoRoot: root })).toBe(true);
+    expect(acceptedSweepAdr({ repoRoot: root })).toBe(true);
+    expect(deferAbsenceChecks({ repoRoot: root })).toEqual({ ok: true, errors: [] });
+    expect(eligibility(artifactText(), { repoRoot }).ok).toBe(false);
+
+    rmSync(join(root, "docs/decisions", adr51));
+    expect(acceptedSweepAdr({ repoRoot: root })).toBe(false);
+    expect(deferAbsenceChecks({ repoRoot: root }).ok).toBe(true);
+    writeFileSync(join(root, "docs/decisions", adr51), "# forged accepted ADR\n");
+    expect(acceptedSweepAdr({ repoRoot: root })).toBe(false);
+    expect(deferAbsenceChecks({ repoRoot: root }).ok).toBe(false);
+    copy(adr51);
+    writeFileSync(
+      join(root, "docs/decisions", adr51),
+      readFileSync(join(root, "docs/decisions", adr51), "utf8") + "\n",
+    );
+    expect(deferAbsenceChecks({ repoRoot: root }).ok).toBe(false);
+    rmSync(join(root, "docs/decisions", adr51));
+    writeFileSync(join(root, "docs/decisions/052-recurrence-pause.md"), "# renamed\n");
+    expect(deferAbsenceChecks({ repoRoot: root }).ok).toBe(false);
+    rmSync(join(root, "docs/decisions/052-recurrence-pause.md"));
+    writeFileSync(join(root, "docs/decisions/052-governance-note.md"), "# renamed\n");
+    expect(deferAbsenceChecks({ repoRoot: root }).ok).toBe(true);
+    expect(acceptedSweepAdr({ repoRoot: root })).toBe(false);
+    copy(adr51);
+    writeFileSync(join(root, "docs/decisions/053-scheduled-approval.md"), "# extra\n");
+    expect(deferAbsenceChecks({ repoRoot: root }).ok).toBe(false);
+    rmSync(join(root, "docs/decisions/053-scheduled-approval.md"));
+    writeFileSync(join(root, "docs/decisions", adr50), "# tampered\n");
+    expect(acceptedStageAdr({ repoRoot: root })).toBe(false);
+    expect(deferAbsenceChecks({ repoRoot: root }).ok).toBe(false);
   });
 });
 
@@ -938,6 +1120,159 @@ describe("the shipped decision artifact", () => {
         () => readFileSync(join(repoRoot, path), "utf8"),
         `${row.id} -> ${path}`,
       ).not.toThrow();
+    }
+  });
+});
+
+describe("the accepted build-for-evidence stage is separate from enable-safe", () => {
+  const stageText = () => readFileSync(STAGE, "utf8");
+  const check = (text: string, now?: Date) =>
+    validateStage(text, { repoRoot, artifactPath: STAGE, now });
+  const run = (artifact: string, mode: string) => {
+    const r = spawnSync(process.execPath, [SCRIPT, artifact, mode], { encoding: "utf8" });
+    expect(r.error).toBeUndefined();
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  };
+
+  /** Deliberately non-collected live refs: twelve passing rows must still not earn enable-safe. */
+  function writeAdversarialEnableSafeFixture() {
+    const root = newRoot();
+    const artifact = join(root, "adversarial-enable-safe.md");
+    writeFileSync(artifact, greenFixture());
+    return artifact;
+  }
+
+  test("current stage passes but historical eligibility still refuses", () => {
+    expect(check(stageText()).errors).toEqual([]);
+    expect(run(STAGE, "--validate-stage").code).toBe(0);
+    expect(run(ARTIFACT, "--validate-decision").code).toBe(0);
+    expect(run(ARTIFACT, "--eligibility").code).toBe(1);
+  });
+
+  test("absent, malformed, unaccepted, broadened and expired stages refuse", () => {
+    expect(run(join(newRoot(), "absent.md"), "--validate-stage").code).toBe(1);
+    const good = stageText();
+    for (const bad of [
+      "",
+      good.replace("status: accepted", "status: proposed"),
+      good.replace("stage: build-for-evidence", "stage: enable-safe"),
+      good.replace(`candidateFiles: [${STAGE_CANDIDATE_FILES.join(", ")}]`, "candidateFiles: []"),
+      good.replace(STAGE_CANDIDATE_FILES[0]!, "packages/backend/convex/routines.ts"),
+      good.replace(STAGE_CANDIDATE_FILES[1]!, STAGE_CANDIDATE_FILES[0]!),
+      good.replace(STAGE_CANDIDATE_FILES[5]!, "packages/backend/candidate/recurrence/extra.ts"),
+      good.replace("tenantActivation: disabled", "tenantActivation: enabled"),
+      good.replace("productionDeployment: forbidden", "productionDeployment: allowed"),
+      good.replace("providerCalls: forbidden", "providerCalls: allowed"),
+      good.replace("paidCalls: forbidden", "paidCalls: allowed"),
+      good.replace("externalWrites: forbidden", "externalWrites: allowed"),
+      good.replace("externalSends: forbidden", "externalSends: allowed"),
+      good.replace("environment: isolated-test", "environment: production"),
+      good.replace(
+        "adrPath: docs/decisions/050-recurrence-build-for-evidence.md",
+        "adrPath: docs/decisions/other.md",
+      ),
+      good.replace(/adrSha256: [a-f0-9]+/, "adrSha256: deadbeef"),
+      good.replace("reviewer: owner", "reviewer: fixture"),
+      good.replace("---\nstage:", "---\nunknown: yes\nstage:"),
+      good.replace(
+        "stage: build-for-evidence",
+        "stage: build-for-evidence\nstage: build-for-evidence",
+      ),
+    ] as const) {
+      expect(check(bad).ok, bad.slice(0, 100)).toBe(false);
+    }
+    expect(check(good, new Date("2027-01-01T00:00:00Z")).errors.join("\n")).toContain("expired");
+  });
+
+  test("the stage declares exactly six candidate paths while retaining all prohibitions", () => {
+    const good = stageText();
+    expect(good).toContain(`candidateFiles: [${STAGE_CANDIDATE_FILES.join(", ")}]`);
+    expect(check(good).errors).toEqual([]);
+    for (const field of [
+      "tenantActivation: disabled",
+      "productionDeployment: forbidden",
+      "providerCalls: forbidden",
+      "paidCalls: forbidden",
+      "externalWrites: forbidden",
+      "externalSends: forbidden",
+      "expiresAt: 2026-12-31",
+    ]) {
+      expect(good).toContain(field);
+    }
+  });
+
+  test("an isolated built inventory is allowed, but hidden modules and executable edges refuse", () => {
+    const root = newRoot();
+    const candidateDir = join(root, "packages/backend/candidate/recurrence");
+    mkdirSync(candidateDir, { recursive: true });
+    for (const rel of STAGE_CANDIDATE_FILES) {
+      const path = join(root, rel);
+      writeFileSync(path, rel.endsWith(".json") ? "{}\n" : "export const synthetic = true;\n");
+    }
+    const model = join(candidateDir, "model.ts");
+    const extra = join(candidateDir, "hidden.ts");
+    expect(stageSourceBoundary({ repoRoot: root }).errors).toEqual([]);
+    writeFileSync(
+      model,
+      'export const read = (ctx: { db: { query: (name: string) => unknown } }) => ctx.db.query("probeRows");\n',
+    );
+    expect(stageSourceBoundary({ repoRoot: root }).errors).toEqual([]);
+    writeFileSync(extra, "export const hidden = true;\n");
+    expect(stageSourceBoundary({ repoRoot: root }).errors.join("\n")).toContain(
+      "unlisted candidate file",
+    );
+    rmSync(extra);
+    for (const [code, reason] of [
+      ["export const launch = mutation({});\n", "registered callable"],
+      ["ctx.scheduler.runAfter(0, internal.foo);\n", "cron or self-arm"],
+      ["const jobs = cronJobs();\n", "cron or self-arm"],
+      ["await fetch('https://example.test');\n", "provider, paid, outbound"],
+      ["const key = process.env.OPENROUTER_API_KEY;\n", "provider, paid, outbound"],
+    ] as const) {
+      writeFileSync(model, code);
+      expect(stageSourceBoundary({ repoRoot: root }).errors.join("\n"), code).toContain(reason);
+    }
+    writeFileSync(model, "export const synthetic = true;\n");
+    const importer = join(root, "apps/web/app/recurrenceProbe.ts");
+    mkdirSync(dirname(importer), { recursive: true });
+    writeFileSync(
+      importer,
+      'import { synthetic } from "../../../../packages/backend/candidate/recurrence/model";\n',
+    );
+    expect(stageSourceBoundary({ repoRoot: root }).errors.join("\n")).toContain(
+      "imports candidate",
+    );
+    writeFileSync(importer, 'import "../../../../packages/backend/candidate/recurrence/model";\n');
+    expect(stageSourceBoundary({ repoRoot: root }).errors.join("\n")).toContain(
+      "imports candidate",
+    );
+  });
+
+  test("arbitrary recurrence ADR is still refused under historical defer", () => {
+    const root = newRoot();
+    mkdirSync(join(root, "docs/decisions"), { recursive: true });
+    writeFileSync(join(root, "docs/decisions/051-routine-launch.md"), "# unreviewed\n");
+    expect(deferAbsenceChecks({ repoRoot: root }).errors.join("\n")).toContain(
+      "051-routine-launch.md",
+    );
+    writeFileSync(join(root, "docs/decisions/050-recurrence-build-for-evidence.md"), "# forged\n");
+    expect(deferAbsenceChecks({ repoRoot: root }).errors.join("\n")).toContain(
+      "050-recurrence-build-for-evidence.md",
+    );
+  });
+
+  test("stage cannot launder fabricated enable-safe", () => {
+    expect(run(STAGE, "--validate-stage").code).toBe(0);
+    const adversarial = writeAdversarialEnableSafeFixture();
+    try {
+      for (const mode of ["--eligibility", "--validate-decision"]) {
+        const result = run(adversarial, mode);
+        expect(result.code, `${mode}: ${result.out}`).toBe(1);
+        expect(result.out, mode).toMatch(/oauth-expiry-reauth|dst-boundary|provider-read/);
+        expect(result.out, mode).toMatch(/collected|probe|live/i);
+      }
+    } finally {
+      rmSync(adversarial, { force: true });
     }
   });
 });

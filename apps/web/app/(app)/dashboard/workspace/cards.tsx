@@ -22,7 +22,7 @@ import { DOC_REVIEW_FRAMEWORK } from "@pikar/voice";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MarkdownDocument } from "../MarkdownDocument";
 // The SHIPPED vault preview, mounted here rather than reimplemented: it already renders markdown,
 // PDFs, images and video, the extraction/failure states and the entity chips. A second document
@@ -31,6 +31,7 @@ import { PreviewModal } from "../vault/PreviewModal";
 import { MediaCanvas, ProposalFailureCanvas } from "./MediaCanvas";
 import { RevenuePackPanel } from "./RevenuePackPanel";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
+import { VerticalArtifactReview } from "./VerticalArtifactReview";
 
 // SC3/SC5 render: the right-pane artifact dispatcher over the live `plans` row + REPORT
 // projection. Cards are plain inline-styled <div>s (the `box` style mirrors review/[id]).
@@ -367,6 +368,17 @@ export const PLAN_REFUSALS: Record<string, PlanNote> = {
     text: "This email is ready, but Gmail is not connected. Connect it to send this approved message.",
     link: { href: "/connect-gmail", label: "Connect Gmail" },
   },
+  microsoft_not_connected: {
+    text: "This email is ready, but Microsoft is not connected. Connect it to send from Outlook.",
+    link: { href: "/connect-microsoft", label: "Connect Microsoft" },
+  },
+  mail_scope_missing: {
+    text: "Your Microsoft connection does not include mail access. Reconnect it before sending from Outlook.",
+    link: { href: "/connect-microsoft", label: "Reconnect Microsoft" },
+  },
+  first_send_recipient_mismatch: {
+    text: "This first-send draft no longer matches your signed-in address. Start a fresh first-send check.",
+  },
   no_postal_address: {
     text: "Add your postal address before sending — the law requires it in every email's footer.",
     // href and label travel TOGETHER (Task 8 review). They used to be an optional `href` beside a
@@ -646,6 +658,8 @@ export function ResearchDeliverableStatus({
 
 function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const execute = useMutation(api.cockpit.executePlan);
+  const saveFacts = useMutation(api.tenantProfile.saveFacts);
+  const recordPrerequisiteRecovered = useMutation(api.betaJourney.recordPrerequisiteRecovered);
   const setSendTime = useMutation(api.plans.setPlanSendTime);
   const managedEvent = useQuery(
     api.calendarEvents.forCard,
@@ -654,6 +668,9 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
       : "skip",
   );
   const [busy, setBusy] = useState(false);
+  const [postalRecoveryOpen, setPostalRecoveryOpen] = useState(false);
+  const [postalAddress, setPostalAddress] = useState("");
+  const [postalBusy, setPostalBusy] = useState(false);
   // The governed-refusal note, typed off `PlanNote` so the entry's own `link.label` rides along.
   // A refusal LEAVES the plan `proposed`, which is the only reason a note in this component's
   // state is visible at all — see the withheld report in `PlanCards`, which is the same
@@ -679,6 +696,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         // media/scheduling refusal the canvas or the picker already surfaces.
         const refusal = PLAN_REFUSALS[res.reason];
         if (refusal) setNote({ ...refusal, tone: "error" });
+        if (res.reason === "no_postal_address") setPostalRecoveryOpen(true);
       }
       // NO success branch here — neither `res.withheld` nor finance's `res.applied === 0`.
       // Merge note (2026-08-10, lane/live-finance-inputs): the lane predates 19-12 and re-added
@@ -1137,6 +1155,56 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
       >
         {busy ? "Approving…" : sendAt ? "Approve & schedule" : "Approve"}
       </button>
+      {postalRecoveryOpen && (
+        <form
+          data-testid="postal-recovery"
+          style={{ marginTop: "0.75rem", display: "grid", gap: "0.45rem" }}
+          onSubmit={async (event) => {
+            event.preventDefault();
+            if (postalBusy) return;
+            setPostalBusy(true);
+            try {
+              await saveFacts({ postalAddress });
+              await recordPrerequisiteRecovered({
+                planId: plan._id,
+                prerequisite: "postal_address",
+              });
+              setPostalRecoveryOpen(false);
+              setNote({
+                tone: "info",
+                text: "Postal address saved. Review the same plan and approve again when ready.",
+              });
+            } catch {
+              setNote({
+                tone: "error",
+                text: "Enter a complete postal address before retrying this plan.",
+              });
+            } finally {
+              setPostalBusy(false);
+            }
+          }}
+        >
+          <label htmlFor={`postal-address-${plan._id}`} style={{ ...dim, fontWeight: 600 }}>
+            Business postal address
+          </label>
+          <textarea
+            id={`postal-address-${plan._id}`}
+            value={postalAddress}
+            onChange={(event) => setPostalAddress(event.target.value)}
+            disabled={postalBusy}
+            rows={3}
+            autoComplete="street-address"
+            style={{ ...btn, cursor: "text", border: "1px solid #e5e5e5", resize: "vertical" }}
+          />
+          <button
+            type="submit"
+            disabled={postalBusy || postalAddress.trim() === ""}
+            style={{ ...btn, justifySelf: "start" }}
+          >
+            {postalBusy ? "Saving…" : "Save address"}
+          </button>
+        </form>
+      )}
       {planNote}
     </div>
   );
@@ -1509,6 +1577,55 @@ function ReportCard({ planId }: { planId: PlanId }) {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function FirstSendOfferCard({ onStarted }: { onStarted: (threadId: string) => void }) {
+  const offer = useQuery(api.onboarding.firstSendOffer, {});
+  const start = useAction(api.cockpit.startFirstSend);
+  const recordShown = useMutation(api.betaJourney.recordFirstOfferShown);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (offer?.eligible) void recordShown({});
+  }, [offer?.eligible, recordShown]);
+  if (!offer?.eligible) return null;
+
+  return (
+    <div style={box} data-testid="first-send-offer">
+      <div style={label}>FIRST SEND</div>
+      <p style={{ margin: "0.55rem 0 0", fontWeight: 600 }}>
+        Review a message to your signed-in address before anything can be sent.
+      </p>
+      <p style={{ ...dim, margin: "0.45rem 0 0" }}>
+        The address is selected by the server. You still approve the normal cockpit plan.
+      </p>
+      {error && (
+        <p role="alert" style={{ color: "#dc2626", margin: "0.55rem 0 0" }}>
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={busy}
+        style={{ ...btn, marginTop: "0.75rem" }}
+        onClick={async () => {
+          if (busy) return;
+          setBusy(true);
+          setError(null);
+          try {
+            const result = await start({});
+            onStarted(result.threadId);
+          } catch {
+            setError("The first-send offer could not be started. Refresh and try again.");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? "Preparing…" : "Review first-send draft"}
+      </button>
     </div>
   );
 }
@@ -2746,6 +2863,20 @@ function OutputCard({ threadId }: { threadId?: string }) {
   // `count` would be a heuristic where a stored closed enum already exists.
   const kind = FORM_LABEL[created.form ?? "long"];
   const many = created.count > 1;
+  const textPreview = artifact?.text ? (
+    <div style={{ maxHeight: "32rem", overflowY: "auto" }}>
+      <MarkdownDocument markdown={artifact.text} />
+    </div>
+  ) : created.snippet ? (
+    <div>
+      <p style={{ ...traceText, margin: "0 0 0.5rem", color: "var(--ink-soft)" }}>
+        Full text unavailable. Showing the saved summary.
+      </p>
+      <MarkdownDocument markdown={created.snippet} compact />
+    </div>
+  ) : (
+    "This artifact has no text preview."
+  );
   return (
     <div style={{ ...briefingSheet, padding: "1rem 1.15rem" }} data-testid="output-card">
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
@@ -2797,7 +2928,9 @@ function OutputCard({ threadId }: { threadId?: string }) {
         {/* `pdfBytes && pdfUrl === undefined` is still LOADING: the URL query cannot even be
             registered until `artifact` resolves, so without this the card renders the extracted
             markdown for one round trip and then swaps it for the frame. */}
-        {artifact === undefined || (pdfBytes && pdfUrl === undefined) ? (
+        {!selectedId || artifact === null ? (
+          "This saved artifact is unavailable."
+        ) : artifact === undefined || (pdfBytes && pdfUrl === undefined) ? (
           "Loading document…"
         ) : pdfUrl ? (
           // The document AS IT WILL BE READ. The browser's own PDF viewer, the same bare iframe the
@@ -2815,16 +2948,18 @@ function OutputCard({ threadId }: { threadId?: string }) {
               background: "var(--card)",
             }}
           />
-        ) : artifact?.text ? (
-          <div style={{ maxHeight: "32rem", overflowY: "auto" }}>
-            <MarkdownDocument markdown={artifact.text} />
+        ) : pdfBytes ? (
+          <div data-testid="output-storage-partial">
+            <p style={{ ...traceText, margin: "0 0 0.5rem", color: "var(--ink-soft)" }}>
+              Download unavailable. Showing the saved text instead.
+            </p>
+            {textPreview}
           </div>
-        ) : created.snippet ? (
-          <MarkdownDocument markdown={created.snippet} compact />
         ) : (
-          "This artifact has no text preview."
+          textPreview
         )}
       </section>
+      {selectedId && <VerticalArtifactReview key={selectedId} artifactId={selectedId} />}
       {/* The full document, HERE. The inline preview above is the text; this opens the shipped
           vault viewer over the workspace for the rest of it — the stored PDF, download, entities,
           rename/delete — without leaving the conversation that produced it. */}
@@ -3291,6 +3426,7 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
 export function CardList({
   threadId,
   sending,
+  onFirstSendThread,
   // OPT-IN copy override for the no-plan fallback. Defaults to the cockpit wording, so every
   // existing caller is behaviourally unchanged. Exists because "answer the questions to build one"
   // is wrong on a surface with no composer — the voice-doc post-call screen (14-08).
@@ -3298,6 +3434,7 @@ export function CardList({
 }: {
   threadId?: string;
   sending: boolean;
+  onFirstSendThread?: (threadId: string) => void;
   noPlanHint?: string;
 }) {
   const plan = useQuery(api.plans.byThread, threadId ? { threadId } : "skip");
@@ -3355,6 +3492,7 @@ export function CardList({
       {/* Revenue discovery is the passed-provider + active-pin server projection. Parked, failed,
           expired and inactive workflows never reach this renderer. */}
       <RevenuePackPanel threadId={threadId} />
+      {!threadId && onFirstSendThread && <FirstSendOfferCard onStarted={onFirstSendThread} />}
       {rest()}
     </div>
   );

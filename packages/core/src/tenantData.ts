@@ -53,6 +53,9 @@ export const TENANT_TABLE_CLASSIFICATION = {
   inboxFixtures: "tenant_owned",
   attachments: "tenant_owned",
   telemetry: "tenant_owned",
+  // BETA-03 refs-only journey rows still describe this tenant's product use, so normal export and
+  // erasure apply; the per-tenant idempotency index prevents double-counting retries.
+  betaJourneyEvents: "tenant_owned",
   notifications: "tenant_owned",
   gmailTokens: "tenant_credential",
   microsoftCalendarTokens: "tenant_credential",
@@ -74,6 +77,9 @@ export const TENANT_TABLE_CLASSIFICATION = {
   tenantProfiles: "tenant_owned",
   goals: "tenant_owned",
   spendEvents: "tenant_owned",
+  // Golden-run recovery journal: insert-only workflow/budget refs plus a request hash. It may
+  // outlive an eval tenant, so the closed refs-only immutable class is the honest privacy shape.
+  goldenEvalAttempts: "audit_immutable",
   spendCoverage: "tenant_owned",
   mediaJobs: "tenant_owned",
   contacts: "tenant_owned",
@@ -250,6 +256,24 @@ export const TENANT_TABLE_CLASSIFICATION = {
    * `billingUnapplied` would be an incoherent pair.
    */
   billingPeriods: "tenant_owned",
+  // Phase 48 structured web runtime: projects, immutable versions, raw-request aggregates and
+  // short-lived idempotency/abuse rows all belong to the tenant and are exportable/erasable.
+  webProjects: "tenant_owned",
+  webProjectVersions: "tenant_owned",
+  webMetrics: "tenant_owned",
+  webSubmissions: "tenant_owned",
+  // Phase 50-02: buyer-free catalogue, stock and reservation coordination belong to the
+  // tenant. No accounting retention exception is presumed for future order/payment tables.
+  tenantProducts: "tenant_owned",
+  tenantStock: "tenant_owned",
+  tenantReservations: "tenant_owned",
+  // Plan 50-04 local policy/mapping/cart/order/attempt content is exportable. Erasure refuses
+  // while ANY order exists until the owner resolves accounting retention and payment duties.
+  tenantCommercePolicies: "tenant_owned",
+  tenantCommerceMappings: "tenant_owned",
+  tenantCarts: "tenant_owned",
+  tenantOrders: "tenant_owned",
+  tenantOrderAttempts: "tenant_owned",
 } as const satisfies Readonly<Record<string, TenantTableCategory>>;
 
 export type ClassifiedTenantTable = keyof typeof TENANT_TABLE_CLASSIFICATION;
@@ -307,6 +331,7 @@ export const STORAGE_ID_FIELDS = {
   vaultDocuments: ["storageId"],
   funnels: ["storageId"], // Fixed artifact bytes can outlive a changed/deleted Vault reference.
   mediaJobs: ["assetStorageId"],
+  webProjectVersions: ["artifactStorageId"],
 } as const satisfies Record<string, readonly string[]>;
 
 export type StorageBearingTable = keyof typeof STORAGE_ID_FIELDS;
@@ -348,6 +373,250 @@ export function storageIdsIn(table: string, row: Record<string, unknown>): strin
 }
 
 export const exportableTables = deletableTables;
+
+/** Plan 50-19: closed merchant view for the current commerce schema. Unknown nested fields,
+ * including future buyer details or credentials, refuse until their export/erasure disposition
+ * is reviewed. These are source refs and quoted facts, never provider secrets or legal terms. */
+type CommerceFieldRule = "merchant" | "omit" | CommerceFields | readonly [CommerceFields];
+interface CommerceFields {
+  readonly [key: string]: CommerceFieldRule;
+}
+const branchFields: CommerceFields = {
+  taxSourceRef: "merchant",
+  taxBasisPoints: "merchant",
+  refundPolicyRef: "merchant",
+  buyerRetentionRef: "merchant",
+};
+const physicalFields: CommerceFields = {
+  ...branchFields,
+  shippingSourceRef: "merchant",
+  shippingMinor: "merchant",
+  returnsPolicyRef: "merchant",
+};
+const digitalFields: CommerceFields = {
+  ...branchFields,
+  deliveryRef: "merchant",
+  revocationRef: "merchant",
+  noShipping: "merchant",
+};
+const cartLineFields: CommerceFields = {
+  presentationItemId: "merchant",
+  productId: "merchant",
+  quantity: "merchant",
+  expectedProductRevision: "merchant",
+  expectedUnitMinor: "merchant",
+};
+const orderLineFields: CommerceFields = {
+  presentationItemId: "merchant",
+  productId: "merchant",
+  sku: "merchant",
+  goodsKind: "merchant",
+  taxSourceRef: "merchant",
+  refundPolicyRef: "merchant",
+  buyerRetentionRef: "merchant",
+  productRevision: "merchant",
+  stockRevision: "merchant",
+  unitMinor: "merchant",
+  quantity: "merchant",
+  lineMinor: "merchant",
+};
+
+export const COMMERCE_EXPORT_FIELDS: Readonly<Record<string, CommerceFields>> = {
+  tenantProducts: {
+    tenantId: "merchant",
+    sku: "merchant",
+    variant: "merchant",
+    currency: "merchant",
+    priceMinor: "merchant",
+    status: "merchant",
+    goodsKind: "merchant",
+    revision: "merchant",
+    createdAt: "merchant",
+    updatedAt: "merchant",
+  },
+  tenantStock: {
+    tenantId: "merchant",
+    productId: "merchant",
+    kind: "merchant",
+    onHand: "merchant",
+    reserved: "merchant",
+    reservationTtlMs: "merchant",
+    approvedUntracked: "merchant",
+    revision: "merchant",
+    updatedAt: "merchant",
+  },
+  tenantReservations: {
+    tenantId: "merchant",
+    productId: "merchant",
+    quantity: "merchant",
+    status: "merchant",
+    expiresAt: "merchant",
+    createdAt: "merchant",
+    updatedAt: "merchant",
+    orderId: "merchant",
+    attemptId: "merchant",
+  },
+  tenantCommercePolicies: {
+    tenantId: "merchant",
+    projectId: "merchant",
+    revision: "merchant",
+    sellerOfRecordRef: "merchant",
+    taxSourceRef: "merchant",
+    shippingSourceRef: "merchant",
+    refundPolicyId: "merchant",
+    currency: "merchant",
+    countries: "merchant",
+    taxBasisPoints: "merchant",
+    taxRounding: "merchant",
+    shippingMinor: "merchant",
+    physical: physicalFields,
+    digital: digitalFields,
+    createdAt: "merchant",
+  },
+  tenantCommerceMappings: {
+    tenantId: "merchant",
+    projectId: "merchant",
+    presentationItemId: "merchant",
+    productId: "merchant",
+    revision: "merchant",
+    createdAt: "merchant",
+    updatedAt: "merchant",
+  },
+  tenantCarts: {
+    tenantId: "merchant",
+    projectId: "merchant",
+    lines: [cartLineFields],
+    addressCountry: "merchant",
+    revision: "merchant",
+    createdAt: "merchant",
+    updatedAt: "merchant",
+    expiresAt: "merchant",
+  },
+  tenantOrders: {
+    tenantId: "merchant",
+    projectId: "merchant",
+    cartId: "merchant",
+    cartRevision: "merchant",
+    snapshot: {
+      tenantId: "merchant",
+      projectId: "merchant",
+      currency: "merchant",
+      country: "merchant",
+      policyId: "merchant",
+      policyRevision: "merchant",
+      sellerOfRecordRef: "merchant",
+      taxRounding: "merchant",
+      taxSourceRef: "merchant",
+      shippingSourceRef: "merchant",
+      refundPolicyId: "merchant",
+      physicalPolicy: physicalFields,
+      digitalPolicy: digitalFields,
+      lines: [orderLineFields],
+      subtotalMinor: "merchant",
+      taxMinor: "merchant",
+      shippingMinor: "merchant",
+      totalMinor: "merchant",
+      hash: "merchant",
+    },
+    snapshotHash: "merchant",
+    status: "merchant",
+    expiresAt: "merchant",
+    createdAt: "merchant",
+    updatedAt: "merchant",
+  },
+  tenantOrderAttempts: {
+    tenantId: "merchant",
+    orderId: "merchant",
+    cartId: "merchant",
+    cartRevision: "merchant",
+    retryKeyHash: "omit",
+    snapshotHash: "merchant",
+    status: "merchant",
+    createdAt: "merchant",
+    updatedAt: "merchant",
+  },
+};
+
+/** Prefix guard makes a future commerce table refuse before the generic export dumps its rows. */
+export function isCommerceTable(table: string): boolean {
+  return /^tenant(?:Products|Stock|Reservations|Commerce|Carts|Orders|OrderAttempts|Merchant|Payments?|Refunds?|Fulfilment)/.test(
+    table,
+  );
+}
+
+function viewFields(
+  value: Record<string, unknown>,
+  fields: CommerceFields,
+  path: string,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, field] of Object.entries(value)) {
+    const rule = key === "_id" || key === "_creationTime" ? "merchant" : fields[key];
+    if (rule === undefined) throw new Error(`COMMERCE_FIELD_UNCLASSIFIED:${path}.${key}`);
+    if (rule === "omit" || field === undefined) continue;
+    if (rule === "merchant") {
+      out[key] = field;
+      continue;
+    }
+    if (Array.isArray(rule)) {
+      if (!Array.isArray(field)) throw new Error(`COMMERCE_FIELD_UNCLASSIFIED:${path}.${key}`);
+      out[key] = field.map((entry) => {
+        if (entry === null || typeof entry !== "object" || Array.isArray(entry))
+          throw new Error(`COMMERCE_FIELD_UNCLASSIFIED:${path}.${key}[]`);
+        return viewFields(
+          entry as Record<string, unknown>,
+          rule[0] as CommerceFields,
+          `${path}.${key}[]`,
+        );
+      });
+    } else {
+      if (field === null || typeof field !== "object" || Array.isArray(field))
+        throw new Error(`COMMERCE_FIELD_UNCLASSIFIED:${path}.${key}`);
+      out[key] = viewFields(
+        field as Record<string, unknown>,
+        rule as CommerceFields,
+        `${path}.${key}`,
+      );
+    }
+  }
+  return out;
+}
+
+export function commerceExportView(
+  table: string,
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const fields = COMMERCE_EXPORT_FIELDS[table];
+  if (!fields) throw new Error(`COMMERCE_TABLE_UNCLASSIFIED:${table}`);
+  const view = viewFields(row, fields, table);
+  if (table === "tenantProducts" && row.goodsKind === undefined) {
+    view.goodsKind = null;
+    view.classification = "legacy_unclassified";
+  }
+  if (table === "tenantCommercePolicies" && row.physical === undefined && row.digital === undefined)
+    view.classification = "legacy_policy_branches_missing";
+  if (table === "tenantOrders") {
+    const snapshot = row.snapshot as Record<string, unknown> | undefined;
+    if (snapshot && snapshot.physicalPolicy === undefined && snapshot.digitalPolicy === undefined)
+      view.classification = "legacy_order_policy_missing";
+  }
+  return view;
+}
+
+/** Existing commerce orders and their linkage cannot be erased until financial, fulfilment,
+ * refund and buyer-retention authority is accepted. Unused catalogue/policy rows are deletable. */
+export function commerceDeletionBlocker(
+  table: string,
+  row: Record<string, unknown>,
+): string | null {
+  if (!COMMERCE_EXPORT_FIELDS[table]) throw new Error(`COMMERCE_TABLE_UNCLASSIFIED:${table}`);
+  if (table === "tenantOrders")
+    return "COMMERCE_RETENTION_POLICY_REQUIRED:ORDER_FINANCIAL_FULFILMENT_REFUND_BUYER";
+  if (table === "tenantOrderAttempts") return "COMMERCE_RETENTION_POLICY_REQUIRED:ATTEMPT_HISTORY";
+  if (table === "tenantReservations" && (row.orderId !== undefined || row.attemptId !== undefined))
+    return "COMMERCE_RETENTION_POLICY_REQUIRED:LINKED_RESERVATION";
+  return null;
+}
 
 export const TENANT_EXPORT_SCHEMA_VERSION = 1;
 export const AUDIT_ARCHIVE_STATEMENT =

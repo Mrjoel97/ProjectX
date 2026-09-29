@@ -164,6 +164,10 @@ export const vaultIngestText = tenantMutation({
     if (docId) {
       const existing = await ctx.db.get(docId);
       if (!existing || existing.tenantId !== ctx.tenantId) throw new Error("vault: doc not found");
+      // This seam exists only for a stored upload awaiting extraction. A caller must never
+      // overwrite a ready document (especially an agent-created review candidate) in place.
+      if (existing.status !== "pending_extraction" || existing.origin === "agent")
+        throw new Error("vault: late-text target not pending upload");
       await ctx.db.patch(docId, {
         text,
         contentHash: hash,
@@ -1524,6 +1528,15 @@ export const insertCreatedDoc = internalMutation({
     markdown: v.string(),
     contentHash: v.string(),
     storageId: v.optional(v.id("_storage")),
+    // Operator Data previews pass the exact source they prepared so a later source-state
+    // change cannot be hidden by the action's separate read and write transactions.
+    sourceCheck: v.optional(
+      v.object({
+        sourceDocId: v.id("vaultDocuments"),
+        storageId: v.id("_storage"),
+        mimeType: v.string(),
+      }),
+    ),
     // 26-11 (CONT-01): which conversation produced this artifact. BOTH are v.optional -- the nine
     // createdDocs.test.ts call sites and the over-the-wire e2e call pass neither, and a legacy row
     // carrying neither must keep validating (dashboardSchema.test.ts). The caller takes them from
@@ -1533,9 +1546,34 @@ export const insertCreatedDoc = internalMutation({
   },
   handler: async (
     ctx,
-    { tenantId, title, form, markdown, contentHash: hash, storageId, sourceThreadId, sourcePlanId },
-  ): Promise<Id<"vaultDocuments">> =>
-    await ctx.db.insert("vaultDocuments", {
+    {
+      tenantId,
+      title,
+      form,
+      markdown,
+      contentHash: hash,
+      storageId,
+      sourceCheck,
+      sourceThreadId,
+      sourcePlanId,
+    },
+  ): Promise<Id<"vaultDocuments">> => {
+    if (sourceCheck) {
+      const source = await ctx.db.get(sourceCheck.sourceDocId);
+      if (
+        !source ||
+        source.tenantId !== tenantId ||
+        source.status !== "ready" ||
+        source.storageId !== sourceCheck.storageId ||
+        source.mimeType !== sourceCheck.mimeType ||
+        !(await ctx.db.system.get(sourceCheck.storageId))
+      )
+        throw new Error("DATA_SOURCE_CHANGED");
+      const folder = source.folderId ? await ctx.db.get(source.folderId) : null;
+      if (folder && (folder.tenantId !== tenantId || folder.status === "ingesting"))
+        throw new Error("DATA_SOURCE_SEALED");
+    }
+    return await ctx.db.insert("vaultDocuments", {
       tenantId,
       title,
       // Free-string `kind`. NOT "document" — smoke.ts seedVoiceDocSession already writes that.
@@ -1547,6 +1585,7 @@ export const insertCreatedDoc = internalMutation({
       mimeType: "text/markdown",
       size: byteLen(markdown),
       contentHash: hash,
+      contentRevision: 0,
       text: markdown,
       storageId, // absent ⇒ PreviewModal's canDownload is false ⇒ no Download button, for free
       // The LOCKED line above stays locked, and this is why it can: `mimeType` answers "what is the
@@ -1560,7 +1599,8 @@ export const insertCreatedDoc = internalMutation({
       sourcePlanId,
       status: "ready", // ready WITHOUT ingest — see the block comment above
       createdAt: Date.now(),
-    }),
+    });
+  },
 });
 
 /**
@@ -1609,6 +1649,9 @@ export const patchCreatedDoc = internalMutation({
     // BOTH guards, not one: tenant (isolation) AND origin (never let a revise overwrite an UPLOAD,
     // and never silently rewrite a doc the user PROMOTED to reference material).
     if (!doc || doc.tenantId !== a.tenantId || doc.origin !== "agent") return { ok: false };
+    const revision = doc.contentRevision ?? 0;
+    if (!Number.isSafeInteger(revision) || revision < 0 || revision >= Number.MAX_SAFE_INTEGER)
+      return { ok: false };
 
     const oldStorageId = doc.storageId;
     await ctx.db.patch(docId, {
@@ -1617,6 +1660,7 @@ export const patchCreatedDoc = internalMutation({
       text: a.markdown,
       size: byteLen(a.markdown),
       contentHash: a.contentHash,
+      contentRevision: revision + 1,
       storageId: a.storageId, // undefined REMOVES it ⇒ long→short drops the Download button
       // Phase 40: the bytes' type is REVISED with them. Without this line a long→sheet rewrite
       // kept `application/pdf` over .xlsx bytes and PreviewModal framed a workbook in the PDF

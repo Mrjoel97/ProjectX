@@ -1,0 +1,29 @@
+
+> @pikar/backend@0.0.0 eval:golden C:\Users\expert\Desktop\Pikar-Ai\packages\backend
+> node ./scripts/run-eval-golden.mjs "--skill" "cockpit-agent@26" "--skill" "inbox-digest@2" "--no-retry"
+
+[eval:golden] self-check PASSED (57 fixtures valid, 12 gated skills derived from GATED_SKILLS, vocabulary/cap/multi-pin/only-filter/dispatch/cost-merge logic proven offline; 21-03: tenant-pin parsing/scope-merge/candidate-eligibility/evidence-suppression/inspection/expectations/foreign-collision/deployment-fingerprint/unknown-arg proven offline)
+[eval:golden] provider preflight PASSED (secret-safe; no budget opened)
+[eval:golden] budget ps7f497nf881se330r2jncnzr18epwfx; unresolved calls retain their reservation
+[eval:golden] run bc1d1a74 — 46 cases, tenant eval-bc1d1a74, cap $2.00, pins cockpit-agent@26 inbox-digest@2
+[eval:golden] NO-RETRY RUN — every fixture receives exactly one attempt; a failure remains final.
+[eval:golden] seeded inbox fixture: 5 message(s), live digest
+[eval:golden] seeded vault corpus: 5 doc(s), live embed
+[eval:golden] seeded confirmed Blueprint: doc mx77ezthtjqv9scd45s3wkafe18eqz88, 5 source(s), spine 401 chars, needle evalblpr
+  · 01-happy-single thread=smoke-attach-37c6f709-cd1e-4f80-9606-8f6d3954bc1b plan=mh72j9vqx107zyeyjgks5v4vys8epf38
+  PASS            01-happy-single  ($0.0062)
+  · 02-happy-multi-individual thread=smoke-attach-be017259-bc81-4267-b279-2b4b5fc69698 plan=mh7a3ke3750zdnwkey4wnr2hh18eqew1
+  PASS            02-happy-multi-individual  ($0.0053)
+  · 03-happy-group thread=smoke-attach-cee023e2-8aa6-467e-a3aa-4bbe84059f73 plan=mh716ae74nggbz42xws530wddx8epamm
+  PASS            03-happy-group  ($0.0053)
+  · 04-edit-remove-recipient thread=smoke-attach-40843a19-7dad-4304-8a4b-7d60bb952308 plan=mh77y1vgqsf06mjwg20cwgshc58eq4z3
+  PASS            04-edit-remove-recipient  ($0.0074)
+  · 05-edit-make-formal thread=smoke-attach-441eb740-3b1d-41a1-9f04-cedfca0774b7 plan=mh7bgp2qgcnfjj1ajqmsff7vk98ep4hy
+  PASS            05-edit-make-formal  ($0.0074)
+  · 06-edit-change-subject thread=smoke-attach-068c0469-8a64-495a-a4c1-543f672d843d plan=mh71q0wzh1dq5nrw90gddfa58s8epe3z
+  PASS            06-edit-change-subject  ($0.0073)
+  · 07-bounce-invalid-address thread=smoke-attach-c17b2a83-1f99-47ab-bdee-df0eaa1bca93 plan=mh77sdsxndy7k998dpgtgr9rv58epcnb
+  PASS            07-bounce-invalid-address  ($0.0021)
+  · 08-bounce-then-correct thread=smoke-attach-d5d1e015-a7a6-4336-8623-0fa1d4f24908 plan=mh749q8zsywbx9v5s237vezxas8eq5zv
+[eval:golden] GOLDEN_PAID_CALL_UNRESOLVED; retained recovery checkpoints; no retry, evidence, or cleanup.
+ ELIFECYCLE  Command failed with exit code 2.

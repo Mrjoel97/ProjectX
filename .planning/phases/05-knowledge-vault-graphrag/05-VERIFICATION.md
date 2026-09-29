@@ -1,9 +1,10 @@
 ---
 phase: 05-knowledge-vault-graphrag
 verified: 2026-07-14T19:05:54Z
-status: human_needed
-score: 4/4 must-haves verified (code-complete); 2 items deferred to human/live verification
-human_verification:
+reverified: 2026-09-20
+status: technically_ready_for_external_gate
+score: repository-controlled acceptance green; one exact current-release provider re-entry remains
+historical_human_verification:
   - test: "Visual 1:1 check of /dashboard/vault against docs/design/brand/brand-024242.png and brand-024258.png"
     expected: "Headline, Refresh + Loading pill, 4 stat tiles (colored icon badges), 6 category tabs (My Uploads active teal pill), dropzone copy, search bar + N ITEMS + grid/list toggle, and honest-zero empty states all match the screenshots pixel-for-pixel"
     why_human: "Visual/brand fidelity cannot be verified programmatically; requires a running dev stack + human eyes. The vault Convex functions are not deployed on the shared local backend that owns 127.0.0.1:3210 (owned by the main repo's convex dev watcher), and browser auth cannot be automated in this environment — consistent with every prior phase's deferral to /gsd:verify-work."
@@ -14,9 +15,18 @@ human_verification:
 
 # Phase 5: Knowledge Vault & GraphRAG Verification Report
 
+## Closure reconciliation — 2026-09-20
+
+The two 2026-07-14 deferrals no longer carry equal weight:
+
+- The screenshot-specific visual check was superseded by the later Nord Edge Vault redesign. Phase 15.4 verified the connected authenticated route in Playwright (2/2), recorded 5/5 success criteria, and carries the owner's approval. Re-testing the retired Phase 5 screenshots would validate a design the product no longer uses.
+- The real provider path was subsequently observed at commit `860e3f54`: `vaultSmoke:seedCorpus` embedded two documents, and `pnpm smoke:vault` passed real hybrid search, graph-neighbour merge, and the no-raw-text audit scan. Later Vault changes mean this historical pass does not certify the exact current release, so a single current-version `smoke:vault` run remains an external Wave 7 re-entry packet rather than a Wave 1 code task.
+
+Current repository-controlled qualification was rerun on 2026-09-20: `@pikar/vault` 192/192, backend `vault` + `vaultGraph` 52/52, and backend `vaultGround` + `vaultRedaction` 28/28. The implementation and offline layers are therefore current and green. Phase 5 is technically ready for its exact external gate; no provider run or deployment is inferred by this reconciliation.
+
 **Phase Goal:** The system remembers — briefs and documents become groundable, searchable memory scoped to each user via hybrid vector + graph retrieval.
 **Verified:** 2026-07-14T19:05:54Z
-**Status:** human_needed
+**Historical status (2026-07-14):** human_needed; superseded by the closure reconciliation above.
 **Re-verification:** No — initial verification
 
 ## Goal Achievement
@@ -124,7 +134,7 @@ None. Scanned `packages/vault/src/*.ts`, `packages/backend/convex/vault*.ts`, an
 
 No code gaps found. All 4 VALT requirements (VALT-01..04) have complete, substantive, wired implementations verified against the actual codebase — not just SUMMARY claims. Every artifact from every plan's frontmatter was located, read, and confirmed non-stub; every key link was traced and confirmed wired; all offline/unit tests pass (44 total vault-scoped tests across `@pikar/vault` + `@pikar/backend`, all green when run per-file); the web app builds cleanly with the vault route present; the Playwright spec is discovered and exercises the full VALT-04 UI loop offline; `check-playbooks` passes; backend/web typechecks are clean of any vault-caused errors (the ~20 remaining backend tsc errors are confirmed pre-existing in `.test.ts` files from prior phases, unrelated to this phase's changes).
 
-The two items flagged for human verification (the live 1:1 UI brand check and the live `smoke:vault` gate) are explicitly deferred by design — consistent with every prior phase's precedent in this project — because the vault functions are not deployed on the shared local Convex backend and browser auth cannot be automated in this environment. This is a known, documented carry-forward (recorded in `.planning/STATE.md` and `docs/playbooks/vault.md`), not a phase failure. Status is `human_needed` rather than `passed` to make this explicit and ensure the two live checks are executed before the phase is considered fully closed.
+This paragraph records the original 2026-07-14 verdict. The 2026-09-20 reconciliation above supersedes it: the redesigned authenticated Vault has owner/browser evidence, while one exact current-release provider smoke remains packeted for Wave 7.
 
 ---
 

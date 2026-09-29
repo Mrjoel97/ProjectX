@@ -1,0 +1,24 @@
+# Plan 47-20 — independent technical review
+
+**Verdict: ACCEPT as isolated synthetic design evidence only.** Reviewer: Codex `/root/phase47_20_independent_review`, independent of the candidate implementer, 2026-09-25. The first and second source reviews refused acceptance for stranded holds after unknown paid outcomes, interrupted running attempts, and an admitted-but-unstarted step replayed after pause. The implementer corrected those exact paths; the reviewer then read the final source and tests and independently ran the explicit candidate suite (25/25, exit 0). This verdict does not pass ADR-046 D6, ROUT-02, Phase 47 or Wave 6.
+
+The final six-file candidate remains outside the production Convex functions root, default backend test discovery and app bundle. A source inventory found no production/app/core import of this candidate, no registered scheduler or tenant-callable route, and no real provider, paid-model or outbound send path. The candidate's `convex-test` transactions show a committed reservation admission before either keyed synthetic rail effect; a committed, single-outstanding paid-step admission; and a separate single-use start claim. Pause/version changes and admissions serialize through the transaction store. A previously admitted step may physically start after pause but lands without an actionable plan or successor admission. A terminal outcome with a possible hold keeps `activeRunId` and a pending status until keyed release is confirmed. The bounded, test-only reconciliation entry point can close interrupted outcomes without re-dispatching a claimed paid step.
+
+Adverse tests now force restart after attempt start, reservation admission, one unrecorded rail effect and a claimed paid start; pause after a paid admission but before its start is replayed by two workers, with one mock call, no new reserve, terminal release and no actionable plan or external-action admission. The reviewer checked the actual code paths and bounded `settledStepIds`, rather than treating a passing test count alone as proof. Synthetic release tombstones an absent key to prevent a late reserve in the test stub. The real spend rails must establish their own atomicity, keyed lookup, refund and tombstone behavior.
+
+| Check | Final observed result |
+| --- | --- |
+| Candidate Vitest, explicit config | 25/25, exit 0; independently rerun by reviewer and root |
+| Candidate and backend TypeScript | exit 0 each; root reran both |
+| Focused backend `routineDecision` / `routines` / `dstProbe` | 106/106, exit 0, implementer rerun |
+| Checker `--self-check` | 32/32, exit 0; root rerun |
+| Historical `--matrix` / `--eligibility` / `--validate-decision` / separate `--validate-stage` | `0/1/0/0`; root rerun; eligibility still refuses with 14 findings |
+| Playbook checker / strict planning / `git diff --check` | exits 0/0/0; root rerun; diff check emitted only unrelated CRLF warnings |
+
+Final SHA-256: `schema.ts` `51a3e31bc583f706b9f7b2207858cc0778dd2e8255fa85a40a2ea2d5c544b8f9`; `model.ts` `4b4c710b22c7271f29052b9e8a2743b3cf729bd2ee5d1f2ba16d799cd2a8006e`; `model.test.ts` `b8eddb3d2af89fe3dba390da93009cee148089bda43a3bed19909275d1112ef8`; candidate `README.md` `d5d049220a3f96bb2ce21c0731105a4e2fd9f91f5bb67902e6e36b7507e33df2`; owning playbook `61fb77097d4c65feb819fe2a870b69785d7563638350c616db18a7c015fc316b`. Candidate `tsconfig.json` and `vitest.config.mts` were not edited. The [baseline](47-20-BASELINE.md) records pre-edit hashes and existing dirty-worktree state; no broad rollback or unrelated edit was made.
+
+**Open limits:** The reconciliation entry point has no registered driver or scheduler, so recovery liveness is not established. An unknown physical outcome still needs explicit closure. Real rate-limiter semantics, bounded deployed sweep/reachability, per-run approval integration, live DST/OAuth/provider traces and ADR-050's literal pause/cancel reconciliation remain unproved. The candidate still stores `nextDueUtcMs`/next-local fields and direct prompt material and uses a separate dead-letter table. These are named production-design differences, not accepted production behavior. The historical operational decision stays `defer`; no tenant activation, production deployment, provider/paid call or send was authorized or performed.
+
+## Graph maintenance
+
+`graphify update .` was attempted after the candidate edits but produced no result for approximately 100 seconds and was interrupted; no completed full graph refresh is claimed. An initial Convex-edge fixup failed twice with a Windows `UNKNOWN` write-open error on the existing modified `graphify-out/graph.json`. Root reran `node scripts/extract-convex-edges.mjs` after the source stabilized; it exited 0 with 76 tables, no added edges and the listed unresolved external targets. This graph limitation is not runtime or governance evidence.

@@ -1,5 +1,6 @@
 import { authTables } from "@convex-dev/auth/server";
 import { CONTRACTS_PACKAGE_NAME } from "@pikar/contracts";
+import { WEB_RECIPE_SKILL_NAMES } from "@pikar/contracts/skill";
 import {
   AUTHORITY_CLASSES,
   CONFIDENCE_LABELS,
@@ -32,9 +33,10 @@ void CONTRACTS_PACKAGE_NAME;
  */
 const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
+const webRecipeName = literals(WEB_RECIPE_SKILL_NAMES);
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 62 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 76 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -47,7 +49,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │                                                                            │
 // │ ── Content & Pipeline ──────────────────────────────────── ~L334           │
 // │   requests, plans, briefings, intakeArtifacts, attachments,                │
-// │   telemetry, demoItems, funnels                                            │
+// │   telemetry, betaJourneyEvents, demoItems, funnels                         │
 // │                                                                            │
 // │ ── Agent ───────────────────────────────────────────────── ~L998           │
 // │   evaluations, agenda, agentSteps, researchControls                        │
@@ -72,13 +74,19 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │   inboxFixtures                                                            │
 // │                                                                            │
 // │ ── Finance ─────────────────────────────────────────────── ~L1981          │
-// │   spendEvents, spendCoverage, financeInputs                                │
+// │   spendEvents, goldenEvalAttempts, spendCoverage, financeInputs            │
 // │                                                                            │
 // │ ── Media ───────────────────────────────────────────────── ~L2030          │
 // │   mediaJobs                                                                │
 // │                                                                            │
 // │ ── CRM ─────────────────────────────────────────────────── ~L2104          │
 // │   contacts, followUps, suppressions                                        │
+// │                                                                            │
+// │ ── Web runtime (48-02) ─────────────────────────────────────────────────── │
+// │   webProjects, webProjectVersions, webMetrics, webSubmissions              │
+// │ ── Tenant commerce catalogue (50-02) ──────────────────────────────────── │
+// │   tenantProducts, tenantStock, tenantReservations, tenantCommercePolicies,  │
+// │   tenantCommerceMappings, tenantCarts, tenantOrders, tenantOrderAttempts    │
 // │                                                                            │
 // │ ── Proposals ───────────────────────────────────────────── ~L2238          │
 // │   proposals                                                                │
@@ -285,10 +293,28 @@ export default defineSchema({
     payload: v.any(),
     ts: v.number(),
     exportVersion: v.optional(v.literal(2)),
+    // Ref-only lookup keys for new vertical outcome rows. Historical immutable audit
+    // rows lack them and are handled by the bounded legacy fallback.
+    verticalEvent: v.optional(v.string()),
+    verticalPreview: v.optional(v.boolean()),
+    verticalArtifactId: v.optional(v.id("vaultDocuments")),
   })
     .index("by_tenant_ts", ["tenantId", "ts"])
     .index("by_tenant_event_ts", ["tenantId", "eventType", "ts"])
     .index("by_correlation", ["correlationId"])
+    .index("by_tenant_correlation_vertical_event_preview_artifact", [
+      "tenantId",
+      "correlationId",
+      "verticalEvent",
+      "verticalPreview",
+      "verticalArtifactId",
+    ])
+    .index("by_tenant_vertical_artifact_event_preview", [
+      "tenantId",
+      "verticalArtifactId",
+      "verticalEvent",
+      "verticalPreview",
+    ])
     // OPSG-03 WORM export windows CROSS-tenant by ts (by_tenant_ts is per-tenant, useless
     // for the global export). Adding an index is not a write path — Convex backfills it
     // (no migration; OPSG-06 moot). Backs auditSince, which previously full-scanned.
@@ -357,6 +383,49 @@ export default defineSchema({
     // only `isWorkflowPackSkill` names ever require them.
     provenance: v.optional(v.string()),
     browserEvidence: v.optional(v.string()),
+    // Server-stamped ownership marker for the disposable Phase 49 browser fixture harness only.
+    qualificationFixtureRunId: v.optional(v.string()),
+    // Refs-only, server-owned transcript for the authenticated owner browser qualification flow.
+    // It is deliberately attached to the exact candidate row: no raw input, HTML, screenshot,
+    // tenant/public authority, or provider output is persisted here.
+    browserQualification: v.optional(
+      v.object({
+        runId: v.string(),
+        challengeHash: v.string(),
+        ownerId: v.string(),
+        route: v.string(),
+        revision: v.number(),
+        candidateName: v.string(),
+        candidateVersion: v.number(),
+        bodyHash: v.string(),
+        definitionHash: v.string(),
+        bundleHash: v.string(),
+        rendererVersion: v.string(),
+        lanes: v.array(
+          v.object({
+            viewport: v.union(v.literal("desktop"), v.literal("mobile")),
+            observations: v.array(
+              v.object({
+                outcome: v.union(
+                  v.literal("selected"),
+                  v.literal("partial"),
+                  v.literal("refusal"),
+                  v.literal("recovery"),
+                  v.literal("edit"),
+                  v.literal("preview"),
+                ),
+                inputHash: v.optional(v.string()),
+                documentHash: v.optional(v.string()),
+                artifactHash: v.optional(v.string()),
+                byteLength: v.optional(v.number()),
+              }),
+            ),
+          }),
+        ),
+        finalizedHash: v.optional(v.string()),
+        updatedAt: v.number(),
+      }),
+    ),
     createdAt: v.number(),
   })
     .index("by_name_status", ["name", "status"])
@@ -803,6 +872,10 @@ export default defineSchema({
     ),
     // Slot content (accumulated during the conversation; all optional until filled):
     recipients: v.optional(v.array(v.string())), // validated, deduped emails
+    // BETA-03: server-owned first-send guard. When present this plan may only ever propose and
+    // execute a single message to the authenticated owner's current email address. Optional so
+    // ordinary cockpit plans and legacy rows remain unchanged.
+    firstSendRecipient: v.optional(v.string()),
     mode: v.optional(v.union(v.literal("individual"), v.literal("group"))),
     subject: v.optional(v.string()),
     bodyIntent: v.optional(v.string()), // the user's goal → drafter turns it into `body`
@@ -2113,6 +2186,10 @@ export default defineSchema({
     mimeType: v.string(),
     size: v.number(),
     contentHash: v.string(), // sha-256 hex → cross-doc dedup
+    // Only an in-place rewrite of an agent-created document increments this. Legacy absence is
+    // revision zero; the value lets a later review refuse to attribute rewritten prose to the
+    // original vertical candidate without logging generated content or a reversible content hash.
+    contentRevision: v.optional(v.number()),
     storageId: v.optional(v.id("_storage")), // stored bytes for downloadable uploads
     // WHAT THE BYTES ARE, when that differs from what the ROW is. `mimeType` above is the artifact
     // of record — it drives extraction routing and searchability, and for an agent-created document
@@ -2717,6 +2794,12 @@ export default defineSchema({
     evalActualUsd: v.optional(v.number()),
     evalTavilyCredits: v.optional(v.number()),
     evalBreach: v.optional(v.boolean()),
+    // `observed` is provider-reported usage. `conservative_ceiling` is an ambiguous failed
+    // request charged at its full reservation so a golden budget can close without pretending
+    // the provider returned exact usage or leaving an orphaned hold forever.
+    evalSettlementBasis: v.optional(
+      v.union(v.literal("observed"), v.literal("conservative_ceiling")),
+    ),
     createdAt: v.number(),
   })
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
@@ -2725,6 +2808,23 @@ export default defineSchema({
     .index("by_correlation", ["correlationId"])
     .index("by_eval_budget", ["evalBudgetId"])
     .index("by_probe_thread", ["tenantId", "evalAuthoringProbe.threadId"]),
+
+  // Durable idempotency key for the golden evaluator's provider-driving operations. This table is
+  // intentionally refs/hash-only: request arguments and returned model content live only in the
+  // Workflow component journal, never in the application data plane or audit plane.
+  goldenEvalAttempts: defineTable({
+    attemptId: v.string(),
+    requestSha256: v.string(),
+    operation: v.union(
+      v.literal("llm:runCockpitAgent"),
+      v.literal("llm:runRevenueCandidateEval"),
+      v.literal("vaultSmoke:seedCorpus"),
+      v.literal("evaluations:actOnGapInternal"),
+    ),
+    workflowId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
+    createdAt: v.number(),
+  }).index("by_attempt_id", ["attemptId"]),
 
   // One durable start per tenant, created before the first paid movement. A missing row means
   // coverage has not begun; it never means historical spend was zero.
@@ -3612,6 +3712,41 @@ export default defineSchema({
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
     .index("by_correlation", ["correlationId"]),
   /**
+   * BETA-03: refs-only, append-only journey measurements. This is tenant content rather than
+   * immutable audit because a tenant may export and erase its own product-usage history.
+   * `idempotencyKey` is per tenant: no retry can double-count a journey step.
+   */
+  betaJourneyEvents: defineTable({
+    tenantId: v.string(),
+    eventType: v.union(
+      v.literal("admission_succeeded"),
+      v.literal("onboarding_completed"),
+      v.literal("first_offer_shown"),
+      v.literal("first_offer_started"),
+      v.literal("prerequisite_recovered"),
+      v.literal("approval_decided"),
+      v.literal("delivery_sent"),
+      v.literal("delivery_failed"),
+      v.literal("delivery_suppressed"),
+      v.literal("delivery_held"),
+      v.literal("session_started"),
+      v.literal("return_observed"),
+    ),
+    idempotencyKey: v.string(),
+    occurredAt: v.number(),
+    inviteId: v.optional(v.id("betaInvites")),
+    approvalId: v.optional(v.id("plans")),
+    planId: v.optional(v.id("plans")),
+    requestId: v.optional(v.id("requests")),
+    auditId: v.optional(v.id("audit")),
+    terminalOutcome: v.optional(
+      v.union(v.literal("sent"), v.literal("failed"), v.literal("suppressed"), v.literal("held")),
+    ),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_occurredAt", ["tenantId", "occurredAt"])
+    .index("by_tenant_key", ["tenantId", "idempotencyKey"]),
+  /**
    * One durable start per tenant, opened by the first recorded billing movement. A missing row
    * means the billing ledger has not begun watching this tenant; it NEVER means their revenue was
    * zero. `spendCoverage` next door, same law, different book.
@@ -3749,4 +3884,372 @@ export default defineSchema({
     // `isolation.test.ts`: the rollup is deployment-wide and has no tenant in hand until it reads
     // a row. Every consumer is an internalMutation reached only from the cron.
     .index("by_status_dueAt", ["status", "dueAt"]),
+  /**
+   * Phase 48: one mutable coordination head for a structured site or landing page.
+   * Status is derived from these pointers and publication receipts; there is deliberately no
+   * independently mutable lifecycle-status field.
+   */
+  webProjects: defineTable({
+    tenantId: v.string(),
+    kind: v.union(v.literal("site"), v.literal("landing"), v.literal("storefront")),
+    slug: v.string(),
+    title: v.string(),
+    publicHost: v.string(),
+    domainMode: v.union(
+      v.literal("platform_path"),
+      v.literal("custom_pending"),
+      v.literal("custom_active"),
+    ),
+    hostingDeclaration: v.object({
+      hosting: v.union(
+        v.literal("pikar_platform_path"),
+        v.literal("tenant_custom_domain_pending"),
+        v.literal("tenant_custom_domain_verified"),
+      ),
+      source: v.literal("tenant_structured_content"),
+    }),
+    draftVersion: v.optional(v.number()),
+    approvedVersion: v.optional(v.number()),
+    approvedContentHash: v.optional(v.string()),
+    publishedVersion: v.optional(v.number()),
+    publishedContentHash: v.optional(v.string()),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_slug", ["tenantId", "slug"])
+    .index("by_tenant_host_slug", ["tenantId", "publicHost", "slug"])
+    // Public routing begins with no tenant identity. These two indexes are the declared exception:
+    // they resolve a host/path to one tenant-owned coordination head before any content is read.
+    .index("by_host_slug", ["publicHost", "slug"])
+    .index("by_slug", ["slug"]),
+  /** Immutable structured version and its deterministic rendered artifact. */
+  webProjectVersions: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    version: v.number(),
+    document: v.any(),
+    contentHash: v.string(),
+    rendererVersion: v.string(),
+    artifactStorageId: v.optional(v.id("_storage")),
+    artifactHtml: v.optional(v.string()),
+    artifacts: v.optional(
+      v.array(
+        v.object({
+          pageSlug: v.string(),
+          html: v.string(),
+          byteLength: v.number(),
+        }),
+      ),
+    ),
+    artifactByteLength: v.number(),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    basedOnVersion: v.optional(v.number()),
+    sourceRefs: v.array(v.string()),
+    /**
+     * Server-owned origin identity. This is optional for legacy/manual versions and immutable
+     * once written; later edits copy it while `contentHash` follows the edited document.
+     */
+    recipeRef: v.optional(
+      v.object({
+        name: webRecipeName,
+        version: v.number(),
+        skillId: v.string(),
+        bodyHash: v.string(),
+        definitionHash: v.string(),
+        inputHash: v.string(),
+        rendererVersion: v.optional(v.string()),
+        designProfile: v.object({
+          bundleHash: v.string(),
+          compilerHash: v.string(),
+          patternId: v.string(),
+          styleId: v.string(),
+          paletteId: v.string(),
+          typographyId: v.string(),
+          formProfileId: v.string(),
+          dials: v.object({
+            variance: v.number(),
+            motion: v.number(),
+            density: v.number(),
+          }),
+          pageOverride: v.optional(v.string()),
+        }),
+      }),
+    ),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project_version", ["tenantId", "projectId", "version"])
+    .index("by_tenant_project_hash", ["tenantId", "projectId", "contentHash"]),
+  /** Aggregate raw-request counters; never unique-person or conversion claims. */
+  webMetrics: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    version: v.number(),
+    kind: v.union(
+      v.literal("page_view"),
+      v.literal("cta_click"),
+      v.literal("form_accepted"),
+      v.literal("form_rejected"),
+    ),
+    count: v.number(),
+    windowStartedAt: v.number(),
+    windowEndsAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project_kind_window", ["tenantId", "projectId", "kind", "windowStartedAt"]),
+  /** Short-lived idempotency and abuse state; no raw IP, user-agent, email, or form body. */
+  webSubmissions: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    version: v.number(),
+    formId: v.string(),
+    idempotencyKeyHash: v.string(),
+    outcome: v.union(
+      v.literal("accepted"),
+      v.literal("duplicate"),
+      v.literal("invalid"),
+      v.literal("consent_required"),
+      v.literal("suppressed"),
+      v.literal("rate_limited"),
+      v.literal("unavailable"),
+    ),
+    outcomeRef: v.optional(v.string()),
+    /** Bounded, publisher-authored campaign metadata copied from the immutable form version. */
+    attribution: v.optional(
+      v.object({
+        source: v.optional(v.string()),
+        medium: v.optional(v.string()),
+        campaign: v.optional(v.string()),
+      }),
+    ),
+    abuseBucketHash: v.optional(v.string()),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    abuseWindowExpiresAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_expires_at", ["tenantId", "expiresAt"])
+    .index("by_expires_at", ["expiresAt"])
+    .index("by_tenant_idempotency", ["tenantId", "projectId", "formId", "idempotencyKeyHash"])
+    .index("by_tenant_abuse_bucket", ["tenantId", "abuseBucketHash", "abuseWindowExpiresAt"]),
+  /** Tenant-owned product/variant authority; display text is never payment authority. */
+  tenantProducts: defineTable({
+    tenantId: v.string(),
+    goodsKind: v.optional(v.union(v.literal("physical"), v.literal("digital"))),
+    sku: v.string(),
+    variant: v.string(),
+    currency: v.string(),
+    priceMinor: v.number(),
+    status: v.union(v.literal("draft"), v.literal("active"), v.literal("retired")),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_sku_variant", ["tenantId", "sku", "variant"]),
+  /** One atomic stock head per product; reserved stock is not sellable. */
+  tenantStock: defineTable({
+    tenantId: v.string(),
+    productId: v.id("tenantProducts"),
+    kind: v.union(v.literal("finite"), v.literal("untracked")),
+    onHand: v.optional(v.number()),
+    reserved: v.optional(v.number()),
+    reservationTtlMs: v.optional(v.number()),
+    approvedUntracked: v.optional(v.boolean()),
+    revision: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_product", ["tenantId", "productId"]),
+  /** Buyer-free reservation coordination; financial-record retention is a later closed gate. */
+  tenantReservations: defineTable({
+    tenantId: v.string(),
+    productId: v.id("tenantProducts"),
+    quantity: v.number(),
+    status: v.union(
+      v.literal("held"),
+      v.literal("released"),
+      v.literal("expired"),
+      v.literal("consumed"),
+    ),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    orderId: v.optional(v.id("tenantOrders")),
+    attemptId: v.optional(v.id("tenantOrderAttempts")),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_product", ["tenantId", "productId"])
+    .index("by_tenant_order", ["tenantId", "orderId"])
+    .index("by_tenant_product_status_expiry", ["tenantId", "productId", "status", "expiresAt"])
+    .index("by_tenant_status_expiry", ["tenantId", "status", "expiresAt"]),
+  /** Operator-supplied, versioned local facts; no jurisdiction/provider defaults. */
+  tenantCommercePolicies: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    revision: v.number(),
+    sellerOfRecordRef: v.string(),
+    taxSourceRef: v.optional(v.string()),
+    shippingSourceRef: v.optional(v.string()),
+    refundPolicyId: v.optional(v.string()),
+    currency: v.string(),
+    countries: v.array(v.string()),
+    taxBasisPoints: v.optional(v.number()),
+    taxRounding: v.optional(v.literal("half_up")),
+    shippingMinor: v.optional(v.number()),
+    physical: v.optional(
+      v.object({
+        shippingSourceRef: v.string(),
+        shippingMinor: v.number(),
+        returnsPolicyRef: v.string(),
+        taxSourceRef: v.string(),
+        taxBasisPoints: v.number(),
+        refundPolicyRef: v.string(),
+        buyerRetentionRef: v.string(),
+      }),
+    ),
+    digital: v.optional(
+      v.object({
+        deliveryRef: v.string(),
+        revocationRef: v.string(),
+        noShipping: v.literal(true),
+        taxSourceRef: v.string(),
+        taxBasisPoints: v.number(),
+        refundPolicyRef: v.string(),
+        buyerRetentionRef: v.string(),
+      }),
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project_revision", ["tenantId", "projectId", "revision"]),
+  /** Private presentation-item to live product mapping; this does not publish a storefront. */
+  tenantCommerceMappings: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    presentationItemId: v.string(),
+    productId: v.id("tenantProducts"),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project_item", ["tenantId", "projectId", "presentationItemId"]),
+  tenantCarts: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    lines: v.array(
+      v.object({
+        presentationItemId: v.string(),
+        productId: v.id("tenantProducts"),
+        quantity: v.number(),
+        expectedProductRevision: v.number(),
+        expectedUnitMinor: v.number(),
+      }),
+    ),
+    addressCountry: v.string(),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project", ["tenantId", "projectId"])
+    .index("by_tenant_expiry", ["tenantId", "expiresAt"]),
+  /** Buyer content belongs here, never in audit or attempt receipts. */
+  tenantOrders: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    cartId: v.id("tenantCarts"),
+    cartRevision: v.number(),
+    snapshot: v.object({
+      tenantId: v.string(),
+      projectId: v.string(),
+      currency: v.string(),
+      country: v.string(),
+      policyId: v.string(),
+      policyRevision: v.number(),
+      sellerOfRecordRef: v.string(),
+      taxRounding: v.optional(v.literal("half_up")),
+      taxSourceRef: v.optional(v.string()),
+      shippingSourceRef: v.optional(v.string()),
+      refundPolicyId: v.optional(v.string()),
+      physicalPolicy: v.optional(
+        v.object({
+          shippingSourceRef: v.string(),
+          shippingMinor: v.number(),
+          returnsPolicyRef: v.string(),
+          taxSourceRef: v.string(),
+          taxBasisPoints: v.number(),
+          refundPolicyRef: v.string(),
+          buyerRetentionRef: v.string(),
+        }),
+      ),
+      digitalPolicy: v.optional(
+        v.object({
+          deliveryRef: v.string(),
+          revocationRef: v.string(),
+          noShipping: v.literal(true),
+          taxSourceRef: v.string(),
+          taxBasisPoints: v.number(),
+          refundPolicyRef: v.string(),
+          buyerRetentionRef: v.string(),
+        }),
+      ),
+      lines: v.array(
+        v.object({
+          presentationItemId: v.string(),
+          productId: v.string(),
+          sku: v.string(),
+          goodsKind: v.optional(v.union(v.literal("physical"), v.literal("digital"))),
+          taxSourceRef: v.optional(v.string()),
+          refundPolicyRef: v.optional(v.string()),
+          buyerRetentionRef: v.optional(v.string()),
+          productRevision: v.number(),
+          stockRevision: v.number(),
+          unitMinor: v.number(),
+          quantity: v.number(),
+          lineMinor: v.number(),
+        }),
+      ),
+      subtotalMinor: v.number(),
+      taxMinor: v.number(),
+      shippingMinor: v.number(),
+      totalMinor: v.number(),
+      hash: v.string(),
+    }),
+    snapshotHash: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("expired"),
+      v.literal("cancelled"),
+      v.literal("cancel_requested"),
+      v.literal("paid"),
+      v.literal("paid_needs_review"),
+    ),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_cart", ["tenantId", "cartId"]),
+  /** A local journal only. No provider is selected or called by Plan 04. */
+  tenantOrderAttempts: defineTable({
+    tenantId: v.string(),
+    orderId: v.id("tenantOrders"),
+    cartId: v.id("tenantCarts"),
+    cartRevision: v.number(),
+    retryKeyHash: v.string(),
+    snapshotHash: v.string(),
+    status: v.union(v.literal("local_pending"), v.literal("refused"), v.literal("expired")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_order", ["tenantId", "orderId"])
+    .index("by_tenant_cart_revision", ["tenantId", "cartId", "cartRevision"])
+    .index("by_tenant_cart_retry", ["tenantId", "cartId", "retryKeyHash"]),
 });

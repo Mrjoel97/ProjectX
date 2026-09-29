@@ -50,6 +50,16 @@ export const deliverApprovedPlan = workflow.define({
               requestId,
               outcome: "suppressed",
             });
+          } else {
+            await step.runMutation(internal.betaJourney.record, {
+              tenantId,
+              eventType: "delivery_held",
+              idempotencyKey: `delivery-hold:${String(requestId)}:${result.reason}`,
+              occurredAt: Date.now(),
+              planId,
+              requestId,
+              terminalOutcome: "held",
+            });
           }
           continue; // every other reason is a HOLD, not a failure — do not change awaiting_reauth
         }

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * check-routine-gate — the fail-closed gate in front of ANY recurrence implementation (29-11,
  * ROUT-02).
@@ -83,6 +84,7 @@
  *   check-routine-gate.mjs <artifact.md> --matrix              # closed schema + enums, red rows OK
  *   check-routine-gate.mjs <artifact.md> --eligibility         # exit 0 ONLY if enable-safe is earned
  *   check-routine-gate.mjs <artifact.md> --validate-decision   # the recorded decision is permitted
+ *   check-routine-gate.mjs <stage.md> --validate-stage          # disabled pre-build governance only
  *   check-routine-gate.mjs --self-check                        # prove the gate can go red
  *
  * EXACTLY ONE MODE, AND `--self-check` TAKES NOTHING ELSE. An unrecognised flag and any
@@ -101,8 +103,10 @@
  * Do not read this script's exit code through a pipe.
  */
 
+import { createHash } from "node:crypto";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -116,6 +120,57 @@ import { argv, exit, platform, stdout } from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRootDefault = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const STAGE_ADR = "docs/decisions/050-recurrence-build-for-evidence.md";
+const STAGE_ADR_SHA256 = "5872061c0c2ffa2a1e481116f884af08ac26aa3dc94856a51f451bad236a3303";
+const SWEEP_ADR = "docs/decisions/051-sweep-only-pause-fencing-for-recurring-routines.md";
+const SWEEP_ADR_SHA256 = "d52ca4736eff665e3f1f3747a2be984f6138236347353fffbf4455c7d8ec813c";
+const D6_EVIDENCE_ADR = "docs/decisions/052-sweep-only-recurrence-d6-evidence-reconciliation.md";
+const D6_EVIDENCE_ADR_SHA256 = "525590dc6dff1f6f9f1d42c13c1f3f565add4b3502d091e6808e66e97b760b65";
+const STAGE_PATH = ".planning/phases/47-the-schedule-row-that-re-arms/47-14-STAGE-DECISION.md";
+const HISTORICAL_DECISION =
+  ".planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md";
+const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+/** Only this exact accepted governance-order amendment is exempt from the defer ADR-name scan. */
+export function acceptedStageAdr({ repoRoot = repoRootDefault } = {}) {
+  const path = resolve(repoRoot, STAGE_ADR);
+  if (!existsSync(path) || !statSync(path).isFile()) return false;
+  const bytes = readFileSync(path);
+  return (
+    sha256(bytes) === STAGE_ADR_SHA256 &&
+    bytes.toString("utf8").includes("**Status:** Accepted for development/test governance only")
+  );
+}
+
+/** ADR-051's own exact metadata exception; it does not inherit ADR-050's authority. */
+export function acceptedSweepAdr({ repoRoot = repoRootDefault } = {}) {
+  const path = resolve(repoRoot, SWEEP_ADR);
+  if (!existsSync(path) || !statSync(path).isFile()) return false;
+  const bytes = readFileSync(path);
+  return (
+    sha256(bytes) === SWEEP_ADR_SHA256 &&
+    bytes
+      .toString("utf8")
+      .includes(
+        "**Status:** Accepted as a conditional governance amendment on 2026-09-25; operational recurrence remains deferred.",
+      )
+  );
+}
+
+/** ADR-052's separate exact metadata exception; it grants no stage or D6 pass. */
+export function acceptedD6EvidenceAdr({ repoRoot = repoRootDefault } = {}) {
+  const path = resolve(repoRoot, D6_EVIDENCE_ADR);
+  if (!existsSync(path) || !statSync(path).isFile()) return false;
+  const bytes = readFileSync(path);
+  return (
+    sha256(bytes) === D6_EVIDENCE_ADR_SHA256 &&
+    bytes
+      .toString("utf8")
+      .includes(
+        "**Status:** Accepted as a conditional D6 evidence-wording amendment on 2026-09-25; operational recurrence remains deferred.",
+      )
+  );
+}
 
 /**
  * `true` where the filesystem folds case — which includes the platform this repo is developed
@@ -535,11 +590,13 @@ export const SCHEDULING_DEPENDENCY_RE =
  * taken, and no scheduling dependency was installed. Cheap, and the exact things a later
  * "we sort of enabled it" drift would leave behind.
  *
- * ponytail: the ADR rule matches FILENAMES against `routine|recurrence|schedul`, so an
+ * ADR-050, ADR-051 and ADR-052 each have a separately accepted, exact hash-pinned metadata exception.
+ * None of these exceptions makes recurrence operational. ponytail: the ADR rule
+ * otherwise matches FILENAMES against `routine|recurrence|schedul`, so an
  * unrelated future ADR (`0NN-scheduled-worm-export.md`) would trip it. That direction is
  * deliberate — a governance gate should fail closed and make a human look — and the
  * alternative (scanning ADR bodies for the topic) is more code with more false negatives.
- * Upgrade path if it ever fires falsely: rename the ADR, or lift the defer.
+ * Upgrade path if it ever fires falsely: review the ADR, or lift the defer; do not disguise names.
  */
 export function deferAbsenceChecks({ repoRoot = repoRootDefault } = {}) {
   const errors = [];
@@ -547,6 +604,17 @@ export function deferAbsenceChecks({ repoRoot = repoRootDefault } = {}) {
   if (existsSync(adrDir)) {
     const stray = readdirSync(adrDir).filter((f) => /routine|recurrence|schedul/i.test(f));
     for (const f of stray) {
+      if (f === "050-recurrence-build-for-evidence.md" && acceptedStageAdr({ repoRoot })) continue;
+      if (
+        f === "051-sweep-only-pause-fencing-for-recurring-routines.md" &&
+        acceptedSweepAdr({ repoRoot })
+      )
+        continue;
+      if (
+        f === "052-sweep-only-recurrence-d6-evidence-reconciliation.md" &&
+        acceptedD6EvidenceAdr({ repoRoot })
+      )
+        continue;
       errors.push(`decision is \`defer\` but docs/decisions/${f} exists — no ADR may be minted`);
     }
   }
@@ -585,14 +653,195 @@ export function validateDecision(text, opts = {}) {
   return { ok: errors.length === 0, doc: base.doc, errors };
 }
 
+const STAGE_FIELDS = [
+  "stage",
+  "status",
+  "adrPath",
+  "adrSha256",
+  "reviewer",
+  "reviewedAt",
+  "expiresAt",
+  "environment",
+  "candidateFiles",
+  "tenantActivation",
+  "productionDeployment",
+  "providerCalls",
+  "paidCalls",
+  "externalWrites",
+  "externalSends",
+];
+export const STAGE_CANDIDATE_FILES = [
+  "packages/backend/candidate/recurrence/schema.ts",
+  "packages/backend/candidate/recurrence/model.ts",
+  "packages/backend/candidate/recurrence/model.test.ts",
+  "packages/backend/candidate/recurrence/tsconfig.json",
+  "packages/backend/candidate/recurrence/vitest.config.mts",
+  "packages/backend/candidate/recurrence/README.md",
+];
+const CANDIDATE_ROOT = "packages/backend/candidate";
+const SOURCE_ROOTS = ["packages", "apps", "scripts"];
+
+function sourceFiles(root, rel) {
+  const dir = resolve(root, rel);
+  if (!existsSync(dir)) return [];
+  const found = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (["node_modules", ".next", "dist", "coverage", ".turbo"].includes(entry.name)) continue;
+    const child = `${rel}/${entry.name}`;
+    if (entry.isSymbolicLink()) continue;
+    if (entry.isDirectory()) found.push(...sourceFiles(root, child));
+    else if (entry.isFile() && /\.(?:ts|tsx|js|jsx|mjs|mts)$/.test(entry.name)) found.push(child);
+  }
+  return found;
+}
+
+/** Structural tripwires only. A human still reviews actual imports and reachability. */
+export function stageSourceBoundary({ repoRoot = repoRootDefault } = {}) {
+  const errors = [];
+  const declared = new Set(STAGE_CANDIDATE_FILES);
+  const candidateRoot = resolve(repoRoot, CANDIDATE_ROOT);
+  if (existsSync(candidateRoot)) {
+    if (lstatSync(candidateRoot).isSymbolicLink()) {
+      return { ok: false, errors: [`candidate root symlink is forbidden: ${CANDIDATE_ROOT}`] };
+    }
+    const visit = (abs) => {
+      for (const entry of readdirSync(abs, { withFileTypes: true })) {
+        const path = join(abs, entry.name);
+        const rel = path.slice(repoRoot.length + 1).replace(/\\/g, "/");
+        if (entry.isSymbolicLink()) {
+          errors.push(`candidate symlink is forbidden: ${rel}`);
+        } else if (entry.isDirectory()) {
+          if (rel !== CANDIDATE_ROOT + "/recurrence") {
+            errors.push(`unlisted candidate directory: ${rel}`);
+          } else visit(path);
+        } else if (!entry.isFile() || !declared.has(rel)) {
+          errors.push(`unlisted candidate file: ${rel}`);
+        } else if (/\.(?:ts|mts)$/.test(rel) && !/\.test\.ts$/.test(rel)) {
+          const body = readFileSync(path, "utf8");
+          const banned = [
+            [
+              "registered callable",
+              /\b(?:const|let|var)\s+\w+\s*=\s*(?:query|mutation|action|httpAction|internalQuery|internalMutation|internalAction)\s*\(/,
+            ],
+            [
+              "cron or self-arm",
+              /\b(?:cronJobs|ctx\.scheduler|runAfter|runAt|setInterval|setTimeout)\b/,
+            ],
+            [
+              "provider, paid, outbound or environment primitive",
+              /\b(?:fetch|XMLHttpRequest|WebSocket|Stripe|PayPal|OpenRouter|process\.env|child_process|execSync|spawnSync)\b/,
+            ],
+          ];
+          for (const [name, pattern] of banned) {
+            if (pattern.test(body)) errors.push(`candidate ${rel} contains ${name}`);
+          }
+        }
+      }
+    };
+    visit(candidateRoot);
+  }
+  for (const sourceRoot of SOURCE_ROOTS) {
+    for (const rel of sourceFiles(repoRoot, sourceRoot)) {
+      if (
+        rel.startsWith(CANDIDATE_ROOT + "/") ||
+        /\.test\.[cm]?[jt]sx?$/.test(rel) ||
+        rel === "packages/backend/scripts/check-routine-gate.mjs"
+      )
+        continue;
+      const body = readFileSync(resolve(repoRoot, rel), "utf8");
+      if (
+        /\b(?:from\s*["']|import\s*(?:\(\s*)?["']|require\s*\(\s*["'])[^"'\n]*candidate[\\/]recurrence/i.test(
+          body,
+        )
+      ) {
+        errors.push(`production/app source imports candidate: ${rel}`);
+      }
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+const STAGE_VALUES = {
+  stage: "build-for-evidence",
+  status: "accepted",
+  adrPath: STAGE_ADR,
+  adrSha256: STAGE_ADR_SHA256,
+  reviewer: "owner",
+  reviewedAt: "2026-09-24",
+  expiresAt: "2026-12-31",
+  environment: "isolated-test",
+  candidateFiles: `[${STAGE_CANDIDATE_FILES.join(", ")}]`,
+  tenantActivation: "disabled",
+  productionDeployment: "forbidden",
+  providerCalls: "forbidden",
+  paidCalls: "forbidden",
+  externalWrites: "forbidden",
+  externalSends: "forbidden",
+};
+
+/**
+ * A distinct pre-build governance check; never an eligibility or runtime approval.
+ * @param {string} text
+ * @param {{repoRoot?: string, artifactPath?: string | null, now?: Date}} [opts]
+ */
+export function validateStage(
+  text,
+  { repoRoot = repoRootDefault, artifactPath = null, now = new Date() } = {},
+) {
+  const errors = [];
+  const expectedPath = resolve(repoRoot, STAGE_PATH);
+  if (!artifactPath || fileIdentity(resolve(artifactPath)) !== fileIdentity(expectedPath)) {
+    errors.push(`stage artifact must be the exact ${STAGE_PATH}`);
+  }
+  const lines = typeof text === "string" ? text.replace(/\r\n/g, "\n").split("\n") : [];
+  const close = lines.indexOf("---", 1);
+  if (lines[0] !== "---" || close !== STAGE_FIELDS.length + 1) {
+    errors.push("stage frontmatter must contain exactly the closed field set");
+  } else {
+    for (let i = 0; i < STAGE_FIELDS.length; i++) {
+      const expected = `${STAGE_FIELDS[i]}: ${STAGE_VALUES[STAGE_FIELDS[i]]}`;
+      if (lines[i + 1] !== expected)
+        errors.push(`stage field ${STAGE_FIELDS[i]} must be exactly ${expected}`);
+    }
+    if (lines[close + 1] !== "" || !lines.slice(close + 2).some((line) => line.trim())) {
+      errors.push("stage artifact requires a nonempty human-readable scope");
+    }
+  }
+  if (!acceptedStageAdr({ repoRoot }))
+    errors.push("accepted ADR-050 identity/content is absent or changed");
+  const expiry = new Date(`${STAGE_VALUES.expiresAt}T23:59:59.999Z`);
+  if (!(now instanceof Date) || Number.isNaN(now.getTime()) || now > expiry) {
+    errors.push("build-for-evidence review checkpoint expired or clock invalid");
+  }
+  const historicalPath = resolve(repoRoot, HISTORICAL_DECISION);
+  if (!existsSync(historicalPath) || !statSync(historicalPath).isFile()) {
+    errors.push("historical defer decision is absent");
+  } else {
+    const historical = validateDecision(readFileSync(historicalPath, "utf8"), {
+      repoRoot,
+      artifactPath: historicalPath,
+    });
+    if (!historical.ok || historical.doc?.decision !== "defer") {
+      errors.push("historical operational decision must remain valid defer");
+      errors.push(...historical.errors);
+    }
+  }
+  // Invalid governance is already refused; avoid repeatedly walking the whole source tree for
+  // every negative frontmatter mutation in the guard suite.
+  if (errors.length === 0) errors.push(...stageSourceBoundary({ repoRoot }).errors);
+  // A green stage permits only this inventory in an isolated test directory. It cannot prove
+  // semantic reachability, D1-D8 implementation, live evidence, or enable-safe.
+  return { ok: errors.length === 0, doc: null, errors };
+}
+
 const MODES = {
   "--matrix": validateMatrix,
   "--eligibility": eligibility,
   "--validate-decision": validateDecision,
+  "--validate-stage": validateStage,
 };
 
 const USAGE =
-  "usage: check-routine-gate.mjs <artifact.md> --matrix|--eligibility|--validate-decision\n" +
+  "usage: check-routine-gate.mjs <artifact.md> --matrix|--eligibility|--validate-decision|--validate-stage\n" +
   "       check-routine-gate.mjs --self-check\n";
 
 export function main(args) {

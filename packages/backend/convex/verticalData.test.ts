@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { utils, write } from "xlsx";
@@ -37,6 +38,69 @@ async function fixture(owner = true) {
 }
 
 describe("owner Data preview", () => {
+  test("the public preview action passes its prepared source identity to the final write", () => {
+    const source = readFileSync(new URL("./verticalData.ts", import.meta.url), "utf8");
+    expect(source).toMatch(
+      /internal\.vault\.insertCreatedDoc,[\s\S]*sourceCheck: \{ sourceDocId, storageId: sourceStorageId, mimeType: sourceMimeType \}/,
+    );
+  });
+
+  test("final artifact write refuses a source changed or sealed after preparation", async () => {
+    const { t, userId, addFile } = await fixture();
+    const sourceDocId = await addFile();
+    const source = await t.run((ctx) => ctx.db.get(sourceDocId));
+    if (!source?.storageId) throw new Error("test source storage absent");
+    const storageId = source.storageId;
+    const write = (tenantId = String(userId)) =>
+      t.mutation(internal.vault.insertCreatedDoc, {
+        tenantId,
+        title: "Data profile — operator preview",
+        form: "long",
+        markdown: "# Prepared profile",
+        contentHash: "prepared-hash",
+        sourceCheck: {
+          sourceDocId,
+          storageId,
+          mimeType: source.mimeType,
+        },
+      });
+
+    await expect(write("another-tenant")).rejects.toThrow("DATA_SOURCE_CHANGED");
+    await t.run((ctx) => ctx.db.patch(sourceDocId, { status: "processing" }));
+    await expect(write()).rejects.toThrow("DATA_SOURCE_CHANGED");
+    const folderId = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("vaultFolders", {
+        tenantId: String(userId),
+        name: "newly sealed",
+        source: "upload",
+        status: "ingesting",
+        memberCount: 1,
+        terminalCount: 0,
+        failedCount: 0,
+        reservedCents: 0,
+        spentCents: 0,
+        createdAt: 1,
+      });
+      await ctx.db.patch(sourceDocId, { status: "ready", folderId: id });
+      return id;
+    });
+    await expect(write()).rejects.toThrow("DATA_SOURCE_SEALED");
+    const otherStorageId = await t.run(async (ctx) => {
+      await ctx.db.patch(folderId, { status: "complete" });
+      const id = await ctx.storage.store(new Blob(["Changed,Bytes\n1,2"]));
+      await ctx.db.patch(sourceDocId, { storageId: id });
+      return id;
+    });
+    await expect(write()).rejects.toThrow("DATA_SOURCE_CHANGED");
+    await t.run((ctx) => ctx.db.patch(sourceDocId, { storageId, mimeType: "application/pdf" }));
+    await expect(write()).rejects.toThrow("DATA_SOURCE_CHANGED");
+    await t.run((ctx) => ctx.db.patch(sourceDocId, { mimeType: "text/csv" }));
+    await t.run((ctx) => ctx.storage.delete(storageId));
+    await expect(write()).rejects.toThrow("DATA_SOURCE_CHANGED");
+    expect(await t.run((ctx) => ctx.db.system.get(otherStorageId))).not.toBeNull();
+    expect(await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).toHaveLength(1);
+  });
+
   test("creates a normal retained artifact from owned storage bytes without any network call", async () => {
     const { t, viewer, userId, addFile } = await fixture();
     const sourceDocId = await addFile();

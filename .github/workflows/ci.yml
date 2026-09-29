@@ -74,10 +74,20 @@ jobs:
       - name: Free gates
         run: |
           node scripts/check-free-gates.mjs --self-test
-          node scripts/check-free-gates.mjs
+          pnpm check:free-gates
 
       - name: Test
         run: pnpm test
+
+      # The disabled recurrence candidate is intentionally outside backend Vitest's default
+      # discovery and production Convex root. Run its separate synthetic harness explicitly;
+      # stage validation must refuse an expired or broadened candidate inventory first.
+      - name: Disabled recurrence candidate
+        run: |
+          node packages/backend/scripts/check-routine-gate.mjs .planning/phases/47-the-schedule-row-that-re-arms/47-14-STAGE-DECISION.md --validate-stage
+          cd packages/backend
+          node node_modules/vitest/vitest.mjs run --config candidate/recurrence/vitest.config.mts candidate/recurrence/model.test.ts
+          node node_modules/typescript/bin/tsc --noEmit --project candidate/recurrence/tsconfig.json
 
       - name: Operator control regressions
         run: node --test packages/backend/scripts/goldenPaidAttempt.test.mjs packages/backend/scripts/goldenEvaluatorIdentity.test.mjs .planning/phases/23-agent-authored-skills/phase23-operator.test.mjs scripts/smoke-quickbooks-read.test.mjs

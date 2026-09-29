@@ -377,7 +377,15 @@ describe("25-06: no second OAuth surface exists, and mail readiness is derived n
     // `providerGates.connectPermitted`; see docs/playbooks/revenue-connectors.md.
     // 11 -> 12 at 31-03: the approved GET-only /f/ bearer route increments fixed aggregate
     // counters and redirects to trusted Vault bytes. It is not another OAuth callback.
-    expect(routes).toBe(12);
+    // 12 -> 14 at Phase 48 plan 48-04: `GET /p/` (http.ts:121) reads a PUBLISHED page from the
+    // tenant-leading host index and records a bounded `page_view` metric, and `POST /p/`
+    // (http.ts:153) is the CTA / form / closed-cart preflight. Two routes, one guard caught it,
+    // and the guard is working: the count is pinned on the TOTAL precisely so an unremarkable public
+    // read has to announce itself. NEITHER IS AN OAUTH CALLBACK — there is no authorization code
+    // exchange, no `state` to verify and no Microsoft token write on either, which is why the three
+    // assertions below it are unchanged and still hold. ADR-018's "one callback route" is
+    // unaffected: the single `path: "/microsoft/callback"` literal is still the only one.
+    expect(routes).toBe(14);
     expect(httpSource.match(/pathPrefix:\s*"\/f\/"/g)).toHaveLength(1);
     const microsoftCallbacks = [...httpSource.matchAll(/microsoft/gi)].length;
     expect(microsoftCallbacks).toBeGreaterThan(0);

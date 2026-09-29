@@ -20,6 +20,7 @@
 // a subject, or an unmasked address.
 import type { AnyDataModel, GenericMutationCtx } from "convex/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { ownerMutation, ownerQuery } from "./lib/functions";
@@ -424,6 +425,15 @@ export async function admitIdentity(
     redeemedAt: Date.now(),
     redeemedSubject: subject,
     redeemedUserId: userId,
+  });
+  // The admission transaction is the only successful-new-user boundary. Refusals return before
+  // this point and cannot leave a journey row without the tenant identity it belongs to.
+  await ctx.runMutation(internal.betaJourney.record, {
+    tenantId: String(userId),
+    eventType: "admission_succeeded",
+    idempotencyKey: `admission:${String(invite._id)}`,
+    occurredAt: Date.now(),
+    inviteId: invite._id,
   });
 
   return userId;

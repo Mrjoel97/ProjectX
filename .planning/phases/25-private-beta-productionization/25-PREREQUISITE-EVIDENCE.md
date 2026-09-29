@@ -1,5 +1,40 @@
 # Phase 25 prerequisite evidence
 
+## 2026-09-29 superseding 22-plan planning checkpoint — still no owner release
+
+The current plan set is `25-00` through `25-21` at commit `c151c3a`. Plan 20 now
+owns the effective-auth and public URL census; new Plan 21 owns Pikar billing and
+OAuth/connector callback runtime-origin refusals and the final repository-only
+origin packet. The integer-wave dependency chain is 19 (Wave 8) → 20 (Wave 9)
+→ 21 (Wave 10) → 18 (Wave 11) → 07 (first live mail gate, Wave 12).
+Plan 11 repeats exact-final-source and hosted observations after Plan 09.
+
+All 22 plan structures and strict planning/playbook checks passed. Independent
+goal-backward review passed after the split and integer-wave correction; the
+installed GSD phase index places every declared dependency in an earlier wave.
+The prior 21-plan warning about Plan 20's execution size is resolved by the split,
+and Plan 19 now requires ADR-022 approved app-origin equality for copied invites,
+including a durable-but-unapproved negative test. This is a planning verdict only:
+Plans 19–21 are unimplemented, hosted origins/provider redirects are unobserved,
+and neither the Task 1 prerequisite-matrix approval nor the Task 3 prospective
+plan-set owner release has been recorded. The historical pre-25-01 checkpoint
+breach is not retroactively approved. Do not create `25-00-SUMMARY.md` or begin
+new Phase 25 source work on this planning evidence alone.
+
+## 2026-09-29 superseding 21-plan recheck — still no owner release
+
+The earlier 19-plan verdict below is a historical planning snapshot, superseded after current-source URL-origin drift was found. Plans `25-19` and `25-20` now cover durable copied invites, effective auth callback overrides, and generated public/shareable URLs. The dependency chain requires 19 → 20 → 18 authorization coverage → 07 first live mail gate. Plan 11 repeats exact-final-source authorization and URL checks after Plan 09, then repeats hosted copied/generated invite, funnel, unsubscribe, and effective auth/redirect observations against the final deployed ID and SHA before later live sends. A `mailReady=false` refusal is a blocking outcome, not Outlook completion.
+
+All 21 plans passed structural validation and strict planning checks in the working tree. Independent goal-backward review found zero blockers after the revision; its final-deployment observation warning was resolved in `25-11-PLAN.md` before the final local verification. Plan 20 spans 11 files and retains a nonblocking execution-scope warning. This is planning evidence only: Plans 19/20 are unimplemented, hosted links and provider callbacks are unobserved, and no prospective Plan 00 owner verdict is recorded. The historical Plan 25-01 sequencing breach is not retroactively approved. Do not write `25-00-SUMMARY.md` or begin the new Phase 25 source work on the strength of this recheck.
+
+## 2026-09-29 planning-only recheck — no owner release
+
+The current Phase 25 plan set has 19 files (`25-00` through `25-18`). At the 2026-09-29 planning recheck, all 19 passed `gsd-tools.cjs verify plan-structure` with zero warnings; strict `node scripts/check-planning.mjs --exit-code` and `git diff --check` passed. An independent goal-backward checker found three substantive blockers on its first review (live mail before durable origins, unstable `HEAD == deployed SHA`, and phase-completeness before its own summary), then passed the revised set after two planning-only revision rounds. The final verdict was `VERIFICATION PASSED` for plan logic and coverage of BETA-01/02/03/05 and DLVR-02. It did **not** execute any plan, grant an owner release, prove hosted origins or providers, or complete a requirement. Three four-task plans (09, 13, 18) remain a nonblocking scope warning.
+
+The revision preserves the historical sequencing breach recorded below: Plan 25-01 and later source work landed before Plan 25-00's blocking human checkpoints. The accepted ADR-022 settles durable-origin *policy*, not hosted DNS/TLS or redirect observations. New Plan 25-18 requires a prospective explicit owner verdict before new authorization-coverage source work, then a current parsed-runtime/table/index/export/HTTP packet before Plan 25-11 deploy. Plan 25-00 Task 2's full current source/UI inventory and its exact final-plan SHA evidence remain open; earlier offline gate commands at `3435b9f` are recorded in `25-00-CURRENT-RECHECK-2026-09-29.md`. Do not write a `25-00-SUMMARY.md` or infer retroactive approval until the stated Task 2/3 evidence and owner verdict actually exist.
+
+Committed plan-set SHA: `cc77a5457d310c2a8df0dde9bce6525f824d463e`. After that commit, all 19 `verify plan-structure` checks passed with zero errors/warnings, strict planning returned `{"status":"passed"}`, and the playbook checker exited 0. The only dirty paths were pre-existing `graphify-out/` outputs, not Phase 25 plans or product source. The independent goal-backward verdict applies to this same plan content. The pending Task 2 source/UI inventory and owner verdict remain separate; this commit is not a release authorization.
+
 ## GATE RE-SCOPED — 2026-08-16, at owner direction
 
 **This section supersedes the Task 1 verdict below. Everything under "Gate status" and after is

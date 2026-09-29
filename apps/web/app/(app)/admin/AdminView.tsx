@@ -108,15 +108,18 @@ export function AdminView() {
   // The live code is held in memory for THIS session only, so the owner can copy the link. It is
   // never written to a log, an audit payload, or anywhere else (CLAUDE.md §4). `approve` is
   // replay-safe, so re-approving is how you get it back rather than persisting it here.
-  const [issued, setIssued] = useState<Record<string, string>>({});
+  const [issued, setIssued] = useState<Record<string, { code: string; email: string }>>({});
   const [copied, setCopied] = useState<string | null>(null);
 
-  async function onApprove(waitlistId: PendingRow["waitlistId"]) {
-    setBusy(waitlistId);
+  async function onApprove(row: PendingRow) {
+    setBusy(row.waitlistId);
     setError(null);
     try {
-      const invite = await approve({ waitlistId });
-      setIssued((prior) => ({ ...prior, [waitlistId]: invite.code }));
+      const invite = await approve({ waitlistId: row.waitlistId });
+      setIssued((prior) => ({
+        ...prior,
+        [row.waitlistId]: { code: invite.code, email: row.email },
+      }));
     } catch {
       setError("Could not approve that request. Reload and try again.");
     }
@@ -171,7 +174,7 @@ export function AdminView() {
         )}
 
         {pending?.map((row) => {
-          const code = issued[row.waitlistId];
+          const code = issued[row.waitlistId]?.code;
           return (
             <div
               key={row.waitlistId}
@@ -217,7 +220,7 @@ export function AdminView() {
                     type="button"
                     className="vault-button"
                     disabled={busy === row.waitlistId}
-                    onClick={() => void onApprove(row.waitlistId)}
+                    onClick={() => void onApprove(row)}
                   >
                     {busy === row.waitlistId ? "Approving…" : "Approve & mint invite"}
                   </button>
@@ -226,6 +229,38 @@ export function AdminView() {
             </div>
           );
         })}
+
+        {Object.entries(issued)
+          .filter(([waitlistId]) => !pending?.some((row) => row.waitlistId === waitlistId))
+          .map(([waitlistId, invite]) => (
+            <div
+              key={`issued-${waitlistId}`}
+              style={{
+                display: "grid",
+                gap: "0.5rem",
+                padding: "0.9rem 1rem",
+                border: "1px solid var(--line)",
+                borderRadius: "0.7rem",
+              }}
+            >
+              <strong style={{ color: "var(--ink)" }}>{invite.email}</strong>
+              <code style={{ wordBreak: "break-all", color: "var(--ink)" }}>
+                /signup?invite={invite.code}
+              </code>
+              <div>
+                <button
+                  type="button"
+                  className="vault-button"
+                  onClick={() => void onCopy(invite.code)}
+                >
+                  {copied === invite.code ? "Copied" : "Copy invite link"}
+                </button>
+              </div>
+              <p style={{ margin: 0, color: "var(--ink-2)", fontSize: "0.85rem" }}>
+                Send this to {invite.email}. It only works for that address, and only once.
+              </p>
+            </div>
+          ))}
       </section>
 
       <EnvReadiness />

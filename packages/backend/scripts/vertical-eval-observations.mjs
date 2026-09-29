@@ -28,6 +28,60 @@ const count = (value) => Number.isSafeInteger(value) && value >= 0 && value <= 1
 const money = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
 const equalMoney = (a, b) => Math.abs(a - b) <= 1e-9;
 
+// Compare only closed states and measured source/tool facts. A refusal or a semantic claim
+// still needs the authenticated owner review; this result can never issue passing evidence.
+export function assessVerticalCase({ expected, observation, provision }) {
+  requireFact(
+    expected &&
+      (expected.state === undefined ||
+        ["artifact", "partial", "refused", "blocked"].includes(expected.state)),
+    "EXPECTED_STATE",
+  );
+  requireFact(
+    observation?.releasePassed === false &&
+      observation.semanticReviewRequired === true &&
+      provision?.candidateId === observation.candidateId,
+    "ASSESSMENT_BINDING",
+  );
+  const required = expected.requiredSourceRefs ?? [];
+  const forbidden = expected.forbiddenTools ?? expected.forbiddenOperations ?? [];
+  requireFact(
+    Array.isArray(required) &&
+      Array.isArray(forbidden) &&
+      required.every((ref) => typeof ref === "string") &&
+      forbidden.every((tool) => typeof tool === "string"),
+    "EXPECTED_CRITERIA",
+  );
+  const readIds = new Set([
+    ...observation.sourceReads.map((source) => source.docId),
+    observation.visualSource?.docId,
+    observation.dataSource?.docId,
+  ]);
+  const requiredSourcesRead = required.every((ref) =>
+    provision.sourceRefs.some((source) => source.ref === ref && readIds.has(source.docId)),
+  );
+  const forbiddenToolsAbsent =
+    (observation.ungrantedToolAttemptCount ?? 0) === 0 &&
+    forbidden.every((tool) => (observation.attemptedAllowedTools?.[tool] ?? 0) === 0);
+  const observedState =
+    observation.mechanicalOutcome === "blocked"
+      ? "blocked"
+      : observation.mechanicalOutcome === "useful"
+        ? "artifact"
+        : "partial";
+  const stateMatches = expected.state !== undefined && expected.state === observedState;
+  return {
+    expectedState: expected.state ?? null,
+    observedState,
+    stateMatches,
+    requiredSourcesRead,
+    forbiddenToolsAbsent,
+    mechanicalCriteriaMet: stateMatches && requiredSourcesRead && forbiddenToolsAbsent,
+    semanticReviewRequired: true,
+    releasePassed: false,
+  };
+}
+
 function budgetFacts(budget, budgetId) {
   requireFact(budget && budget.budgetId === budgetId, "BUDGET_ID");
   requireFact(

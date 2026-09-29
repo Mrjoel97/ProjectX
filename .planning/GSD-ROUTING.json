@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "governing_reference": ".planning/audits/2026-09-10-merged-audit-codebase-review.md",
+  "active": {
+    "phase": "17.1",
+    "plan": "17.1-11 shared golden gate with 03.7-10",
+    "reason": "Phase 49 Plan 07 is repository/local qualified on the 2026-09-25 exact digest; its Wave 7/8 and Phase 50 layers remain open. Return to the governing Wave 1 sequence: Blueprint and inbox golden evidence, then founder acceptance and Phase 18 consumption. The OpenRouter request-shape repair and offline self-check are current, but the exact accepted baseline is still false."
+  },
+  "next": {
+    "phase": "18",
+    "plan": "18-11",
+    "handoff": ".planning/phases/18-document-content-creation/18-11-PLAN.md",
+    "reason": "Only after the exact Phase 17.1-11 baseline is accepted and shared 03.7-10 live/founder evidence is reconciled; no partial golden run or offline pass unblocks document acceptance."
+  },
+  "queue": [
+    "Wave 1",
+    "Wave 2",
+    "Wave 3",
+    "Wave 4",
+    "Wave 5",
+    "Wave 6",
+    "Wave 7",
+    "Wave 8"
+  ],
+  "advisory": "Canonical progress is derived by the hardened semantic checker: superseded plans are final dispositions outside completion numerators, and live/owner/external evidence remains independent.",
+  "blocked": [
+    {
+      "phase": "03.7 + 17.1",
+      "wave": "1A",
+      "reason": "Historical paid attempts remain non-certifying and settled; current evaluator request-shape repair and source-derived revision pass offline checks. Named non-production backend is not currently ready, no fresh paid run has executed, and Blueprint baseline remains accepted:false."
+    },
+    {
+      "phase": "32",
+      "wave": "7",
+      "reason": "external_legal_and_channel_enablement_gated"
+    },
+    {
+      "phase": "47",
+      "wave": "6",
+      "reason": "real_dst_and_oauth_evidence_required_before_recurrence"
+    },
+    {
+      "phase": "SITE-LAND-SHOP external remainder",
+      "wave": "7",
+      "reason": "domain_merchant_provider_and_policy_enablement_gated"
+    },
+    {
+      "phase": "H5",
+      "wave": "post-beta-evidence",
+      "reason": "private_beta_evidence_gates_must_close_first"
+    }
+  ]
+}

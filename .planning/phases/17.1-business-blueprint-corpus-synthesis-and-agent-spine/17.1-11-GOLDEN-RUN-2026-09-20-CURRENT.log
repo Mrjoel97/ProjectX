@@ -1,0 +1,13 @@
+[eval:golden] self-check PASSED (57 fixtures valid, 12 gated skills derived from GATED_SKILLS, vocabulary/cap/multi-pin/only-filter/dispatch/cost-merge logic proven offline; 21-03: tenant-pin parsing/scope-merge/candidate-eligibility/evidence-suppression/inspection/expectations/foreign-collision/deployment-fingerprint/unknown-arg proven offline)
+[eval:golden] provider preflight PASSED (secret-safe; no budget opened)
+[eval:golden] budget ps7d509t3e281pb14ry373r7s18er6cr; unresolved calls retain their reservation
+[eval:golden] run 72a43b32 — 46 cases, tenant eval-72a43b32, cap $2.00, pins cockpit-agent@26 inbox-digest@2
+[eval:golden] NO-RETRY RUN — every fixture receives exactly one attempt; a failure remains final.
+[eval:golden] seeded inbox fixture: 5 message(s), live digest
+[eval:golden] seeded vault corpus: 5 doc(s), live embed
+[eval:golden] seeded confirmed Blueprint: doc mx78pp7qf674sy5c9bxky5dw9d8es8m0, 5 source(s), spine 401 chars, needle evalblpr
+  · 01-happy-single thread=smoke-attach-b29aa31b-b763-4d70-9762-c33a11b8843c plan=mh7dwcrrdsbe07egepbkg2q4e98es32g
+[eval:golden] closed budget ps7d509t3e281pb14ry373r7s18er6cr after terminal paid failure; accounted $0.030004 ($0.030000 conservative ceiling, not observed usage)
+[eval:golden] tenant eval-72a43b32 KEPT — a failed run's rows are the evidence for why. Remove fixture data with exact tenant cleanup while preserving spendEvents; budget evidence must remain.
+[eval:golden] GOLDEN_PAID_CALL_FAILED; durable attempt retained; no paid replay, evidence, or cleanup.
+__EXIT__=2

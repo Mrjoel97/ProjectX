@@ -1,5 +1,186 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-29 — rollout now refuses candidate pinning unless
+> marked for an isolated evaluation deployment. The CI train step requires
+> distinct eval deployment credentials and rejects the source URL; no live
+> deployment or provider test was run. Eight offline checks pass locally (the
+> installed-package case is skipped when that package is absent).
+>
+> Last verified: 2026-09-29 — the pinned SkillOpt 0.2.0 adapter, split loader,
+> config and registration shim pass seven offline checks against an installed
+> wheel. The main workflow now has an independent qualification latch; a
+> credentials-free workflow runs these checks. This does not prove a trainer
+> run, feedback-sensitive semantic improvement or privacy qualification.
+>
+> Historical 2026-09-29 audit — Phase 8 Nyquist revalidation initially added
+> five offline SkillOpt contract checks (one green, four red), identifying wrong
+> adapter imports/call shape and workflow entrypoint plus a fixed historical
+> reward. The next entry above records the offline repairs; neither audit ran
+> a live optimizer or provider call. See `08-VALIDATION.md`.
+>
+> Last verified: 2026-09-28 — the Data preview final-write guard changed
+> `vault.ts`, which is inside the source-derived golden evaluator identity.
+> The unchanged 46-case corpus is now pinned to
+> `2026-09-11.budgeted-evaluator.9be6709f0bef7daf69909e80624cb7214661f1c2747c7ce658d62201fec29811`;
+> its dependent zero-cost web-recipe implementation hash is
+> `33669c54554f457ba3b5fbbeb20dba6f55fa29786bc6eac529ab814c07836ce6`.
+> The generated six-lane/40-case native vertical corpus was repinned for the
+> same source change. These pins retire old evidence; no paid evaluation,
+> semantic verdict or activation follows from regeneration.
+>
+> Last verified: 2026-09-28 — the tenant-first vertical audit indexes changed
+> `schema.ts` and `audit.ts`, both pinned by the free golden evaluator. Its
+> unchanged 46-case corpus now uses revision
+> `2026-09-11.budgeted-evaluator.0915149bddb4b591b8e8ad4c603c1c04a80db6c2ae4690809346ab976af66e79`;
+> the dependent zero-cost web-recipe implementation hash is
+> `1a6c05f8ee8d6200f17ad9c0a58c0f0ec31bb83ef45783273d23ad16d86ad6f1`.
+> This retires prior source identities, not the missing paid golden verdict,
+> vertical semantic evaluation, hosted UAT or activation.
+
+> Last verified: 2026-09-28 — the local-only golden provider egress refusal
+> retires the previous evaluator identity. The unchanged 46-case corpus now
+> pins `2026-09-11.budgeted-evaluator.60d0fbcc22d14d608e4ce7245fb60a5c81b507f0368c874b8b7f9a149038bd0d`;
+> the dependent zero-cost web-recipe implementation pin is
+> `50a35a4465c578ebbcb396c3648f5ce880a046a728250a17d77fc432b678c406`.
+> The 57-fixture self-check, local preflight controls and recipe self-check pass.
+> A filtered diagnostic stopped unresolved during its first embedding seed, so
+> it provided no passing registry evidence or skill activation. Phase 49's
+> new watched-source aggregate must pass separately.
+
+> Last verified: 2026-09-28 — the free golden preflight now supports the Convex
+> CLI's self-hosted local route with a separate process-scoped
+> `PIKAR_GOLDEN_LOCAL_INSTANCE` declaration. It refuses a simultaneous
+> `CONVEX_DEPLOYMENT`, remote/mismatched URLs, missing admin key, or production
+> override. A fresh disposable instance matched `/instance_name`; the current
+> source reached the read-only readiness function and returned the closed
+> missing-OpenRouter-key refusal before any budget or provider call. Empty final
+> Convex CLI output now becomes a transport failure rather than an invented
+> readiness response. The unchanged 46-case golden corpus is repinned to
+> `2026-09-11.budgeted-evaluator.76cef090db5f54c02f78556778e33c4f8b6a6cad9d72aaa4b69644860cd6d0c0`;
+> the dependent deterministic web-recipe source pin is
+> `6e98f7daa7ad7adfff0c90a5c3953cf8e65ed4286764a7727cfefed1826afc50`.
+> Neither repin is a paid verdict, native activation, or Wave 7/8 acceptance.
+>
+> Last verified: 2026-09-28 — the disposable Phase 49 runner now supports a bounded
+> terminal-held browser session for synthetic local review. It does not alter skill
+> bodies, versions, activation or routing. Because this runner is in Phase 49's pinned
+> source set, its previous aggregate digest is stale until exact-source requalification.
+>
+> Last verified: 2026-09-28 — the Vault schema adds an optional content-revision marker
+> for agent-created document replacements. It does not alter skill versions, activation,
+> rollback, tool grants or model routing; vertical artifact review uses the marker only
+> to refuse a decision after the original candidate output has been rewritten. This
+> source-derived evaluator change retires the previous golden revision; the new exact
+> revision is `2026-09-11.budgeted-evaluator.f9ef2ac4d2958a75b7bcfe82684e52f7845620aedd1d4ff0c9b7b371610ed8fb`.
+> The contracts source pin also changes the deterministic web-recipe evaluator identity to
+> `b3b91687fdff807461b480ab07e2b52ae0813e30b04832dc5ed2800fba2eccde`;
+> previous recipe evidence is retired without changing its fixture corpus or claiming a paid pass.
+>
+> Last verified: 2026-09-28 — adding the CI-only model-provider AST dependency changed the
+> lockfile in the source-derived evaluator set, so prior golden and deterministic recipe
+> evidence identities are retired without changing either fixture corpus. The 46-case golden
+> manifest and contracts now pin
+> `2026-09-11.budgeted-evaluator.2f6e88af89b316f8a99538629bb6034f36fe139242e3ae69f842d2e75777d503`;
+> the zero-cost recipe implementation pin is
+> `361c791efb232e3465f4f7c99ff6e08a1a4cf9b3fd8027723175d8067898623f`.
+> The native vertical generated corpus was also refreshed after the lockfile change. Both
+> evaluator self-checks and the native corpus check pass; Phase 49's new exact-source aggregate
+> must pass separately. No paid verdict or skill activation follows from these repins.
+>
+> Last verified: 2026-09-28 — the golden evaluator's free settlement poll now rejects
+> malformed, inconsistent or cross-budget ledger snapshots before a quiet-window verdict.
+> The runner binds every read to its opened budget. An offline red-then-green control covers
+> wrong identity, impossible counts, invalid cost fields and contradictory conservative
+> totals; the 13 direct paid-attempt tests and 57-fixture golden self-check pass without
+> provider work. The unchanged 46-case corpus pins source-derived revision
+> `2026-09-11.budgeted-evaluator.8d2ce949da0f9f5c3e92cfe7e8751d6454b3464c7ca27f20f680c3cdaf2c5e6f`;
+> the dependent web-recipe implementation pin is
+> `814049b5638fc6307c194a9101f30cec8f391668fe1fff45e86b62cfe0e71321`.
+> No named non-production target, paid case verdict or skill activation is inferred.
+
+> Last verified: 2026-09-27 — the free golden preflight now rejects conflicting ambient/file
+> deployment declarations and explicit Convex URLs that contradict a named `local:` or `dev:`
+> target. Local URLs must be loopback; an explicit cloud-dev URL must name the same Convex
+> deployment. This is a necessary routing check, not `/instance_name` proof. The source-derived
+> golden evaluator and unchanged 46-case manifest now pin
+> `2026-09-11.budgeted-evaluator.9d4e970858fa89a3cd2145c49bb8c90a70e57af803981877a358e5634a8c258b`;
+> the dependent deterministic web-recipe evaluator pins
+> `148305ce474e70522d8f586a7738d9d7044540f5f48ba959ba3492db2b92b07c`.
+> Offline preflight tests and both evaluator self-checks pass. The real preflight still refuses
+> `named_nonproduction_target_required` before a budget opens; no live or paid gate passed.
+
+> Last verified: 2026-09-27 (Wave 1 golden target-guard acknowledgment only). The free golden
+> preflight now requires an explicit named `dev:` or `local:` `CONVEX_DEPLOYMENT` before querying
+> readiness; missing, anonymous and production declarations fail closed. A declared name alone is
+> not actual `/instance_name` or source proof. The code-owned golden evaluator revision and 46-case
+> manifest are `2026-09-11.budgeted-evaluator.03cd0dcac6b310b93920e702b8cc868a92297117573e6a474d7c639136d1ca00`;
+> the 57-fixture self-check passes, while the current real preflight refuses before a budget opens.
+> Because `skill.ts` is also in the web-recipe evaluator inventory, its normalized digest moved to
+> `5faad16e49354a4a48735f91fa602a9b3bac0c807baad74579f5f7fd0b493d00` and the old
+> exact-revision evidence is retired. This makes no activation or paid-verdict claim.
+
+> Last verified: 2026-09-27 (watch-gate acknowledgment only - **a `Last verified` bump plus a forward
+> record, NOT a verification of the sections below.** No skill or prompt body changed. The current
+> evaluator source moved the golden revision to
+> `2026-09-11.budgeted-evaluator.a8f2127b60b4e3c5249776779717b018f499fad3f460888c37eb0bd718afb168`,
+> because `llm.ts` and `lib/evalBudgetModel.ts` are members of `EVALUATOR_FILES` and the authoring
+> probe's failure policy changed - see `guardrails.md` for what that change does and why it tightens
+> rather than loosens the money boundary. The code-owned `AGENT_EVAL_SUITE` and the regenerated
+> 46-case manifest agree, and the 57-fixture offline self-check passes. The deterministic web-recipe
+> evaluator pin moved with it to `d407d5fce26f8cda...` because `skill.ts` is inside that digest's own
+> normalized inventory, so the golden bump necessarily moves it. Older exact-evaluator evidence
+> keyed to either prior revision is retired. The free provider preflight still refuses against the
+> unavailable local deployment, so no paid or live pass follows from this identity refresh.)
+
+> Last verified: 2026-09-25 - the current evaluator source moved the golden revision to
+> `2026-09-11.budgeted-evaluator.d324ea865ac2dfc43fe6f0a04131f35d240a193d9c11502265e8f2aa010bc74e`.
+> The code-owned `AGENT_EVAL_SUITE` and regenerated 46-case manifest agree; the 57-fixture
+> offline self-check passes. Older exact-evaluator evidence is retired. The free provider
+> preflight still refuses against the unavailable local deployment, so no paid or live pass
+> follows from this identity refresh.
+
+> Last verified: 2026-09-24 — Plan 50-19 closes tenant commerce export/deletion field
+> classification, omits attempt retry-key hashes and refuses undecided order retention. Skill
+> registry tables, bodies, routing and activation are unchanged; this is not a provider gate.
+
+> Last verified: 2026-09-24 — Plan 50-18 adds optional legacy-compatible goods-kind,
+> branch-policy and snapshot fields to tenant commerce schema. Merchant writes and local
+> quote refuse absent required facts. Skill registry tables and prompts are unchanged;
+> Plan 50-19 now supplies the separate export/delete classification described above.
+
+> Last verified: 2026-09-24 — Plan 50-04 adds five tenant-leading local commerce
+> policy/mapping/cart/order/attempt tables and reservation linkage, with classification,
+> export/erasure refusal and focused adapter tests. Skill registry tables and prompts are unchanged.
+
+> Last verified: 2026-09-24 — Plan 50-02 adds three tenant-leading catalogue/stock/reservation
+> schema tables, independently classified in tenantData and covered by focused adapter,
+> export and erasure tests. The skill-registry tables and runtime prompts are unchanged.
+
+> Last verified: 2026-09-23 — Phase 49 integrates the three pinned offline design-knowledge
+> sources, exact evaluator/browser/owner conjunction, active version rollback and a separate
+> site/landing/storefront lifecycle matrix. Final local gate status is in `49-VERIFICATION.md`;
+> Wave 7/8 remain open.
+
+> Last verified: 2026-09-23 — Phase 49 deterministic web-recipe evaluator now binds every ordered
+> fixture input/expectation, fixture builder, evidence predicate, runner, and pure rendering sources.
+> The designed renderer is pure core code pending backend/owner-preview integration.
+> See the evaluator invariant at the end of this playbook.
+
+> Last verified: 2026-09-23 — Phase 49 browser qualification cleanup requires an empty recipe
+> baseline, explicit offline fixture consent, a loopback HTTP site origin, and captured fixture row
+> ids. Cleanup refuses deletion if any recipe-family row is uncaptured. See the Phase 49 cleanup
+> invariant at the end of this playbook.
+
+> Last verified: 2026-09-20 — the governed first-send and journey-terminal source changes moved
+> the golden evaluator identity. `AGENT_EVAL_SUITE.revision` and the mechanical manifest now pin
+> the same recomputed hash, and the offline self-check is green. All older evaluator evidence is
+> retired; no paid diagnostic was rerun and no semantic/provider pass is claimed.
+
+> Last verified: 2026-09-20 — terminal golden provider failures now settle conservatively and close
+> their budget without replay. That evaluator-source change refreshed `AGENT_EVAL_SUITE.revision`
+> and the golden manifest together. It retires older exact-evaluator evidence and does not create a
+> passing case, owner acceptance, activation or rollback evidence.
+
 > Last verified: 2026-09-14 — the deterministic research-PDF dependency and native vertical
 > review-console sources moved both evaluator identities. `AGENT_EVAL_SUITE.revision`, the golden
 > manifest and the generated vertical evaluator revision were refreshed only after source freeze.
@@ -2444,6 +2625,14 @@ cached outputs.
 Phase 8 wires an **offline** prompt-optimization loop ON TOP of this registry. The registry's
 candidate→active gate is the load-bearing invariant it reuses — SkillOpt never bypasses it.
 
+**Current qualification (2026-09-29):** This is the intended design, not a proven operating loop.
+`skillopt/tests/test_skillopt_contract.py` now passes seven offline checks against the installed
+pinned package, repairing the initially red adapter, CLI and score seams. The candidate-observed
+hard score is only structural plan completeness; it cannot prove an edit resolved the user's
+feedback. The July dry run used a hand-edited candidate, so it proved steps 1–3 and 5–7's seam but
+not step 4. Do not enable the app kill switch or set `SKILLOPT_RUNTIME_QUALIFIED=true` until a
+feedback-sensitive quality measure, privacy review and controlled end-to-end proof pass.
+
 **The loop (ships DORMANT):**
 
 1. **Feedback capture** (`convex/feedback.ts`, IMPR-01): a thumbs±comment on a delivered response
@@ -2455,10 +2644,16 @@ candidate→active gate is the load-bearing invariant it reuses — SkillOpt nev
 3. **Scrubbed export** (`convex/skilloptExport.ts` → `GET /skillopt/export`, bearer `SKILLOPT_TOKEN`):
    every text field runs through `packages/pii` `scanText`; only `safeText`+counts leave, fail-closed
    (a scan `Err` drops that trajectory). This is a SEPARATE export plane from the refs-only audit (§4).
-4. **SkillOpt CI batch** (`skillopt/`, `.github/workflows/skillopt.yml`, `skillopt==0.2.0`): reads
-   `optimizerConfig.enabled` FIRST and no-ops when dormant; otherwise runs rollout→reflect→edit→held-out
-   accept and emits `best_skill.md`. The optimizer NEVER sees the golden `eval-cases/` set — that
-   in-repo partition is the independent third gate.
+4. **SkillOpt CI batch (unqualified)** (`skillopt/`, `.github/workflows/skillopt.yml`, `skillopt==0.2.0`):
+   reads `optimizerConfig.enabled` first and no-ops when dormant; a separate absent-by-default CI
+   qualification latch prevents training if the app switch is flipped alone. The pinned adapter,
+   config and entrypoint load offline, but rollout→reflect→edit→held-out accept has not been run.
+   The golden `eval-cases/` set is an independent repository gate, not an export/train source.
+   Per-edit candidate pins and synthetic plans must go to a separate disposable deployment:
+   `SKILLOPT_EVAL_CONVEX_DEPLOY_KEY`, `SKILLOPT_EVAL_HTTP_URL` and `SKILLOPT_EVAL_TOKEN` are required
+   for the train step, and the workflow refuses an eval URL equal to the source URL. The source
+   deployment receives only the final write-back after training; these secrets are not yet set or
+   qualified. A local flag alone is not proof of deployment separation.
 5. **Write-back → CANDIDATE** (`POST /skillopt/writeback` → `skills.insertCandidate`): the accepted body
    lands as a NEW `candidate` version (`maxVersion+1`), prior rows immutable. `insertCandidate` rejects a
    non-gated name (`NOT_GATED`) and is idempotent vs the newest row (identical body → `inserted:false`,
@@ -3109,3 +3304,119 @@ neuter the `row.tenantId !== tenantId` comparison in `runPackTurn`; drop the `te
 into `runSpecialistTurn`; hardcode `const name = "pack-business-pulse"` in
 `publishPackCustomization`; delete the `template_not_active` early return; remove the `pack-`
 refusal from `assertEvaluableCandidate`.
+
+## Phase 49 browser qualification cleanup
+
+The local browser drill requires the shared `offlineSeamAvailable()` consent (`PIKAR_OFFLINE_FIXTURES=1`
+and no OpenAI or OpenRouter key), plus a server `CONVEX_SITE_URL` that is exactly an HTTP loopback
+origin (`localhost`, `127.0.0.1`, or `[::1]`) with an explicit valid port. A disposable isolated
+deployment's three web-recipe families must be empty before setup. Setup must stop before seeding
+if any family already has a row;
+it must not snapshot historical ids for later restoration. The dedicated fixture seeder mints a run
+token and stamps it on inserted rows. Version 2 requires the same token and one fully evidenced,
+active v1 in every family. Capture the seeder's exact created row ids and pass those ids plus the
+token to `cleanupWebRecipeQualification`.
+
+The server verifies offline fixture consent, the loopback site origin, each marker, all ids and all
+three recipe families before deleting anything. ID counts are capped at six and each family scan
+stops at seven rows, so overflow fails closed. Wrong-run or non-recipe ids, duplicate ids, or any
+family row outside the captured id set cause the mutation to fail without changing a row. Cleanup
+never patches captured rows back to a presumed baseline. A failed isolation check leaves the
+existing registry state untouched and requires a fresh disposable deployment.
+
+## Phase 49 deterministic web-recipe evaluator
+
+The zero-cost receipt is pinned to the exact candidate row body, full ordered three-family fixture
+content (including every grouped input and expected outcome), and an implementation digest covering
+the evaluator, fixture builder, evidence predicate contract, runner, recipe materializer, design
+selector/bundle, and both legacy and designed renderers. The contract's own digest field is replaced
+by a fixed placeholder when computing that digest; all other contract source bytes are bound.
+`WEB_RECIPE_EVAL_SUITE.casesHash` combines the fixture and implementation digests. Any change to
+those sources retires prior receipts; update the manifest only after review and rerun
+`node packages/backend/scripts/run-web-recipe-evals.mjs --self-check`. The self-check compares
+actual source bytes, checks source-only tamper controls, and executes the production evaluator
+against exact seeded candidate rows.
+
+Every grouped refusal input must be independently exercised. Only a bounded recipe input or
+document validation error counts as expected refusal; an assertion failure, exception in a
+mutation control, or accepted later input fails the whole candidate. Every required scalar/item
+field has its own refusal input. The CTA path enforces its declared 256-character limit.
+Changed-bundle and source-removal controls parse a known-good raw generated bundle first, then
+tamper its label/data or remove each role's raw records and require the production parser to reject.
+Every source role is also required by the designed renderer's selected-profile verifier. The renderer
+emits code-owned accessible CSS from the closed profile; each Taste dial changes its corresponding
+rendered style independently while the canonical document, form,
+consent, attribution, route and analytics identities remain unchanged. New recipe-backed project
+versions now pin the selected renderer profile for their stored immutable artifact and owner
+preview. Older stored versions retain their bytes. Disabled or reduced motion suppresses hover
+translation, and long content can wrap on narrow screens. Browser evidence and activation remain
+separate gates.
+
+## Phase 49 server-observed browser qualification
+
+An owner begins a fresh run for one exact candidate identity. The server captures the candidate,
+fixture, implementation, bundle, and renderer hashes and clears previous browser evidence. The
+owner selects each viewport lane with a revision compare-and-swap, then calls the server preview
+for ordered partial, refusal, recovery, changed edit, and final preview stages. Preview
+materializes the design on the server, records input/document/artifact hashes and byte length, and
+returns actual designed HTML. Only bounded validation refusal counts; other errors abort the
+transcript. The changed edit must change input and artifact hashes; final preview must agree with
+that edited artifact. Each lane is independent.
+
+After both desktop and mobile lanes are complete, the owner finalizes a transcript hash. This
+does not create evidence. A trusted internal runner separately verifies browser observations and
+writes a witness against that exact finalized hash, run id, revision, and current candidate
+identity. Owner-provided outcomes, hashes, or legacy witness rows do not qualify activation. A
+new run or candidate version invalidates earlier browser evidence. The sandboxed owner iframe
+displays server-returned HTML; its presence alone is not a browser witness. Use an isolated
+production-build E2E, never the normal database or production owner storage, for the full path.
+The owner UI completes an opened lane before opening the other, so neither lane can be stranded;
+an empty owner review has an explicit empty state. Browser E2E compares each created site's,
+landing page's, and private storefront's recipe name, skill ID, body hash, and version to the
+captured exact v1/v2 candidates, including immutable v2 readback after rollback.
+
+The disposable stack's cleanup is part of the gate, not a best-effort success footer. On Windows,
+the backend starts through one PowerShell broker that owns a kill-on-close Job Object. Its gated
+launcher receives the backend request over private stdin **only after** job assignment, so the
+backend and descendants inherit job membership before execution. The broker verifies the
+kill-on-close flag and documented process-ID-list membership; query errors (including bad buffer
+length) fail closed. A normal stop or owner stdin EOF closes the sole job handle. The runner
+requires the broker's observed stop and exit, then independently checks listeners and exact root
+removal; a stop timeout, missing broker result, remaining listener, or remaining root fails. The
+non-Windows direct-child path does **not** claim descendant-tree proof. Recursive deletion requires the fresh direct-child temp root and its
+per-run ownership marker. A failed or unverifiable cleanup exits nonzero even if browser
+assertions passed, and original browser failure metadata is retained without raw stdout/stderr.
+SQLite can contain deployment secrets after `env set`, so deleting standalone key files never
+proves that a residual database is inert. Treat any remaining database/storage as potentially
+sensitive and unresolved until exact, verified cleanup finishes. Browser page/console diagnostics
+report event presence only, never arbitrary messages.
+The designed renderer's hash canonicalizes every validated profile field in fixed key order so
+Convex persistence cannot change an identical document/profile hash. Its renderer ID stays v1:
+the designed project path had not entered accepted production when this correction landed, and
+legacy/manual renderer bytes are unchanged. The changed evaluator implementation digest retires
+all provisional exact-source receipts regardless of the unchanged renderer ID.
+
+## Phase 49 recipe operations and change review
+
+`third_party/design-knowledge/` preserves reviewed MIT notices and immutable source identities
+for interface patterns, visual-quality guidance and commerce-safety boundaries. The compiler
+consumes an audited subset offline and emits a closed Pikar recipe/design bundle. Upstream text is
+data, never a runtime prompt or instruction. Do not install its tools, execute its code, fetch its
+links or pass source/fixture bodies into tenant output, evidence or audit.
+
+Before changing source bytes, exclusions, compiler, recipe definition, evaluator or renderer,
+review the diff and update the pinned manifest. Run provenance actual/self-test, compiler check,
+the deterministic evaluator self-check and both isolated production-build browser specs. Evidence
+binds the exact candidate id/version/body/definition, bundle and renderer, fixture and
+implementation digests. A stale or missing plane refuses activation; an owner transcript alone
+does not mint the trusted browser witness. The owner may activate only the exact passing row and
+roll back to an eligible earlier exact version. Already stored project/artifact bytes and origin
+lineage do not change when that registry pointer moves.
+
+The ordinary tenant sees only site and landing active recipes. Storefront is an owner-only private
+qualification artifact with explicit commerce-unavailable copy. Its activation never authorizes a
+tenant card, publication mutation, resolver or anonymous route. The code-owned false commerce
+seam remains until Phase 50's typed lifecycle and separate merchant gates are accepted. Use
+`node scripts/check-phase49-qualification.mjs` for the final repository/local source set; an
+unavailable Git/Graphify or cleanup gate stays open. See
+`docs/releases/phase-49-wave7-wave8-reentry.md` for external and exact-production re-entry.

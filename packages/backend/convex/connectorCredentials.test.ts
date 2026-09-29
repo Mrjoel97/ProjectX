@@ -514,7 +514,16 @@ describe("revocation records what Pikar actually did, not what it wishes it did"
     const [status] = await h.asA.query(api.connectorCredentials.connectorStatuses, {});
     expect(status?.revocation?.upstream).toBe("attempted_failed");
     // The provider's status CODE is operator detail; it must not ride out to the browser.
-    expect(JSON.stringify(status)).not.toContain("503");
+    //
+    // Asserted on the revocation PROJECTION, never on a substring of the whole serialized row.
+    // This used to be `expect(JSON.stringify(status)).not.toContain("503")`, which greps a blob
+    // that includes `connectedAt` — an epoch-millis timestamp. That made the assertion pass or
+    // fail on the digits of the current clock: a `connectedAt` of 1790503470595 contains "5","0","3"
+    // in sequence and reddened a green gate. A leak check must not be time-dependent, so the
+    // property is now named directly and the substring check is scoped to the projection, which
+    // carries no timestamp.
+    expect(status?.revocation).not.toHaveProperty("statusCode");
+    expect(JSON.stringify(status?.revocation)).not.toContain("503");
   });
 
   test("HubSpot's unproven cascade is expressible: the grant may outlive the revoke", async () => {

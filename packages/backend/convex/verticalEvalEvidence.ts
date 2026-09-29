@@ -427,7 +427,13 @@ export const sealCase = internalMutation({
       outputHash,
       artifactId,
       blockedReason,
-      observedOutcome: result.ok ? result.outcome : "blocked",
+      // The runtime's useful/partial quality hint is not the review corpus's
+      // artifact/partial/refused state. A refusal is a semantic owner judgment.
+      observedOutcome: !result.ok
+        ? "blocked"
+        : result.outcome === "useful" && artifactId !== undefined && !truncated
+          ? "artifact"
+          : "partial",
       truncated,
       attemptedAllowedToolCounts: result.ok
         ? encodeToolCounts(result.facts.attemptedAllowedTools)
@@ -502,6 +508,9 @@ function resolveMechanicalCriterion(
   const path = criterion.path;
   const sourceDocIds = new Set((receipt.payload.sourceDocIds as string[] | undefined) ?? []);
   if (path === "expected.state") {
+    // A model refusal cannot be inferred from a runtime quality hint or the
+    // absence of a saved artifact; require the owner's byte-bound review.
+    if (criterion.expected === "refused") return null;
     const actual = receipt.payload.observedOutcome;
     return {
       decision: actual === criterion.expected ? "supported" : "contradicted",
@@ -709,7 +718,11 @@ export const reviewCase = ownerMutation({
     );
     const accepted =
       requiredSourcesRead &&
-      args.outcome === receipt.payload.observedOutcome &&
+      (args.outcome === receipt.payload.observedOutcome ||
+        (args.outcome === "refused" &&
+          receipt.payload.observedOutcome === "partial" &&
+          receipt.payload.artifactId === undefined &&
+          output !== null)) &&
       (expected.state === undefined || args.outcome === expected.state) &&
       args.decisions.every((d) => d.decision === "supported") &&
       [...mechanicallyResolved.values()].every((item) => item.decision === "supported") &&

@@ -99,6 +99,10 @@ function render(viewer: Viewer): { html: string; queries: string[]; mutations: s
       case "skills:candidatesForReview":
       case "skills:tenantCandidatesForReview":
         return [];
+      case "skills:webRecipeCandidatesForReview":
+        return [];
+      case "webRecipes:getStorefrontQualification":
+        return null;
       default:
         throw new Error(
           `Unexpected query mounted: ${getFunctionName(reference as Parameters<typeof getFunctionName>[0])}`,
@@ -134,6 +138,8 @@ describe("/ops owner presentation boundary", () => {
         "optimizerConfig:getOptimizerStatus",
         "skills:candidatesForReview",
         "skills:tenantCandidatesForReview",
+        "skills:webRecipeCandidatesForReview",
+        "webRecipes:getStorefrontQualification",
       ]),
     );
     expect(result.mutations).toEqual(
@@ -142,6 +148,13 @@ describe("/ops owner presentation boundary", () => {
         "skills:activateCandidate",
         "skills:activateTenantCandidate",
         "skills:rollbackTenantSkill",
+        "skills:activateWebRecipeCandidate",
+        "skills:rollbackWebRecipe",
+        "skills:beginWebRecipeBrowserQualification",
+        "skills:advanceWebRecipeBrowserQualification",
+        "skills:finalizeWebRecipeBrowserQualification",
+        "webRecipes:previewWebRecipeCandidate",
+        "webRecipes:qualifyStorefront",
       ]),
     );
 
@@ -178,6 +191,15 @@ describe("/ops owner presentation boundary", () => {
       "skills:tenantCandidatesForReview",
       "skills:activateTenantCandidate",
       "skills:rollbackTenantSkill",
+      "skills:webRecipeCandidatesForReview",
+      "skills:activateWebRecipeCandidate",
+      "skills:rollbackWebRecipe",
+      "skills:beginWebRecipeBrowserQualification",
+      "skills:advanceWebRecipeBrowserQualification",
+      "skills:finalizeWebRecipeBrowserQualification",
+      "webRecipes:previewWebRecipeCandidate",
+      "webRecipes:getStorefrontQualification",
+      "webRecipes:qualifyStorefront",
       // D13. The sharpest of the set: mounting this one subscribes a non-owner to OTHER TENANTS'
       // failure rows. The server `ownerQuery` would refuse it, but a refused subscription is still
       // an error boundary and a loading state on somebody's screen.

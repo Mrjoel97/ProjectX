@@ -1,9 +1,17 @@
+import { VERTICAL_CANDIDATES } from "@pikar/contracts/skills/verticalCandidates";
+import { VERTICAL_EVAL_MODELS } from "@pikar/contracts/verticalEval";
+import {
+  VERTICAL_CORPUS,
+  VERTICAL_CORPUS_SHA256,
+  VERTICAL_EVALUATOR_SHA256,
+} from "@pikar/contracts/verticalEvalCorpus";
 import { verticalSkillName } from "@pikar/core/verticalPacks";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import { VERTICAL_EVAL_AUDIT_NAMESPACE } from "./audit";
+import { contentHash } from "./lib/hash";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -75,6 +83,148 @@ async function setup() {
 }
 
 describe("vertical controls use native tenant/version state", () => {
+  test("only the exact released active row exposes bounded refs, never a foreign overlay or stale planes", async () => {
+    const { t, asA, asB, a, b } = await setup();
+    const name = "vertical-product" as const;
+    const body = VERTICAL_CANDIDATES[name].body;
+    const browserEvidence = JSON.stringify({
+      runner: "playwright:pack",
+      runId: "browser-product-1",
+      pass: true,
+      skillVersions: { [name]: 1 },
+      authenticated: true,
+      viewports: 2,
+      casesPassed: 2,
+      casesTotal: 2,
+      deploymentRef: "private deployment details",
+      ts: 1,
+    });
+    const globalId = await t.run(async (ctx) => {
+      const candidateId = await ctx.db.insert("skills", {
+        name,
+        version: 1,
+        body,
+        provenance: JSON.stringify(VERTICAL_CANDIDATES[name].provenance),
+        browserEvidence,
+        status: "active",
+        createdAt: 1,
+      });
+      const core = {
+        schemaVersion: 1,
+        kind: "native-owner-reviewed-vertical",
+        name,
+        version: 1,
+        candidateId,
+        bodyHash: await contentHash(body),
+        runId: "123e4567-e89b-42d3-a456-426614174000",
+        corpusHash: VERTICAL_CORPUS_SHA256,
+        evaluatorHash: VERTICAL_EVALUATOR_SHA256,
+        caseHashes: VERTICAL_CORPUS.product.map((item) => item.caseHash),
+        caseReceiptIds: VERTICAL_CORPUS.product.map((_, i) => `case-${i}`),
+        reviewReceiptIds: VERTICAL_CORPUS.product.map((_, i) => `review-${i}`),
+        modelIds: [VERTICAL_EVAL_MODELS[0]],
+        budgetId: "budget-1",
+        passed: true,
+      };
+      const issuanceId = await ctx.db.insert("audit", {
+        tenantId: VERTICAL_EVAL_AUDIT_NAMESPACE,
+        correlationId: `verticalissuance:${core.runId}:${name}:1`,
+        eventType: "vertical_evidence.issuance",
+        actor: "system",
+        ts: 1,
+        payload: {
+          evidenceHash: await contentHash(JSON.stringify(core)),
+          candidateId,
+          bodyHash: core.bodyHash,
+        },
+      });
+      await ctx.db.patch(candidateId, { evidence: JSON.stringify({ ...core, issuanceId }) });
+      return candidateId;
+    });
+    const workloadIds = await t.run(async (ctx) =>
+      Promise.all(
+        [1, 2].map((i) =>
+          ctx.db.insert("vaultDocuments", {
+            tenantId: String(b),
+            title: `Prior product draft ${i}`,
+            kind: "document",
+            category: "workspace-docs",
+            source: "agent",
+            mimeType: "text/markdown",
+            size: 12,
+            contentHash: `h-${i}`,
+            text: "Owned product source",
+            status: "ready",
+            createdAt: i,
+          }),
+        ),
+      ),
+    );
+    await asB.mutation(api.verticalPacks.configure, {
+      needs: ["product"],
+      reviewReady: ["product"],
+      confirmWorkload: { verticalId: "product", artifactIds: workloadIds },
+    });
+    const released = await asB.query(api.verticalPacks.discover, {});
+    expect(released.recommendations).toMatchObject([{ id: "product", state: "available" }]);
+    expect(released.controls.find((row) => row.id === "product")?.activeEvidenceRefs).toEqual({
+      provenance: {
+        sourceCommit: VERTICAL_CANDIDATES[name].provenance.sourceCommit,
+        bodySha256: VERTICAL_CANDIDATES[name].provenance.bodySha256,
+      },
+      eval: { runId: "123e4567-e89b-42d3-a456-426614174000", issuanceId: expect.any(String) },
+      uat: { runId: "browser-product-1", evidenceSha256: await contentHash(browserEvidence) },
+    });
+    expect(JSON.stringify(released)).not.toContain("private deployment details");
+    expect(JSON.stringify(released)).not.toContain(body);
+
+    const overlayId = await t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        tenantId: String(a),
+        name,
+        version: 1,
+        status: "active",
+        rollbackEligible: false,
+        body: "Private overlay",
+        authoredBody: "",
+        author: "system",
+        basedOnScope: "global",
+        basedOnName: name,
+        basedOnVersion: 1,
+        createdAt: 1,
+      }),
+    );
+    const shadowed = await asA.query(api.verticalPacks.discover, {});
+    expect(shadowed.controls.find((row) => row.id === "product")).toMatchObject({
+      candidateId: overlayId,
+      activeVersion: null,
+      activeEvidenceRefs: null,
+    });
+    expect(JSON.stringify(shadowed)).not.toContain(globalId);
+    expect(JSON.stringify(shadowed)).not.toContain("Private overlay");
+    expect(shadowed.recommendations).toEqual([]);
+    expect(String(a)).not.toBe(String(b));
+
+    await t.run((ctx) => ctx.db.patch(globalId, { browserEvidence: undefined }));
+    expect(
+      (await asB.query(api.verticalPacks.discover, {})).controls.find((row) => row.id === "product")
+        ?.activeEvidenceRefs,
+    ).toBeNull();
+    await t.run((ctx) => ctx.db.patch(globalId, { browserEvidence, evidence: undefined }));
+    expect(
+      (await asB.query(api.verticalPacks.discover, {})).controls.find((row) => row.id === "product")
+        ?.activeEvidenceRefs,
+    ).toBeNull();
+    await t.run((ctx) =>
+      ctx.db.patch(globalId, {
+        browserEvidence: browserEvidence.replace('"vertical-product":1', '"vertical-product":2'),
+      }),
+    );
+    expect(
+      (await asB.query(api.verticalPacks.discover, {})).controls.find((row) => row.id === "product")
+        ?.activeEvidenceRefs,
+    ).toBeNull();
+  });
   test("workload picker paginates past sealed sources without exposing content or another tenant", async () => {
     const { t, asA, asB, a, b, artifact } = await setup();
     const foreign = await t.run(async (ctx) => {
@@ -131,7 +281,7 @@ describe("vertical controls use native tenant/version state", () => {
   });
 
   test("unregistered or unevaluated rows cannot become recommendations or new activations", async () => {
-    const { t, asA, aPending, bOld } = await setup();
+    const { t, asA, a, aPending, bOld } = await setup();
     await asA.mutation(api.verticalPacks.configure, { needs: ["legal"], reviewReady: ["legal"] });
     const result = await asA.query(api.verticalPacks.discover, {});
     expect(result.recommendations).toEqual([]);
@@ -143,6 +293,22 @@ describe("vertical controls use native tenant/version state", () => {
     await expect(
       t.mutation(internal.skills.activateSkill, { name: verticalSkillName("legal"), version: 1 }),
     ).rejects.toThrow("NO_SUCH_SKILL_VERSION");
+    await expect(
+      asA.mutation(api.verticalPacks.recordShown, { verticalIds: ["legal"] }),
+    ).rejects.toThrow("RECOMMENDATION_STALE");
+    await expect(
+      asA.mutation(api.verticalPacks.recordAccepted, { verticalId: "legal" }),
+    ).rejects.toThrow("RECOMMENDATION_STALE");
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query("audit")
+          .withIndex("by_tenant_event_ts", (q) =>
+            q.eq("tenantId", String(a)).eq("eventType", "vertical_pack.outcome"),
+          )
+          .collect(),
+      ),
+    ).toEqual([]);
   });
 
   test("disable blocks effective loading before global fallback, affects one tenant and preserves artifacts", async () => {
@@ -218,5 +384,90 @@ describe("vertical controls use native tenant/version state", () => {
     await expect(
       asA.query(api.verticalPacks.discover, { released: ["legal"] } as never),
     ).rejects.toThrow();
+  });
+
+  test("updating workload choices without a playbook argument preserves the confirmed playbook", async () => {
+    const { t, asA, a, artifact } = await setup();
+    await asA.mutation(api.verticalPacks.configure, {
+      needs: ["legal"],
+      reviewReady: ["legal"],
+      legalPlaybookDocId: artifact,
+    });
+    await asA.mutation(api.verticalPacks.configure, {
+      needs: ["legal", "data"],
+      reviewReady: ["legal"],
+    });
+    const profile = await t.run((ctx) =>
+      ctx.db
+        .query("tenantProfiles")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", String(a)))
+        .unique(),
+    );
+    expect(profile?.verticalPreferences?.legalPlaybookDocId).toBe(artifact);
+    expect(profile?.verticalPreferences?.needs).toEqual(["legal", "data"]);
+  });
+
+  test("a confirmed data source remains reachable beyond the five-row discovery window", async () => {
+    const { t, asA, a } = await setup();
+    await t.mutation(internal.skills.seedVerticalCandidates, {});
+    const dataDocs = await t.run(async (ctx) => {
+      const base = {
+        tenantId: String(a),
+        title: "Prior work",
+        kind: "document" as const,
+        category: "workspace-docs" as const,
+        source: "agent" as const,
+        size: 10,
+        contentHash: "h",
+        status: "ready" as const,
+        createdAt: 1,
+      };
+      for (let i = 0; i < 5; i++)
+        await ctx.db.insert("vaultDocuments", {
+          ...base,
+          title: `Unrelated text ${i}`,
+          mimeType: "text/markdown",
+          text: "Unrelated source",
+        });
+      const storageId = await ctx.storage.store(
+        new Blob(["name,value\na,1\n"], { type: "text/csv" }),
+      );
+      const first = await ctx.db.insert("vaultDocuments", {
+        ...base,
+        title: "Confirmed data one",
+        mimeType: "text/csv",
+        storageId,
+      });
+      const second = await ctx.db.insert("vaultDocuments", {
+        ...base,
+        title: "Confirmed data two",
+        mimeType: "text/csv",
+        storageId,
+      });
+      return [first, second] as const;
+    });
+    await asA.mutation(api.verticalPacks.configure, {
+      needs: ["data"],
+      reviewReady: ["data"],
+      confirmWorkload: { verticalId: "data", artifactIds: [...dataDocs] },
+    });
+    const prepare = () =>
+      t.query(internal.verticalPacks.prepare, {
+        tenantId: String(a),
+        verticalId: "data",
+        previewVersion: 1,
+      });
+    expect(await prepare()).toMatchObject({ ok: true, dataSourceId: dataDocs[0] });
+    await t.run(async (ctx) => {
+      const first = await ctx.db.get(dataDocs[0]);
+      if (!first?.storageId) throw new Error("missing test storage");
+      await ctx.storage.delete(first.storageId);
+    });
+    expect(await prepare()).toMatchObject({ ok: false, reason: "validator-unavailable" });
+    await t.run(async (ctx) => {
+      await ctx.db.delete(dataDocs[0]);
+      await ctx.db.delete(dataDocs[1]);
+    });
+    expect(await prepare()).toMatchObject({ ok: false, reason: "validator-unavailable" });
   });
 });

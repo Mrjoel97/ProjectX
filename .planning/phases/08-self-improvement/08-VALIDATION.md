@@ -1,7 +1,7 @@
 ---
 phase: 8
 slug: self-improvement
-status: draft
+status: partial
 nyquist_compliant: false
 wave_0_complete: false
 created: 2026-07-21
@@ -43,17 +43,18 @@ Seeded at requirement level from research; the planner/executor expands to per-t
 
 | Req / Criterion | Observable proof | Test Type | Automated Command | Exists | Status |
 |-----------------|------------------|-----------|-------------------|--------|--------|
-| IMPR-01 capture | thumbs±comment insert → tenant-scoped `feedback` row keyed requestId+skillName+skillVersion; edit/undo mutates same row | unit | `pnpm --filter @pikar/backend test feedback` | ❌ W0 | ⬜ |
-| IMPR-01 attribution | `plans.skillVersion` set at propose; copied to `requests` at executePlan | unit | `pnpm --filter @pikar/backend test cockpit` | ❌ W0 | ⬜ |
-| IMPR-01 UI | control renders on delivered PlanCard/request row; BRAND-compliant + a11y | manual + offline E2E | dev UI walkthrough | ❌ W0 (manual) | ⬜ |
-| IMPR-02 trigger | breach query `eligible=true` only when negativeRate≥threshold AND count≥floor AND past cooldown; below floor → false | unit | `pnpm --filter @pikar/backend test optimizerEligibility` | ❌ W0 | ⬜ |
-| IMPR-02 export scrub | export emits only `safeText`+counts; seeded email/SSN/phone absent; scan error drops the trajectory | unit | `pnpm --filter @pikar/backend test skilloptExport` | ❌ W0 | ⬜ |
-| IMPR-02 write-back | POST inserts `status="candidate"`, `version=maxVer+1`, prior rows immutable; non-gated name rejected; idempotent | unit | `pnpm --filter @pikar/backend test skills` | ⚠ partial | ⬜ |
-| IMPR-02 eval gate | `eval:golden --skill cockpit-agent@N` green → evidence recorded; `activateSkill` refuses candidate w/o evidence | eval-fixture + unit | `pnpm eval:golden --skill cockpit-agent@N` | ✅ | ⬜ |
-| IMPR-02 kill switch | `optimizerConfig.enabled=false` → CI no-ops at step 1; ops toggle flips it | unit + manual | `pnpm --filter @pikar/backend test optimizerConfig` | ❌ W0 | ⬜ |
-| IMPR-02 rollback | `activateSkill(prior)` reactivates without an eval run (status-exempt) | unit | `pnpm --filter @pikar/backend test skills` | ✅ | ⬜ |
-| IMPR-03 versioning | each optimization = new candidate row (before=prior active, after=candidate); insert-only `audit` row carries refs/counts only (§4) | unit | `pnpm --filter @pikar/backend test skills audit` | ⚠ partial | ⬜ |
-| Proof-of-life | ONE manual cockpit-agent dry-run: export → SkillOpt → best_skill.md → write-back candidate → eval green → owner activate → active flips | manual dry-run | end-to-end, owner-verified | ❌ Wave 6 | ⬜ |
+| IMPR-01 capture | thumbs±comment insert → tenant-scoped `feedback` row; edit/undo mutates same row | unit | `pnpm --filter @pikar/backend test feedback` | ✅ | ✅ |
+| IMPR-01 attribution | `plans.skillVersion` set at propose; copied to `requests` at executePlan | unit | `pnpm --filter @pikar/backend test cockpit` | ✅ | ✅ historical; not rerun in this audit |
+| IMPR-01 UI | control renders on delivered response; BRAND-compliant + a11y | manual + offline E2E | dev UI walkthrough | ✅ historical owner dry-run | ⚠ manual-only |
+| IMPR-02 trigger | threshold, sample floor and cooldown gate | unit | `pnpm --filter @pikar/backend test optimizerEligibility`; `pnpm --filter @pikar/core test optimizerBreach` | ✅ | ✅ |
+| IMPR-02 export scrub | scrubbed train/valid trajectory export | unit | `pnpm --filter @pikar/backend test skilloptExport` | ✅ | ✅ |
+| IMPR-02 write-back | new gated candidate, immutable prior, idempotence | unit | `pnpm --filter @pikar/backend test skills` | ✅ | ✅ |
+| IMPR-02 Python optimizer contract | pinned v0.2.0 adapter, loader, config and installed entrypoint load correctly; candidate-observed structural score changes with outcome | offline contract + installed-package import/config smoke | `python -m unittest discover -s skillopt/tests -p 'test_*.py' -v` | ✅ | ✅ 7/7 against installed wheel; no trainer/model run |
+| IMPR-02 eval gate | candidate activation requires passing evidence | unit + live-model eval | `pnpm --filter @pikar/backend test skills`; `pnpm --filter @pikar/backend eval:golden --skill cockpit-agent@N` | ✅ | ⚠ unit green; live candidate eval not rerun |
+| IMPR-02 kill switch | default off; CI refuses unreadable gate | unit + workflow review | `pnpm --filter @pikar/backend test optimizerConfig` | ✅ | ✅ unit; live CI no-op not rerun |
+| IMPR-02 rollback | prior active version can be restored | unit | `pnpm --filter @pikar/backend test skills` | ✅ | ✅ |
+| IMPR-03 versioning | candidate and audit preserve before/after version and trigger evidence | unit | `pnpm --filter @pikar/backend test skills` | ✅ | ✅ |
+| Proof-of-life | export → actual SkillOpt optimizer → best_skill.md → candidate → eval → owner activation | manual dry-run | end-to-end, owner-verified | ⚠ hand-edited candidate seam only | ❌ actual optimizer never run |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -104,4 +105,20 @@ Three disjoint sets — the partition **is** the "optimizer never sees it" guara
 - [ ] Feedback latency < 15s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** partial; IMPR-02 optimizer proof is not accepted for activation.
+
+## Validation Audit 2026-09-29
+
+| Metric | Count |
+|--------|-------|
+| New optimizer-contract gaps | 2 |
+| Resolved | 0 |
+| Escalated implementation gaps | 2 |
+
+The original five offline checks returned one pass and four failures. The pinned v0.2.0 base classes were not imported, its positional rollout call was rejected, the workflow called a nonexistent repository script, and the hard reward copied historical feedback. A hand-edited candidate proved the Convex write-back/eval seam in July, not the Python optimizer. This audit preserves the July report as historical evidence while superseding its full-loop conclusion.
+
+## Implementation Recheck 2026-09-29
+
+The adapter, config, split loader and local registration shim now pass **7/7 offline tests against the installed `skillopt==0.2.0` wheel**. The synthetic smoke verifies actual package import, flat config, adapter registration, nonempty train/val and empty test; missing validation data fails. Candidate-observed structural scoring changes on a mocked good/poor plan, and the historical feedback comment is no longer replayed as a user turn. An independent CI workflow runs the same tests without credentials. The main workflow has a separate default-off qualification latch in addition to the app kill switch.
+
+This is **not** a live trainer, semantic improvement, privacy, or end-to-end proof. The structural reward can be gamed and cannot establish that an edit addresses the user's complaint. `optimizerConfig.enabled` and `SKILLOPT_RUNTIME_QUALIFIED` must remain false/unset. IMPR-02 and Nyquist compliance stay partial until a trustworthy feedback-sensitive quality measure, privacy review, bounded synthetic run, live controlled run, eval-gate evidence and owner-reviewed activation/rollback are proved.

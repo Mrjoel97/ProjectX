@@ -103,6 +103,11 @@ describe("six dormant native vertical candidates", () => {
         primary: [textStep],
       });
     expect(await run()).toMatchObject({ ok: false, reason: "missing-source" });
+    expect(
+      (await t.run((ctx) => ctx.db.query("audit").collect())).filter(
+        (row) => row.eventType === "vertical_pack.outcome",
+      ),
+    ).toEqual([]);
     const imageBytes = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
       "base64",
@@ -135,6 +140,161 @@ describe("six dormant native vertical candidates", () => {
         },
       },
     });
+    const foreignSourceId = await t.run((ctx) =>
+      ctx.db.insert("vaultDocuments", {
+        tenantId: "foreign",
+        title: "Foreign image",
+        kind: "upload",
+        category: "my-uploads",
+        source: "upload",
+        mimeType: "image/png",
+        size: 1,
+        contentHash: "foreign",
+        status: "ready",
+        createdAt: 1,
+      }),
+    );
+    expect(
+      await t.action(internal.verticalPackBinding.__runWithScript, {
+        ...args,
+        verticalId: "design",
+        sourceDocId: foreignSourceId,
+        primary: [textStep],
+      }),
+    ).toMatchObject({ ok: false, reason: "missing-source" });
+    const candidate = await t.query(internal.verticalPacks.prepare, {
+      tenantId,
+      verticalId: "design",
+      previewVersion: 1,
+    });
+    if (!candidate.ok) throw new Error("expected prepared design candidate");
+    const blocked = (await t.run((ctx) => ctx.db.query("audit").collect())).filter(
+      (row) => row.eventType === "vertical_pack.outcome" && row.payload?.event === "blocked",
+    );
+    expect(blocked).toHaveLength(1);
+    expect(blocked[0]).toMatchObject({
+      tenantId,
+      payload: {
+        event: "blocked",
+        verticalId: "design",
+        candidateId: candidate.skillId,
+        preview: true,
+        reason: "missing_source",
+      },
+    });
+    expect(JSON.stringify(blocked)).not.toContain("Foreign image");
+  });
+
+  test("Data read refusal records one exact blocked event and no provider spend", async () => {
+    const { t, args, tenantId } = await setup();
+    await t.run(async (ctx) => {
+      const profile = await ctx.db
+        .query("tenantProfiles")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+        .unique();
+      if (!profile) throw new Error("MISSING_TEST_PROFILE");
+      await ctx.db.patch(profile._id, {
+        verticalPreferences: { needs: ["data"], reviewReady: ["data"] },
+      });
+      const storageId = await ctx.storage.store(
+        new Blob(["name,value\nA,1"], { type: "text/csv" }),
+      );
+      await ctx.db.insert("vaultDocuments", {
+        tenantId,
+        title: "Owned CSV",
+        kind: "upload",
+        category: "my-uploads",
+        source: "upload",
+        mimeType: "text/csv",
+        storageId,
+        size: 14,
+        contentHash: "owned",
+        status: "ready",
+        createdAt: 1,
+      });
+    });
+    const candidate = await t.query(internal.verticalPacks.prepare, {
+      tenantId,
+      verticalId: "data",
+      previewVersion: 1,
+    });
+    if (!candidate.ok) throw new Error("expected prepared data candidate");
+    const foreignSourceId = await t.run((ctx) =>
+      ctx.db.insert("vaultDocuments", {
+        tenantId: "foreign",
+        title: "Foreign CSV",
+        kind: "upload",
+        category: "my-uploads",
+        source: "upload",
+        mimeType: "text/csv",
+        size: 1,
+        contentHash: "foreign",
+        status: "ready",
+        createdAt: 1,
+      }),
+    );
+    expect(
+      await t.action(internal.verticalPackBinding.__runWithScript, {
+        ...args,
+        verticalId: "data",
+        sourceDocId: foreignSourceId,
+        primary: [textStep],
+      }),
+    ).toMatchObject({ ok: false, reason: "missing-source" });
+    const blocked = (await t.run((ctx) => ctx.db.query("audit").collect())).filter(
+      (row) => row.eventType === "vertical_pack.outcome" && row.payload?.event === "blocked",
+    );
+    expect(blocked).toHaveLength(1);
+    expect(blocked[0]).toMatchObject({
+      tenantId,
+      payload: {
+        event: "blocked",
+        verticalId: "data",
+        candidateId: candidate.skillId,
+        preview: true,
+        reason: "missing_source",
+      },
+    });
+    expect(await t.run((ctx) => ctx.db.query("spendEvents").collect())).toEqual([]);
+  });
+
+  test("post-prepare budget refusal records one exact blocked event before provider use", async () => {
+    const { t, args, tenantId } = await setup();
+    const candidate = await t.query(internal.verticalPacks.prepare, {
+      tenantId,
+      verticalId: "product",
+      previewVersion: 1,
+    });
+    if (!candidate.ok) throw new Error("expected prepared product candidate");
+    await t.run((ctx) =>
+      ctx.db.insert("guardrailConfig", {
+        killSwitch: true,
+        budgetUsdPerRequest: 0.05,
+        updatedAt: Date.now(),
+      }),
+    );
+    expect(
+      await t.action(internal.verticalPackBinding.__runWithScript, {
+        ...args,
+        primary: [textStep],
+      }),
+    ).toMatchObject({ ok: false, reason: "budget-paused" });
+    const blocked = (await t.run((ctx) => ctx.db.query("audit").collect())).filter(
+      (row) => row.eventType === "vertical_pack.outcome" && row.payload?.event === "blocked",
+    );
+    expect(blocked).toHaveLength(1);
+    expect(blocked[0]).toMatchObject({
+      tenantId,
+      payload: {
+        event: "blocked",
+        verticalId: "product",
+        candidateId: candidate.skillId,
+        preview: true,
+        reason: "budget_paused",
+      },
+    });
+    expect(await t.run((ctx) => ctx.db.query("spendEvents").collect())).toEqual([]);
+    expect(await t.run((ctx) => ctx.db.query("agentSteps").collect())).toEqual([]);
   });
 
   test("fixed-source evaluation traverses real owned files, reserved calls and an actual artifact without recording a release pass", async () => {
@@ -548,5 +708,10 @@ describe("six dormant native vertical candidates", () => {
       }),
     ).toMatchObject({ ok: false, reason: "missing-source" });
     expect(await t.run((ctx) => ctx.db.query("spendEvents").collect())).toEqual([]);
+    expect(
+      (await t.run((ctx) => ctx.db.query("audit").collect())).filter(
+        (row) => row.eventType === "vertical_pack.outcome",
+      ),
+    ).toEqual([]);
   });
 });

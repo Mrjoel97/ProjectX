@@ -5,6 +5,20 @@ import { useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { DisconnectGoogle } from "../_components/DisconnectGoogle";
 
+const GMAIL_CALLBACK_MESSAGES: Readonly<Record<string, string>> = {
+  cancelled: "Google connection was cancelled. No access was granted.",
+  missing_callback: "Google returned an incomplete connection response. Please try again.",
+  invalid_state: "The Google connection response could not be verified. Please try again.",
+  exchange_failed: "Google could not complete the connection. Please try again.",
+  missing_refresh:
+    "Google did not return lasting access. Remove Pikar at myaccount.google.com/permissions, then reconnect.",
+};
+
+export function gmailCallbackMessage(code: string | null): string | null {
+  if (code === null) return null;
+  return GMAIL_CALLBACK_MESSAGES[code] ?? "Google connection failed. Please try again.";
+}
+
 // DLVR-03 / Google consent (02-05, widened in 17-02). One explicit consent grants mail and
 // calendar access. The authorize URL is minted server-side with a tenant-bound signed `state`;
 // the browser only follows the link. Reconnect resets the 7-day Testing-mode refresh window,
@@ -18,7 +32,9 @@ export default function ConnectGmailPage() {
   // avoids the useSearchParams Suspense requirement for a value that only arrives via redirect).
   const [gmailError, setGmailError] = useState<string | null>(null);
   useEffect(() => {
-    setGmailError(new URLSearchParams(window.location.search).get("gmailError"));
+    setGmailError(
+      gmailCallbackMessage(new URLSearchParams(window.location.search).get("gmailError")),
+    );
   }, []);
 
   return (
@@ -30,6 +46,8 @@ export default function ConnectGmailPage() {
           reasoning. Minting a --danger token is scope this change did not ask for. */}
       {gmailError && (
         <div
+          data-testid="gmail-error"
+          role="alert"
           style={{
             border: "1px solid #fecaca",
             background: "#fef2f2",
@@ -43,9 +61,10 @@ export default function ConnectGmailPage() {
       )}
 
       {status === undefined ? (
-        <p>Loading…</p>
+        <p data-testid="gmail-status-loading">Loading…</p>
       ) : status.connected ? (
         <div
+          data-testid="gmail-connected"
           style={{
             border: "1px solid var(--released)",
             background: "var(--card)",
@@ -85,6 +104,7 @@ export default function ConnectGmailPage() {
 
       {connect?.url ? (
         <a
+          data-testid="gmail-connect-link"
           href={connect.url}
           style={{
             display: "inline-block",
@@ -101,6 +121,7 @@ export default function ConnectGmailPage() {
         </a>
       ) : connect?.configured === false ? (
         <div
+          data-testid="gmail-unconfigured"
           role="alert"
           style={{
             border: "1px solid #fecaca",
@@ -114,7 +135,12 @@ export default function ConnectGmailPage() {
           this deployment. Ask an administrator to configure it, then reload this page.
         </div>
       ) : (
-        <p style={{ color: "var(--ink-soft)", fontSize: "0.85rem" }}>Preparing consent link…</p>
+        <p
+          data-testid="gmail-link-loading"
+          style={{ color: "var(--ink-soft)", fontSize: "0.85rem" }}
+        >
+          Preparing consent link…
+        </p>
       )}
     </section>
   );

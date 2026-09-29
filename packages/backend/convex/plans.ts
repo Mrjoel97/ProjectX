@@ -972,6 +972,20 @@ export const recordDeliveryTerminal = internalMutation({
 
     // `blocked` is an EXISTING requests.status member — the suppressed terminal invents no state.
     await ctx.db.patch(requestId, { status: outcome === "suppressed" ? "blocked" : outcome });
+    await ctx.runMutation(internal.betaJourney.record, {
+      tenantId: plan.tenantId,
+      eventType:
+        outcome === "sent"
+          ? "delivery_sent"
+          : outcome === "failed"
+            ? "delivery_failed"
+            : "delivery_suppressed",
+      idempotencyKey: `delivery:${String(requestId)}`,
+      occurredAt: Date.now(),
+      planId,
+      requestId,
+      terminalOutcome: outcome,
+    });
     if (
       plan.counterComplete !== true ||
       plan.recipientTotal === undefined ||

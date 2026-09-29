@@ -1,0 +1,24 @@
+# Immutable bounded preflight record — 2026-09-20
+
+Authorization, verbatim: `authorize bounded preflight and run`
+
+Authorized scope: synchronize only evaluator commits `77f8df8` and `e04a656` (plus already-landed
+required evaluator work) to the existing non-production target
+`local:local-joel_feruzi-pikar_ai_50c69-1` at `http://127.0.0.1:3210`; run one free bounded
+preflight; run one unfiltered no-retry corpus only if that preflight returns PASS.
+
+The backend was started only from `packages/backend`. It did not produce the required exact-target
+functions-ready signal, so it was not treated as a synchronized candidate. The preflight still
+terminated through the bounded terminal wrapper in 27.6 seconds:
+
+```text
+[eval:golden] self-check PASSED (57 fixtures valid, 12 gated skills derived from GATED_SKILLS, vocabulary/cap/multi-pin/only-filter/dispatch/cost-merge logic proven offline; 21-03: tenant-pin parsing/scope-merge/candidate-eligibility/evidence-suppression/inspection/expectations/foreign-collision/deployment-fingerprint/unknown-arg proven offline)
+[eval:golden] provider preflight REFUSED (secret-safe; no budget opened)
+PREFLIGHT_EXIT=2
+```
+
+The raw captured diagnostic has SHA-256
+`9b5dea7511468a80a49b7df627aca1957635b00545a921e16caedd46ad34a87e` and zero credential-pattern
+matches. The backend process started for this check was stopped after refusal. Preflight was not
+PASS, therefore the conditional corpus command was not invoked: 0 corpus commands, 0 cases, no run
+or budget id, 0 retries, USD 0.00, no provider calls, no evidence writes, and no cleanup action.

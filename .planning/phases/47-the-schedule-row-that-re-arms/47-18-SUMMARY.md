@@ -1,0 +1,9 @@
+# Plan 47-18 summary — exact ADR-051 text accepted for a later bounded transition
+
+**Completed:** 2026-09-25. **Scope:** a proposed sweep-only D6 text, independent review and exact-text owner verdict. No accepted ADR has yet been materialized, and D6, ROUT-02, Phase 47 and Wave 6 remain open.
+
+The exact [proposed ADR-051](47-18-ADR-DRAFT.md) remains byte-for-byte at the owner-reviewed SHA-256 `fffda838ac5f4ec9364c6721f51e6e129d669e5ab515704366625da2868bbc03`. The [independent review](47-18-INDEPENDENT-REVIEW.md) refused two earlier versions before accepting that exact draft: it required transactionally fenced paid-step admission rather than an impossible physical-start promise, and then a single outstanding paid-step interlock with idempotent replay. The owner answered **“Accept exact draft (recommended)”** to the SHA-identified text. To preserve those exact accepted bytes, the verdict was recorded in the review rather than appended to the draft's pending-status line; this is the one location deviation from Task 3, not a substantive change to its outcome.
+
+The candidate's nine synthetic tests and typecheck passed; strict planning and diff checks passed. Historical matrix/eligibility/defer/stage exits remained **0/1/0/0**. No accepted ADR file, checker exception, stage/candidate/production source, evidence row, provider/paid call, deployment or send was changed. The shared dirty worktree prevented a clean atomic GSD task-commit sequence; no commit is claimed here. ROUT-02 is not marked complete.
+
+**Next:** a separate bounded plan must prove that accepted ADR-051 can be materialized with a hash-pinned governance-metadata exception without weakening ADR-050 or operational `defer`. A later technical implementation and live evidence remain separately required before D6 can pass.

@@ -11,6 +11,7 @@ import {
 import type { Scorecard } from "@pikar/core/growth/index";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { applyScorecardAnswer } from "./evaluations";
@@ -468,6 +469,12 @@ export const answerDecision = tenantMutation({
       origin: "stated",
       source: "approvals:answerDecision",
       at: Date.now(),
+    });
+    await ctx.runMutation(internal.betaJourney.record, {
+      tenantId: ctx.tenantId,
+      eventType: "approval_decided",
+      idempotencyKey: `decision:${String(row._id)}:${answer.field}`,
+      occurredAt: Date.now(),
     });
     return { recorded: true as const };
   },

@@ -103,6 +103,7 @@ const CONVEX_MODULES = [
   "auth.config.ts",
   "auth.ts",
   "authoringProbe.ts",
+  "betaJourney.ts",
   "billing.ts",
   "billingApi.ts",
   "billingLedger.ts",
@@ -141,6 +142,7 @@ const CONVEX_MODULES = [
   "gmail.ts",
   "gmailAuth.ts",
   "goals.ts",
+  "goldenEvalAttempts.ts",
   "graph.ts",
   "guardrails.ts",
   "home.ts",
@@ -219,8 +221,10 @@ const CONVEX_MODULES = [
   "stripeAuth.ts",
   "stripeConnector.ts",
   "telemetry.ts",
+  "tenantCatalogue.ts",
   "tenantDelete.ts",
   "tenantExport.ts",
+  "tenantOrders.ts",
   "tenantProfile.ts",
   "vault.ts",
   "vaultDigest.ts",
@@ -236,6 +240,7 @@ const CONVEX_MODULES = [
   "vaultSources.ts",
   "vaultSweep.ts",
   "vaultTranscribe.ts",
+  "verticalArtifactEdit.ts", // tenant-triggered artifact edit; no recurrence or scheduler grant
   "verticalData.ts",
   "verticalEvalEvidence.ts",
   "verticalEvalSources.ts",
@@ -246,6 +251,11 @@ const CONVEX_MODULES = [
   "voice.ts",
   "voiceDoc.ts",
   "voiceToken.ts",
+  "webForms.ts",
+  "webProjects.ts",
+  "webRecipeEvals.ts",
+  "webRecipes.ts",
+  "webRuntime.ts",
   "workflowPackBinding.ts",
   "workflowPackDiscovery.ts",
   "workflowPackEventLog.ts",
@@ -262,8 +272,8 @@ const CONVEX_MODULES = [
 // loop MUST reach for `ctx.scheduler`. Every construction that defeated round 3 did.
 //
 // These lists are the answer to "who may schedule work at all". Each file below schedules a
-// FOLLOW-UP STEP of a run the user started: a poll for a media job, a watchdog timeout, the next
-// page of a folder walk. None re-arms itself on a cadence.
+// bounded FOLLOW-UP STEP of a run or system cleanup: a media poll, watchdog, next folder page,
+// or another expired-form deletion page. None re-arms itself on a routine cadence.
 const SCHEDULER_CALL_SITES = [
   "billingRollup.ts",
   "cockpit.ts",
@@ -285,10 +295,19 @@ const SCHEDULER_CALL_SITES = [
   "researchControl.ts",
   "review.ts",
   "smoke.ts",
+  // Phase 50 catalogue: one absolute expiry callback per authenticated standalone stock hold.
+  // Its internal landing never schedules again; order-linked holds use tenantOrders instead.
+  "tenantCatalogue.ts",
+  // Phase 50 local checkout: one expiry callback per newly placed order. `expireDue` only
+  // closes that order's held stock and never schedules another callback or cadence.
+  "tenantOrders.ts",
   "vault.ts",
   "vaultDrive.ts",
   "vaultFolders.ts",
   "voice.ts",
+  // Phase 48 form retention: one more 100-row page only when the global expiry index proves
+  // backlog remains. The hourly system cron starts/restarts cleanup; no tenant routine is armed.
+  "webForms.ts",
 ];
 const CRON_REGISTRARS = ["crons.ts"];
 
@@ -378,6 +397,8 @@ describe("the scheduling primitives have a CLOSED, PINNED call-site set", () => 
       "vault-pending-extraction-sweep",
       "reliability-sweep",
       "billing-invoice-rollup",
+      // Phase 48's fixed global retention sweep, not a tenant-created cadence.
+      "web-form-retention",
     ]);
   });
 });

@@ -121,6 +121,11 @@ jobs:
           node-version: "24"
           cache: pnpm
 
+      # A successful CI workflow_run can finish after a newer push to main.
+      # Do not let an older opt-in release promote its otherwise valid SHA.
+      - name: Check main head before release work
+        run: node scripts/check-production-head.mjs
+
       - name: Install workspace
         run: pnpm install --frozen-lockfile
 
@@ -129,6 +134,9 @@ jobs:
 
       - name: Pull Vercel production settings
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Verify production Vercel project identity
+        run: node scripts/check-production-vercel-project.mjs
 
       - name: Validate Vercel client/deploy environment
         shell: bash
@@ -198,6 +206,9 @@ jobs:
       - name: Require committed Convex generated types
         run: git diff --exit-code -- packages/backend/convex/_generated
 
+      - name: Recheck main head before production mutations
+        run: node scripts/check-production-head.mjs
+
       # Convex Auth expands OAuth `redirectTo` paths against SITE_URL. Keep that value tied to the
       # durable custom domain, never a generated Vercel deployment URL, or host-only auth cookies
       # will be minted on one origin while middleware checks another (the "second login works"
@@ -238,6 +249,11 @@ jobs:
 
       - name: Probe staged Vercel deployment
         run: vercel curl / --deployment="${{ steps.stage.outputs.url }}"
+
+      # A later push during Convex deployment cannot be made atomic with this workflow.
+      # Refuse the web promotion and surface the partial-release recovery explicitly.
+      - name: Recheck main head before web promotion
+        run: node scripts/check-production-head.mjs
 
       - name: Promote staged Vercel deployment
         run: vercel promote "${{ steps.stage.outputs.url }}" --yes --timeout=5m --scope="$VERCEL_ORG_ID" --token="$VERCEL_TOKEN"

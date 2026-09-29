@@ -13,6 +13,7 @@ import type { AuditPayload } from "@pikar/contracts/audit";
 import { classifyPayload } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import { auditCounts } from "./aggregates";
 import { migrations } from "./migrations";
@@ -31,6 +32,9 @@ export async function appendAudit(
     eventType: string;
     actor: string;
     payload: AuditPayload;
+    verticalEvent?: string;
+    verticalPreview?: boolean;
+    verticalArtifactId?: Id<"vaultDocuments">;
   },
 ) {
   const id = await ctx.db.insert("audit", { ...args, ts: Date.now(), exportVersion: 2 });
@@ -54,6 +58,8 @@ export const log = internalMutation({
     if (
       args.tenantId === VERTICAL_EVAL_AUDIT_NAMESPACE ||
       args.eventType.startsWith(VERTICAL_EVAL_EVENT_PREFIX) ||
+      // Vertical outcome rows need typed index keys and must use their closed writer.
+      args.eventType === "vertical_pack.outcome" ||
       args.tenantId === AUTHORING_PROBE_AUDIT_NAMESPACE ||
       args.eventType.startsWith("authoring_probe.") ||
       args.correlationId.startsWith("authoring-probe:")

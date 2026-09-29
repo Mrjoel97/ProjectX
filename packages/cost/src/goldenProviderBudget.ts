@@ -79,19 +79,25 @@ export function goldenProviderCeilingCents(call: GoldenProviderCall): number {
   }
 }
 
-/** Replace routing options; never merge caller-controlled options after these constraints. */
+/** Replace routing options; never merge caller-controlled options after these constraints.
+ * Values are NUMBERS in dollars per million tokens (the documented max_price format).
+ * `require_parameters` is deliberately ABSENT: it excludes any endpoint that does not
+ * advertise every supplied parameter, and with `plugins: []` (or any meta-parameter the
+ * /endpoints advertised set does not list) it filtered out the ONE pinned OpenAI endpoint
+ * and OpenRouter answered HTTP 400 "no allowed providers". `only` + `order` +
+ * `allow_fallbacks: false` already pin the exact endpoint; tools/tool_choice/max_tokens
+ * are core parameters the pinned endpoint advertises.
+ */
 function openRouterProvider(prompt: number, completion: number) {
   return {
     only: ["openai"],
     order: ["openai"],
     allow_fallbacks: false,
-    require_parameters: true,
     max_price: {
-      prompt: String(prompt),
-      completion: String(completion),
-      request: "0",
-      image: "0",
-      audio: "0",
+      prompt,
+      completion,
+      request: 0,
+      image: 0,
     },
   };
 }
@@ -99,11 +105,15 @@ function openRouterProvider(prompt: number, completion: number) {
 export function goldenChatWireOptions(call: Extract<GoldenProviderCall, { kind: "chat" }>) {
   goldenProviderCeilingCents(call);
   const bound = chatBound(call.model);
+  // Only keys OpenRouter's documented chat-completions body accepts. The @openrouter
+  // provider SPREADS providerOptions.openrouter into the top-level request body, so a
+  // foreign key here becomes a foreign wire field. `n: 1` and `transforms: []` (the
+  // first EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_400 incident) and `plugins: []`
+  // under `require_parameters` (the second) are therefore absent on purpose: n:1 is the
+  // API default, transforms is no longer a documented body parameter, and an empty
+  // plugins array is indistinguishable from omitting the field.
   return {
     max_tokens: call.maxOutputTokens,
-    n: 1,
-    plugins: [],
-    transforms: [],
     provider: openRouterProvider(bound.promptPerMillion, bound.completionPerMillion),
   };
 }

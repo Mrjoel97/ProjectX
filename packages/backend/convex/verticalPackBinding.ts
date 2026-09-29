@@ -146,7 +146,14 @@ async function runVertical(
     const sourceDocId = evalProof
       ? evalProof.source?.docId
       : (args.sourceDocId ?? ready.visualSourceId);
-    if (!sourceDocId) return { ok: false, reason: "missing-source" };
+    if (!sourceDocId) {
+      await ctx.runMutation(internal.verticalPackTelemetry.record, {
+        ...eventBase,
+        event: "blocked",
+        reason: "missing_source",
+      });
+      return { ok: false, reason: "missing-source" };
+    }
     try {
       const source = await ctx.runAction(internal.verticalVisual.readOwnedScreenshot, {
         tenantId: args.tenantId,
@@ -157,6 +164,11 @@ async function runVertical(
       visualSource = { docId: source.sourceDocId, sha256: source.sha256 };
     } catch {
       if (evalProof) throw new Error("VERTICAL_EVAL_SOURCE_UNAVAILABLE");
+      await ctx.runMutation(internal.verticalPackTelemetry.record, {
+        ...eventBase,
+        event: "blocked",
+        reason: "missing_source",
+      });
       return { ok: false, reason: "missing-source" };
     }
   }
@@ -164,7 +176,14 @@ async function runVertical(
     const sourceDocId = evalProof
       ? evalProof.source?.docId
       : (args.sourceDocId ?? ready.dataSourceId);
-    if (!sourceDocId) return { ok: false, reason: "missing-source" };
+    if (!sourceDocId) {
+      await ctx.runMutation(internal.verticalPackTelemetry.record, {
+        ...eventBase,
+        event: "blocked",
+        reason: "missing_source",
+      });
+      return { ok: false, reason: "missing-source" };
+    }
     try {
       profile = await ctx.runAction(internal.verticalData.profileOwnedDataset, {
         tenantId: args.tenantId,
@@ -183,7 +202,14 @@ async function runVertical(
     }
   }
   const budget = await ctx.runMutation(internal.guardrails.preCall, { tenantId: args.tenantId });
-  if (!budget.ok) return { ok: false, reason: "budget-paused" };
+  if (!budget.ok) {
+    await ctx.runMutation(internal.verticalPackTelemetry.record, {
+      ...eventBase,
+      event: "blocked",
+      reason: "budget_paused",
+    });
+    return { ok: false, reason: "budget-paused" };
+  }
   const startedAt = Date.now();
   const allowedTools = toolsForVerticalWorkflow(VERTICAL_PACKS[args.verticalId].workflowId);
   try {

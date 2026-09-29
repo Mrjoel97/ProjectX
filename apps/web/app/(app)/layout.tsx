@@ -63,6 +63,7 @@ const NAV: Array<{ label: string; icon: ReactNode; href: string; ownerOnly?: boo
   // 31-07: activated after the explicit Marketing navigation approval, 2026-09-12.
   // Remove this entry and its compact href to hide discovery without altering links or contacts.
   { label: "Marketing", href: "/dashboard/marketing", icon: <GlobeIcon /> },
+  { label: "Sites", href: "/dashboard/sites", icon: <GlobeIcon /> },
   // Compliance is a TAB on the approvals page now, not its own route. `/ops` still resolves
   // (ops/page.tsx keeps a default export) so old bookmarks survive, but the rail sends people
   // to the consolidated surface. The owner gate travels with `ComplianceView` itself, so this
@@ -94,6 +95,7 @@ const TABBAR_HREFS = [
   "/dashboard/workspace",
   "/dashboard/vault",
   "/dashboard/marketing",
+  "/dashboard/sites",
 ];
 
 // OPSG-07: a failure nobody sees is a failure nobody fixes. This is an unread-mail

@@ -2,6 +2,14 @@ import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
+import {
+  inviteCode,
+  jsonValue,
+  noOutputReason,
+  onboardedTenant,
+  ownerGrant,
+  provisioningOwnerLookup,
+} from "./provision-owner.diagnostics";
 
 // 27-11: PROVISION THE OWNER THE BROWSER EVIDENCE PLANE NEEDS. Local dev only, and it is a SETUP
 // project rather than a spec — it creates state, it asserts nothing about the product.
@@ -30,12 +38,29 @@ function convexRun(fn: string, args: Record<string, unknown>): string {
   const r = spawnSync(process.execPath, [convexBin, "run", fn, JSON.stringify(args)], {
     cwd: backendDir,
     encoding: "utf8",
+    timeout: 60_000,
   });
+  const stdout = (r.stdout ?? "").trim();
+  // On Windows, the local CLI can report a non-zero exit during Node teardown after printing a
+  // successful result, so stdout remains authoritative. When it prints nothing, expose only a
+  // closed transport reason: raw stderr could carry the invite payload or deployment detail.
+  if (!stdout) {
+    throw new Error(`${fn} returned no output (${noOutputReason(r)})`);
+  }
   const stderr = r.stderr ?? "";
   if (/Failed to run function|isn't running|not listening/.test(stderr)) {
-    throw new Error(`${fn} failed:\n${stderr.trim()}`);
+    throw new Error(`${fn} failed (local CLI transport)`);
   }
-  return (r.stdout ?? "").trim();
+  try {
+    JSON.parse(stdout);
+  } catch {
+    throw new Error(`${fn} returned invalid JSON`);
+  }
+  return stdout;
+}
+
+function convexJson(fn: string, args: Record<string, unknown>): unknown {
+  return jsonValue(fn, convexRun(fn, args));
 }
 
 // Three CLI round trips and a real signup — comfortably past Playwright's 30s default, and the
@@ -59,15 +84,19 @@ test("provision an owner account for the candidate preview", async ({ page }) =>
   //    failure is confusing: the invite is REDEEMED by the first successful signup, so the second
   //    run's preflight rejects the code and leaves Create Account disabled forever. Measured — this
   //    step exists because the second run failed exactly that way.
-  const existing = convexRun("owner:findUserIdByEmail", { email });
-  const already = /"userId": "([a-z0-9]+)"/.exec(existing)?.[1];
+  const existing = provisioningOwnerLookup(
+    convexJson("owner:findUserIdByEmailForProvisioning", { email }),
+  );
+  if (!existing) throw new Error("owner lookup returned an invalid provisioning envelope");
 
-  if (already === undefined) {
+  if (existing.kind === "absent") {
     // 2. The invite, then sign up through the REAL form, so the account is created by the
     //    product's own auth transaction rather than by a fixture that could diverge from it.
-    const seeded = convexRun("invites:__seedInvite", { email });
-    const code = /"code": "([A-Z0-9-]+)"/.exec(seeded)?.[1];
-    expect(code, `no invite code came back:\n${seeded}`).toBeTruthy();
+    const seeded = convexJson("invites:__seedInvite", { email });
+    const code = inviteCode(seeded);
+    if (!code) {
+      throw new Error("invites:__seedInvite returned an invalid invite-code shape");
+    }
 
     await page.goto(`${appOrigin}/signup?invite=${code}`);
     const emailField = page.getByPlaceholder("name@company.com");
@@ -88,16 +117,24 @@ test("provision an owner account for the candidate preview", async ({ page }) =>
 
   // 3. The owner grant, by id, from the CLI. `bootstrapOwner` is `internalMutation`; nothing the
   //    browser can reach grants authority.
-  const found = convexRun("owner:findUserIdByEmail", { email });
-  const userId = /"userId": "([a-z0-9]+)"/.exec(found)?.[1];
-  expect(userId, `no user row for ${email} after signup:\n${found}`).toBeTruthy();
-  convexRun("owner:bootstrapOwner", { userId });
+  const found = provisioningOwnerLookup(
+    convexJson("owner:findUserIdByEmailForProvisioning", { email }),
+  );
+  if (found?.kind !== "found") {
+    throw new Error("owner lookup did not return a durable user-id envelope after signup");
+  }
+  const userId = found.userId;
+  if (!ownerGrant(convexJson("owner:bootstrapOwner", { userId }), userId)) {
+    throw new Error("owner:bootstrapOwner returned an invalid grant result");
+  }
 
   // 4. Past the ONBOARDING GATE. The `(app)` layout force-redirects a tenant with no committed
   //    business profile to /dashboard/onboarding and lets it reach NO other route, so without this
   //    the workspace — and therefore every candidate card — is unreachable for a fresh account.
   //    `__seedOnboardedTenant` is the sanctioned way past it (e2e/README.md): idempotent, offline,
   //    no credits. The tenant id IS the user id (`requireTenant` returns the subject before '|').
-  convexRun("onboarding:__seedOnboardedTenant", { tenantId: userId });
-  console.log(`provisioned owner ${email} (${userId}) and seeded onboarding`);
+  if (!onboardedTenant(convexJson("onboarding:__seedOnboardedTenant", { tenantId: userId }))) {
+    throw new Error("onboarding:__seedOnboardedTenant returned an invalid seed result");
+  }
+  console.log("provisioned disposable owner and seeded onboarding");
 });

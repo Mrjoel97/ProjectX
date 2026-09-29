@@ -9,7 +9,11 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AGENT_AUTHORABLE_SKILLS, CONTENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
+import {
+  AGENT_AUTHORABLE_SKILLS,
+  CONTENT_DRAFTER_SKILL,
+  DOCUMENT_DRAFTER_SKILL,
+} from "@pikar/contracts/skill";
 import {
   ACTION_TYPES,
   type ActionType,
@@ -673,6 +677,33 @@ test("buildCockpitTools registers tenant-derived Drive reads without a tenantId 
     };
     expect(schema.jsonSchema.properties).not.toHaveProperty("tenantId");
   }
+});
+
+test("Drive read refusals distinguish connection, refresh, bad id, and provider failures", async () => {
+  const runAction = vi.fn();
+  const tools = buildCockpitTools({
+    ctx: { runAction } as unknown as ToolContext["ctx"],
+    tenantId: "t1",
+    planId: "plan-stub" as Id<"plans">,
+  }) as unknown as Record<string, { execute: (input: unknown, opts: unknown) => Promise<string> }>;
+  const cases = [
+    ["listDriveFolders", { parentId: "folder-1" }, "not_connected", /not connected/i],
+    ["listDriveFolders", { parentId: "folder-1" }, "reauth", /without Drive access/i],
+    ["listDriveFolders", { parentId: "folder-1" }, "bad_folder_id", /invalid/i],
+    ["listDriveFolders", { parentId: "folder-1" }, "refresh_failed", /refreshed/i],
+    ["listDriveFolders", { parentId: "folder-1" }, "drive_error", /could not be read/i],
+    ["findInDrive", { query: "plan" }, "not_connected", /not connected/i],
+    ["findInDrive", { query: "plan" }, "reauth", /without Drive access/i],
+    ["findInDrive", { query: "plan" }, "refresh_failed", /refreshed/i],
+    ["findInDrive", { query: "plan" }, "drive_error", /search failed/i],
+  ] as const;
+  for (const [name, input, reason, expected] of cases) {
+    runAction.mockResolvedValueOnce({ ok: false, reason });
+    const reply = await tools[name]!.execute(input, extractOpts);
+    expect(reply, `${name}: ${reason}`).toMatch(expected);
+    expect(runAction.mock.lastCall?.[1]).toEqual(input);
+  }
+  expect(runAction).toHaveBeenCalledTimes(cases.length);
 });
 
 // ── 22.1b: every tool the research grant NAMES is actually BUILT ──────────────────────────────
@@ -2041,6 +2072,7 @@ const SMOKE_TITLE = "Smoke Document"; // draftDocument's deterministic offline t
 const vaultDocs = (t: T) => t.run((ctx) => ctx.db.query("vaultDocuments").collect());
 const cardRows = (t: T) => t.run((ctx) => ctx.db.query("vaultSources").collect());
 const auditRows = (t: T) => t.run((ctx) => ctx.db.query("audit").collect());
+const storageObjects = (t: T) => t.run((ctx) => ctx.db.system.query("_storage").collect());
 const createdAudit = async (t: T) =>
   (await auditRows(t)).filter((r) => r.eventType === "document.created");
 
@@ -2443,6 +2475,13 @@ test("createDocument(replace: <bad index>) returns a sentence and changes NOTHIN
   const { t, planId } = await setup();
   await call(t, planId, "createDocument", { topic: CREATE_TOPIC, form: "long" });
   const before = (await vaultDocs(t))[0]!;
+  const storedBefore = await storageObjects(t);
+  expect(storedBefore).toHaveLength(1); // the accepted document's derived PDF
+  // Make drafting a deterministic tripwire. If replacement validation slips back below the
+  // drafter, the call returns the draft-failure sentence instead of the indexed refusal.
+  expect(await t.mutation(internal.skills.archiveSkill, { name: DOCUMENT_DRAFTER_SKILL })).toEqual({
+    archived: true,
+  });
 
   const reply = await call(t, planId, "createDocument", {
     topic: `${SMOKE} rewrite the fifth one`,
@@ -2452,12 +2491,71 @@ test("createDocument(replace: <bad index>) returns a sentence and changes NOTHIN
 
   // A refusal is a returned sentence, never a throw — and nothing is half-written.
   expect(reply).toMatch(/no document #5|nothing was changed/i);
+  expect(reply).not.toMatch(/drafting|rendering/i);
   const after = await vaultDocs(t);
   expect(after).toHaveLength(1);
   expect(after[0]!.contentHash).toBe(before.contentHash);
   expect(after[0]!.storageId).toBe(before.storageId);
   expect((await cardRows(t)).filter((r) => r.role === "created")).toHaveLength(1); // no new card
   expect(await createdAudit(t)).toHaveLength(1); // no audit for work not done
+  expect((await storageObjects(t)).map((o) => o._id)).toEqual(storedBefore.map((o) => o._id));
+});
+
+test("createDocument preflights a foreign replacement before drafting or changing storage", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "createDocument", { topic: CREATE_TOPIC, form: "long" });
+  const before = (await vaultDocs(t))[0]!;
+  await t.run((ctx) => ctx.db.patch(before._id, { tenantId: "t2" }));
+  const storedBefore = await storageObjects(t);
+  expect(await t.mutation(internal.skills.archiveSkill, { name: DOCUMENT_DRAFTER_SKILL })).toEqual({
+    archived: true,
+  });
+
+  const reply = await call(t, planId, "createDocument", {
+    topic: `${SMOKE} rewrite the foreign one`,
+    form: "long",
+    replace: 1,
+  });
+
+  expect(reply).toMatch(/no document #1|nothing was changed/i);
+  expect(reply).not.toMatch(/drafting|rendering/i); // archived skill was never reached
+  const after = (await vaultDocs(t))[0]!;
+  expect(after.contentHash).toBe(before.contentHash);
+  expect(after.storageId).toBe(before.storageId);
+  expect((await cardRows(t)).filter((r) => r.role === "created")).toHaveLength(1);
+  expect(await createdAudit(t)).toHaveLength(1);
+  expect((await storageObjects(t)).map((o) => o._id)).toEqual(storedBefore.map((o) => o._id));
+});
+
+test("createDocument preflights a user upload replacement before drafting or changing storage", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "createDocument", { topic: CREATE_TOPIC, form: "long" });
+  const before = (await vaultDocs(t))[0]!;
+  // ABSENT origin is the schema's authoritative user-supplied discriminator. Keep the same card
+  // and bytes so this test isolates replacement eligibility rather than index resolution.
+  await t.run((ctx) =>
+    ctx.db.patch(before._id, { origin: undefined, kind: "upload", source: "upload" }),
+  );
+  const storedBefore = await storageObjects(t);
+  expect(await t.mutation(internal.skills.archiveSkill, { name: DOCUMENT_DRAFTER_SKILL })).toEqual({
+    archived: true,
+  });
+
+  const reply = await call(t, planId, "createDocument", {
+    topic: `${SMOKE} rewrite the upload`,
+    form: "long",
+    replace: 1,
+  });
+
+  expect(reply).toMatch(/no document #1|nothing was changed/i);
+  expect(reply).not.toMatch(/drafting|rendering/i); // archived skill was never reached
+  const after = (await vaultDocs(t))[0]!;
+  expect(after.contentHash).toBe(before.contentHash);
+  expect(after.storageId).toBe(before.storageId);
+  expect(after.origin).toBeUndefined();
+  expect((await cardRows(t)).filter((r) => r.role === "created")).toHaveLength(1);
+  expect(await createdAudit(t)).toHaveLength(1);
+  expect((await storageObjects(t)).map((o) => o._id)).toEqual(storedBefore.map((o) => o._id));
 });
 
 // ── SC2 + the renderer-bypass guard (static) ──────────────────────────────────
@@ -3373,6 +3471,92 @@ test("replyToMessage with NO sender and NO subject answers the MODEL, and stages
   const plan = await readPlan(t, planId);
   expect(plan?.recipients ?? []).toEqual([]);
   expect(plan?.subject).toBeUndefined();
+});
+
+test("replyToMessage schema structurally requires one non-empty selector", () => {
+  const tools = buildCockpitTools({
+    ctx: {} as ToolContext["ctx"],
+    tenantId: "t1",
+    planId: "plan-stub" as Id<"plans">,
+  });
+  const schema = (
+    tools.replyToMessage.inputSchema as unknown as {
+      jsonSchema: {
+        properties: Record<string, { minLength?: number }>;
+        required: string[];
+        anyOf: Array<{ required: string[] }>;
+        additionalProperties: boolean;
+      };
+    }
+  ).jsonSchema;
+
+  expect(Object.keys(schema.properties).sort()).toEqual(["intent", "range", "sender", "subject"]);
+  expect(schema.required).toEqual(["intent"]);
+  expect(schema.anyOf).toEqual([{ required: ["sender"] }, { required: ["subject"] }]);
+  expect(schema.properties.sender?.minLength).toBe(1);
+  expect(schema.properties.subject?.minLength).toBe(1);
+  expect(schema.additionalProperties).toBe(false);
+});
+
+test("replyToMessage recovers one full subject from the raw user turn, never from attacker body", async () => {
+  const { t, planId } = await setupMailbox();
+  const reply = await t.action(internal.llm.__invokeCockpitTool, {
+    tenantId: "t1",
+    planId,
+    toolName: "replyToMessage",
+    input: { intent: `${SMOKE} say I reviewed it` },
+    currentUserTurn: "Reply to that 'Account activity' notification and say I reviewed it.",
+  });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.replyToMessageId).toBe("fix-injection");
+  expect(plan?.recipients).toEqual(["no-reply@example.net"]);
+  expect(plan?.subject).toBe("Re: Account activity");
+  expect(plan?.body).toBeTruthy();
+  expect(JSON.stringify(plan)).not.toContain(NEEDLE);
+  expect(reply).not.toContain(NEEDLE);
+  // Reply setup stages the ordinary email draft only. The injected body cannot pick another
+  // action or bypass Approve into a request/provider write.
+  expect(plan?.kind).toBeUndefined();
+  expect(await t.run((ctx) => ctx.db.query("requests").collect())).toHaveLength(0);
+});
+
+test("replyToMessage raw-turn recovery refuses ambiguous and body-only matches without writes", async () => {
+  for (const currentUserTurn of [
+    "Reply about Account activity and Re: Q3 numbers.",
+    `Reply to ${NEEDLE}.`,
+  ]) {
+    const { t, planId } = await setupMailbox();
+    const reply = await t.action(internal.llm.__invokeCockpitTool, {
+      tenantId: "t1",
+      planId,
+      toolName: "replyToMessage",
+      input: { intent: `${SMOKE} say I reviewed it` },
+      currentUserTurn,
+    });
+    expect(reply).toMatch(/without naming a message/i);
+    const plan = await readPlan(t, planId);
+    expect(plan?.recipients ?? []).toEqual([]);
+    expect(plan?.subject).toBeUndefined();
+    expect(plan?.replyToMessageId).toBeUndefined();
+    expect(await t.run((ctx) => ctx.db.query("requests").collect())).toHaveLength(0);
+  }
+});
+
+test("replyToMessage keeps an explicit selector authoritative over the raw-turn fallback", async () => {
+  const { t, planId } = await setupMailbox();
+  await t.action(internal.llm.__invokeCockpitTool, {
+    tenantId: "t1",
+    planId,
+    toolName: "replyToMessage",
+    input: { intent: `${SMOKE} sounds good`, subject: "Q3" },
+    currentUserTurn: "Reply to the Account activity message.",
+  });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.replyToMessageId).toBe("fix-reply");
+  expect(plan?.recipients).toEqual(["sarah.chen@example.com"]);
+  expect(plan?.subject).toBe("Re: Q3 numbers");
 });
 
 test("replyToMessage RESOLVES and stages the original sender BEFORE it drafts a body", async () => {

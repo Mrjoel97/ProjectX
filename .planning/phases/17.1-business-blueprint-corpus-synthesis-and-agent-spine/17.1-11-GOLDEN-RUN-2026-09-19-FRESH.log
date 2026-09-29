@@ -1,0 +1,14 @@
+
+> @pikar/backend@0.0.0 eval:golden C:\Users\expert\Desktop\Pikar-Ai\packages\backend
+> node ./scripts/run-eval-golden.mjs "--skill" "cockpit-agent@26" "--skill" "inbox-digest@2" "--no-retry"
+
+[eval:golden] self-check PASSED (57 fixtures valid, 12 gated skills derived from GATED_SKILLS, vocabulary/cap/multi-pin/only-filter/dispatch/cost-merge logic proven offline; 21-03: tenant-pin parsing/scope-merge/candidate-eligibility/evidence-suppression/inspection/expectations/foreign-collision/deployment-fingerprint/unknown-arg proven offline)
+✖ Failed to run function "guardrails:openEvalBudget":
+Error: [Request ID: 1d89f5c6463ee49c] Server Error
+Uncaught Error: GOLDEN_PROVIDER_BILLING_UNVERIFIED
+[eval:golden] ✖ Failed to run function "guardrails:openEvalBudget":
+Error: [Request ID: 1d89f5c6463ee49c] Server Error
+Uncaught Error: GOLDEN_PROVIDER_BILLING_UNVERIFIED
+C:\Users\expert\Desktop\Pikar-Ai\packages\backend:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @pikar/backend@0.0.0 eval:golden: `node ./scripts/run-eval-golden.mjs "--skill" "cockpit-agent@26" "--skill" "inbox-digest@2" "--no-retry"`
+Exit status 1

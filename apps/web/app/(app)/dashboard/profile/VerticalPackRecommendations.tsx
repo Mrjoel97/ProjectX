@@ -3,7 +3,7 @@
 import { api } from "@pikar/backend/api";
 import type { VerticalId, VerticalReason, VerticalRecommendation } from "@pikar/core/verticalPacks";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { card, primaryButton } from "./styles";
 import { VerticalWorkloadConfirmation } from "./VerticalWorkloadConfirmation";
 
@@ -135,8 +135,24 @@ export function VerticalPackRecommendations() {
   const result = useQuery(api.verticalPacks.discover, {});
   const start = useAction(api.cockpit.startVerticalPack);
   const setDisabled = useMutation(api.verticalPacks.setDisabled);
+  const recordShown = useMutation(api.verticalPacks.recordShown);
+  const recordAccepted = useMutation(api.verticalPacks.recordAccepted);
+  const lastShown = useRef("");
+  const shownTask = useRef<Promise<unknown> | null>(null);
   const [starting, setStarting] = useState<VerticalId | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    const ids = result?.recommendations.map((item) => item.id) ?? [];
+    const signature = ids
+      .map(
+        (id) =>
+          `${id}:${result?.controls.find((control) => control.id === id)?.activeVersion ?? "none"}`,
+      )
+      .join("|");
+    if (signature === lastShown.current) return;
+    lastShown.current = signature;
+    shownTask.current = ids.length > 0 ? recordShown({ verticalIds: ids }).catch(() => {}) : null;
+  }, [result?.recommendations, result?.controls, recordShown]);
   const onStart = async (verticalId: VerticalId) => {
     if (
       starting !== null ||
@@ -146,6 +162,9 @@ export function VerticalPackRecommendations() {
     setStarting(verticalId);
     setNotice(null);
     try {
+      // Observational telemetry must never block a real user start.
+      await shownTask.current;
+      await recordAccepted({ verticalId }).catch(() => {});
       const reply = await start({ verticalId, text: OPENERS[verticalId] });
       if (!reply.ok || typeof reply.threadId !== "string") {
         setNotice(

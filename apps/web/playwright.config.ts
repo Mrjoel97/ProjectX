@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const phase23Identities = process.env.PIKAR_PHASE23_TWO_IDENTITIES === "1";
+const phase49Qualification = process.env.PIKAR_PHASE49_QUALIFICATION === "1";
 if (
   phase23Identities &&
   (process.env.PIKAR_E2E_PROVISION === "1" || process.env.PIKAR_E2E_STORAGE_STATE)
@@ -22,8 +23,11 @@ if (
  */
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: !phase23Identities,
-  ...(phase23Identities ? { workers: 1, retries: 0 } : {}),
+  // Auth storage/profile files are runtime artifacts, never test modules. Without this exclusion a
+  // malformed invocation can recursively import Chrome extension JavaScript from `.auth`.
+  testIgnore: ["**/.auth/**"],
+  fullyParallel: !phase23Identities && !phase49Qualification,
+  ...(phase23Identities || phase49Qualification ? { workers: 1, retries: 0 } : {}),
   forbidOnly: !!process.env.CI,
   reporter: "list",
   use: {
@@ -33,7 +37,7 @@ export default defineConfig({
     // Local stays the default: an unflagged run can never point at production by accident.
     baseURL: process.env.PIKAR_E2E_BASE_URL ?? "http://127.0.0.1:3111",
     // A Phase 23 adaptation is private; traces include input text and auth-bearing network data.
-    trace: phase23Identities ? "off" : "on-first-retry",
+    trace: phase23Identities || phase49Qualification ? "off" : "on-first-retry",
   },
   projects: [
     // 27-11: creates the OWNER account the pack candidate preview needs, on a machine that has
@@ -51,12 +55,14 @@ export default defineConfig({
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],
-        storageState: process.env.PIKAR_E2E_STORAGE_STATE ?? "e2e/.auth/user.json",
+        storageState: phase49Qualification
+          ? undefined
+          : (process.env.PIKAR_E2E_STORAGE_STATE ?? "e2e/.auth/user.json"),
       },
       // `setup` signs in through the local password form, which cannot work against a deployment
       // whose only human account is a Google identity. Supplying a storageState captured elsewhere
       // (see e2e/capture-prod-session.mjs) is therefore also the signal to SKIP that sign-in.
-      dependencies: process.env.PIKAR_E2E_STORAGE_STATE ? [] : ["setup"],
+      dependencies: phase49Qualification || process.env.PIKAR_E2E_STORAGE_STATE ? [] : ["setup"],
     },
   ],
 });

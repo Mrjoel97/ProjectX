@@ -87,6 +87,17 @@ jobs:
             echo "proceed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Separate qualification latch: flipping the app's kill switch alone must not run an
+      # optimizer whose semantic reward and privacy posture remain under review. This repository
+      # variable defaults to absent/false. It is not a substitute for recorded qualification.
+      - name: Qualification gate (independent of app kill switch)
+        if: steps.killswitch.outputs.proceed == 'true'
+        run: |
+          if [ "${{ vars.SKILLOPT_RUNTIME_QUALIFIED }}" != "true" ]; then
+            echo "::error::SkillOpt runtime has not been qualified; refusing training and provider calls"
+            exit 1
+          fi
+
       # ── GATE 2: ELIGIBILITY (cron = breach-only; workflow_dispatch bypasses) ───────────────────
       - name: Eligibility gate (optimizerEligibility breach; dispatch bypasses)
         id: eligibility
@@ -165,8 +176,30 @@ jobs:
         if: steps.eligibility.outputs.proceed == 'true'
         env:
           SKILLOPT_EXPORT: ${{ github.workspace }}/export.json
+          # Never mint per-edit candidates or synthetic plans in the source deployment.
+          CONVEX_DEPLOY_KEY: ${{ secrets.SKILLOPT_EVAL_CONVEX_DEPLOY_KEY }}
+          SKILLOPT_HTTP_URL: ${{ secrets.SKILLOPT_EVAL_HTTP_URL }}
+          SKILLOPT_TOKEN: ${{ secrets.SKILLOPT_EVAL_TOKEN }}
+          SKILLOPT_PROD_HTTP_URL: ${{ secrets.SKILLOPT_HTTP_URL }}
+          SKILLOPT_PROD_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          SKILLOPT_EVAL_ISOLATED: "true"
         run: |
-          python scripts/train.py \
+          if [ -z "$CONVEX_DEPLOY_KEY" ] || [ -z "$SKILLOPT_HTTP_URL" ] || [ -z "$SKILLOPT_TOKEN" ]; then
+            echo "::error::isolated SkillOpt evaluation deployment credentials are required"
+            exit 1
+          fi
+          if [ "$SKILLOPT_HTTP_URL" = "$SKILLOPT_PROD_HTTP_URL" ]; then
+            echo "::error::SkillOpt evaluation URL equals the source deployment URL"
+            exit 1
+          fi
+          if [ "$CONVEX_DEPLOY_KEY" = "$SKILLOPT_PROD_DEPLOY_KEY" ]; then
+            echo "::error::SkillOpt evaluation deploy key equals the source deploy key"
+            exit 1
+          fi
+          # The installed skillopt-train entrypoint has only built-in environments.
+          # This local shim registers pikar_cockpit, then calls the same pinned main().
+          mkdir -p outputs/skillopt_split/train outputs/skillopt_split/val outputs/skillopt_split/test
+          python skillopt/train_pikar.py \
             --config skillopt/envs/pikar_cockpit/configs/pikar_cockpit/default.yaml \
             --out_root outputs/run
           test -f outputs/run/best_skill.md

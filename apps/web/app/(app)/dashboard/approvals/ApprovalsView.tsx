@@ -23,6 +23,7 @@ type InFlightItem = InFlightPage["items"][number];
 type ClearedItem = FunctionReturnType<typeof api.approvals.listCleared>["items"][number];
 type DecisionPage = FunctionReturnType<typeof api.approvals.listDecisions>;
 type DecisionItem = DecisionPage["items"][number];
+type JourneyHistory = FunctionReturnType<typeof api.betaJourney.history>;
 // ADR-037 Decision 7. Every row on this page carries its own `planId` (`approvals.ts:74`), and each
 // card now READS the row it MUTATES. It was safe to display by `threadId` while mutating by
 // `planId` only because `plans.byThread` was `.unique()` and threw on a second row; the moment a
@@ -126,6 +127,10 @@ export function parseScheduleInput(
 export function refusalMessage(reason: string): string {
   const messages: Record<string, string> = {
     gmail_not_connected: "Gmail is not connected. Nothing was sent and nothing was spent.",
+    microsoft_not_connected:
+      "Microsoft mail is not connected. Nothing was sent and nothing was spent.",
+    mail_scope_missing:
+      "Your mailbox needs sending permission before this plan can run. Nothing was sent.",
     send_time_too_far: "That time is outside the safe scheduling window. Nothing was sent.",
     review_escalated: "This plan cannot be approved until its review issue is resolved.",
     // ADR-039 D3: the channel this plan is bound to has no scheduler arm, so a time on it would be
@@ -1453,6 +1458,41 @@ function ClearedSection() {
   );
 }
 
+/** BETA-03’s bounded, redacted result projection — this intentionally does not read plan content. */
+function ResultHistorySection() {
+  const history = useQuery(api.betaJourney.history, { limit: 25 });
+  return (
+    <Section label="Journey result history" count={history?.length}>
+      {history === undefined ? (
+        <ApprovalsStateNotice state="loading" />
+      ) : history.length === 0 ? (
+        <ApprovalsStateNotice state="empty">No governed result history yet.</ApprovalsStateNotice>
+      ) : (
+        history.map((item: JourneyHistory[number]) => (
+          // `betaJourney.history` is a redacted projection with no `_id`, so identity is composed
+          // from the row's own governed references. Two rows that tie on every field are a data
+          // problem worth surfacing as a duplicate-key warning, not one to hide behind position:
+          // an index key would silently reuse the wrong DOM whenever the bounded list shifts.
+          <article
+            key={`${item.eventType}:${item.occurredAt}:${item.auditId ?? item.approvalId ?? item.planId ?? item.requestId ?? "unreferenced"}`}
+            style={{ ...card, ...stack }}
+          >
+            <div style={row}>
+              <strong>{item.eventType.replaceAll("_", " ")}</strong>
+              <span style={caps}>{item.terminalOutcome ?? "recorded"}</span>
+            </div>
+            <p style={muted}>{formatAbsoluteInstant(item.occurredAt, browserTimeZone())}</p>
+            <p style={muted} data-testid="journey-history-refs">
+              Approval {item.approvalId ?? "—"} · Plan {item.planId ?? "—"} · Request{" "}
+              {item.requestId ?? "—"} · Audit {item.auditId ?? "—"}
+            </p>
+          </article>
+        ))
+      )}
+    </Section>
+  );
+}
+
 class ApprovalsErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
   static getDerivedStateFromError(error: Error) {
@@ -1558,6 +1598,7 @@ function ConnectedApprovals({ headingLevel = "h1" }: { headingLevel?: "h1" | "h2
       )}
       <ScheduledSection />
       <InFlightSection />
+      <ResultHistorySection />
       <DecisionsAndBlocked />
       <ClearedSection />
     </div>

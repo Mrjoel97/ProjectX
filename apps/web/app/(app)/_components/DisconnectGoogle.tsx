@@ -4,6 +4,12 @@ import { api } from "@pikar/backend/api";
 import { useAction, useQuery } from "convex/react";
 import { useState } from "react";
 
+export function googleDisconnectMessage(result: "partial" | "failed"): string {
+  return result === "partial"
+    ? "Pikar's copy of your token is deleted, but Google did not confirm the revocation. Remove Pikar at myaccount.google.com/permissions to be certain."
+    : "Disconnect failed — your connection is unchanged. Check your network and try again.";
+}
+
 // ONE writer for the disconnect confirm copy and for how a partial revoke is reported. This was
 // inline in `connect-gmail/page.tsx` until the Connections tab needed the same control; two copies
 // of a user-facing warning drift the moment the Google scope changes.
@@ -43,16 +49,11 @@ export function DisconnectGoogle() {
       // our copy is deleted but Google may still hold the grant. Reporting a flat "Disconnected"
       // here would be a second false promise of exactly the kind this control exists to retire.
       if (!revoked) {
-        setNote(
-          "Pikar's copy of your token is deleted, but Google did not confirm the revocation. " +
-            "Remove Pikar at myaccount.google.com/permissions to be certain.",
-        );
+        setNote(googleDisconnectMessage("partial"));
       }
     } catch {
       // A thrown fetch aborts the action BEFORE deleteTokens, so the connection really is intact.
-      setNote(
-        "Disconnect failed — your connection is unchanged. Check your network and try again.",
-      );
+      setNote(googleDisconnectMessage("failed"));
     } finally {
       setBusy(false);
     }
@@ -68,6 +69,7 @@ export function DisconnectGoogle() {
     <div style={{ display: "grid", gap: "0.4rem", justifyItems: "start" }}>
       {showButton && (
         <button
+          data-testid="gmail-disconnect"
           type="button"
           onClick={() => void onDisconnect()}
           disabled={busy}
@@ -87,6 +89,7 @@ export function DisconnectGoogle() {
       )}
       {note && (
         <p
+          data-testid="gmail-disconnect-result"
           role="status"
           style={{ margin: 0, fontSize: "0.85rem", color: "var(--ink-soft)", maxWidth: "34rem" }}
         >

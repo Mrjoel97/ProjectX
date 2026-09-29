@@ -1,5 +1,12 @@
 # `SMOKE::` seam debt — offline fixtures are selected by in-band sentinels in content
 
+> **2026-09-28 update to the separate model-route debt below:** a registered AST gate now refuses
+> direct provider-SDK imports, re-exports and computed dynamic imports outside `lib/models.ts` and
+> `llm.ts`, with controls for the prior import escapes. The historical statement that there was no
+> guard was accurate when written. A module can still route models with raw HTTP or other
+> non-SDK indirection, so this is a scoped import-boundary improvement, not a complete proof that
+> no private route table can ever exist.
+
 > Written 2026-08-28 by the Phase-29 wave-2 final pass. **This is a record for a future plan, not a
 > fix.** One instance (`vaultDigest.ts`) was closed in the same pass because it was cheap and
 > isolated; the rest are coupled to each other and to a landed E2E, so they cannot be closed one at

@@ -1,5 +1,223 @@
 # Optional vertical packs
 
+Last verified: 2026-09-29 — the offline vertical collector now records closed
+expected/observed state and source/tool checks alongside each exact-candidate
+mechanical observation. A blocked result stays blocked even when its fixture
+expects an artifact; ungranted tool attempts and missing required source reads
+fail mechanical criteria. These booleans never count as semantic approval or
+release evidence. The full paid six-candidate run and authenticated owner
+review remain open; no model call or activation was made for this change.
+
+Last verified: 2026-09-29 — the native release gate may accept authenticated
+browser evidence without a run ID. Discovery now projects its SHA-256 evidence
+reference in that case, with a run ID only when valid and present; it never
+exposes the browser payload. The focused native-issuance and discovery suites
+pass 31/31. This repairs a CI regression without changing the release gate or
+claiming actual UAT.
+
+Last verified: 2026-09-28 — post-prepare Design/Data source failures and a
+budget pre-call refusal each emit one exact-candidate, refs-only `blocked`
+outcome with a closed reason; pre-prepare refusals cannot safely attribute a
+candidate and emit none. The current discovery/review/telemetry/binding/registry
+selection passes 47/47. This closes Plan 30-02's repository controls, not
+actual candidate evaluation, tenant UAT, owner acceptance or activation.
+
+Last verified: 2026-09-28 — tenant discovery projects only source commit/body
+hash, native issuance/run id and authenticated browser evidence hash (plus an
+optional run id) from the exact
+active global vertical after its native exposure gate passes. A tenant overlay
+suppresses those global refs; stale or missing evidence exposes none. An
+isolated synthetic issuance test covers two tenants and does not establish
+real qualification. The closed outcome writer requires a `blocked` event to
+carry one of its enumerated reasons and refuses a reason on any other event.
+Its new `budget_paused` reason stays a closed enum, with no free-text budget
+payload. Red-before-green controls cover the refs and writer gaps. This is
+repository integrity, not live use, semantic quality, UAT or activation.
+
+Last verified: 2026-09-28 — the Data operator preview's final Vault insert now
+rechecks the exact prepared source in the same mutation as artifact creation.
+A red-before-green control changed the source between preparation and insert;
+ready-state, folder-seal, storage-pointer, MIME and missing-blob refusals leave
+no preview artifact. The existing deterministic profile action still returns
+the same profile shape, and unrelated created-document callers remain valid.
+This is local source integrity, not a candidate model eval, UAT or activation.
+
+Last verified: 2026-09-28 — new `vertical_pack.outcome` rows now carry
+tenant-first, ref-only audit index keys for the exact candidate, artifact,
+event and preview posture. The generic audit RPC refuses this event type;
+the closed writer appends through the same insert-only audit primitive and
+checks indexed keys against payload refs on read. A red-before-green control
+buried a creation event under 201 newer same-candidate rows; exact review,
+second-artifact repeat use and replay now pass. Another red-before-green
+control buried the authenticated review target under 201 newer tenant rows;
+the user approval and later idempotent readback now pass. Eight focused
+vertical/audit/schema/isolation suites pass 148/148, and backend TypeScript
+passes. Historical immutable rows have no new keys: a bounded 200-event
+fallback preserves recent origins but refuses an aged-out origin. The public
+summary is still a 200-event sample, not an all-time count. This is repository
+integrity, not live usage, semantic review or activation.
+The unchanged six-lane/40-case native corpus was regenerated only to renew its
+source-derived evaluator revision to `702affb25661fbd4b1f2640b1342b6e7a93dbc6e4522cd4c9db03b6f4e876633`;
+`--check` passes. This is not a semantic pass.
+
+Last verified: 2026-09-28 — the internal outcome writer now refuses
+`review_approved` and `review_rejected` without the closed `actor: user` value,
+as it already did for `review_edited`. An owned artifact and exact-candidate
+origin remain required. The two prior system-actor writes failed red-before-green;
+focused vertical tests pass 35/35 and backend TypeScript passes. This establishes
+event-shape integrity, not human presence or semantic approval. The exact-candidate
+200-row history ceiling, native evaluation, tenant UAT and activation remain open.
+
+Last verified: 2026-09-28 — review-origin and derived repeat-use checks now
+read at most 200 audit rows correlated to the exact native candidate, then
+require the same tenant and vertical event type. A red-before-green control
+inserted 201 newer events for another candidate: the old tenant-wide sample
+lost a valid artifact origin, while the candidate-indexed lookup preserves
+both its user review and second-artifact repeat signal. The public summary
+remains a separate bounded tenant-wide sample. More than 200 events for the
+same candidate can still cause conservative undercount/refusal; no durable
+all-time uniqueness or live usage claim follows. Four focused suites pass
+35/35 and backend TypeScript and source formatting pass.
+
+Last verified: 2026-09-28 — `repeat_use` is now derived by the refs-only
+telemetry writer when a second distinct ordinary-run artifact is recorded for
+the same tenant and exact native candidate. Previews, another candidate
+version, replay of the same artifact, foreign artifacts and direct attempts to
+write a repeat event do not count. The focused telemetry/binding suites pass
+18/18 and backend TypeScript passes. The lookup is bounded to the latest 200
+candidate-correlated audit rows, so it can conservatively undercount older
+repeat demand; this
+is not live tenant usage, semantic acceptance, model-eval or pack activation.
+
+Last verified: 2026-09-28 — the shared Convex smoke/evaluation runner now
+classifies an empty final CLI result as a safe transport failure after any
+opt-in idempotent-read retry. This changes no vertical candidate, browser review,
+native evaluator corpus or activation policy. The watched source change retires
+the prior Phase 49 local aggregate digest until its exact-source rerun passes.
+
+Last verified: 2026-09-28 — the Output card now has a genuine authenticated edit path.
+It seeds an editor from the owned artifact text; a changed draft is rendered to replacement
+PDF/workbook bytes where applicable and committed with an exact original-content CAS.
+Only after the content and bytes persist does one user-actor, refs-only `review_edited`
+event record revision 1. No-op, foreign, stale, preview, duplicate and table-free edits
+refuse; a later model rewrite invalidates the edit outcome's current-artifact attribution.
+Superseded PDF/workbook deletion now shares the content/outcome transaction; an
+injected post-patch audit failure rolls back the row and retains the old bytes,
+while the action deletes its newly staged blob. The old-blob cleanup is not silently
+swallowed after a successful save.
+If the save response is lost, the UI does not infer rollback; it asks the reviewer to
+reopen the artifact and confirm its persisted state. A DOM regression pins this ambiguity.
+Authenticated disposable Chromium runs on 2026-09-28 exercised ordinary product
+artifact edits in long, short and spreadsheet forms through the Output card. The
+PDF/status and edited spreadsheet/status persisted across reload. Server readback
+matched edited text hashes and one `review_edited` outcome per saved artifact; a
+table-free sheet edit refused without an outcome. A third fresh browser run
+clicked the full-document **Download original** control; its downloaded XLSX
+parsed to the edited header and row. A separate authenticated backend test reads
+the replacement workbook from Convex storage and parses the edited cells, then
+confirms deletion of the prior blob. The browser fixture's initial stored bytes
+were only a synthetic placeholder. These are local proofs, not hosted tenant UAT,
+full cross-format refusal coverage, exact-version semantic evaluation, candidate
+approval, activation or delivery.
+
+Last verified: 2026-09-28 — ordinary artifact review now refuses an agent document
+rewritten in place after its original `artifact_created` event. `vaultDocuments.contentRevision`
+starts at zero for new agent content and advances on the created-document replacement seam;
+legacy absence means zero. The public Vault late-text seam is also restricted to pending
+non-agent uploads, so it cannot bypass this review provenance check. Local red-then-green
+Vault and vertical tests pass. The source change retires the old native evaluator revision;
+its generated six-lane/40-case corpus now pins
+`1accbd5f9d1a91901f49bae828f106a0700f3690fbcac3b930703f7fa6c36168` with
+unchanged corpus hash. AI rewrites still do not count as human edits.
+
+Last verified: 2026-09-28 — an authenticated Output-card action can now record one
+accept-or-needs-changes decision for an owned ordinary-run vertical artifact. The server
+derives its exact candidate from bounded creation history; missing, foreign, preview,
+ambiguous, stale and contradictory-review cases refuse. Review counts include only
+`actor: "user"` events, not synthetic system observations, and the audit carries only
+candidate/artifact refs and closed enums. The action does not edit the artifact, approve
+a native candidate, publish, activate or send. The edited-outcome path, semantic review
+and authenticated browser UAT remain open.
+
+Last verified: 2026-09-28 — review outcome telemetry now requires its owned artifact's
+bounded `artifact_created` event to match the review's preview-versus-ordinary-run status
+as well as tenant, vertical and candidate. A preview artifact previously grounded a
+non-preview approval; the new negative control failed before the guard and passes now,
+alongside the reverse mismatch and two matching positive controls. Focused vertical tests
+pass 24/24 and backend TypeScript passes. This is event-provenance integrity only, not
+proof of a human review, a review UI, native evaluation or pack activation.
+
+Last verified: 2026-09-28 — the generated native vertical evaluator revision is
+`1accbd5f9d1a91901f49bae828f106a0700f3690fbcac3b930703f7fa6c36168` after
+the lockfile dependency change; the six-lane, 40-case corpus hash remains
+`dc21fea0660d041e0c3ee5ed9b2ea0448f53c4834f9566b6c0180a11578bcc69`.
+The generator's `--check` passes. This retires older source-derived evidence; no
+native candidate is qualified or activated by regenerating the pin.
+
+Last verified: 2026-09-27 — the internal vertical telemetry writer now refuses
+`review_approved`, `review_edited` and `review_rejected` without an owned artifact and a
+bounded prior `artifact_created` observation for the same exact tenant, vertical and candidate.
+If the origin has aged out of the 200-event window, the review metric refuses rather than
+guessing. Synthetic positive and foreign/missing/wrong-candidate negatives pass locally.
+This only hardens event provenance; it does not establish that a human actually reviewed or
+edited a document, add a review UI, or close native evaluation and UAT.
+
+Last verified: 2026-09-27 — discovery now refuses to recommend a globally active native
+candidate when this tenant has an active overlay for the same vertical, because the ordinary
+start path does not treat that overlay as released. The profile card records bounded,
+server-recomputed `recommendation_shown` observations and, only after a recent matching
+impression for the exact active candidate, `recommendation_accepted` when Start is selected.
+The client attempts both without blocking the start if telemetry fails; duplicate impressions
+for the same candidate are suppressed for 30 minutes over the bounded 200-event read.
+Local focused backend and UI regressions cover stale/disabled/no-evidence paths and a
+synthetic fully qualified candidate. This is not evidence of actual native qualification,
+authenticated browser UAT, tenant activation, or useful outcome. Review-decision telemetry
+remains open.
+
+Last verified: 2026-09-27 — Data/Design source readiness now requires the selected owned,
+ready, unsealed Vault row's storage object to exist, not merely a stored `storageId`. A
+confirmed CSV preview incorrectly remained `ok:true` after its blob was deleted before this
+repair; it now refuses with `validator-unavailable`, while the live-blob positive still passes.
+The lookup is bounded by the same confirmed-plus-five-row discovery set and does not read bytes
+or invoke a model. This is repository-local readiness honesty, not file-content validation or
+pack-release evidence.
+
+Last verified: 2026-09-27 — vertical discovery now reads the exact tenant-confirmed artifact
+IDs first (bounded to two per six packs), then its existing five-row fallback sample. A
+data-pack preview with two confirmed ready CSV files beyond that sample failed before the
+repair and passes afterward; deleting those files restores `validator-unavailable`. Read-time
+tenant ownership, ready status and sealed-folder checks still apply. The focused controls,
+binding and telemetry suites passed 22/22 and backend TypeScript passed. This is local source
+selection integrity, not a paid native evaluation, owner review or pack activation.
+
+Last verified: 2026-09-27 — the tenant `verticalPacks.configure` mutation now preserves an
+already selected legal-playbook document when a workload-choice update omits the optional
+`legalPlaybookDocId`. A new test reproduced the loss before the repair and passed afterward;
+the focused vertical controls/telemetry suite passed 8/8, the workload form suite passed 7/7,
+and backend TypeScript passed. Explicit replacement still validates tenant ownership and ready
+status. This is repository-only preference integrity, not a Phase 30 candidate-eval, semantic
+review, pack exposure, provider, or Wave 4 acceptance result.
+
+Last verified: 2026-09-27 (watch-gate acknowledgment only - **a `Last verified` bump plus a forward
+record, NOT a verification of the sections below.** No vertical case, lane or pack content changed.
+The offline generator reconciled the generated native evaluator field to the current source-derived
+revision `0c440be9611fef8d504338297b0e379727ee89258b10a450eadd40b1b3725ddc`, moved from
+`6387a7959eb146d1ecad7e79dab1f93b27e0a40e5ee8691fbcb137186320d997`. Both `llm.ts` and
+`lib/evalBudgetModel.ts` are in the generator's `EVALUATOR_FILES` inventory, so the authoring
+probe's failure-policy change moved the evaluator's source identity; the refresh happened only
+after source freeze, per the convention recorded in `skill-registry.md`. The corpus hash
+`dc21fea0660d041e0c3ee5ed9b2ea0448f53c4834f9566b6c0180a11578bcc69` and all six lanes and forty
+cases are UNCHANGED, as is every `caseHash` and `requestHash`; `--check` and the focused pin tests
+pass. This issues no native semantic observations, authenticated review, activation, or production
+acceptance, and retires evidence keyed to the prior evaluator revision.)
+
+Last verified: 2026-09-23 - the offline generator reconciled the six-lane/forty-case native
+corpus's stale generated evaluator field to the current source-derived revision
+`721b8f452746ee434cd012925fde549c1cd573fc8cceab28495d2dff3b85a54e`.
+The corpus hash and cases did not change; `--check` and all four focused pin tests pass.
+This does not issue native semantic observations, authenticated review, activation, or production
+acceptance.
+
 Last verified: 2026-09-14 — `/admin` now contains a closed owner review console for an exact native
 evaluation run UUID. It displays sealed output bytes and hash, exact source links, stable criterion
 IDs and mechanically resolved runtime facts; every other criterion requires an explicit decision
@@ -138,8 +356,10 @@ owner/test plane. The native binding and ordinary-start path now both rerun elig
 candidate/artifact refs, closed event/outcome/reason/cost/latency buckets and bounded counts. It has
 no prompt, filename, person, clause, URL or dataset-value field. Aggregate reads use the exact
 tenant/event index, count at most 200 events, and mark truncation. Artifact and run-completion/failure
-events accompany actual runtime writes. User acceptance/review event coverage still requires the
-later workflow acceptance work. No live gate ran.
+events accompany actual runtime writes. Profile recommendation impressions and Start selections
+now emit bounded shown/accepted observations against the server's current exact candidate;
+review-decision and useful-outcome coverage still require later workflow acceptance work. No
+live gate ran.
 
 Check backend verticalPacks, verticalPackTelemetry, isolation, routines and skills tests, plus
 backend/core typecheck. The local generated API declaration received exact typed module entries;

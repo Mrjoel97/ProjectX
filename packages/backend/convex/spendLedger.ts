@@ -91,6 +91,9 @@ const movementArgs = {
   evalActualUsd: v.optional(v.number()),
   evalTavilyCredits: v.optional(v.number()),
   evalBreach: v.optional(v.boolean()),
+  evalSettlementBasis: v.optional(
+    v.union(v.literal("observed"), v.literal("conservative_ceiling")),
+  ),
 };
 
 export type SpendMovementArgs = ObjectType<typeof movementArgs>;

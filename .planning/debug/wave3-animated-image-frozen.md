@@ -1,0 +1,68 @@
+---
+status: awaiting_human_verify
+trigger: "Phase 20.2 animated_image scene has decoded motion below MEDIA-01: MOTION_FRAMES=48 MOTION_UNIQUE=1 in smoke_assemble.sh with SMOKE_SKIP_RED=1."
+created: 2026-09-25T04:04:43Z
+updated: 2026-09-25T04:12:43Z
+---
+
+## Current Focus
+
+hypothesis: Confirmed historical zoom-state reset caused an effectively frozen scene, and the current pzoom fix already resolves it.
+test: Completed isolated FFmpeg differential, focused mirror tests, and complete unsuppressed synthetic smoke.
+expecting: A human review of the exact proof and playbook entry can close the historical escalation.
+next_action: Root agent reviews the evidence and reconciles Phase 20.2 validation status; no renderer source change is indicated.
+
+## Symptoms
+
+expected: Synthetic 30-second reel animated_image scene has at least 36 unique hashes among 48 decoded sampled frames.
+actual: Phase 20.2 validation found MOTION_FRAMES=48 MOTION_UNIQUE=1.
+errors: No command error reported; output was a valid 30.016-second reel with scene sequence video,image,card,video.
+reproduction: Run packages/backend/convex/render/smoke_assemble.sh with SMOKE_SKIP_RED=1 against current assemble_final.sh.
+started: Observed 2026-08-16; no production fix from the auditor.
+
+## Eliminated
+
+- hypothesis: Current pzoom image branch produces only one decoded image across two seconds.
+  evidence: Exact branch filter on the smoke's synthetic still at 360x640/24 fps produced 48 unique hashes in 48 decoded frames.
+  timestamp: 2026-09-25T04:06:00Z
+- hypothesis: Full-reel concat, final encode, or the smoke hash sampler freezes otherwise moving image frames.
+  evidence: Unmodified full synthetic smoke produced a 30.016-second reel and measured 48/48 unique decoded frames in the final output image window.
+  timestamp: 2026-09-25T04:08:00Z
+
+## Evidence
+
+- timestamp: 2026-09-25T04:04:43Z
+  checked: Baseline of owned renderer files.
+  found: assemble_final.sh=7e77919a2bbcfbf4cd86618e0b430fb131ef07cc; assembleScript.ts=65023ebb6a840312ef49e7b4186cf4a84422c292; smoke_assemble.sh=71c0431a4d3bc9caab20507c5b520fba4b5672d0; no scoped worktree edits.
+  implication: Subsequent diff can be attributed to this investigation.
+- timestamp: 2026-09-25T04:05:00Z
+  checked: Renderer image branch, smoke motion assertion, and dated media playbook entries.
+  found: Image branch loops a still at FPS, upscales 4x, runs zoompan with z=min(pzoom+0.0012,1.20) and d=1, then normalizes FPS. Smoke samples 48 decoded frames at 8.5-10.5s. The 2026-08-16 playbook says pzoom was mirrored but motion was not re-observed.
+  implication: Prior pzoom edit is a hypothesis, not verification; measure its actual output and distinguish branch from downstream processing.
+- timestamp: 2026-09-25T04:06:00Z
+  checked: Local isolated FFmpeg run of the current image branch, using testsrc2 still and the exact 4x scale, zoompan, fps, format, and H.264 filters.
+  found: 48 decoded frames yielded 48 unique hashes.
+  implication: The current branch itself is animated in this environment; the historical MOTION_UNIQUE=1 may describe pre-fix bytes.
+- timestamp: 2026-09-25T04:08:00Z
+  checked: Unmodified SMOKE_SKIP_RED=1 full synthetic 8/6/4/12-second reel using current assemble_final.sh.
+  found: Exit 0; 30.016 seconds; video,image,card,video sidecar; image window 48/48 distinct decoded frame hashes.
+  implication: MEDIA-01 currently passes end to end locally, and no current production code change is indicated by this evidence.
+- timestamp: 2026-09-25T04:09:00Z
+  checked: Differential FFmpeg reproduction with the same synthetic still, dimensions, FPS, codec, and filters, changing only pzoom to the historical zoom expression.
+  found: Old expression yielded 48 frames but only 4 unique hashes (44 frames identical); current pzoom yielded 48/48 unique. Focused assembleScript.test.ts passed 23/23, including shell/TS byte identity.
+  implication: The original expression is causally linked to the freeze, and the executable mirror already contains the corrected one. Historical 1/48 versus local 4/48 differs in edge-frame encoding but both fail the 36/48 motion gate.
+- timestamp: 2026-09-25T04:11:00Z
+  checked: Complete unsuppressed `bash /c/Users/expert/Desktop/Pikar-Ai/packages/backend/convex/render/smoke_assemble.sh /c/Users/expert/Desktop/Pikar-Ai/packages/backend/convex/render/assemble_final.sh /c/Users/expert/Desktop/Pikar-Ai/.planning/debug/animated-image-smoke-full /c/Windows/Fonts/arial.ttf` under Git Bash.
+  found: Exit 0; 30.016s; final image scene 48/48 distinct decoded hashes; sidecar and card checks passed; deliberately muted narration render exited 1 with the intended gate error; overall `SMOKE OK`.
+  implication: The historical defect is resolved in current source and full local render behavior, including adjacent narration safety.
+- timestamp: 2026-09-25T04:12:43Z
+  checked: Scoped worktree after recording evidence and removing synthetic media generated by this investigation.
+  found: Only docs/playbooks/media.md and this debug file changed; renderer shell, TS mirror, smoke script, and focused tests retain baseline hashes and no worktree edits.
+  implication: The review is a documentation closure of a previously applied source fix, with no production code mutation.
+
+## Resolution
+
+root_cause: Historical zoompan used zoom, which reinitializes per looped input frame when d=1, producing an effectively static crop. The previously mirrored pzoom expression carries prior input zoom and is already present in the current shell and TS artifact.
+fix: No new renderer code change was warranted; current shell and TS mirror already embody the correction. Recorded observed closure in media playbook.
+verification: Isolated current branch 48/48 unique versus historical zoom expression 4/48; full unsuppressed smoke exit 0, 48/48 unique and 30.016s, with sabotaged narration gate observed red; focused assembleScript.test.ts 23/23 passed, including shell/TS byte identity.
+files_changed: [docs/playbooks/media.md, .planning/debug/wave3-animated-image-frozen.md]

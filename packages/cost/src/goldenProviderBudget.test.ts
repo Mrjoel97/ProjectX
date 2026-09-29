@@ -69,19 +69,71 @@ describe("golden provider reservation policy (offline, no ledger or transport)",
       model: "or/openai/gpt-4o-mini",
       maxOutputTokens: 8192,
     });
-    expect(wire).toMatchObject({
+    expect(wire).toEqual({
       max_tokens: 8192,
-      n: 1,
-      plugins: [],
-      transforms: [],
       provider: {
         only: ["openai"],
         order: ["openai"],
         allow_fallbacks: false,
-        require_parameters: true,
-        max_price: { prompt: "0.15", completion: "0.6", request: "0", image: "0", audio: "0" },
+        max_price: { prompt: 0.15, completion: 0.6, request: 0, image: 0 },
       },
     });
+    // The @openrouter ai-sdk provider SPREADS providerOptions.openrouter into the
+    // top-level request body, so every key here must be in OpenRouter's documented
+    // chat-completions body schema, and NO `require_parameters` filter may appear:
+    // it excluded the one pinned OpenAI endpoint over meta-parameters and OpenRouter
+    // answered HTTP 400 "no allowed providers" (runs 294a80bc / 72a43b32 / e902a0a3).
+    // max_price values are documented NUMBERS in dollars per million tokens.
+    const documentedChatBodyKeys = [
+      "cache_control",
+      "debug",
+      "frequency_penalty",
+      "image_config",
+      "logit_bias",
+      "logprobs",
+      "max_completion_tokens",
+      "max_tokens",
+      "messages",
+      "metadata",
+      "min_p",
+      "modalities",
+      "model",
+      "models",
+      "parallel_tool_calls",
+      "plugins",
+      "prediction",
+      "presence_penalty",
+      "prompt_cache_key",
+      "prompt_cache_options",
+      "provider",
+      "reasoning",
+      "reasoning_effort",
+      "repetition_penalty",
+      "response_format",
+      "route",
+      "seed",
+      "service_tier",
+      "session_id",
+      "stop",
+      "stop_server_tools_when",
+      "stream",
+      "stream_options",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_a",
+      "top_k",
+      "top_logprobs",
+      "top_p",
+      "trace",
+      "user",
+    ] as const;
+    for (const key of Object.keys(wire)) expect(documentedChatBodyKeys).toContain(key);
+    expect(wire).not.toHaveProperty("n");
+    expect(wire).not.toHaveProperty("transforms");
+    expect(wire).not.toHaveProperty("plugins");
+    expect(wire.provider).not.toHaveProperty("require_parameters");
+    for (const value of Object.values(wire.provider.max_price)) expect(typeof value).toBe("number");
   });
 
   it("bounds embedding batches using every full input context and copies the priced inputs", () => {
@@ -96,7 +148,7 @@ describe("golden provider reservation policy (offline, no ledger or transport)",
       dimensions: 1536,
       encoding_format: "float",
       provider: {
-        max_price: { prompt: "0.02", completion: "0", request: "0" },
+        max_price: { prompt: 0.02, completion: 0, request: 0 },
         allow_fallbacks: false,
       },
     });

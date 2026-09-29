@@ -35,12 +35,12 @@
  * deployment reports the offsets it saw, and this script asks its own ICU whether a transition
  * really fell between the armed and fired instants. Two witnesses, and they must agree.
  *
- * `oauth-expiry-reauth` and `provider-read` have their PRECONDITION half complete and their
- * COLLECTION half unexercised, because there is nothing on this deployment to collect from: every
- * `gmailTokens` row reads `packeval-not-a-real-token` and `connectorConnections` is empty (measured
- * 2026-08-30). Both refuse correctly on that state, and that refusal IS tested. The provider call
- * each would make on a deployment holding a real grant has never run. Do not read a passing
- * `--self-check` as evidence that it would work; read it as evidence that it cannot fake a result.
+ * `provider-read` has a bounded collection path, but its real-grant half remains unexercised on
+ * the deployment measured 2026-08-30. `oauth-expiry-reauth` deliberately REFUSES even a real
+ * expired access token: silent access-token refresh is not the seven-day grant expiry, explicit
+ * user reconnect and no-catch-up trace demanded by 29-RECURRENCE-DECISION.md section 7. The
+ * earlier collector called the weaker observation `live`, a false positive caught 2026-09-24.
+ * No OAuth artifact may be written until a separate refs-only trace proves the actual requirement.
  *
  * Usage:
  *   collect-recurrence-evidence.mjs <probe> --deployment <name> [--out <dir>]
@@ -51,14 +51,28 @@
  */
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmdirSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "..", "..", "..");
+
+function writeArtifactOnce(file, body) {
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, body, { encoding: "utf8", flag: "wx" });
+}
 
 /** The three rows `--eligibility` requires a LIVE trace for. Same ids as the gate's REQUIRED_LIVE_ROWS. */
 export const PROBES = ["oauth-expiry-reauth", "dst-boundary", "provider-read"];
@@ -128,19 +142,37 @@ export function crossedDstBoundary(zone, fromMs, toMs) {
  * the author did not picture, and it is wrong again every year. `Intl` already holds the whole tz
  * database; asking it is both shorter and correct.
  *
- * Day-granularity: it answers WHICH DAY to schedule for, not the exact instant, which is all a
- * refusal message needs. Returns `null` if the zone has no transition in the window.
+ * Find a changed daily sample, then bisect its interval to the first changed millisecond. A UTC
+ * noon guessed from a calendar day can fall BEFORE a transition (Auckland 2026-09-26 is one such
+ * case), so the refusal's runnable arming instant must be derived from the actual offset change.
+ * Returns `null` if the zone has no transition in the window.
  */
 export function nextTransition(zone, fromMs, days = 400) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    timeZoneName: "shortOffset",
+  });
   const offsetAt = (ms) =>
-    new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "shortOffset" })
-      .formatToParts(new Date(ms))
-      .find((p) => p.type === "timeZoneName")?.value ?? "";
+    formatter.formatToParts(new Date(ms)).find((p) => p.type === "timeZoneName")?.value ?? "";
   let prev = offsetAt(fromMs);
   for (let d = 1; d <= days; d++) {
     const ms = fromMs + d * 86_400_000;
     const now = offsetAt(ms);
-    if (now !== prev) return { day: new Date(ms).toISOString().slice(0, 10), from: prev, to: now };
+    if (now !== prev) {
+      let before = ms - 86_400_000;
+      let after = ms;
+      while (after - before > 1) {
+        const middle = before + Math.floor((after - before) / 2);
+        if (offsetAt(middle) === prev) before = middle;
+        else after = middle;
+      }
+      return {
+        day: new Date(after).toISOString().slice(0, 10),
+        from: prev,
+        to: now,
+        atMs: after,
+      };
+    }
     prev = now;
   }
   return null;
@@ -264,20 +296,9 @@ const COLLECTORS = {
     };
   },
 
-  /**
-   * A TOKEN THAT EXPIRED AND WAS SILENTLY RE-AUTHED. The observation is that `gmailTokens.expiresAt`
-   * ADVANCED across a read that needed a valid access token — a fact about stored state before and
-   * after, not a claim the script makes about itself.
-   *
-   * WHY IT DRIVES `gmail:listInbox` RATHER THAN THE REFRESH ENDPOINT. The refresh is not a thing a
-   * user asks for; it happens because a real call needed a valid token. Calling the provider's
-   * refresh URL directly would exercise a path production never takes and would need this script to
-   * hold credentials, which it must not. Driving the app's own bounded read means the trace is of
-   * the code that actually runs, through the same seam a scheduled routine would hit.
-   *
-   * REFUSES rather than reports when the token has NOT expired: a read that never needed a refresh
-   * is not evidence of one, and calling it so would be the relabelling this whole gate exists for.
-   */
+  /** The current grant-state query exposes ACCESS-token `expiresAt`, not the seven-day refresh
+   * grant's expiry or a user reconnect event. A successful read here could only prove silent
+   * access-token refresh. Keep this row closed until a reviewed end-to-end trace exists. */
   "oauth-expiry-reauth": ({ tenant, runConvex }) => {
     if (!tenant) return { observed: false, reason: NEEDS_TENANT };
     const before = runConvex("gmailAuthState", { tenantId: tenant });
@@ -301,29 +322,12 @@ const COLLECTORS = {
           "— that wait is the point: a refresh nobody needed is not evidence that refresh works.",
       };
     }
-    const read = runConvex("listInbox", { tenantId: tenant });
-    if (read === null) return { observed: false, reason: "the read failed — no refresh observed" };
-    const after = runConvex("gmailAuthState", { tenantId: tenant });
-    if (
-      after === null ||
-      typeof after.expiresAt !== "number" ||
-      after.expiresAt <= before.expiresAt
-    ) {
-      return {
-        observed: false,
-        reason:
-          "the read succeeded but the stored expiry did NOT advance, so no refresh happened on this " +
-          "path. Whatever made the read work, it was not the re-auth this row is about.",
-      };
-    }
     return {
-      observed: true,
-      // REFS AND COUNTS ONLY (§4): a provider name and two instants. Never a token, never a subject.
-      detail: {
-        provider: "gmail",
-        expiredAt: new Date(before.expiresAt).toISOString(),
-        renewedUntil: new Date(after.expiresAt).toISOString(),
-      },
+      observed: false,
+      reason:
+        "the access token expired, but this read path can only silently refresh that token. " +
+        "It cannot prove seven-day grant expiry, explicit user reconnect, or absence of a " +
+        "catch-up burst. No provider read was made and no live artifact was written.",
     };
   },
 
@@ -365,19 +369,33 @@ const DST_PROBE_EVENT = "clock.dst_probe";
  * not picture it.
  */
 function noProbeReason(zone, nowMs, seen = []) {
-  const own = nextTransition(zone, nowMs);
-  const soonest = soonestTransition(nowMs);
-  const pending = seen.filter((r) => r.payload?.phase === "armed").length;
-  const target = own === null ? null : Date.parse(`${own.day}T12:00:00Z`);
+  const armed = seen.filter((r) => r.payload?.phase === "armed");
+  const pending = armed.length;
+  const targets = armed
+    .map((r) => Number(r.payload?.fireAtMs))
+    .filter((ms) => Number.isSafeInteger(ms) && ms > 0);
+  const overdue = targets.filter((ms) => ms <= nowMs).length;
+  const own = pending > 0 ? null : nextTransition(zone, nowMs);
+  const soonest = pending > 0 ? null : soonestTransition(nowMs);
+  const target = own === null ? null : own.atMs + 60 * 60_000;
   return (
     `no completed \`${DST_PROBE_EVENT}\` trace for ${zone}` +
     (pending > 0
-      ? ` — ${pending} armed row(s) are waiting for their transition, which has not arrived yet. ` +
-        "That is the expected state between arming and firing; nothing is wrong."
+      ? overdue > 0
+        ? ` — ${pending} armed row(s) exist, but ${overdue} scheduled fire instant(s) have ` +
+          "elapsed without a fired audit row. Recheck the scheduler and audit trace; do not " +
+          "infer success or arm a duplicate."
+        : targets.length !== pending
+          ? ` — ${pending} armed row(s) exist but not every target instant is readable. ` +
+            "Whether the job is overdue is unknown; inspect the trace and do not re-arm."
+          : ` — ${pending} armed row(s) are waiting for their scheduled fire, next at ` +
+            `${new Date(Math.min(...targets)).toISOString()}. Nothing is wrong yet; do not re-arm.`
       : " — nothing has been armed on this deployment.") +
-    (own === null
-      ? ` ${zone} has no transition in the next 400 days, so it can never carry this row.`
-      : ` ${zone} next transitions on ${own.day} (${own.from} -> ${own.to}).`) +
+    (pending > 0
+      ? ""
+      : own === null
+        ? ` ${zone} has no transition in the next 400 days, so it can never carry this row.`
+        : ` ${zone} next transitions on ${own.day} (${own.from} -> ${own.to}).`) +
     (soonest === null ? "" : ` Earliest anywhere: ${soonest.day} (${soonest.zones.join(", ")}).`) +
     (target === null
       ? ""
@@ -563,6 +581,38 @@ function selfCheck() {
   assert.match(art, /^probe: dst-boundary$/m);
   assert.match(art, /^observed: true$/m);
 
+  // An earlier collector output is evidence, not a scratch file. A later observation
+  // must never replace its bytes, including when the output already exists at write time.
+  const temporaryOutput = mkdtempSync(join(tmpdir(), "pikar-recurrence-once-"));
+  const existingArtifact = join(temporaryOutput, "dst-boundary.md");
+  try {
+    writeArtifactOnce(existingArtifact, art);
+    assert.throws(
+      () => writeArtifactOnce(existingArtifact, "replacement"),
+      (error) => error?.code === "EEXIST",
+      "a second collection must not overwrite the first artifact",
+    );
+    assert.equal(readFileSync(existingArtifact, "utf8"), art);
+    const repeat = spawnSync(
+      process.execPath,
+      [
+        fileURLToPath(import.meta.url),
+        "dst-boundary",
+        "--deployment",
+        "test",
+        "--out",
+        temporaryOutput,
+      ],
+      { encoding: "utf8", timeout: 5_000 },
+    );
+    assert.equal(repeat.status, 1, "an existing output must refuse before any deployment query");
+    assert.match(repeat.stderr, /existing artifact must not be overwritten/);
+    assert.equal(readFileSync(existingArtifact, "utf8"), art);
+  } finally {
+    if (existsSync(existingArtifact)) unlinkSync(existingArtifact);
+    rmdirSync(temporaryOutput);
+  }
+
   // 3. THE DST PROBE IS REAL, and both directions are proven — a positive witness first, so the
   //    refusal below cannot be passing because the function always says no.
   const NY = "America/New_York";
@@ -678,12 +728,57 @@ function selfCheck() {
   );
   assert.match(dstNone.reason, /Earliest anywhere: \d{4}-\d{2}-\d{2}/, "must name a derived date");
 
+  // Calendar-day noon is NOT safely on the far side: Auckland changes at 14:00Z in 2026.
+  const beforeAuckland = Date.UTC(2026, 8, 24, 18);
+  const auckland = nextTransition(NZ, beforeAuckland);
+  assert.equal(auckland?.atMs, Date.UTC(2026, 8, 26, 14));
+  const safeAucklandFire = auckland.atMs + 60 * 60_000;
+  assert.equal(crossedDstBoundary(NZ, beforeAuckland, safeAucklandFire).crossed, true);
+  assert.match(
+    noProbeReason(NZ, beforeAuckland),
+    new RegExp(`"fireAtMs":${safeAucklandFire}`),
+    "an unarmed-zone command must use the real transition, not UTC noon",
+  );
+  // All four currently armed production zones have distinct transition shapes. Keep the derived
+  // instant pinned offline so an ICU or search regression cannot hand an operator a pre-boundary
+  // target even though the scheduled live jobs themselves are never changed by this test.
+  for (const [zone, atMs, from, to] of [
+    ["Pacific/Auckland", Date.UTC(2026, 8, 26, 14), "GMT+12", "GMT+13"],
+    ["Australia/Lord_Howe", Date.UTC(2026, 9, 3, 15, 30), "GMT+10:30", "GMT+11"],
+    ["Europe/Berlin", Date.UTC(2026, 9, 25, 1), "GMT+2", "GMT+1"],
+    ["America/New_York", Date.UTC(2026, 10, 1, 6), "GMT-4", "GMT-5"],
+  ]) {
+    const transition = nextTransition(zone, beforeAuckland);
+    assert.deepEqual(transition, {
+      day: new Date(atMs).toISOString().slice(0, 10),
+      from,
+      to,
+      atMs,
+    });
+    assert.equal(crossedDstBoundary(zone, beforeAuckland, atMs + 60 * 60_000).crossed, true);
+  }
+
   // ARMED BUT NOT YET FIRED — the expected state for most of the wait. It must read as "not yet",
   // never as "broken", or somebody re-arms a probe that is working perfectly.
-  const dstPending = dst([{ correlationId: "c2", payload: { phase: "armed", zone: NZ } }]);
+  const dstPending = dst([
+    { correlationId: "c2", payload: { phase: "armed", zone: NZ, fireAtMs: nzTarget + 3600000 } },
+  ]);
   assert.equal(dstPending.observed, false);
   assert.match(dstPending.reason, /1 armed row\(s\) are waiting/);
-  assert.match(dstPending.reason, /nothing is wrong/);
+  assert.match(dstPending.reason, /Nothing is wrong yet/);
+  assert.doesNotMatch(
+    dstPending.reason,
+    /internal:dstProbe:arm/,
+    "an armed probe must never invite an operator to arm a duplicate",
+  );
+  const dstOverdue = dst([
+    { correlationId: "c3", payload: { phase: "armed", zone: NZ, fireAtMs: nzTarget - 1000 } },
+  ]);
+  assert.match(dstOverdue.reason, /scheduled fire instant\(s\) have elapsed/);
+  assert.match(dstOverdue.reason, /without a fired audit row/);
+  assert.doesNotMatch(dstOverdue.reason, /Nothing is wrong yet|internal:dstProbe:arm/);
+  const dstUnknownTarget = dst([{ correlationId: "c4", payload: { phase: "armed", zone: NZ } }]);
+  assert.match(dstUnknownTarget.reason, /Whether the job is overdue is unknown/);
 
   // UNREACHABLE IS NOT "NOTHING ARMED". Same sentinel discipline as the other two probes.
   assert.match(
@@ -781,27 +876,19 @@ function selfCheck() {
   assert.equal(notYet.observed, false, "an unexpired token cannot evidence a refresh");
   assert.match(notYet.reason, /still valid until/);
 
-  // Expired, and the stored expiry ADVANCES across the read: that is the refresh, observed.
+  // Even if a stub could advance the access expiry, it is not the explicit reconnect trace.
   let call = 0;
   const refreshed = COLLECTORS["oauth-expiry-reauth"]({
     tenant: "t1",
     runConvex: (what) => {
-      if (what === "listInbox") return { count: 1 };
+      assert.notEqual(what, "listInbox", "the insufficient OAuth probe must not spend a read");
       call += 1;
       return { real: true, expiresAt: call === 1 ? PAST : FUTURE };
     },
   });
-  assert.equal(refreshed.observed, true, "expiry advancing across a read IS the re-auth trace");
-  assert.equal(refreshed.detail.provider, "gmail");
-  assert.ok(!("token" in refreshed.detail), "§4: no token may reach an artifact");
-
-  // Expired, read succeeds, expiry does NOT move — something else made it work. Not this row.
-  const noAdvance = COLLECTORS["oauth-expiry-reauth"]({
-    tenant: "t1",
-    runConvex: (what) => (what === "listInbox" ? { count: 1 } : { real: true, expiresAt: PAST }),
-  });
-  assert.equal(noAdvance.observed, false, "a read that refreshed nothing is not a refresh trace");
-  assert.match(noAdvance.reason, /did NOT advance/);
+  assert.equal(refreshed.observed, false, "access-token refresh cannot certify explicit reconnect");
+  assert.equal(call, 1, "only the refs-only grant-state precondition may run");
+  assert.match(refreshed.reason, /seven-day grant expiry, explicit user reconnect/);
 
   console.log(
     "[recurrence-evidence] self-check PASSED " +
@@ -809,11 +896,9 @@ function selfCheck() {
       "TRACE and every failure mode is driven — nothing armed, armed-but-waiting, unreachable, a " +
       "fired row with no armed half, a window spanning no transition, the two tzdata witnesses " +
       "disagreeing, and a call that fired early — with a positive witness first so none of those " +
-      "refusals can be passing vacuously; all three probes refuse on the current deployment state " +
-      "with actionable reasons, and the dst refusal hands over a runnable arm command with a " +
-      "DERIVED instant; and BOTH provider collection halves RUN — a real count is the " +
-      "provider-read trace, an expiry ADVANCING across a read is the re-auth trace, and an " +
-      "unexpired token refuses because a refresh nobody needed evidences nothing)",
+      "refusals can be passing vacuously; the dst refusal offers a DERIVED arming instant only " +
+      "when no arm exists; provider-read requires a real grant and count; and oauth-expiry-reauth " +
+      "REFUSES silent access-token refresh because it is not explicit seven-day reauthorization)",
   );
 }
 
@@ -842,6 +927,13 @@ function main(argv) {
   }
   const outIx = argv.indexOf("--out");
   const outDir = resolve(REPO_ROOT, outIx >= 0 ? argv[outIx + 1] : "docs/evidence/recurrence");
+  const file = join(outDir, `${probe}.md`);
+  if (existsSync(file)) {
+    console.error(
+      `[recurrence-evidence] ${probe} REFUSED — existing artifact must not be overwritten.`,
+    );
+    process.exit(1);
+  }
 
   const tenIx = argv.indexOf("--tenant");
   const tenant = tenIx >= 0 ? argv[tenIx + 1] : undefined;
@@ -865,19 +957,24 @@ function main(argv) {
     process.exit(1);
   }
 
-  if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
-  const file = join(outDir, `${probe}.md`);
-  writeFileSync(
-    file,
-    renderArtifact({
-      probe,
-      observed: true,
-      collectedAt: new Date(now).toISOString(),
-      deployment,
-      detail: res.detail,
-    }),
-    "utf8",
-  );
+  try {
+    writeArtifactOnce(
+      file,
+      renderArtifact({
+        probe,
+        observed: true,
+        collectedAt: new Date(now).toISOString(),
+        deployment,
+        detail: res.detail,
+      }),
+    );
+  } catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+    console.error(
+      `[recurrence-evidence] ${probe} REFUSED — existing artifact must not be overwritten.`,
+    );
+    process.exit(1);
+  }
   console.log(`[recurrence-evidence] ${probe} OBSERVED — wrote ${file}`);
 }
 

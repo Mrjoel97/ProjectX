@@ -1,3 +1,40 @@
+> Last verified: 2026-09-28 — `insertCreatedDoc` now accepts an optional exact
+> source check for Data operator previews. In its final mutation it rechecks
+> tenant, ready state, storage pointer, MIME, stored-byte presence and folder
+> seal before writing an artifact; other created-document callers omit it and
+> keep their existing behavior. This closes the action read/write race locally,
+> not Data-pack semantic qualification or release.
+>
+> Last verified: 2026-09-28 — dispatcher research tests that start vault ingest now
+> freeze scheduled timeout callbacks; the sole scripted retry test keeps real timers.
+> Focused dispatcher and one full backend suite pass. See the dated dispatcher residual
+> follow-up below; other suites' scheduler/component warnings remain separate.
+>
+> Last verified: 2026-09-28 — `vaultIngestText(docId)` now refuses ready rows and
+> agent-origin documents; its late-text write is limited to same-tenant rows awaiting
+> extraction. The general agent-created-document replacement seam increments a private
+> revision marker so vertical artifact review cannot attribute replaced prose to the
+> original candidate. A failing-before-fix test proves the public overwrite was real;
+> existing pending-upload ingest remains green. This is local integrity evidence, not
+> proof of a human edit or deployed workflow.
+>
+> Last verified: 2026-09-25 — Plan 20.1-01's existing read-only Drive search still reuses the
+> tenant-scoped Drive client, escapes backslashes and apostrophes before URL encoding, caps one
+> `files.list` page at 20, and carries both shared-drive flags. The cockpit list/search tools and
+> their offline SMOKE routes have trace parity; a temporary import-call mutation made the
+> no-import guard fail and was restored. A Drive API failure now names a read/search failure,
+> distinct from a token-refresh failure. Neither tool spends, imports, or becomes available to
+> ordinary model turns until Plan 20.1-02 teaches and activates the versioned skill body.
+>
+> Browser-evidence procedure (prepared 2026-09-20) — `blueprint-active-spine.spec.ts` has an
+> opt-in `PIKAR_E2E_BROWSER_EVIDENCE_DIR` capture path. It saves the confirmed Blueprint state at
+> 1280×1000 and 390×844 only after the existing derived-target and no-horizontal-overflow checks;
+> it restores desktop size before the remaining profile-tab assertion. Run it only against a fresh
+> disposable local tenant because its existing fixture creates and accepts a contradictory Blueprint
+> draft. The no-tool prompt and voice-instruction seams stop before model/provider access. These
+> screenshots are implementation observations, never evidence of a founder's qualitative
+> grounding or voice judgment.
+>
 > Last verified: 2026-09-14 — an explicitly requested research PDF is now a deterministic
 > attachment on the original `web_research` Vault document. The markdown text, content hash,
 > sources, labels and source plan remain the artifact of record; `attachResearchPdf` adds the PDF
@@ -4440,6 +4477,18 @@ file, where it is nearly undiagnosable. (2) **Validate a flake fix on the FULL s
 subset.** Both wrong theories here looked confirmed on a two-file reproducer — `fileParallelism:
 false` went 6/6 and `pool: threads` went 9/9 on the pair, and both still failed the full suite.
 
+**2026-09-28 dispatcher residual follow-up:** The statement above that `dispatch.test.ts` still
+leaks is historical. Its one real-timer dependency is the direct scripted retry/fallback test;
+that test does not start ingest. With only `setTimeout`/`clearTimeout` faked for the rest of the
+file, 127 tests passed and that retry test timed out. Letting that single test use real timers
+restored **128/128**, with no post-file workflow errors in the focused run. A real-timer teardown
+experiment also passed 128 assertions, but continued to report unregistered RAG-component work
+after the file; it was reverted, not counted as a fix. Backend typecheck and Biome passed. One
+full cross-file backend run passed **182 files / 4,624 tests**. This narrows the known dispatcher
+leak; it does not certify all remaining backend scheduler logs are clean. The full run still printed
+unregistered-component warnings from other suites, and one successful run is not a flake-rate
+measurement. Recheck on exact-head CI before treating the dispatcher change as integrated.
+
 ### 15.3-09 — the Google Drive rail (VALT-13)
 
 `packages/backend/convex/vaultDrive.ts` + `packages/vault/src/driveEstimate.ts`.
@@ -4540,3 +4589,28 @@ property-position regex, not `includes`.
 is that we SEND both shared-drive parameters, never that Google honours them for a real shared
 drive. One real import against a real shared-drive folder, confirming a non-zero file count, is the
 gate — and it is the ONLY thing that can settle it.
+> Last verified: 2026-09-19 (17.1-11 bounded L6 attempt — **FAIL-CLOSED BEFORE
+> SPEND**). The exact local deployment `local:local-joel_feruzi-pikar_ai_50c69-1`
+> synchronized and reported ready, the current 57-fixture runner self-check passed,
+> provider DNS/TCP checks passed, and active identities were observed as
+> `cockpit-agent@26`, `inbox-digest@2`, and `business-blueprint@1`. The one authorized
+> unfiltered `--no-retry` invocation was refused by `guardrails:openEvalBudget` with
+> `GOLDEN_PROVIDER_BILLING_UNVERIFIED` before a budget row, run id, fixture tenant,
+> five-source corpus, Blueprint, rendered `evalblpr` spine, evidence row, or case was
+> created. Result: **0 paid/full-run attempts, 0/57 cases, 0 retries, USD 0.00**. The
+> invocation was not retried. L6 remains RED/open and no founder verification or
+> Phase-18 baseline acceptance is permitted from this record.
+
+> Fresh-authority follow-up, 2026-09-19: the five approved local environment values
+> were present by name, but the initial PowerShell stdin path appended carriage-return
+> bytes. The server therefore refused the one fresh command at `openEvalBudget`, again
+> before the five ready sources, Blueprint, or `evalblpr` spine existed. The values were
+> corrected without output after the authority was consumed; no second command ran.
+> Read-only reconciliation found zero new audit, plan, spend, or vault rows and USD 0.00.
+## Wave 1A retained Blueprint fixture (2026-09-20)
+
+The conditional run proved five ready source documents, one confirmed Blueprint, and a rendered
+spine containing `evalblpr` before case 1. The shared corpus then stopped at case 8 after seven
+observed passes. The retained fixture tenant holds 8 ready vault documents: 5 source brain dumps,
+the Blueprint, and 2 web-research documents. Failed/partial-run policy keeps these diagnostic rows;
+do not purge them or the associated spend evidence as successful-run cleanup.

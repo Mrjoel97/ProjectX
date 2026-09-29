@@ -104,4 +104,19 @@ describe("the inline PDF mints exactly one URL, for the open thread's selected a
     expect(frame.slice(0, 600)).toMatch(/min\(70vh, 32rem\)/);
     expect(code).toMatch(/<iframe/);
   });
+
+  test("loading, missing artifact, missing storage, partial and empty states are explicit", () => {
+    expect(cards).toContain("Loading document…");
+    expect(cards).toContain("This saved artifact is unavailable.");
+    expect(cards).toContain("Download unavailable. Showing the saved text instead.");
+    expect(cards).toContain("Full text unavailable. Showing the saved summary.");
+    expect(cards).toContain("This artifact has no text preview.");
+    expect(cards).toContain('data-testid="output-storage-partial"');
+  });
+
+  test("the success copy says SAVE, never SEND", () => {
+    expect(cards).toContain("Saved to your vault. Nothing was sent.");
+    const outputCard = cards.slice(cards.indexOf("function OutputCard("));
+    expect(outputCard.slice(0, 6000)).not.toMatch(/sent successfully|published|delivered/i);
+  });
 });

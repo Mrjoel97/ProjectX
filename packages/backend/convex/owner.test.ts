@@ -84,6 +84,56 @@ describe("owner.viewer — one boolean, fail-closed", () => {
   });
 });
 
+describe("owner email lookup — nullable operator contract and non-null provisioning envelope", () => {
+  test("preserves null absence while the provisioning envelope makes that absence printable", async () => {
+    const t = harness();
+
+    expect(
+      await t.query(internal.owner.findUserIdByEmail, { email: "absent@example.test" }),
+    ).toBeNull();
+    expect(
+      await t.query(internal.owner.findUserIdByEmailForProvisioning, {
+        email: "absent@example.test",
+      }),
+    ).toEqual({ result: null });
+  });
+
+  test("returns the same exact user through both lookup contracts", async () => {
+    const t = harness();
+    const userId = await t.run((ctx) =>
+      ctx.db.insert("users", { email: "owner@example.test", owner: true }),
+    );
+    const expected = { userId, owner: true };
+
+    expect(
+      await t.query(internal.owner.findUserIdByEmail, { email: " OWNER@EXAMPLE.TEST " }),
+    ).toEqual(expected);
+    expect(
+      await t.query(internal.owner.findUserIdByEmailForProvisioning, {
+        email: " OWNER@EXAMPLE.TEST ",
+      }),
+    ).toEqual({ result: expected });
+  });
+
+  test("both lookup contracts refuse duplicate identities without selecting or mutating either row", async () => {
+    const t = harness();
+    const first = await t.run((ctx) => ctx.db.insert("users", { email: "dup@example.test" }));
+    const second = await t.run((ctx) =>
+      ctx.db.insert("users", { email: "dup@example.test", owner: true }),
+    );
+
+    await expect(
+      t.query(internal.owner.findUserIdByEmail, { email: "dup@example.test" }),
+    ).rejects.toThrow("AMBIGUOUS_EMAIL: 2");
+    await expect(
+      t.query(internal.owner.findUserIdByEmailForProvisioning, { email: "dup@example.test" }),
+    ).rejects.toThrow("AMBIGUOUS_EMAIL: 2");
+
+    expect((await t.run((ctx) => ctx.db.get(first)))?.owner).toBeUndefined();
+    expect((await t.run((ctx) => ctx.db.get(second)))?.owner).toBe(true);
+  });
+});
+
 describe("owner.bootstrapOwner — exact, idempotent, audited once", () => {
   test("absent -> true on the first run, no-op on the second, with exactly one audit row", async () => {
     const t = harness();

@@ -847,6 +847,18 @@ describe("executePlan attachment fan-out (CKPT-02 — one byte set shared across
       .withIdentity({ subject: TENANT })
       .mutation(api.cockpit.executePlan, { planId });
     expect(res.ok).toBe(true);
+    expect(
+      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).toEqual({ ok: true, alreadyStarted: true });
+
+    const approvalEvents = await t.run((ctx) => ctx.db.query("betaJourneyEvents").collect());
+    expect(approvalEvents).toHaveLength(1);
+    expect(approvalEvents[0]).toMatchObject({
+      tenantId: TENANT,
+      eventType: "approval_decided",
+      approvalId: planId,
+      planId,
+    });
 
     const reqs = await t.run((ctx) => ctx.db.query("requests").collect());
     expect(reqs).toHaveLength(2);
@@ -1531,6 +1543,115 @@ describe("cockpit revise cap (REVW-02 — bounded, fail-closed live gate)", () =
   });
 });
 
+describe("first-send self-recipient guard (BETA-03)", () => {
+  test("proposal rejects a client-side recipient rewrite before status becomes proposed", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: "first-send-thread",
+        status: "collecting",
+        recipients: [],
+        firstSendRecipient: "owner@example.com",
+        createdAt: Date.now(),
+      }),
+    );
+
+    await expect(
+      t.mutation(internal.cockpit.proposeEmailPlan, {
+        planId,
+        recipients: ["victim@example.com"],
+        mode: "individual",
+        subject: "First send",
+        body: "Review me",
+      }),
+    ).rejects.toThrow(/FIRST_SEND_RECIPIENT_MISMATCH/);
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("collecting");
+  });
+
+  test("approval revalidates the owner address and refuses before the CAS/fan-out", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: "first-send-thread",
+        status: "proposed",
+        recipients: ["owner@example.com"],
+        mode: "individual",
+        subject: "First send",
+        body: "Review me",
+        firstSendRecipient: "owner@example.com",
+        createdAt: Date.now(),
+      }),
+    );
+
+    const result = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(result).toEqual({ ok: false, reason: "first_send_recipient_mismatch" });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+    expect(await countRequests(t)).toHaveLength(0);
+  });
+});
+
+describe("executePlan provider-aware mailbox preflight (BETA-03 / DLVR-02)", () => {
+  const seedMicrosoftPlan = (t: ReturnType<typeof convexTest>) =>
+    t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: "microsoft-first-send",
+        status: "proposed",
+        recipients: ["owner@example.com"],
+        mode: "individual",
+        subject: "Provider check",
+        body: "Review me",
+        mailProvider: "microsoft",
+        createdAt: Date.now(),
+      }),
+    );
+
+  test("a selected Microsoft plan refuses before CAS when no Microsoft grant exists", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedMicrosoftPlan(t);
+
+    const result = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(result).toEqual({ ok: false, reason: "microsoft_not_connected" });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+    expect(await countRequests(t)).toHaveLength(0);
+  });
+
+  test("a calendar-only grant refuses, then the same proposed plan starts after Mail.Send returns", async () => {
+    const t = withDelivery();
+    const planId = await seedMicrosoftPlan(t);
+    await seedPostalAddress(t);
+    const tokenId = await t.run((ctx) =>
+      ctx.db.insert("microsoftCalendarTokens", {
+        tenantId: TENANT,
+        refreshToken: "refresh",
+        accessToken: "access",
+        expiresAt: Date.now() + 60_000,
+        scope: "openid offline_access Calendars.ReadWrite",
+        updatedAt: Date.now(),
+      }),
+    );
+
+    const asTenant = t.withIdentity({ subject: TENANT });
+    expect(await asTenant.mutation(api.cockpit.executePlan, { planId })).toEqual({
+      ok: false,
+      reason: "mail_scope_missing",
+    });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+
+    await t.run((ctx) => ctx.db.patch(tokenId, { scope: "offline_access Mail.Send Mail.Read" }));
+    const retried = await asTenant.mutation(api.cockpit.executePlan, { planId });
+    expect(retried.ok).toBe(true);
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("delivering");
+    expect(await countRequests(t)).toHaveLength(1);
+  });
+});
+
 // Skill-version attribution (08 IMPR-01): a rating is training signal only if it resolves to the
 // EXACT skill version that produced the response. proposeEmailPlan stamps plan.skillVersion from
 // the active cockpit-agent row; executePlan copies it onto every seeded request row, so feedback
@@ -1725,6 +1846,45 @@ describe("executePlan suppression + postal-address gates (19-05, PIPE-01)", () =
     "four@example.com",
     "five@example.com",
   ];
+
+  test("a recipient suppressed after scheduled approval is blocked when the frozen callback fires", async () => {
+    const t = withDelivery();
+    await seedMailbox(t);
+    const recipient = "late@example.com";
+    const planId = await seedEmailPlan(t, [recipient]);
+    const approved = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(approved).toEqual({ ok: true, scheduled: true });
+    const [request] = await countRequests(t);
+    expect(request?.recipient).toBe(recipient);
+    if (!request) throw new Error("scheduled approval did not create its request");
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("scheduled");
+
+    // The approve-time filter has already frozen the request ID. Only the send-time backstop can
+    // see this later suppression; no transport call is permitted, even in a scheduled workflow.
+    await suppress(t, recipient);
+    const transport = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("unexpected send"));
+    try {
+      vi.advanceTimersByTime(3_600_001);
+      for (let pass = 0; pass < 20; pass += 1) {
+        await vi.advanceTimersByTimeAsync(1_000);
+        await t.finishInProgressScheduledFunctions();
+        if ((await t.run((ctx) => ctx.db.get("requests", request._id)))?.status === "blocked")
+          break;
+      }
+      expect((await t.run((ctx) => ctx.db.get("requests", request._id)))?.status).toBe("blocked");
+      expect(await t.run((ctx) => ctx.db.get(planId))).toMatchObject({
+        recipientTotal: 0,
+        queuedCount: 0,
+        sentCount: 0,
+        failedCount: 0,
+      });
+      expect(transport).not.toHaveBeenCalled();
+    } finally {
+      transport.mockRestore();
+    }
+  });
 
   test("Marketing-captured suppressed contact is withheld before immediate fan-out", async () => {
     const t = withFanoutOnly();

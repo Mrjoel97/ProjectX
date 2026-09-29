@@ -1,6 +1,17 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
-> Last verified: 2026-09-12 — `/dashboard/workspace?thread=<thread>&plan=<plan>&view=canvas`
+> Last verified: 2026-09-27 (watch-gate acknowledgment only - **this entry is a `Last verified`
+> bump plus a forward record, NOT a verification of the sections below.** No media code changed.
+> `reliabilitySweep.test.ts` changed because its cron count assertion was stale: `crons.ts`
+> registers SEVEN jobs, not six. The seventh is `web-form-retention`, Phase 48's hourly
+> anonymous-form expiry sweep (`internal.webForms.cleanupAll`, `crons.ts:85`) - it is not a media
+> job, and the count is the only thing the assertion reads. The authoritative by-name pin for all
+> seven already lived in `routines.test.ts` and was already correct, so this test was a stale
+> duplicate of a fact pinned correctly elsewhere. Nothing in the media rail, canvas, storyboard,
+> assembler, citation or retry behaviour below is affected, and no media provider call, render or
+> spend changed. The next real media change re-verifies this file.)
+
+> Last verified: 2026-09-12 - `/dashboard/workspace?thread=<thread>&plan=<plan>&view=canvas`
 > selects the exact tenant-owned plan through `plans.byId`. Missing, inaccessible, malformed
 > or wrong-thread IDs never fall back to the newest root. Query validation errors stay inside
 > the canvas boundary. Switching conversations clears the selection and URL plan parameter.
@@ -2027,6 +2038,16 @@
 > terminal job row by `deckStillNeedsJob` — a failed clip whose scene became a card/upload is
 > history, not a hold, while landed siblings stay fresh (the fixes are CONTENT-class, no
 > `shotsChangedAt`). Retry-twice observed RED on the mutation; core 1003/1003, media suites green.)
+
+> Last verified: 2026-09-25 (MEDIA-01 frozen-frame escalation rechecked locally. The current
+> `assemble_final.sh` and its shipped `assembleScript.ts` mirror passed the 23/23 focused tests,
+> including byte identity. The complete, unsuppressed `smoke_assemble.sh` rendered the 30.016s
+> `video,image,card,video` reel and measured **48 unique decoded frame hashes out of 48** inside
+> the image scene; its deliberately muted second render failed at the narration gate as intended.
+> Holding the synthetic input, dimensions, FPS and filters constant and changing only `pzoom`
+> back to the historical `zoom` yielded just 4 unique hashes out of 48 (44 identical frames),
+> below the smoke's 36/48 minimum. The earlier 1/48 report was from before the mirrored `pzoom`
+> correction was verified. No new renderer change was needed.)
 
 > Last verified: 2026-08-16 (Ken Burns `pzoom` fix MIRRORED — motion NOT re-observed. The still
 > path used `zoompan=z='min(zoom+0.0012,1.20)'`, but `zoom` resets to 1.0 on every INPUT frame,
