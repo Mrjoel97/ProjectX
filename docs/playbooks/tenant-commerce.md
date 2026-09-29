@@ -1,5 +1,12 @@
 # Playbook: Tenant commerce (Phase 50)
 
+> Last verified: 2026-09-29 — a same-product server price refresh previously
+> left the private catalogue's editable price at its older value while the
+> revision advanced. A failing DOM regression reproduced an unintended stale
+> price save; the field now follows an authoritative price change before the
+> next save. This affects only authenticated catalogue preparation, not quote
+> arithmetic, provider payment or public checkout.
+
 > Last verified: 2026-09-29 — a fresh loopback-only Convex/production-web
 > browser run found that the private catalogue form omitted the now-required
 > physical/digital `goodsKind`; the real mutation refused `GOODS_KIND_REQUIRED`
@@ -52,6 +59,8 @@ or digital goods, and a legacy unclassified row exposes a revision-pinned goods-
 than silently inferring a kind. Its responsive card layout and labelled keyboard controls have
 local DOM checks and a synthetic loopback desktop/mobile painted-browser run; founder acceptance
 remains for the integrated gate. A catalogue status of `active` is private and never implies checkout.
+An authoritative server price change refreshes the editable field before another save, so an older
+local value cannot be resubmitted against the newly observed product revision without re-entry.
 For finite stock, the list projects the stored reservation TTL (or null when unconfigured), so the
 editor shows the current minutes rather than a default as if it were saved. Merchants may edit an
 active finite product's current 1–60-minute policy through stock-revision CAS; invalid

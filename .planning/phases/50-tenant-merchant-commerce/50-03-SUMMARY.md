@@ -147,3 +147,18 @@ files), strict planning/playbook checks and the tracked-file diff check exited 0
 exited 0, Convex edge fixup exited 0, and the four changed code/test paths have current, nonempty
 AST hashes in its manifest. Painted browser/founder acceptance, provider eligibility, ADR-049,
 public checkout and Wave 7/8 evidence remain open. No provider call, charge or send occurred.
+
+## Current private-price refresh correction — 2026-09-29
+
+A same-product server price update advanced the row revision while the editable
+price field kept an older local value. A new DOM regression reproduced an
+unintended stale-price save before the repair. The field now follows an
+authoritative price change; the regression and focused UI suite pass 9/9.
+Web typecheck, targeted Biome, strict playbooks/planning, the tenant-commerce
+boundary and diff check pass. The watched public-web playbook retired the
+prior Phase 49 digest; the exact 71-file `77e73a8c…` source set passed its
+serialized 21/21 repository/local qualification, including two fresh
+browser/audit stacks and a production build. This is an authenticated
+operator safeguard only; it does not implement merchant review resolution,
+provider refund, buyer notice or public checkout. Pre-existing Graphify
+working-tree changes were left untouched.

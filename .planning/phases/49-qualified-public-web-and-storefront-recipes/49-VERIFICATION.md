@@ -7,6 +7,16 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
+**2026-09-29 private-price watched-file renewal:** A same-product server
+price refresh now updates the authenticated catalogue's editable price before
+another revision-pinned save. The DOM regression failed before the fix and
+passed afterward (9/9 focused UI tests). Its watched public-web playbook
+retired `893f9a3c…`. The 71-file digest below passed a fresh serialized
+**21/21** repository/local aggregate with identical initial/final identity,
+both independent browser/audit stacks, production build, three typechecks,
+strict playbooks/planning, claim controls and all registered free gates. The
+private operator correction does not open commerce or supply Wave 7/8 proof.
+
 **2026-09-29 catalogue-UI watched-file renewal:** The private Phase 50
 goods-kind form repair changed the watched public-web playbook and retired
 `77280787…`. The new 71-file digest below passed all **21/21** serialized
@@ -82,7 +92,7 @@ checkout, external provider, hosted release or founder acceptance.
 
 **Earlier scope:** Requalification passed for a then-current 71-file digest after tenant-first indexed vertical audit provenance, its watched playbooks and dependent evaluator pins changed. A serialized aggregate passed all 21 planes with identical initial/final source identity, two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The preceding `073dd93daf270fbdce08fad3acbbfdaa8d39c650070cabcb0596be5d225a9a61` result is historical. This proves only repository/local technical qualification. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `893f9a3caa90209b77b97dca386ad411676e943d1095edd46e167b9510256492`
+Artifact-set SHA-256: `77e73a8cb5bd386845a1b7684b5f1901f4562972173f6f811a8431a0941f1873`
 
 The earlier code-bearing `ee901e3` [CI run 36440650366](https://github.com/Mrjoel97/ProjectX/actions/runs/36440650366) passed typecheck, lint, free gates, tests, disabled recurrence, operator controls, planning and build on 2026-09-28. It binds older source bytes; exact-head CI for the renewed digest is pending. Neither run certifies deployment or founder acceptance.
 

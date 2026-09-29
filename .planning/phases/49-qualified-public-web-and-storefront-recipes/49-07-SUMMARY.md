@@ -17,6 +17,16 @@ reviewed: 2026-09-28
 
 # Phase 49 Plan 07 summary
 
+**2026-09-29 private-price watched-file renewal:** A server price change now
+refreshes the authenticated catalogue's editable price rather than leaving
+an older value ready to save against a newer product revision. Its regression
+failed before the change and passes 9/9 afterward. The watched public-web
+playbook retired `893f9a3c…`; the pinned 71-file digest below passed all
+**21/21** serialized repository/local planes with identical initial/final
+identity, two independent browser/audit stacks, production build, three
+typechecks, strict documents, claims and free gates. This is not public
+checkout, external provider, hosted or founder acceptance.
+
 **2026-09-29 catalogue-UI watched-file renewal:** The private goods-kind form
 repair changed the watched public-web playbook and retired `77280787…`. The
 new 71-file digest below passed **21/21** serialized repository/local planes
@@ -80,7 +90,7 @@ is inferred.
 
 **Earlier repository/local requalification passed:** tenant-first indexed vertical audit provenance, watched playbooks and dependent evaluator pins changed. A serialized 21-plane aggregate passed on its then-current identity, including two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The preceding `073dd93daf270fbdce08fad3acbbfdaa8d39c650070cabcb0596be5d225a9a61` result is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `893f9a3caa90209b77b97dca386ad411676e943d1095edd46e167b9510256492`
+Artifact-set SHA-256: `77e73a8cb5bd386845a1b7684b5f1901f4562972173f6f811a8431a0941f1873`
 
 The changed skill contract and watched playbooks for a CLI-compatible named
 self-hosted golden diagnostic retired the prior Phase 49 digest. The new

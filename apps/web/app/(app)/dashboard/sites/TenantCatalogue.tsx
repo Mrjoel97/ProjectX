@@ -117,6 +117,9 @@ function ProductCard({ product }: { product: Product }) {
   const adjust = useMutation(adjustStock);
   const configure = useMutation(configureStockPolicy);
   const [price, setPrice] = useState(String(product.priceMinor));
+  useEffect(() => {
+    setPrice(String(product.priceMinor));
+  }, [product.priceMinor]);
   const [delta, setDelta] = useState("");
   const [minutes, setMinutes] = useState(
     product.reservationTtlMs === null ? "" : String(product.reservationTtlMs / 60_000),

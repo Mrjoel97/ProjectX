@@ -1,5 +1,11 @@
 # Playbook: Public web runtime
 
+> Last verified: 2026-09-29 — the authenticated private catalogue price field
+> now follows a same-product server price refresh instead of retaining an older
+> editable value under a newer revision. The regression failed before the UI
+> change and passes afterward. No public recipe, host resolver, storefront or
+> anonymous buyer path was opened by this operator-only change.
+
 > Last verified: 2026-09-29 — the authenticated, private tenant catalogue on
 > `/dashboard/sites` now sends an explicit physical/digital goods kind to its
 > existing tenant-scoped product mutation and can classify a legacy row through

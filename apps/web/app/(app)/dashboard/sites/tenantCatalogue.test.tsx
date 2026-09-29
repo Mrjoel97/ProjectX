@@ -173,6 +173,36 @@ describe("authenticated tenant catalogue controls", () => {
     expect(button("Previous page")).toBeTruthy();
   });
 
+  test("a server price refresh replaces an older editable value before the next save", async () => {
+    const product: Product = {
+      _id: "product-a",
+      sku: "lamp",
+      variant: "bronze",
+      currency: "USD",
+      priceMinor: 1250,
+      status: "active",
+      goodsKind: "physical",
+      revision: 4,
+      stockRevision: 7,
+      available: 3,
+      reservationTtlMs: 900_000,
+    };
+    page = { products: [product], nextCursor: null };
+    await render();
+    await type("New price (minor units)", "1500");
+    page = { products: [{ ...product, priceMinor: 1300, revision: 5 }], nextCursor: null };
+    await render();
+    const price = [...host.querySelectorAll("input")].find((el) =>
+      el.labels?.[0]?.textContent?.includes("New price (minor units)"),
+    );
+    expect(price?.value).toBe("1300");
+    await click(button("Save price"));
+    expect(calls.at(-1)).toEqual({
+      name: "tenantCatalogue:editProduct",
+      args: { productId: "product-a", expectedRevision: 5, priceMinor: 1300 },
+    });
+  });
+
   test("an active finite product shows its saved hold window and permits a bounded CAS edit", async () => {
     page = {
       products: [
