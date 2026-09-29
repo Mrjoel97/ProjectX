@@ -1,5 +1,26 @@
 # Phase 25 prerequisite evidence
 
+## 2026-09-29 superseding 22-plan planning checkpoint — still no owner release
+
+The current plan set is `25-00` through `25-21` at commit `c151c3a`. Plan 20 now
+owns the effective-auth and public URL census; new Plan 21 owns Pikar billing and
+OAuth/connector callback runtime-origin refusals and the final repository-only
+origin packet. The integer-wave dependency chain is 19 (Wave 8) → 20 (Wave 9)
+→ 21 (Wave 10) → 18 (Wave 11) → 07 (first live mail gate, Wave 12).
+Plan 11 repeats exact-final-source and hosted observations after Plan 09.
+
+All 22 plan structures and strict planning/playbook checks passed. Independent
+goal-backward review passed after the split and integer-wave correction; the
+installed GSD phase index places every declared dependency in an earlier wave.
+The prior 21-plan warning about Plan 20's execution size is resolved by the split,
+and Plan 19 now requires ADR-022 approved app-origin equality for copied invites,
+including a durable-but-unapproved negative test. This is a planning verdict only:
+Plans 19–21 are unimplemented, hosted origins/provider redirects are unobserved,
+and neither the Task 1 prerequisite-matrix approval nor the Task 3 prospective
+plan-set owner release has been recorded. The historical pre-25-01 checkpoint
+breach is not retroactively approved. Do not create `25-00-SUMMARY.md` or begin
+new Phase 25 source work on this planning evidence alone.
+
 ## 2026-09-29 superseding 21-plan recheck — still no owner release
 
 The earlier 19-plan verdict below is a historical planning snapshot, superseded after current-source URL-origin drift was found. Plans `25-19` and `25-20` now cover durable copied invites, effective auth callback overrides, and generated public/shareable URLs. The dependency chain requires 19 → 20 → 18 authorization coverage → 07 first live mail gate. Plan 11 repeats exact-final-source authorization and URL checks after Plan 09, then repeats hosted copied/generated invite, funnel, unsubscribe, and effective auth/redirect observations against the final deployed ID and SHA before later live sends. A `mailReady=false` refusal is a blocking outcome, not Outlook completion.
