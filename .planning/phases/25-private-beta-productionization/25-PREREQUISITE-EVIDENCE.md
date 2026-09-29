@@ -6,7 +6,7 @@ The current Phase 25 plan set has 19 files (`25-00` through `25-18`). At the 202
 
 The revision preserves the historical sequencing breach recorded below: Plan 25-01 and later source work landed before Plan 25-00's blocking human checkpoints. The accepted ADR-022 settles durable-origin *policy*, not hosted DNS/TLS or redirect observations. New Plan 25-18 requires a prospective explicit owner verdict before new authorization-coverage source work, then a current parsed-runtime/table/index/export/HTTP packet before Plan 25-11 deploy. Plan 25-00 Task 2's full current source/UI inventory and its exact final-plan SHA evidence remain open; earlier offline gate commands at `3435b9f` are recorded in `25-00-CURRENT-RECHECK-2026-09-29.md`. Do not write a `25-00-SUMMARY.md` or infer retroactive approval until the stated Task 2/3 evidence and owner verdict actually exist.
 
-This section is a planning verdict on the shared working tree. Record the committed plan-set SHA after integration and re-run the mechanical checks there before presenting an owner packet.
+Committed plan-set SHA: `cc77a5457d310c2a8df0dde9bce6525f824d463e`. After that commit, all 19 `verify plan-structure` checks passed with zero errors/warnings, strict planning returned `{"status":"passed"}`, and the playbook checker exited 0. The only dirty paths were pre-existing `graphify-out/` outputs, not Phase 25 plans or product source. The independent goal-backward verdict applies to this same plan content. The pending Task 2 source/UI inventory and owner verdict remain separate; this commit is not a release authorization.
 
 ## GATE RE-SCOPED — 2026-08-16, at owner direction
 
