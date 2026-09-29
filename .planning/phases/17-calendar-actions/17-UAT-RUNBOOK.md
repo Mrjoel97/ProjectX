@@ -13,6 +13,17 @@ The Plan 17-10 offline management-card browser gate passed on a fresh disposable
 one discovered Calendar feature test ran and passed, with zero skips and owned process/temp cleanup.
 That checks the staging/card/trace handoff; it does not supply either provider's live evidence below.
 
+**2026-09-29 zero-write entry check:** No process was listening on the local web/backend
+candidate ports 3000, 3001, 3112, 3210–3213, or 3410–3411. The retained Graph
+concurrency probe is dated 2026-08-16; it records stale PATCH 412/preserved and
+cleanup, but its old deployment/account hashes cannot bind a new live run. No
+current deployed commit, Convex instance, provider connection, historical H3
+row, migration completion, or callback configuration was established. Plan
+17-11 Task 1 therefore has **not** passed, and `17-LIVE-EVIDENCE.json` must not
+be created from these local observations. Re-enter through a named current
+deployment and verify the exact Task 1 measurements before opening either
+OAuth consent page. This check made no provider call or calendar write.
+
 ## Evidence artifact contract
 
 The agent creates `.planning/phases/17-calendar-actions/17-LIVE-EVIDENCE.json` with schema
