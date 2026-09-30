@@ -176,7 +176,7 @@ describe("/microsoft/callback — success", () => {
     });
 
     expect(res.status).toBe(303);
-    expect(location(res)).toBe(`${SITE}/dashboard/profile`);
+    expect(location(res)).toBe(`${SITE}/dashboard/profile?tab=connections`);
     // The three things that must never travel through the browser.
     expect(location(res)).not.toContain(REFRESH);
     expect(location(res)).not.toContain(ACCESS);

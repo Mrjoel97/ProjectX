@@ -1,3 +1,9 @@
+> Last verified: 2026-10-01 — Microsoft OAuth success selects the existing
+> `/dashboard/profile?tab=connections` destination explicitly. The bare profile
+> URL selects Business Profile. A red-before-green callback regression covers
+> the destination; this changes no scopes, tokens, authentication or sends.
+> Live corrected-callback acceptance remains pending release.
+>
 > Last verified: 2026-09-14 — research dispatch now carries an explicit deliverable contract:
 > omitted or `memo` preserves the existing markdown result, while `pdf` records a pending
 > `researchDeliverable` on the exact plan. Only after the research result persists does a one-shot,

@@ -198,7 +198,7 @@ http.route({
       // the request: an unknown grant must read as un-ready, not as fully ready.
       scope: tok.scope ?? "",
     });
-    return seeOther("/dashboard/profile");
+    return seeOther("/dashboard/profile?tab=connections");
   }),
 });
 
