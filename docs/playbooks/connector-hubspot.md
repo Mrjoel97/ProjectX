@@ -1,5 +1,54 @@
 # Playbook: HubSpot connector (REVN-01)
 
+> Last verified: 2026-09-30 — **BOUNDED EXPIRY ACCEPTED; WARNING FIX LOCAL ONLY.**
+> ADR-053 records the owner's exact decision. Current condition:
+> `revocation-bounded-expiry-and-warning`; legacy cascade clearance cannot clear it.
+> The safe Connections projection now retains `residualAccessUntil`; disconnected rows show
+> the precise UTC expiry, or explicitly say expiry is unavailable. The latter cannot qualify
+> release. Unreleased rows now say owner verification only, not that no live read occurred.
+> 213 focused unit tests passed across contracts/provider, projection/gates/backend and UI copy;
+> provider-lane self-tests passed. Deployed warning verification remains outstanding. Do not
+> change the historical `cascaded: false` observation, seal the gate, or activate customers from
+> these local tests. The older criterion-decision blocker below is superseded by ADR-053.
+> Backend, web and revenue typechecks also passed, as did scoped whitespace and playbook checks.
+> The pnpm Biome shim was unavailable; direct installed-Biome invocation worked. Two changed
+> test files were formatted, and scoped Biome checks passed at error severity (two pre-existing
+> warnings: unused HubSpot scope import and operator-only environment variable registration).
+> Release boundary: working branch is 305 commits ahead of the inspected `origin/main`, but the
+> touched HubSpot runtime/presentation/contract files match that baseline before this patch.
+> Isolate this patch for CI and coordinated backend/web release; do not deploy the dirty branch
+> wholesale. No production source deployment, hosted warning check or release seal occurred.
+
+> Last verified: 2026-09-30 — **HOSTED SETUP AND LIVE READS VERIFIED; RELEASE STILL PARKED.**
+> HubSpot project build #3 was validated, uploaded and deployed; the dashboard confirms the
+> production callback alongside localhost, with the same six read-only/OAuth scopes. The three
+> `HUBSPOT_OAUTH_*` deployment variables were configured and privately read-back verified. The
+> previously absent `CONNECTOR_CREDENTIAL_KEY_V1` was generated directly into deployment config.
+> No existing key was replaced. Production target identity matched the web production backend.
+> Owner-only admission was applied through the existing operator seam: parked revision 1,
+> no cleared conditions, unchanged review expiry. No app/backend source deployment occurred.
+>
+> A newly created free developer test portal completed state-protected consent. Its hashed binding
+> matched the intended portal. All five bounded datasets returned `ready`, uncapped, no missing
+> data. The provider populated sample records; no customer CRM was used. **The revoke probe returned
+> `before: ok`, `upstream: confirmed`, `after: ok`, `cascaded: false`.** Local ciphertext was cleared
+> and residual expiry retained. Reauthorization then succeeded and a bounded owners read passed.
+> Evidence: [sanitized live observations](../connectors/hubspot-live-evidence-2026-09-30.json).
+> After reauthorization, the UI Disconnect control was exercised: final status `revoked`,
+> upstream `confirmed`, ciphertext and IV absent. A subsequent read returned `unavailable/revoked`
+> with zero items. The final grant's residual expiry is `1790796442936` epoch milliseconds;
+> it is not proof that HubSpot immediately invalidated its previously issued access credential.
+>
+> **Newly observed release blockers:** the deployed Connections projection omits
+> `residualAccessUntil`, so the warning disappears after successful refresh-grant revocation;
+> its `unproven` copy also falsely says a live read has never occurred. Fix the projection/copy,
+> test and release it before customer activation. The immediate-cascade condition cannot be
+> cleared on this evidence; accepting bounded residual access requires an explicit revised
+> release criterion, not relabelling this probe as passed. Refresh-after-expiry was not exercised.
+> Historical “never run live” and “no callback/UI” notes below are superseded by this entry.
+> Verification: 33 pure-provider tests, 47 backend HubSpot tests, 20 evidence-validator checks,
+> backend `tsc --noEmit`, evidence validation and scoped `git diff --check` passed.
+
 > Last verified: 2026-09-03 (working tree, uncommitted - **THE INSTALL URL NOW CARRIES HubSpot's
 > MANDATORY `oauth` SCOPE.** 339 `packages/revenue` tests green. Not verified against live HubSpot.)
 >

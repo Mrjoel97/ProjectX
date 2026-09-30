@@ -1,5 +1,11 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-09-30 — Connections warning correction, local only. Revoked rows retain
+> a provider-derived residual-access expiry and display it as absolute UTC; invalid/missing
+> expiry is explicitly unknown. Unreleased connector copy distinguishes release status from
+> read history. Existing partial-revocation warnings retain precedence. 33 presentation tests
+> passed. No hosted UI deployment or customer activation is claimed.
+
 > 2026-09-10: Business shape now hosts evidence-qualified vertical suggestions in a separate
 > error boundary. The server selects at most two; unqualified candidates remain absent. Turning
 > a suggestion off preserves artifacts and exposes a restore preference, which cannot bypass

@@ -35,13 +35,13 @@ describe("an unproven lane is offered, and says it is unproven", () => {
     const v = connectorRowView(row({ connected: false, status: null, unproven: true }));
     expect(v.action).toBe("connect");
     expect(v.state).toBe("connect");
-    expect(v.detail).toContain("never completed a live read");
+    expect(v.detail).toContain("owner for verification only");
   });
 
   test("a proven lane says nothing of the sort", () => {
     const v = connectorRowView(row({ connected: false, status: null, unproven: false }));
     expect(v.action).toBe("connect");
-    expect(v.detail).not.toContain("never completed a live read");
+    expect(v.detail).not.toContain("owner for verification only");
   });
 
   // The marker has to survive CONNECTING. A lane that has been connected but never proven is
@@ -55,16 +55,16 @@ describe("an unproven lane is offered, and says it is unproven", () => {
     ["revoked", { status: "revoked" as const, connected: false }],
   ])("state %s keeps the caveat", (_name, over) => {
     expect(connectorRowView(row({ ...over, unproven: true })).detail).toContain(
-      "never completed a live read",
+      "owner for verification only",
     );
     expect(connectorRowView(row({ ...over, unproven: false })).detail).not.toContain(
-      "never completed a live read",
+      "owner for verification only",
     );
   });
 
   test("the caveat is added to the row's own detail, never instead of it", () => {
     const v = connectorRowView(row({ connected: true, status: "connected", unproven: true }));
-    expect(v.detail).toContain("never completed a live read");
+    expect(v.detail).toContain("owner for verification only");
     expect(v.detail).toContain("Read-only. Pikar never writes to this account.");
   });
 });
@@ -89,7 +89,12 @@ describe("a connectable-but-unconnected row offers Connect and nothing else", ()
 
   test("a clean disconnect leaves no residual notice", () => {
     const v = connectorRowView(
-      row({ connected: false, status: "revoked", grantRemainsLiveUpstream: false }),
+      row({
+        connected: false,
+        status: "revoked",
+        grantRemainsLiveUpstream: false,
+        revokeSupport: "confirmed",
+      }),
     );
     expect(v.residualNotice).toBeNull();
     expect(v.state).toBe("disconnected");
@@ -100,6 +105,37 @@ describe("a connectable-but-unconnected row offers Connect and nothing else", ()
       row({ connected: false, status: "revoked", grantRemainsLiveUpstream: true }),
     );
     expect(v.state).toBe("revoke_partial");
+  });
+
+  test("a confirmed refresh revoke preserves the precise access-expiry warning", () => {
+    const expiry = Date.parse("2026-09-30T19:27:22.936Z");
+    const v = connectorRowView(
+      row({ connected: false, status: "revoked", residualAccessUntil: expiry }),
+    );
+    expect(v.residualNotice).toContain(new Date(expiry).toISOString());
+    expect(v.residualNotice).toContain("Pikar will not make further reads");
+    expect(v.residualNotice).not.toContain("grant is still active");
+    expect(v.action).toBe("connect");
+  });
+
+  test.each([
+    undefined,
+    null,
+    NaN,
+    Infinity,
+    -1,
+    8.64e15 + 1,
+  ])("an absent or invalid expiry %s never claims immediate invalidation", (residualAccessUntil) => {
+    const v = connectorRowView(row({ connected: false, status: "revoked", residualAccessUntil }));
+    expect(v.residualNotice).toContain("expiry time is unavailable");
+    expect(v.residualNotice).not.toContain("Invalid Date");
+  });
+
+  test("a live read does not turn an unpassed lane into a release or deny the observed read", () => {
+    const v = connectorRowView(row({ unproven: true, lastReadAt: 1000 }));
+    expect(v.detail).toContain("Not yet released");
+    expect(v.detail).toContain("Last read");
+    expect(v.detail).not.toContain("never completed");
   });
 });
 

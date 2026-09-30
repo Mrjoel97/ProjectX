@@ -126,9 +126,9 @@ export type OpenCondition = {
  * BOTH, deliberately.
  */
 export const PROVIDER_OPEN_CONDITIONS: Record<Provider, readonly OpenCondition[]> = {
-  // Does `POST /oauth/2026-03/token/revoke` cascade to already-issued ACCESS tokens? Undocumented;
-  // the legacy DELETE did not.
-  hubspot: [{ id: "revoke-cascades-to-access-tokens", resolvedBy: "28-22" }],
+  // ADR-053: observed non-cascade; require bounded expiry, local refusal and verified warning.
+  // A new id prevents an old cascade-only clearance from satisfying the revised requirement.
+  hubspot: [{ id: "revocation-bounded-expiry-and-warning", resolvedBy: "28-22" }],
   // App Partner Program tier unstated, so the GET/query-only allow-list is mandatory.
   quickbooks: [{ id: "partner-tier-and-poll-budget", resolvedBy: "28-23" }],
   // Platform-initiated revocation for Stripe Apps is undocumented. Not closable by a green test.

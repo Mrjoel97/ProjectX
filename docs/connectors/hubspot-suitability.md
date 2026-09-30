@@ -1,5 +1,38 @@
 # HubSpot — provider suitability record
 
+## Accepted bounded-expiry criterion — 2026-09-30
+
+The owner accepted [ADR-053](../decisions/053-hubspot-bounded-revocation-expiry.md).
+The current condition is `revocation-bounded-expiry-and-warning`; historical cascade evidence
+below is unchanged. The expiry projection and persistent warning are fixed locally, including
+an explicit unknown-expiry fallback and corrected owner-verification copy. Old cascade clearance
+cannot satisfy the new condition. Hosted warning verification is still required; no condition is
+cleared and customer access remains parked. This supersedes the request below for a criterion decision.
+
+## Live qualification — 2026-09-30
+
+This observation supersedes historical claims below that no live grant/read exists; it does not
+change the admission marker or grant a lane pass. See
+[sanitized evidence](./hubspot-live-evidence-2026-09-30.json).
+
+- Existing private OAuth project updated to build #3 with the verified hosted callback and
+  unchanged scopes. Server-side configuration privately verified. New free isolated developer
+  portal used; no customer CRM records, marketplace submission or production-account install.
+- State-protected OAuth and hashed portal binding verified. Contacts, companies, deals, owners
+  and deal pipelines all returned `ready`, without missing data or caps. Only counts recorded.
+- **Revocation did not cascade:** the access credential worked before AND after the refresh-grant
+  revoke. `upstream: confirmed`, `cascaded: false`; stored ciphertext was cleared and the original
+  access expiry retained. This is an observation of one controlled grant, not a vendor-wide promise.
+- Reauthorization and a subsequent owners read succeeded. Refresh after natural expiry was not
+  tested. No condition was cleared; production gate remains parked, revision 1.
+- The UI Disconnect action then produced `revoked/confirmed`, cleared ciphertext and IV, and a
+  subsequent bounded read refused as `unavailable/revoked`. The test portal remains available for
+  future qualification; no usable grant remains stored in Pikar-AI.
+- The live UI omits the retained residual expiry after disconnect and equates an unpassed lane
+  with “never completed a live read.” These display defects must be fixed and released.
+- A launch accepting residual access until expiry requires an explicit change to the release
+  criterion. The existing immediate-cascade condition cannot honestly be marked satisfied.
+
 > **Decision recorded: `approved_production` — 2026-08-27, evidence-consistent.** The one
 > machine-readable marker below is the authority; the prose is the evidence it was decided
 > against. Register and vocabulary: [`README.md`](./README.md).

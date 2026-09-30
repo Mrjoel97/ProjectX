@@ -795,7 +795,7 @@ describe("probeRevocationCascade — the open condition, tested rather than assu
 
     // Evidence is not a seal. 28-22 decides; this plan only produces the observation.
     expect(PROVIDER_OPEN_CONDITIONS.hubspot.map((c) => c.id)).toContain(
-      "revoke-cascades-to-access-tokens",
+      "revocation-bounded-expiry-and-warning",
     );
     // The harness seeds gate rows for the connect-start gate, so "the probe writes no gate row" is
     // now "the probe CHANGED no gate row" — same claim, and the seeded revisions are the witness.

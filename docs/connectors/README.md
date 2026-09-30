@@ -95,7 +95,7 @@ named downstream plan:
 
 | Provider | Condition still open | Who must confront it |
 |---|---|---|
-| HubSpot | Does `POST /oauth/2026-03/token/revoke` cascade to already-issued **access** tokens? Undocumented; the legacy `DELETE` did not. | **28-05 tests it; 28-22 must not seal without the result.** |
+| HubSpot | Does disconnect prove refresh-grant revocation, local credential clearing/read refusal, and a finite residual access expiry displayed in the released UI? Non-cascade was observed live; the owner accepted bounded expiry with a verified warning in ADR-053. | **28-05 tests it; 28-22 must not seal without the result and deployed warning.** |
 | Stripe | Platform-initiated revocation for Stripe Apps is **undocumented**. 28-CONTEXT requires per-tenant revocation. | **28-24.** It cannot be closed by a green test. |
 | QuickBooks | App Partner Program **tier unstated** (Builder = 500,000 CorePlus calls/workspace/month). Write blast radius **accepted**, so the GET/query-only allow-list is **mandatory**. | **28-06** (allow-list + poll budget); **28-23**. |
 | PayPal | **No revoke endpoint documented anywhere.** Sandbox is **non-probative** about production authorization. | **28-25.** Resolve with the partner manager. |

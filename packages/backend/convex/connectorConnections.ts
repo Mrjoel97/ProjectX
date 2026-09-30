@@ -66,6 +66,8 @@ export type ConnectorView = {
   revokeSupport: "confirmed" | "unproven" | "unsupported";
   /** Set only after a disconnect that could not revoke upstream — the sentence the tenant is owed. */
   grantRemainsLiveUpstream: boolean;
+  /** A confirmed refresh-grant revoke does not prove issued access tokens expired. */
+  residualAccessUntil: number | null;
   /**
    * This lane has NOT passed its gate and is visible only because the caller is the owner.
    *
@@ -105,6 +107,7 @@ async function viewFor(
       revokeSupport: PROVIDER_REVOKE_SUPPORT[provider],
       grantRemainsLiveUpstream:
         row?.revocation !== undefined && row.revocation.upstream !== "confirmed",
+      residualAccessUntil: row?.revocation?.residualAccessUntil ?? null,
       unproven,
     };
   });

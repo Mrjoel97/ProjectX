@@ -393,7 +393,7 @@ describe("PROVIDER_OPEN_CONDITIONS — parity with the register of record", () =
         PROVIDERS.map((p) => [p, PROVIDER_OPEN_CONDITIONS[p].map((c) => [c.id, c.resolvedBy])]),
       ),
     ).toEqual({
-      hubspot: [["revoke-cascades-to-access-tokens", "28-22"]],
+      hubspot: [["revocation-bounded-expiry-and-warning", "28-22"]],
       quickbooks: [["partner-tier-and-poll-budget", "28-23"]],
       stripe: [["platform-initiated-revocation", "28-24"]],
       paypal: [["no-documented-revoke-endpoint", "28-25"]],
@@ -407,5 +407,14 @@ describe("PROVIDER_OPEN_CONDITIONS — parity with the register of record", () =
         expect(c.id).toMatch(/^[a-z0-9-]+$/);
       }
     }
+  });
+
+  it("a legacy cascade clearance does not satisfy the revised HubSpot release criterion", () => {
+    const e = resolveProviderEligibility(
+      gate({ provider: "hubspot", clearedConditions: ["revoke-cascades-to-access-tokens"] }),
+      input({ openConditions: PROVIDER_OPEN_CONDITIONS.hubspot.map((c) => c.id) }),
+    );
+    expect(e.state).not.toBe("passed");
+    expect(e.reasons).toContain("open_condition_unresolved");
   });
 });
