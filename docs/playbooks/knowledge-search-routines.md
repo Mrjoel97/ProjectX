@@ -1,5 +1,12 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-30 — isolated HubSpot release CI exposed the existing DST test
+> timer-overflow race (all 4432 backend assertions passed, but the scheduler harness rejected
+> a canceled running job). Bring forward only the existing test-only repair from development:
+> park setTimeout/clearTimeout in the two arming tests, retain real Date/ICU timestamps and
+> scheduled-row assertions, cancel the jobs and restore timers after each test. Focused tests
+> pass 7/7. No runtime scheduler, recurrence gate or activation changes. Full CI must pass.
+
 > Last verified: 2026-09-14 — the closed Convex module inventory includes
 > `researchDeliverable.ts`, the one-shot deterministic derivative workflow for an explicitly
 > requested research PDF. It is started only from an existing research plan, never re-arms, and

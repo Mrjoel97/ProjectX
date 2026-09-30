@@ -211,6 +211,7 @@ describe("the surface shows passed lanes and nothing else", () => {
       "lastFailureClass",
       "lastReadAt",
       "provider",
+      "residualAccessUntil",
       "revokeSupport",
       "status",
       "unproven",
@@ -218,6 +219,32 @@ describe("the surface shows passed lanes and nothing else", () => {
   });
 
   // The disconnect button has to be able to tell the truth before it is pressed.
+  test("confirmed refresh revocation exposes the residual expiry only to its tenant", async () => {
+    const h = await harness(true);
+    await gate(h);
+    const id = await connection(h, h.tenantId, "hubspot", { sealed: false });
+    const expiry = Date.now() + 30 * 60_000;
+    await h.t.run((ctx) =>
+      ctx.db.patch(id, {
+        status: "revoked",
+        revocation: {
+          upstream: "confirmed",
+          attemptedAt: 1,
+          localClearedAt: 1,
+          residualAccessUntil: expiry,
+        },
+      }),
+    );
+    expect((await view(h))[0]).toMatchObject({
+      connected: false,
+      status: "revoked",
+      grantRemainsLiveUpstream: false,
+      residualAccessUntil: expiry,
+      unproven: true,
+    });
+    expect(await h.asOther.query(api.connectorConnections.connections, {})).toEqual([]);
+  });
+
   test("each row carries whether a revoke can actually kill the grant upstream", async () => {
     const h = await harness();
     for (const p of ["hubspot", "quickbooks", "stripe", "paypal"] as const) await passed(h, p);

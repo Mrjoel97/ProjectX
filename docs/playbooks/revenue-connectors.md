@@ -1,4 +1,11 @@
-# Playbook: Revenue connectors — shared lifecycle, gates and release semantics
+# Playbook: Revenue connectors - shared lifecycle, gates and release semantics
+
+> Last verified: 2026-09-30 — ADR-053 changes only HubSpot's release criterion to
+> `revocation-bounded-expiry-and-warning`. Legacy cascade clearance cannot satisfy it.
+> Connections now projects the safe residual-expiry timestamp without credential material.
+> 40 contract, 33 projection and 27 gate tests passed; provider-lane self-tests passed.
+> Existing historical evidence remains unchanged. No gate was cleared; hosted warning
+> verification and the separate release seal remain required.
 
 > Last verified: 2026-09-06 (38-01 — `isRevenueToolGrant` (the IDENTITY check on `SPECIALISTS.revenue.tools`) moved to `packages/core/src/toolGrants.ts`, where `grantsFor` reads it; `revenueTools.ts` re-exports it so its importers and `revenueTools.test.ts` are unchanged. The revenue read tools and reminder staging are built under `grants.revenueReads` / `grants.invoiceReminderStage` now; the snapshot test pins the revenue specialist and both eval-seam variants.)
 >

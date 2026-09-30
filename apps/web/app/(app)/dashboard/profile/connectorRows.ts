@@ -20,6 +20,8 @@ export type ConnectorRow = {
   lastFailureClass: string | null;
   revokeSupport: "confirmed" | "unproven" | "unsupported";
   grantRemainsLiveUpstream: boolean;
+  /** Optional during rollout against an older backend; absence never proves immediate expiry. */
+  residualAccessUntil?: number | null;
   /** The lane has not passed its gate; only the owner is shown it, and only to prove it. */
   unproven: boolean;
 };
@@ -102,8 +104,7 @@ const READ_ONLY = "Read-only. Pikar never writes to this account.";
  * before it is pressed.
  */
 const UNPROVEN =
-  "Not yet verified: this connector has never completed a live read against the provider. " +
-  "Connecting it here is how that evidence gets collected.";
+  "Not yet released: this connector is available to the owner for verification only.";
 
 /** Prefix the unproven sentence onto whatever this row was going to say. */
 const detailFor = (row: ConnectorRow, detail: string): string =>
@@ -144,6 +145,10 @@ export function connectorRowView(row: ConnectorRow): ConnectorRowView {
   if (!row.connected) {
     const partialRevoke = row.grantRemainsLiveUpstream;
     const disconnected = row.status === "revoked";
+    const expiry = row.residualAccessUntil;
+    const knownExpiry =
+      typeof expiry === "number" && Number.isFinite(expiry) && expiry > 0 && expiry <= 8.64e15;
+    const residualAccess = disconnected && (row.revokeSupport === "unproven" || knownExpiry);
     return {
       ...base,
       state: partialRevoke ? "revoke_partial" : disconnected ? "disconnected" : "connect",
@@ -156,7 +161,12 @@ export function connectorRowView(row: ConnectorRow): ConnectorRowView {
       residualNotice: partialRevoke
         ? "Pikar's copy is deleted. The grant is still active in your provider account until you " +
           "remove it there."
-        : null,
+        : residualAccess
+          ? "Pikar's copy is deleted and Pikar will not make further reads. Previously issued access " +
+            (knownExpiry
+              ? `tokens may remain usable until ${new Date(expiry).toISOString()}.`
+              : "tokens may remain usable until they expire; the expiry time is unavailable.")
+          : null,
     };
   }
 

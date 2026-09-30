@@ -7,7 +7,10 @@
     "distribution": "private",
     "auth": {
       "type": "oauth",
-      "redirectUrls": ["http://localhost:3211/connectors/hubspot/callback/production"],
+      "redirectUrls": [
+        "http://localhost:3211/connectors/hubspot/callback/production",
+        "https://opulent-octopus-494.convex.site/connectors/hubspot/callback/production"
+      ],
       "requiredScopes": [
         "oauth",
         "crm.objects.contacts.read",

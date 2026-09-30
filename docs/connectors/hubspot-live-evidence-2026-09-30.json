@@ -1,0 +1,66 @@
+{
+  "schema": "hubspot-read-lane/v1",
+  "provider": "hubspot",
+  "environment": "production",
+  "mode": "live",
+  "recordedAt": "2026-09-30T18:54:09.523Z",
+  "reads": [
+    {
+      "dataset": "contacts",
+      "state": "ready",
+      "itemCount": 2,
+      "capped": false,
+      "missing": null,
+      "retrievedAt": 1790794434270,
+      "sampleRefCount": 2
+    },
+    {
+      "dataset": "companies",
+      "state": "ready",
+      "itemCount": 0,
+      "capped": false,
+      "missing": null,
+      "retrievedAt": 1790794437736,
+      "sampleRefCount": 0
+    },
+    {
+      "dataset": "deals",
+      "state": "ready",
+      "itemCount": 0,
+      "capped": false,
+      "missing": null,
+      "retrievedAt": 1790794440227,
+      "sampleRefCount": 0
+    },
+    {
+      "dataset": "owners",
+      "state": "ready",
+      "itemCount": 1,
+      "capped": false,
+      "missing": null,
+      "retrievedAt": 1790794442552,
+      "sampleRefCount": 1
+    },
+    {
+      "dataset": "dealPipelines",
+      "state": "ready",
+      "itemCount": 1,
+      "capped": false,
+      "missing": null,
+      "retrievedAt": 1790794444997,
+      "sampleRefCount": 1
+    }
+  ],
+  "revocation": {
+    "before": "ok",
+    "upstream": "confirmed",
+    "after": "ok",
+    "cascaded": false,
+    "residualAccessUntil": 1790796114541
+  },
+  "openCondition": {
+    "id": "revoke-cascades-to-access-tokens",
+    "resolved": false,
+    "observed": "The same pre-revocation access credential still permitted a bounded read after the refresh grant was revoked."
+  }
+}

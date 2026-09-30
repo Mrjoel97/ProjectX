@@ -41,7 +41,7 @@
  *   node scripts/check-provider-lane.mjs --all --json
  *   node scripts/check-provider-lane.mjs --provider hubspot --seal-decision from-owner
  *   node scripts/check-provider-lane.mjs --provider hubspot --seal-decision pass \
- *        --evidence 28-22-SUMMARY.md#live-read --clear-condition revoke-cascades-to-access-tokens
+ *        --evidence 28-22-SUMMARY.md#live-read --clear-condition revocation-bounded-expiry-and-warning
  *   node scripts/check-provider-lane.mjs --verify-gate                  # runs the real gate tests
  *   node scripts/check-provider-lane.mjs --self-test                    # prove every row can go red
  *
@@ -681,7 +681,7 @@ function selfTest() {
       why: "dropping a condition from the code while the register still lists it is a drift",
       fs: mutatedFs({
         [CONTRACTS]: contracts.replace(
-          '  hubspot: [{ id: "revoke-cascades-to-access-tokens", resolvedBy: "28-22" }],',
+          '  hubspot: [{ id: "revocation-bounded-expiry-and-warning", resolvedBy: "28-22" }],',
           "  hubspot: [],",
         ),
       }),
@@ -795,7 +795,7 @@ function selfTest() {
         seal: "pass",
         provider: "hubspot",
         evidence: "28-22-SUMMARY.md#live",
-        clear: ["revoke-cascades-to-access-tokens"],
+        clear: ["revocation-bounded-expiry-and-warning"],
       },
       expect: { ok: false },
     },
@@ -828,7 +828,7 @@ function selfTest() {
         seal: "pass",
         provider: "hubspot",
         evidence: "28-22-SUMMARY.md#live",
-        clear: ["revoke-cascades-to-access-tokens"],
+        clear: ["revocation-bounded-expiry-and-warning"],
       },
       fs: mutatedFs({
         [`list:${CONNECTOR_DIR}`]: [...realFs.list(CONNECTOR_DIR), "hubspotRead.ts"],

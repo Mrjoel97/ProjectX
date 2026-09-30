@@ -1,6 +1,6 @@
 import { classifyPayload, worst } from "@pikar/core/payloadShape";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 // `audit.log` maintains the auditCounts aggregate (audit.ts:40), so the component must be
 // registered or the REAL insert path throws. Same idiom as audit.test.ts.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -18,6 +18,16 @@ const harness = () => {
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   return t;
 };
+
+afterEach(() => vi.useRealTimers());
+
+/**
+ * convex-test passes the months-away DST delay directly to Node's setTimeout. Once the next
+ * Auckland crossing is more than 2^31-1 ms away, Node truncates it to 1 ms and the synthetic job
+ * races our cancellation. Keep the clock real for production-shaped timestamps, but park only
+ * these harness timers until the test has inspected and canceled the scheduled row.
+ */
+const parkHarnessTimers = () => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 
 /**
  * Cancel every job this test armed.
@@ -99,6 +109,7 @@ describe("arm refuses a window that could not evidence anything", () => {
 
 describe("the armed half", () => {
   test("it books ONE scheduled call at the requested instant and ONE audit row", async () => {
+    parkHarnessTimers();
     const t = harness();
     const fireAtMs = transitionAfter(DST_ZONE, Date.now()) + 3_600_000;
 
@@ -176,6 +187,7 @@ describe("NEITHER HALF MAY POISON THE ARCHIVE IT EXISTS TO UNBLOCK", () => {
   // by opening another — and because `audit` is insert-only and destined for COMPLIANCE-mode
   // object lock, that row would be permanent. So the REAL classifier is run over the REAL rows.
   test("every payload this probe writes is refs, ids, counts and timestamps only", async () => {
+    parkHarnessTimers();
     const t = harness();
     const fireAtMs = transitionAfter(DST_ZONE, Date.now()) + 3_600_000;
     const armed = await t.mutation(internal.dstProbe.arm, { zone: DST_ZONE, fireAtMs });
