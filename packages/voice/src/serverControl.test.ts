@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { assertMediaOnlyOffer, trustedCallId, trustedResponseUsage } from "./serverControl";
+import {
+  assertMediaOnlyOffer,
+  assertVoiceControlAcknowledged,
+  trustedCallId,
+  trustedResponseUsage,
+  VOICE_RESPONSE_CEILING_CENTS,
+  VOICE_TRUNCATION,
+  voiceUsageWithinBounds,
+} from "./serverControl";
 
 const offer = [
   "v=0",
@@ -11,6 +19,38 @@ const offer = [
   `a=fingerprint:sha-256 ${Array(32).fill("AA").join(":")}`,
 ].join("\r\n");
 describe("server voice trust boundary", () => {
+  it("requires the exact provider budget contract before admitting responses", () => {
+    const ack = {
+      model: "gpt-realtime-2.1",
+      max_output_tokens: 1024,
+      audio: { input: { turn_detection: { create_response: false } } },
+      truncation: VOICE_TRUNCATION,
+    };
+    expect(VOICE_RESPONSE_CEILING_CENTS).toBe(84);
+    expect(() => assertVoiceControlAcknowledged(ack)).not.toThrow();
+    for (const patch of [
+      { model: "gpt-realtime" },
+      { max_output_tokens: 2048 },
+      { audio: {} },
+      { truncation: undefined },
+      { truncation: { ...VOICE_TRUNCATION, retention_ratio: 0.9 } },
+      { truncation: { ...VOICE_TRUNCATION, type: "auto" } },
+      { truncation: { ...VOICE_TRUNCATION, token_limits: { post_instructions: 8193 } } },
+    ])
+      expect(() => assertVoiceControlAcknowledged({ ...ack, ...patch })).toThrow(
+        "VOICE_CONTROL_UNCONFIRMED",
+      );
+    const usage = {
+      responseId: "r",
+      inAudioTok: 8192,
+      textInTok: 119808,
+      outAudioTok: 1024,
+      textOutTok: 0,
+    };
+    expect(voiceUsageWithinBounds(usage)).toBe(true);
+    for (const patch of [{ inAudioTok: 8193 }, { textInTok: 119809 }, { textOutTok: 1 }])
+      expect(voiceUsageWithinBounds({ ...usage, ...patch })).toBe(false);
+  });
   it("accepts one audio-only offer and rejects frontend control channels", () => {
     expect(() => assertMediaOnlyOffer(offer)).not.toThrow();
     for (const suffix of [

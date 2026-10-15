@@ -7,7 +7,14 @@ import {
   SAVE_FOUNDATION_ANSWER_TOOL,
 } from "@pikar/core/foundation";
 import { DEFAULT_REALTIME_MODEL, SEARCH_DOCUMENT_TOOL, TURN_DETECTION_TYPE } from "@pikar/voice";
-import { trustedResponseUsage } from "@pikar/voice/serverControl";
+import {
+  assertVoiceControlAcknowledged,
+  trustedResponseUsage,
+  VOICE_OUTPUT_TOKENS,
+  VOICE_RESPONSE_CEILING_CENTS,
+  VOICE_TRUNCATION,
+  voiceUsageWithinBounds,
+} from "@pikar/voice/serverControl";
 import { v } from "convex/values";
 import WebSocket from "ws";
 import { internal } from "./_generated/api";
@@ -48,34 +55,25 @@ export const run = internalAction({
       socket.send(JSON.stringify(event));
     };
     const respond = async () => {
+      if (!ready) throw new Error("VOICE_CONTROL_UNCONFIRMED");
       if (failed || Date.now() >= initial.endsAt) throw new Error("VOICE_SESSION_INACTIVE");
       if (pending) return;
       if (++responses > 20) throw new Error("VOICE_RESPONSE_LIMIT");
-      // 128k maximum input at the highest input rate ($32/M), plus1024 output
-      // at the highest output rate ($64/M). Ceil to whole cents, never estimate chars.
+      // Provider-acknowledged conversation truncation bounds audio input; full text
+      // prefix plus conversation is conservatively double-counted in the shared ceiling.
       pending = await ctx.runMutation(internal.guardrails.reservePaidCall, {
         tenantId: initial.tenantId,
         model: DEFAULT_REALTIME_MODEL,
         callId: crypto.randomUUID(),
-        ceilingCents: 417,
+        ceilingCents: VOICE_RESPONSE_CEILING_CENTS,
       });
-      send({ type: "response.create", response: { max_output_tokens: 1024 } });
+      send({ type: "response.create", response: { max_output_tokens: VOICE_OUTPUT_TOKENS } });
     };
     const handle = async (event: Record<string, unknown>) => {
       const type = event.type;
       if (type === "session.updated") {
+        assertVoiceControlAcknowledged(event.session);
         if (!ready) {
-          const session = event.session as
-            | {
-                max_output_tokens?: unknown;
-                audio?: { input?: { turn_detection?: { create_response?: unknown } } };
-              }
-            | undefined;
-          if (
-            session?.max_output_tokens !== 1024 ||
-            session.audio?.input?.turn_detection?.create_response !== false
-          )
-            throw new Error("VOICE_CONTROL_UNCONFIRMED");
           ready = true;
           await ctx.runMutation(internal.voice.controlUpdate, { sessionId, ready: true });
           if (initial.onboarding) await respond();
@@ -90,13 +88,16 @@ export const run = internalAction({
         const usage = trustedResponseUsage(event);
         if (!pending || usage.responseId !== responseId)
           throw new Error("VOICE_UNMATCHED_RESPONSE");
+        const withinBounds = voiceUsageWithinBounds(usage);
         await ctx.runMutation(internal.voice.recordTrustedUsage, {
           sessionId,
           reservationId: pending,
+          retainReservation: !withinBounds,
           ...usage,
         });
         pending = undefined;
         responseId = undefined;
+        if (!withinBounds) throw new Error("VOICE_PROVIDER_EXCEEDED_CONTRACT");
         const response = event.response as {
           output?: { type?: string; name?: string; call_id?: string; arguments?: string }[];
         };
@@ -178,7 +179,8 @@ export const run = internalAction({
         type: "session.update",
         session: {
           type: "realtime",
-          max_output_tokens: 1024,
+          truncation: VOICE_TRUNCATION,
+          max_output_tokens: VOICE_OUTPUT_TOKENS,
           audio: {
             input: {
               turn_detection: {

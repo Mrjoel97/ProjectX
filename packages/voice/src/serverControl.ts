@@ -1,3 +1,53 @@
+/** gpt-realtime-2.1 contract, checked 2026-10-15 against official model/pricing and
+ * voice-latency-cost docs. Keep the full 128k context as TEXT prefix ($4/M), PLUS
+ * all 8192 post-instruction tokens at AUDIO input ($32/M), PLUS 1024 output at
+ * AUDIO output ($64/M). Deliberate input double-counting avoids tokenizer estimates
+ * for instructions/tool definitions. Provider acknowledgement of truncation is required.
+ * https://developers.openai.com/api/docs/models/gpt-realtime-2.1
+ * https://developers.openai.com/api/docs/pricing
+ * https://developers.openai.com/api/docs/guides/voice-latency-cost?voice-api=realtime */
+export const VOICE_CONTEXT_TOKENS = 128_000;
+export const VOICE_CONVERSATION_TOKENS = 8192;
+export const VOICE_OUTPUT_TOKENS = 1024;
+export const VOICE_RESPONSE_CEILING_CENTS = Math.ceil(
+  (VOICE_CONTEXT_TOKENS * 4 + VOICE_CONVERSATION_TOKENS * 32 + VOICE_OUTPUT_TOKENS * 64) / 10_000,
+);
+export const VOICE_TRUNCATION = {
+  type: "retention_ratio",
+  retention_ratio: 0.8,
+  token_limits: { post_instructions: VOICE_CONVERSATION_TOKENS },
+} as const;
+
+export function assertVoiceControlAcknowledged(value: unknown): void {
+  const session = value as {
+    model?: unknown;
+    max_output_tokens?: unknown;
+    audio?: { input?: { turn_detection?: { create_response?: unknown } } };
+    truncation?: {
+      type?: unknown;
+      retention_ratio?: unknown;
+      token_limits?: { post_instructions?: unknown };
+    };
+  } | null;
+  if (
+    session?.model !== "gpt-realtime-2.1" ||
+    session.max_output_tokens !== VOICE_OUTPUT_TOKENS ||
+    session.audio?.input?.turn_detection?.create_response !== false ||
+    session.truncation?.type !== VOICE_TRUNCATION.type ||
+    session.truncation.retention_ratio !== VOICE_TRUNCATION.retention_ratio ||
+    session.truncation.token_limits?.post_instructions !== VOICE_CONVERSATION_TOKENS
+  )
+    throw new Error("VOICE_CONTROL_UNCONFIRMED");
+}
+
+export function voiceUsageWithinBounds(usage: ReturnType<typeof trustedResponseUsage>): boolean {
+  return (
+    usage.inAudioTok <= VOICE_CONVERSATION_TOKENS &&
+    usage.inAudioTok + usage.textInTok <= VOICE_CONTEXT_TOKENS &&
+    usage.outAudioTok + usage.textOutTok <= VOICE_OUTPUT_TOKENS
+  );
+}
+
 /** Server-controlled transport accepts one audio-only WebRTC m-section. The browser
  * must not negotiate SCTP: a data channel would bypass server response/tool controls.
  * This parser validates, never attempts to sanitize an ambiguous offer. */

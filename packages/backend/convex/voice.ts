@@ -569,6 +569,7 @@ export const controlUpdate = internalMutation({
 });
 export const recordTrustedUsage = internalMutation({
   args: {
+    retainReservation: v.optional(v.boolean()),
     sessionId: v.id("voiceSessions"),
     responseId: v.string(),
     reservationId: v.id("spendEvents"),
@@ -584,11 +585,24 @@ export const recordTrustedUsage = internalMutation({
     if ((s.trustedResponseIds?.length ?? 0) >= 20) throw new Error("VOICE_RESPONSE_LIMIT");
     const priced = priceRealtime(a.inAudioTok, a.outAudioTok, a.textInTok, a.textOutTok);
     if (!priced.ok) throw new Error("VOICE_USAGE_UNKNOWN");
-    const settled = await ctx.runMutation(internal.guardrails.settlePaidCall, {
-      tenantId: s.tenantId,
-      reservationId: a.reservationId,
-      costUsd: priced.value,
-    });
+    const held = await ctx.db.get(a.reservationId);
+    if (
+      !held ||
+      held.tenantId !== s.tenantId ||
+      held.kind !== "paid_call" ||
+      held.phase !== "reserved"
+    )
+      throw new Error("VOICE_RESERVATION_INVALID");
+    // A violated provider contract cannot justify releasing its conservative hold.
+    // Known usage above the hold is still debited in full, never capped to admission.
+    const retain = a.retainReservation && Math.ceil(priced.value * 100) <= held.amountCents;
+    const settled = retain
+      ? undefined
+      : await ctx.runMutation(internal.guardrails.settlePaidCall, {
+          tenantId: s.tenantId,
+          reservationId: a.reservationId,
+          costUsd: priced.value,
+        });
     await ctx.db.patch(a.sessionId, {
       trustedResponseIds: [...(s.trustedResponseIds ?? []), a.responseId],
       inAudioTok: s.inAudioTok + a.inAudioTok,
@@ -596,7 +610,7 @@ export const recordTrustedUsage = internalMutation({
       textInTok: s.textInTok + a.textInTok,
       textOutTok: s.textOutTok + a.textOutTok,
     });
-    if (settled.breached)
+    if (a.retainReservation || settled?.breached)
       await ctx.scheduler.runAfter(0, internal.voice.forceEndSession, { sessionId: a.sessionId });
   },
 });
