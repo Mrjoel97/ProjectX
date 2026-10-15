@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { exportableTables } from "../../core/src/tenantData.ts";
 
 const backend = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DASHBOARD = "https://dashboard.convex.dev/d/woozy-wren-368";
@@ -19,6 +20,68 @@ export function booleanEvidence(value) {
   check(Object.values(value).every((item) => typeof item === "boolean"));
   return JSON.stringify(value);
 }
+const FAILURE_CLASSES = [
+  "authentication",
+  "budget",
+  "configuration",
+  "provider",
+  "timeout",
+  "validation",
+  "fixture",
+  "upload",
+  "decode",
+  "assertion",
+  "unknown",
+];
+class PrivateFailure extends Error {
+  constructor(kind) {
+    super("PRIVATE_STAGING_OPERATION_FAILED");
+    this.kind = kind;
+  }
+}
+export function classifyFailure(error) {
+  if (error instanceof PrivateFailure) return error.kind;
+  // Read captured diagnostics only in memory. Never return matched strings or arbitrary codes.
+  const text = [error?.message, error?.code, error?.stderr, error?.stdout]
+    .filter(Boolean)
+    .join("\n");
+  if (/UNAUTHENTICATED|TENANT_ERASURE_IN_PROGRESS/.test(text)) return "authentication";
+  if (
+    /EVAL_BUDGET_|EVAL_CALL_|PAID_BUDGET_|BUDGET_EXCEEDED|EVAL_COST_UNKNOWN|EVAL_PROVIDER_EXCEEDED_RESERVATION/.test(
+      text,
+    )
+  )
+    return "budget";
+  if (
+    /OPENROUTER_API_KEY|OPENAI_API_KEY|EMBEDDING_PROVIDER_NOT_CONFIGURED|GOLDEN_PROVIDER_BILLING_UNVERIFIED|EVAL_EMBEDDING_BILLING_MODE_UNVERIFIED|EVAL_EMBEDDING_PROVIDER_UNSUPPORTED/.test(
+      text,
+    )
+  )
+    return "configuration";
+  if (
+    /EVAL_EMBEDDING_PROVIDER_FAILED|EVAL_EMBEDDING_RESPONSE_UNRESOLVED|EVAL_EMBEDDING_PREVIOUS_FAILURE|vault: embeddings API/.test(
+      text,
+    )
+  )
+    return "provider";
+  if (/ETIMEDOUT|TimeoutError|AbortError/.test(text)) return "timeout";
+  if (/ArgumentValidationError|Invalid ID|invalid.*Id|Value does not match validator/.test(text))
+    return "validation";
+  if (/FIXTURE_BOUND|MISSING_FIXTURE|CLEANUP_BOUND/.test(text)) return "fixture";
+  if (error instanceof SyntaxError) return "decode";
+  if (text === "PRIVACY_DRILL_FAILED") return "assertion";
+  return "unknown";
+}
+function noteFailure(evidence, prefix, error) {
+  evidence[prefix + classifyFailure(error)] = true;
+}
+export function fixtureExportBoundary() {
+  const tables = exportableTables();
+  const identityIndex = tables.indexOf("users");
+  check(identityIndex === tables.length - 1 && identityIndex > 0 && tables.length < 100);
+  return identityIndex;
+}
+
 function cli(args) {
   // Never print argv, returned objects or CLI errors: they include private fixture references.
   try {
@@ -33,8 +96,8 @@ function cli(args) {
         maxBuffer: 2 * 1024 * 1024,
       },
     );
-  } catch {
-    throw new Error("PRIVATE_STAGING_OPERATION_FAILED");
+  } catch (error) {
+    throw new PrivateFailure(classifyFailure(error));
   }
 }
 // Installed CLI deliberately emits no stdout for a successful Convex null result.
@@ -65,7 +128,7 @@ const transport = {
       body: new Uint8Array(1024),
       signal: AbortSignal.timeout(30000),
     });
-    check(response.ok);
+    if (!response.ok) throw new PrivateFailure("upload");
     const result = await response.json();
     check(typeof result.storageId === "string");
     return result.storageId;
@@ -93,10 +156,25 @@ export async function cleanupFixture(io, fixture) {
       tenantId: fixture.tenant,
       docIds: docs.map((d) => d.id),
     });
+  // The native smoke purge schedules asynchronous entry deletion. Drain those exact entries
+  // before namespace cleanup, which rejects namespaces that still have entries.
+  const knownEntries = docs.flatMap((d) => (d.entryId ? [d.entryId] : []));
+  for (let attempt = 0; attempt < 60; attempt++) {
+    if ((await io.query(absentQuery(knownEntries), "rag")) === true) break;
+    check(attempt < 59);
+    await io.wait();
+  }
   // Namespace ownership is exact and fixture-generated; also catches unlinked completed entries.
   const namespaces = await io.query(namespacesQuery(fixture.tenant), "rag");
-  for (const namespaceId of namespaces)
-    await io.invoke("namespaces:deleteNamespace", { namespaceId }, undefined, "rag");
+  for (const namespaceId of namespaces) {
+    // Bound the existing synchronous component cleanup before invoking its internal loop.
+    const bounded = await io.query(
+      `const entries=await ctx.db.query("entries").withIndex("namespaceId_status_key_version",q=>q.eq("namespaceId",${literal(namespaceId)})).take(11);if(entries.length>10)return false;for(const e of entries){if((await ctx.db.query("chunks").withIndex("entryId_order",q=>q.eq("entryId",e._id)).take(33)).length>32)return false;}return true;`,
+      "rag",
+    );
+    check(bounded === true);
+    await io.invoke("namespaces:deleteNamespaceSync", { namespaceId }, undefined, "rag");
+  }
   for (let attempt = 0; attempt < 60; attempt++) {
     if ((await io.query(namespacesQuery(fixture.tenant), "rag")).length === 0) break;
     check(attempt < 59);
@@ -116,15 +194,36 @@ export async function cleanupFixture(io, fixture) {
 export async function runPrivacyDrill(io = transport) {
   const evidence = {
     stagingTarget: false,
+    freshFixtureScopes: false,
     syntheticAdminContext: true,
     nativeAccountDeletionVerified: false,
+    nativeIdentityExportVerified: false,
+    budgetOpened: false,
+    uploadUrlIssued: false,
+    uploadAccepted: false,
+    docInserted: false,
+    ragEmbedded: false,
+    markedReady: false,
+    ragCaptured: false,
+    exportStarted: false,
+    exportPageRead: false,
+    exportRead: false,
+    firstFixtureComplete: false,
+    secondFixtureComplete: false,
+    ...Object.fromEntries(
+      FAILURE_CLASSES.flatMap((kind) => [
+        [`failure_${kind}`, false],
+        [`cleanupFailure_${kind}`, false],
+      ]),
+    ),
     uploadExport: false,
     crossTenantIsolation: false,
-    ragExport: false,
+    vaultContentAndRagRefsExport: false,
     fixtureRowsRemoved: false,
     knownStorageRemoved: false,
     knownRagRowsRemoved: false,
     otherTenantPreserved: false,
+    otherTenantRagPreserved: false,
     cleanupCompleted: false,
     budgetClosed: false,
     hostedInflightRaceVerified: false,
@@ -141,15 +240,30 @@ export async function runPrivacyDrill(io = transport) {
   try {
     requireStaging(await io.target());
     evidence.stagingTarget = true;
+    // Never adopt or clean an existing eval tenant merely because a random label collided.
+    const tables = exportableTables().filter((table) => table !== "users");
+    check(tables.length < 100);
+    for (const fixture of fixtures) {
+      const fresh = await io.query(`// fresh-fixture-check
+for(const table of ${literal(tables)}){if(await ctx.db.query(table).withIndex("by_tenant",q=>q.eq("tenantId",${literal(fixture.tenant)})).first())return false;}if(await ctx.db.query("audit").withIndex("by_tenant_ts",q=>q.eq("tenantId",${literal(fixture.tenant)})).first())return false;if(await ctx.db.query("authRevocations").withIndex("by_userId",q=>q.eq("userId",${literal(fixture.tenant)})).first())return false;return true;`);
+      check(fresh === true);
+      const namespaces = await io.query(namespacesQuery(fixture.tenant), "rag");
+      check(Array.isArray(namespaces) && namespaces.length === 0);
+    }
+    evidence.freshFixtureScopes = true;
     admitted = true;
     budget = await io.invoke("guardrails:openEvalBudget", {
       tenantIds: fixtures.map((f) => f.tenant),
       capCents: 10,
     });
+    check(typeof budget === "string" && budget.length > 0);
+    evidence.budgetOpened = true;
     for (const fixture of fixtures) {
       // CLI impersonation only establishes a synthetic fixture context, never native auth evidence.
       const url = await io.invoke("requests:generateUploadUrl", {}, fixture.tenant);
+      evidence.uploadUrlIssued = true;
       fixture.storageIds.push(await io.upload(url));
+      evidence.uploadAccepted = true;
       const text = `Synthetic privacy drill ${fixture.tenant}. Fictional workshop schedules one weekly planning meeting.`;
       const id = await io.invoke("vaultSmoke:insertBrief", {
         tenantId: fixture.tenant,
@@ -157,15 +271,25 @@ export async function runPrivacyDrill(io = transport) {
         text,
         hash: createHash("sha256").update(text).digest("hex"),
       });
+      check(typeof id === "string" && id.length > 0);
+      evidence.docInserted = true;
       const embedded = await io.invoke("vaultRag:embedDoc", {
         vaultDocId: id,
         tenantId: fixture.tenant,
         evalBudgetId: budget,
       });
+      check(typeof embedded?.entryId === "string" && !embedded.entryId.startsWith("smoke::"));
+      evidence.ragEmbedded = true;
       await io.invoke("vault:markReady", { vaultDocId: id, ragEntryId: embedded.entryId });
+      evidence.markedReady = true;
       fixture.docId = id;
       fixture.ragIds = await io.query(ragCapture([embedded.entryId]), "rag");
+      check(Array.isArray(fixture.ragIds) && fixture.ragIds.length >= 4);
+      evidence.ragCaptured = true;
+      // Synthetic subjects have no users row: exercise only the public tenant-content pages.
+      const identityIndex = fixtureExportBoundary();
       let cursor;
+      evidence.exportStarted = true;
       let exportedBlob = false;
       let exportedDoc = false;
       for (let page = 0; page < 100; page++) {
@@ -174,6 +298,7 @@ export async function runPrivacyDrill(io = transport) {
           cursor ? { cursor } : {},
           fixture.tenant,
         );
+        evidence.exportPageRead = true;
         check(!data.limits.truncated && data.header.tenantId === fixture.tenant);
         for (const file of data.files ?? [])
           if (fixture.storageIds.includes(file.storageId)) exportedBlob = true;
@@ -182,13 +307,16 @@ export async function runPrivacyDrill(io = transport) {
             (d) => d._id === id && d.ragEntryId === embedded.entryId && d.text === text,
           );
         cursor = data.nextCursor;
-        if (!cursor) break;
-        check(page < 99);
+        check(cursor);
+        if (cursor.tableIndex === identityIndex) break;
+        check(cursor.tableIndex < identityIndex && page < 99);
       }
       check(exportedBlob && exportedDoc);
+      evidence.exportRead = true;
+      evidence[fixture === fixtures[0] ? "firstFixtureComplete" : "secondFixtureComplete"] = true;
     }
     evidence.uploadExport = true;
-    evidence.ragExport = true;
+    evidence.vaultContentAndRagRefsExport = true;
     const [a, b] = fixtures;
     check((await io.invoke("vault:vaultDocText", { vaultDocId: a.docId }, b.tenant)) === null);
     check((await io.invoke("vault:vaultDocText", { vaultDocId: b.docId }, a.tenant)) === null);
@@ -199,10 +327,10 @@ export async function runPrivacyDrill(io = transport) {
         (await io.query(receiptsQuery(a.tenant))) === 0,
     );
     evidence.fixtureRowsRemoved = true;
-    check(await io.query(storageQuery(a.storageIds)));
+    check((await io.query(storageQuery(a.storageIds))) === true);
     evidence.knownStorageRemoved = true;
     for (let attempt = 0; attempt < 60; attempt++) {
-      if (await io.query(absentQuery(a.ragIds), "rag")) {
+      if ((await io.query(absentQuery(a.ragIds), "rag")) === true) {
         evidence.knownRagRowsRemoved = true;
         break;
       }
@@ -210,10 +338,17 @@ export async function runPrivacyDrill(io = transport) {
     }
     check(evidence.knownRagRowsRemoved);
     check((await io.invoke("vault:vaultDocText", { vaultDocId: b.docId }, b.tenant)) !== null);
-    check(!(await io.query(storageQuery(b.storageIds))));
+    check((await io.query(storageQuery(b.storageIds))) === false);
+    check(
+      (await io.query(
+        `return (await Promise.all(${literal(b.ragIds)}.map(id=>ctx.db.get(id)))).every(x=>x!==null);`,
+        "rag",
+      )) === true,
+    );
+    evidence.otherTenantRagPreserved = true;
     evidence.otherTenantPreserved = true;
-  } catch {
-    /* Output is only the allowlisted boolean evidence, never provider failures. */
+  } catch (error) {
+    noteFailure(evidence, "failure_", error);
   } finally {
     if (admitted) {
       let clean = true;
@@ -224,14 +359,15 @@ export async function runPrivacyDrill(io = transport) {
             (await io.query(docsQuery(fixture.tenant))).length === 0 &&
               (await io.query(receiptsQuery(fixture.tenant))) === 0,
           );
-          check(await io.query(storageQuery(fixture.storageIds)));
+          check((await io.query(storageQuery(fixture.storageIds))) === true);
           let absent = fixture.ragIds.length === 0;
           for (let attempt = 0; !absent && attempt < 60; attempt++) {
-            absent = await io.query(absentQuery(fixture.ragIds), "rag");
+            absent = (await io.query(absentQuery(fixture.ragIds), "rag")) === true;
             if (!absent) await io.wait();
           }
           check(absent);
-        } catch {
+        } catch (error) {
+          noteFailure(evidence, "cleanupFailure_", error);
           clean = false;
         }
       }
@@ -240,7 +376,8 @@ export async function runPrivacyDrill(io = transport) {
         try {
           await io.invoke("guardrails:closeEvalBudget", { budgetId: budget });
           evidence.budgetClosed = true;
-        } catch {
+        } catch (error) {
+          noteFailure(evidence, "cleanupFailure_", error);
           /* retain accounting */
         }
       }
