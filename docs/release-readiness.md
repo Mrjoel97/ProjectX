@@ -2,16 +2,16 @@
 
 Last reviewed: 2026-10-15. Implementation starting baseline: `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
 Release implementation and deployment evidence: Codex, acting on the repository owner's instructions. Ongoing operator and specialist review assignments remain open under the owner roles below; deployment does not close those operational ownership tasks.
-Current production runtime: `c2cf18c2cbcf4d16df4e3143271ac69471172f64`, deployed 2026-10-15 in [run 38760903041](https://github.com/Mrjoel97/ProjectX/actions/runs/38760903041). Local implementation and tests never imply live provider verification. Voice/foundation activation and the remaining drills below are still open.
+Current production runtime: `6da1bd0711870cb6eea46d87dac149414b304184`, deployed 2026-10-15 in [run 38771736815](https://github.com/Mrjoel97/ProjectX/actions/runs/38771736815). Local implementation and tests never imply live provider verification. Voice/foundation activation and the remaining drills below are still open.
 
 | Gate | Owner role | Current state | Required closure evidence |
 |---|---|---|---|
 | Operations guide | Release engineer | Drafted; operational drill pending | Fresh setup, staging release and recovery using only the guide |
-| Release configuration | Release engineer | Exact-SHA CI, production configuration gate, Convex dry-run/generated-type check, deploy/seed, staged probe and promotion passed at c2cf18c; rollback drill pending | Exact SHA, configuration check, environment protections, successful staged promotion and rollback |
+| Release configuration | Release engineer | Exact-SHA CI, production configuration gate, Convex dry-run/generated-type check, deploy/seed, staged probe and promotion passed at 6da1bd0; rollback drill pending | Exact SHA, configuration check, environment protections, successful staged promotion and rollback |
 | External delivery | Backend engineer | Implemented locally: durable claims/receipts and manual uncertainty review; live reconciliation pending | Durable attempt state, no blind resend, concurrent/crash/timeout tests and controlled provider reconciliation |
 | Cost admission | Backend engineer | Implemented paid admission, server-owned voice control and strict PCM duration bounds locally; live provider evidence open | Atomic reservations, all paid callers migrated, idempotent settlement, uncertain holds, provider reconciliation |
-| Identity | Security/backend engineer | Password verification/recovery and stale-session rejection tested; production sender configured and controlled inbox delivery confirmed; native application drill pending | Cross-tenant negative tests, password verification/recovery, privilege and callback checks |
-| Privacy/export/deletion | Security/backend engineer | Typed audit and foundation export/deletion implemented; live erasure verification pending | Typed operational events, sensitive-data sink tests, all new content included in export/deletion |
+| Identity | Security/backend engineer | Isolated native signup verification, replay rejection, recovery/reset and old/new JWT checks passed; expiry and browser acceptance remain open | Cross-tenant negative tests, password verification/recovery, privilege and callback checks |
+| Privacy/export/deletion | Security/backend engineer | Typed audit and foundation export/deletion implemented; isolated self-deletion succeeded, independent blob-absence proof pending | Typed operational events, sensitive-data sink tests, all new content included in export/deletion |
 | Graph retrieval | Backend engineer | Bounded indexed traversal and stale-revision filtering tested locally | Adjacency-only reads, cycle/high-degree/isolation regression tests, read-budget evidence |
 | Other request scans | Backend engineer | Indexed selection, cursor pagination, bounded working queues and durable cleanup implemented; inventory complete locally | Each scan bounded, paginated or moved to checkpointed work |
 | Module boundaries | Backend engineer | Research tools, PDF renderer and current-media readers extracted in addition to traversal/foundation/stock domains; regressions passed | Incremental pure-domain extraction with behavioral regression coverage |
@@ -24,7 +24,7 @@ Current production runtime: `c2cf18c2cbcf4d16df4e3143271ac69471172f64`, deployed
 | Connectors | Provider operator | Per-provider gates remain binding | Current connection, scope/expiry/revoke/read evidence for each enabled provider |
 | Recurrence | Workflow operator | Existing gate remains binding | Required actual DST/OAuth/provider traces; do not enable on simulated evidence alone |
 | Skill activation | Model operator | Per-skill evidence required | Seed/version identity, evaluation, activation and rollback evidence |
-| CI portability/build | Release engineer | Local Windows checks and hosted Linux CI passed; exact release c2cf18c passed typechecks, lint, free gates, tests and build; production workflow passed | Clean Windows/Linux checks and resolved or dispositioned build warnings |
+| CI portability/build | Release engineer | Local Windows checks and hosted Linux CI passed; release 6da1bd0 passed PR40/main CI and production workflow; PR40 suite: 8,190 passed, two skipped | Clean Windows/Linux checks and resolved or dispositioned build warnings |
 
 ## Delivery order
 
@@ -54,14 +54,15 @@ implementation changes; old evidence is not current assurance.
 
 ## Remaining closure tasks
 
-- [ ] Qualify the tenant-bound upload relay on hosted Convex: production-origin CORS/preflight, a 200 MiB raw streaming upload within the storage upload timeout, single-use receipt binding, original plus normalized audio sidecar, cancellation and deletion races. Local HTTP tests do not establish hosted throughput.
+- [ ] Qualify the tenant-bound upload relay on hosted Convex: production-origin CORS/preflight, a 200 MiB raw streaming upload within the storage upload timeout, single-use receipt binding, original plus normalized audio sidecar, cancellation and deletion races. Hosted admin-fixture throughput passed through 200 MiB, but the separate local 200 MiB path timed out with partial data; browser relay, cancellation and cleanup qualification remain open.
 
 - [ ] Assign named owners and run fresh setup, staging promotion and rollback drills; attach exact revision and environment evidence.
 - [ ] Exercise controlled Gmail/Microsoft acceptance, response loss and mailbox reconciliation. Confirm one provider send per request and no blind retries.
 - [ ] Establish trusted voice session ownership, hard termination and provider usage reconciliation. Browser telemetry must never release a hold. Verify transcription duration ceilings against trusted metadata, and provider pricing against the configured model.
 - [x] Route the operator-only `probeGemini` diagnostic through paid admission. Folder and per-call reservations remain conservatively overlapping; reconcile actual provider invoices before tuning allowances.
 - [x] Provision verified sender configuration and confirm one controlled production email reaches the owner's inbox. Native application authentication is a separate gate below.
-- [ ] Run signup, expiry, replay, recovery and session invalidation with real isolated accounts.
+- [x] Run native signup verification, replay rejection, recovery/reset and old/new JWT checks with an isolated account. See the release evidence below.
+- [ ] Complete authentication expiry and browser-specific acceptance checks.
 - [ ] Verify erasure against storage/RAG/provider systems, including already-running work. Record retained audit/billing/security exceptions.
 - [x] Inventory request-time `.collect()` paths; replace unbounded histories with exact indexes, pagination or bounded cleanup; extract research/PDF/media read modules. See [retrieval inventory](governance/retrieval-boundaries-2026-10-15.md). Production index rollout and load evidence remain release checks.
 - [ ] Run real microphone/browser onboarding: interruption, reconnect, resume, typed/upload fallback, correction, six-document review, explicit approval and repeat publication. Confirm only current approved documents ground answers.
@@ -160,3 +161,19 @@ The temporary production preflight branch was deleted after its controlled test;
 The isolated staging preflight confirmed `woozy-wren-368` using its separate GitHub staging secret. Missing staging signing keys were generated as a fresh pair only when both names were absent; production keys were never copied. The staging frontend was built from verified runtime revision c2cf18c with `NEXT_PUBLIC_CONVEX_URL=https://woozy-wren-368.convex.cloud`; no production domain was promoted by that preview deployment. Staging provider configuration and live acceptance remain independent gates.
 
 Review found that the old first-response admission could never fit a fresh tenant's defaults: the100c initial reservation plus417c response reservation exceeded the500c daily allowance. The follow-up preserves the100c hold and500c allowance, requires acknowledged8192-token post-instruction truncation, and reserves84c per response using conservative full-context text, bounded audio-input and output prices. It rejects missing/mismatched provider controls and terminates on usage outside the contract. Known overages are charged in full; contract violations never release a conservative hold. Local voice suites passed36 backend tests and four shared contract tests, including a real initial reservation and overage accounting; mint13 tests were rerun after their contract assertion. Backend typechecking, scoped formatting, golden self-check and vertical corpus checks passed. These overlapping targeted checks are not a new full-suite total or live provider evidence. Production voice/foundation flags remain off until real acceptance passes.
+
+## PR40 production release and isolated acceptance — 2026-10-15
+
+Independent postflight confirmed Vercel deployment `dpl_BmHDosKvPMCMXBt6Zsp8kDvWko7R` is READY with target production. Public home, sign-in, signup, privacy and terms routes returned HTTP 200; the home and legal pages contain the configured support address.
+
+Evidence owner: Codex acting on the repository owner's instructions. Production runtime: `6da1bd0711870cb6eea46d87dac149414b304184`. [PR40 CI run 38769971783](https://github.com/Mrjoel97/ProjectX/actions/runs/38769971783) passed with 8,190 tests and two skips. [Main CI run 38771336560](https://github.com/Mrjoel97/ProjectX/actions/runs/38771336560) and [production deployment run 38771736815](https://github.com/Mrjoel97/ProjectX/actions/runs/38771736815) succeeded. These supersede the earlier production runtime references; the preceding records remain historical evidence for their stated revisions.
+
+| Scenario and environment | Observed evidence | Remaining limitation / next action |
+|---|---|---|
+| Staging provider configuration | [Run 38772482415](https://github.com/Mrjoel97/ProjectX/actions/runs/38772482415) confirmed OpenRouter configuration | Configuration presence does not prove provider output quality or voice acceptance |
+| Hosted staging admin-fixture uploads | Same run: 1 MiB / 601 ms, 64 MiB / 1,334 ms, 200 MiB / 2,856 ms; all HTTP 200 | Qualify the authenticated browser relay, CORS, receipt binding, sidecars and cancellation separately |
+| Isolated native password-account drill | Signup verification, replay rejection, recovery, reset, rejection of old JWT and acceptance of new JWT passed | Complete expiry and browser-specific scenarios; do not generalize this native drill to browser/microphone acceptance |
+| Local large-upload attempt | 200 MiB attempt timed out after 125 seconds; approximately 86 MB tracked as partial data | Investigate the local path and prove partial-data cleanup; hosted admin-fixture success does not erase this failure |
+| Isolated account self-deletion | Self-deletion succeeded | Independently verify storage blob absence and remaining RAG/provider cleanup before closing erasure |
+
+Native drill outcomes are operator-observed evidence; this document retains no test emails, account IDs, storage IDs, codes or tokens. Their independent cleanup proof remains pending. Production foundation onboarding and controlled voice remain off; billing remains off by owner instruction. No qualified browser/microphone session exists, and no live voice or six-document onboarding acceptance is claimed by these tests.
