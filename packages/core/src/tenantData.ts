@@ -418,7 +418,7 @@ export type TenantExportCursor = {
 };
 
 /**
- * A FILE THE TENANT OWNS, handed over as a time-limited download link.
+ * A FILE THE TENANT OWNS, handed over as a reusable bearer download link.
  *
  * THE GAP THIS CLOSES: until 2026-09-08 the export was rows-only — a grep of `tenantExport.ts` for
  * "storage" returned ZERO — while the erasure surface said “Download your data first if you want a
@@ -430,9 +430,9 @@ export type TenantExportCursor = {
  * whose blob is already gone (a failed render, a half-written intake). A null says so instead of
  * pretending, and the export stays well-formed.
  *
- * THE LINK EXPIRES. `ctx.storage.getUrl` mints a time-limited signed URL, so an export JSON kept
- * for a week hands over links that no longer resolve. That is disclosed on the surface rather than
- * hidden — fetch the files when you take the export.
+ * KEEP LINKS PRIVATE. Anyone with a `ctx.storage.getUrl` URL can reuse or share it; these URLs
+ * do not automatically expire. Deleting the stored file revokes access, so save files before erasure.
+ * Provider contract: https://docs.convex.dev/file-storage/serve-files#security-consideration
  */
 export type TenantExportFile = {
   table: string;

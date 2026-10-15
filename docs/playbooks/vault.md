@@ -1,3 +1,5 @@
+> Last verified: 2026-10-16 — binary preview loading text and PDF/image rendering comments no longer claim automatic expiry for vaultDownloadUrl. That query authorizes the tenant before returning ctx.storage.getUrl; anyone receiving the resulting bearer link can reuse/share it until the stored file is deleted. See [Convex serving-files documentation](https://docs.convex.dev/file-storage/serve-files). Existing preview-state tests cover the current PDF copy; rendering and file access behavior are unchanged.
+
 > Last verified: 2026-10-15 — Document entity previews return at most256 relationships and show a partial-results notice. Deletion removes128 graph edges per transaction and schedules a durable continuation until all edges/orphan nodes are removed. Drive folder refresh resolves the exact tenant/driveFolderId index instead of scanning all folders. Local300-edge deletion regression passes.
 
 > Last verified: 2026-10-15 — audio transcription now reserves a 100-cent policy allowance before egress, disables SDK retries, and settles provider-reported cost or a known reported duration. Missing billing/duration retains its hold instead of becoming zero. This allowance is not a verified duration ceiling: compressed byte limits cannot establish that guarantee. Ordinary research calls also reserve existing fixed per-call fee ceilings before Tavily transport.
@@ -906,6 +908,8 @@
 >
 > `binaryMediaKind(mimeType)` in `previewState.ts` is now THE single answer to "is this shown in
 > its true form, and which kind?", and `application/pdf` is a third kind beside image and video.
+> Correction (2026-10-16): the historical short-lived description below is superseded by the reusable bearer-link contract at the top of this playbook.
+>
 > `PreviewModal` renders it in an `<iframe>` over the same short-lived signed URL
 > (`vault.vaultDownloadUrl`) the image and video branches already use — the browser's own viewer,
 > so pagination, zoom, text selection and search come free with no library and no conversion.

@@ -84,7 +84,7 @@ describe("derivePreviewState", () => {
     // is right for two kinds and silently wrong for a third.
     expect(
       derivePreviewState({ ...ready, mimeType: "application/pdf", text: null }).content,
-    ).toMatchObject({ title: "PDF preview" });
+    ).toMatchObject({ title: "PDF preview", detail: "Loading the stored PDF." });
   });
 
   test("a PDF whose bytes are gone falls back — it must never frame nothing", () => {

@@ -75,15 +75,15 @@ export const isSpreadsheet = (mimeType: string): boolean => SPREADSHEET_MIMES.in
 const BINARY_COPY: Record<"image" | "video" | "pdf", { title: string; detail: string }> = {
   image: {
     title: "Image preview",
-    detail: "Loading the stored image through a short-lived signed URL.",
+    detail: "Loading the stored image.",
   },
   video: {
     title: "Video preview",
-    detail: "Loading the stored video through a short-lived signed URL.",
+    detail: "Loading the stored video.",
   },
   pdf: {
     title: "PDF preview",
-    detail: "Loading the stored PDF through a short-lived signed URL.",
+    detail: "Loading the stored PDF.",
   },
 };
 

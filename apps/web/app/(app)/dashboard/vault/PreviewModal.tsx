@@ -372,7 +372,7 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                   </button>
                 </div>
               ) : preview.content.media === "pdf" ? (
-                // The browser's OWN PDF viewer, over the same short-lived signed URL the image and
+                // The browser's OWN PDF viewer, over the same stored-file bearer URL the image and
                 // video branches use — pagination, zoom, text selection and search for free. No
                 // library, no conversion, no rendering fidelity to argue about.
                 //

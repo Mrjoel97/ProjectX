@@ -1,3 +1,7 @@
+> Last verified: 2026-10-16 — the Content image-thumbnail comment now accurately describes direct rendering of a Convex bearer file URL without an image optimizer; it no longer claims the URL expires. The Vault uses the same getUrl-backed download query. No thumbnail rendering behavior changed.
+
+> Last verified: 2026-10-16 — export wording now describes reusable stored-file links, asks users to keep the export private because anyone with a link can access its file, and advises saving files before erasure. No automatic URL expiry is promised or implemented. [Convex serving-files documentation](https://docs.convex.dev/file-storage/serve-files) states that direct file URLs can be reused/shared and revocation requires deleting the stored file. The existing Settings download DOM test checks this disclosure alongside the downloaded export; no storage behavior changed.
+
 > Last verified: 2026-10-16 — Settings JSON export preserves file descriptors from every continuation page, including later tables and null URLs for missing bytes. The aggregate contract requires files; existing header, omissions and final truncation limits are retained. A DOM regression clicks Download my data and reads the actual downloaded Blob across three pages/two tables, checking file links, rows and partial-export disclosure. File capabilities remain only in the user-requested download, with no logging or additional storage requests.
 
 # Playbook: Connected dashboard pages
@@ -79,6 +83,8 @@
 > fail. A `Reports` heading assertion now precedes it. Enforced repo-wide by
 > `scripts/check-absence-guards.mjs`; see cockpit.md.)
 
+> Correction (2026-10-16): the historical entry below incorrectly described automatic expiry. The current bearer-link contract and product wording are documented at the top of this playbook; the old expiry claim is superseded.
+>
 > Last verified: 2026-09-08 (44-03 — `DataControls`'s export copy now MATCHES what the export
 > ships. Until this commit the surface said only "structured JSON", while the erase panel beside
 > it said "Download your data first if you want a copy" — and `tenantExport` carried no files at
