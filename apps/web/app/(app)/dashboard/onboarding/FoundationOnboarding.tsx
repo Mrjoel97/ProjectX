@@ -43,7 +43,13 @@ const input = {
   color: "var(--ink)",
 };
 
-export default function FoundationOnboarding({ voiceEnabled = true }: { voiceEnabled?: boolean }) {
+export default function FoundationOnboarding({
+  voiceEnabled = true,
+  readOnly = false,
+}: {
+  voiceEnabled?: boolean;
+  readOnly?: boolean;
+}) {
   const draft = useQuery(api.foundation.get, {});
   const review = useQuery(api.foundation.review, {});
   const published = useQuery(api.foundation.publication, {});
@@ -81,6 +87,7 @@ export default function FoundationOnboarding({ voiceEnabled = true }: { voiceEna
   const voice = useVoiceSession(undefined, {
     onboarding: true,
     onAnswer: async (args) => {
+      if (readOnly) throw new Error("Business setup is temporarily read-only.");
       if (pending.current) throw new Error("An answer is already saving. Please retry.");
       pending.current = true;
       setBusy(true);
@@ -100,6 +107,9 @@ export default function FoundationOnboarding({ voiceEnabled = true }: { voiceEna
   });
   const voiceActive = ["live", "paused", "connecting"].includes(voice.status);
   const savedEvents = useRef(new Set<string>());
+  useEffect(() => {
+    if (readOnly && voiceActive) void voice.end();
+  }, [readOnly, voiceActive, voice.end]);
   useEffect(() => {
     if (!pendingDoc || !extracted) return;
     if (extracted.text?.trim()) {
@@ -163,6 +173,7 @@ export default function FoundationOnboarding({ voiceEnabled = true }: { voiceEna
     }
   }
   useEffect(() => {
+    if (readOnly) return;
     if (!draft) return;
     for (const turn of voice.transcript) {
       if (!turn.final || savedEvents.current.has(turn.id)) continue;
@@ -178,7 +189,7 @@ export default function FoundationOnboarding({ voiceEnabled = true }: { voiceEna
         );
       });
     }
-  }, [voice.transcript, checkpoint, draft]);
+  }, [voice.transcript, checkpoint, draft, readOnly]);
 
   async function initialize() {
     setBusy(true);
@@ -250,6 +261,73 @@ export default function FoundationOnboarding({ voiceEnabled = true }: { voiceEna
       setBusy(false);
     }
   }
+
+  if (readOnly)
+    return (
+      <main style={card}>
+        <h1>Your saved business foundation</h1>
+        <p>
+          Business setup is temporarily read-only. Your saved information and approved documents
+          remain available.
+        </p>
+        {error && <p role="alert">{error}</p>}
+        {draft && (
+          <>
+            <h2>Saved revision {draft.revision}</h2>
+            <dl>
+              {Object.entries(draft.profile).map(([key, value]) => (
+                <div key={key}>
+                  <dt>
+                    {{
+                      name: "Business name",
+                      oneLineDescription: "Business description",
+                      stage: "Business stage",
+                      offering: "Offering",
+                      targetCustomer: "Target customer",
+                      primaryGoals: "Goals",
+                      knownConstraints: "Constraints",
+                    }[key as keyof ProfileInput] ?? key}
+                  </dt>
+                  <dd>{Array.isArray(value) ? value.join(", ") : value || "Unknown"}</dd>
+                </div>
+              ))}
+            </dl>
+            {draft.answers.map((answer) => (
+              <p key={answer.eventId}>{answer.text}</p>
+            ))}
+            {review?.documents.map((doc) => (
+              <details key={doc.section}>
+                <summary>{doc.title}</summary>
+                <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit" }}>{doc.text}</pre>
+              </details>
+            ))}
+            <p>
+              Discarding removes unpublished changes and temporary transcripts. Approved documents
+              remain.
+            </p>
+            <button
+              type="button"
+              disabled={busy || voiceActive}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await discard({ revision: draft.revision });
+                  setError(null);
+                } catch {
+                  setError("Could not discard this revision. Reload and try again.");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Discard unpublished progress
+            </button>
+          </>
+        )}
+        <Link href="/dashboard/vault">Open Knowledge Vault</Link>
+        <Link href="/dashboard/profile">Open Business Blueprint</Link>
+      </main>
+    );
 
   return (
     <main

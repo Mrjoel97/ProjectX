@@ -769,6 +769,7 @@ export default defineSchema({
   // Raw content lives HERE (CLAUDE.md §4) — never in audit/deadLetters payloads.
   requests: defineTable({
     tenantId: v.string(),
+    deliveryProtocol: v.optional(v.literal("claim_v1")),
     // Claim persisted BEFORE provider I/O. An uncertain outcome never authorizes another send.
     deliveryAttempt: v.optional(
       v.object({

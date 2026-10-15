@@ -399,7 +399,16 @@ export const pipelineWorkflow = workflow.define({
 export const setStatus = internalMutation({
   args: { requestId: v.id("requests"), status: REQUEST_STATUS },
   handler: async (ctx, { requestId, status }) => {
-    await ctx.db.patch(requestId, { status });
+    const row = await ctx.db.get(requestId);
+    if (!row) throw new Error("PIPELINE_REQUEST_MISSING");
+    await ctx.db.patch(requestId, {
+      status,
+      // An already-delivering pre-upgrade row may have crossed provider POST. Never
+      // retroactively bless it: only a fresh transition proves this code owns admission.
+      ...(status === "delivering" && row.status !== "delivering" && !row.deliveryAttempt
+        ? { deliveryProtocol: "claim_v1" as const }
+        : {}),
+    });
   },
 });
 

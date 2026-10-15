@@ -218,7 +218,7 @@ export default function OnboardingPage() {
   const draft = useQuery(api.foundation.get, {});
   if (enabled === undefined || draft === undefined) return <p>Loading your business setup…</p>;
   return enabled || draft ? (
-    <FoundationOnboarding voiceEnabled={enabled} />
+    <FoundationOnboarding voiceEnabled={enabled} readOnly={!enabled} />
   ) : (
     <LegacyOnboardingPage />
   );

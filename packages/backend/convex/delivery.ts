@@ -38,6 +38,7 @@ export type DeliveryResult =
 export const send = internalAction({
   args: { requestId: v.id("requests") },
   handler: async (ctx, { requestId }): Promise<DeliveryResult> => {
+    await ctx.runMutation(internal.delivery.quarantineLegacy, { requestId });
     const attempt = await ctx.runQuery(internal.delivery.receipt, { requestId });
     if (attempt?.state === "confirmed")
       return { delivered: true, messageId: attempt.messageId ?? "" };
@@ -49,6 +50,25 @@ export const send = internalAction({
     return provider === "microsoft"
       ? await ctx.runAction(internal.graph.send, { requestId })
       : await ctx.runAction(internal.gmail.send, { requestId });
+  },
+});
+
+/** A legacy in-flight send has no durable claim proving whether provider I/O happened.
+ * Quarantine before even token refresh/provider selection. Manual reconciliation uses
+ * the ordinary unknown receipt path and never authorizes an automatic resend. */
+export const quarantineLegacy = internalMutation({
+  args: { requestId: v.id("requests") },
+  handler: async (ctx, { requestId }): Promise<void> => {
+    const row = await ctx.db.get(requestId);
+    if (!row || row.status !== "delivering" || row.deliveryAttempt || row.deliveryProtocol) return;
+    await ctx.db.patch(requestId, {
+      deliveryAttempt: {
+        state: "in_flight",
+        provider: row.mailProvider ?? "google",
+        startedAt: Date.now(),
+      },
+    });
+    await ctx.runMutation(internal.delivery.markUnknown, { requestId });
   },
 });
 
@@ -67,6 +87,7 @@ export const claim = internalMutation({
     ctx,
     { requestId, provider },
   ): Promise<{ proceed: true } | { proceed: false; result: DeliveryResult }> => {
+    await ctx.runMutation(internal.delivery.quarantineLegacy, { requestId });
     const row = await ctx.db.get(requestId);
     if (!row) throw new Error("DELIVERY_REQUEST_MISSING");
     const prior = row.deliveryAttempt;

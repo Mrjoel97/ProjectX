@@ -34,8 +34,14 @@ function setup() {
   t.registerComponent("rateLimiter", rateLimiterSchema, rateModules);
   return t;
 }
-beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.stubEnv("FOUNDATION_ONBOARDING_ENABLED", "1");
+});
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
 const profile = {
   ...emptyFoundationProfile(),
   name: "Example",
@@ -279,4 +285,57 @@ test("enrichment republishes stable document IDs and queues content-versioned cl
   expect(await a.query(api.foundation.history, {})).toHaveLength(2);
   const audits = await t.run((ctx) => ctx.db.query("audit").collect());
   expect(JSON.stringify(audits)).not.toContain("Updated offering");
+});
+
+test.each([
+  "0",
+  undefined,
+])("disabled foundation (%s) rejects direct writes and paid work but permits reads and discard", async (flag) => {
+  const t = setup();
+  const a = await complete(t);
+  const before = await a.query(api.foundation.get, {});
+  vi.stubEnv("FOUNDATION_ONBOARDING_ENABLED", flag);
+  const fetchSpy = vi.spyOn(globalThis, "fetch");
+  try {
+    expect(await a.query(api.foundation.enabled, {})).toBe(false);
+    for (const attempt of [
+      () => a.mutation(api.foundation.begin, {}),
+      () => a.mutation(api.foundation.edit, { revision: 1, profile, answers: [] }),
+      () =>
+        a.mutation(api.foundation.checkpoint, { eventId: "off", text: "Private", speaker: "user" }),
+      () => a.mutation(api.foundation.publish, { revision: 1, reviewHash: "unused" }),
+      () =>
+        a.action(api.foundation.answer, {
+          revision: 1,
+          eventId: "paid_off",
+          answer: "More details",
+          section: "essentials",
+          intent: "current",
+        }),
+      () =>
+        t.mutation(internal.foundation.saveTurn, {
+          tenantId: TENANT,
+          revision: 1,
+          profile,
+          slots,
+          answer: {
+            section: "essentials",
+            text: "Late answer",
+            intent: "current",
+            eventId: "late",
+          },
+          reply: "Late",
+        }),
+    ])
+      await expect(attempt()).rejects.toThrow("FOUNDATION_ONBOARDING_DISABLED");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(await a.query(api.foundation.get, {})).toEqual(before);
+    expect(
+      await t.run(async (ctx) => (await ctx.db.query("foundationTranscripts").collect()).length),
+    ).toBe(0);
+    await a.mutation(api.foundation.discard, { revision: 1 });
+    expect(await a.query(api.foundation.get, {})).toBeNull();
+  } finally {
+    fetchSpy.mockRestore();
+  }
 });

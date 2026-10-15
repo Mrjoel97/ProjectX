@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   revision: 1,
   start: vi.fn(),
   publish: vi.fn().mockResolvedValue({ docIds: [] }),
+  discard: vi.fn().mockResolvedValue(null),
   status: "idle",
   voiceError: null as string | null,
 }));
@@ -28,7 +29,9 @@ vi.mock("convex/react", () => ({
   useMutation: (fn: unknown) =>
     getFunctionName(fn as Parameters<typeof getFunctionName>[0]) === "foundation:publish"
       ? state.publish
-      : vi.fn(),
+      : getFunctionName(fn as Parameters<typeof getFunctionName>[0]) === "foundation:discard"
+        ? state.discard
+        : vi.fn(),
   useQuery: (fn: unknown) => {
     switch (getFunctionName(fn as Parameters<typeof getFunctionName>[0])) {
       case "foundation:get":
@@ -120,7 +123,7 @@ test("a changed revision disables stale approval until a fresh review", async ()
   }
 });
 
-test("rollout disabled and microphone failure leave the typed saved interview available", async () => {
+test("microphone failure leaves typed interview available while foundation is enabled", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   state.voiceError = "permission denied";
   const host = document.createElement("div");
@@ -131,6 +134,28 @@ test("rollout disabled and microphone failure leave the typed saved interview av
     expect(host.querySelector("textarea")).not.toBeNull();
     expect(host.textContent).toContain("continue by typing");
     expect(host.textContent).toContain("Saved revision 1");
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
+test("foundation disabled retains draft reading and discard without write controls", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  try {
+    await act(async () => root.render(<FoundationOnboarding readOnly voiceEnabled={false} />));
+    expect(host.textContent).toContain("temporarily read-only");
+    expect(host.textContent).toContain("Repair bikes");
+    expect(host.textContent).toContain("Operating model");
+    expect(host.querySelector("textarea")).toBeNull();
+    expect([...host.querySelectorAll("button")].map((node) => node.textContent)).toEqual([
+      "Discard unpublished progress",
+    ]);
+    expect(state.publish).not.toHaveBeenCalled();
+    expect(state.start).not.toHaveBeenCalled();
+    await act(async () => button(host, "Discard unpublished progress").click());
+    expect(state.discard).toHaveBeenCalledExactlyOnceWith({ revision: 1 });
   } finally {
     await act(async () => root.unmount());
   }

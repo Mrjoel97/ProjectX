@@ -23,6 +23,7 @@ async function harness() {
       recipient: "test@example.com",
       draft: "Test",
       status: "delivering",
+      deliveryProtocol: "claim_v1",
       attachmentRefs: [],
       createdAt: Date.now(),
     }),
@@ -54,6 +55,11 @@ test("confirmation and audit are idempotent; watchdog cannot downgrade a receipt
   await t.mutation(internal.delivery.confirm, { requestId, messageId: "receipt-1" });
   await t.mutation(internal.delivery.confirm, { requestId, messageId: "receipt-1" });
   await t.mutation(internal.delivery.markUnknown, { requestId });
+  await t.run((ctx) => ctx.db.patch(requestId, { deliveryProtocol: undefined }));
+  expect(await t.action(internal.delivery.send, { requestId })).toEqual({
+    delivered: true,
+    messageId: "receipt-1",
+  });
   expect(await t.mutation(internal.delivery.claim, { requestId, provider: "google" })).toEqual({
     proceed: false,
     result: { delivered: true, messageId: "receipt-1" },
@@ -95,4 +101,60 @@ test("manual reconciliation is tenant-scoped, delayed, revision-bound and never 
     (await t.mutation(internal.delivery.claim, { requestId, provider: "microsoft" })).proceed,
   ).toBe(false);
   expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(1);
+});
+
+test("legacy delivering rows quarantine before provider I/O and remain reconcilable", async () => {
+  const { t, as, requestId } = await harness();
+  await t.run((ctx) => ctx.db.patch(requestId, { deliveryProtocol: undefined }));
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    expect(await t.action(internal.delivery.send, { requestId })).toEqual({
+      delivered: false,
+      reason: "outcome_unknown",
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+    const receipt = await t.query(internal.delivery.receipt, { requestId });
+    expect(receipt?.state).toBe("unknown");
+    expect(await t.mutation(internal.delivery.claim, { requestId, provider: "google" })).toEqual({
+      proceed: false,
+      result: { delivered: false, reason: "outcome_unknown" },
+    });
+    if (!receipt) throw new Error("receipt missing");
+    vi.setSystemTime(Date.now() + 601000);
+    await as.mutation(api.delivery.reconcile, {
+      requestId,
+      startedAt: receipt.startedAt,
+      outcome: "not_sent",
+    });
+    expect(await t.action(internal.delivery.send, { requestId })).toEqual({
+      delivered: false,
+      reason: "outcome_unknown",
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+test("fresh transitions opt into claims; replay cannot bless legacy in-flight delivery", async () => {
+  const { t, requestId } = await harness();
+  await t.run((ctx) => ctx.db.patch(requestId, { deliveryProtocol: undefined }));
+  await t.mutation(internal.pipeline.setStatus, { requestId, status: "delivering" });
+  expect((await t.run((ctx) => ctx.db.get(requestId)))?.deliveryProtocol).toBeUndefined();
+  await t.run((ctx) => ctx.db.patch(requestId, { status: "approved" }));
+  await t.mutation(internal.pipeline.setStatus, { requestId, status: "delivering" });
+  expect((await t.run((ctx) => ctx.db.get(requestId)))?.deliveryProtocol).toBe("claim_v1");
+  expect(await t.mutation(internal.delivery.claim, { requestId, provider: "google" })).toEqual({
+    proceed: true,
+  });
+});
+
+test("direct claim cannot bypass legacy quarantine", async () => {
+  const { t, requestId } = await harness();
+  await t.run((ctx) => ctx.db.patch(requestId, { deliveryProtocol: undefined }));
+  expect(await t.mutation(internal.delivery.claim, { requestId, provider: "google" })).toEqual({
+    proceed: false,
+    result: { delivered: false, reason: "outcome_unknown" },
+  });
+  expect((await t.query(internal.delivery.receipt, { requestId }))?.state).toBe("unknown");
 });

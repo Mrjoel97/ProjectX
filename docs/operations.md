@@ -94,8 +94,8 @@ remain open. No live production readiness is asserted by this document.
 ## Foundation onboarding rollout
 
 `FOUNDATION_ONBOARDING_ENABLED` defaults off. Seed the `foundation-voice` skill through the existing
-versioned registry before enabling it in staging. Existing drafts remain accessible through typed input
-when the flag is off. Approval binds the displayed revision and document hash; editing or changing the
+versioned registry before enabling it in staging. When the flag is off, existing drafts remain readable
+and can be discarded; server-side gates reject interview writes, paid answers and publication. Approval binds the displayed revision and document hash; editing or changing the
 Blueprint requires a new review. Publication keeps six stable Vault IDs and records revision history.
 Replacement graph cleanup is paged, and stale embedding entries are excluded during reindexing.
 Drain/cancel older ingestion workflows without content hashes before activation. Monitor indexing and
@@ -103,7 +103,7 @@ transcript expiry, then complete the release-matrix acceptance scenarios before 
 
 ## Current configuration observations and business constraints
 
-The names-only production preflight is [run 38748292173](https://github.com/Mrjoel97/ProjectX/actions/runs/38748292173), against the existing baseline 53d96a. OpenAI/OpenRouter and other provider configuration names were present; values, account balances, scopes and live behavior were not checked. AUTH_RESEND_KEY and AUTH_EMAIL_FROM were absent, as were required WORM/AWS configuration names. Configure mail credentials using the protected deployment settings and a verified sender domain, then execute verification/recovery with isolated accounts. Never paste values into this guide, source control or release evidence. WORM stays disabled until its independent retention/acknowledgement evidence is complete.
+The initial names-only production preflight is [run 38748292173](https://github.com/Mrjoel97/ProjectX/actions/runs/38748292173), against the existing baseline 53d96a. OpenAI/OpenRouter and other provider configuration names were present; values, account balances, scopes and live behavior were not checked. The later [configuration check](https://github.com/Mrjoel97/ProjectX/actions/runs/38756649548) confirmed AUTH_RESEND_KEY and AUTH_EMAIL_FROM after the operator corrected their names. The release key targets `opulent-octopus-494`, matching the owner's dashboard. A single controlled Resend test was accepted with HTTP 200 in [run 38757084736](https://github.com/Mrjoel97/ProjectX/actions/runs/38757084736), receipt `01a14018-2786-7c9c-afb2-598fca0a0f9d`; the owner confirmed inbox arrival on 2026-10-15. Native password verification/recovery and session invalidation still require a real application drill. Never paste credentials into this guide, source control or release evidence. Required WORM/AWS names were absent; WORM stays disabled until its independent retention/acknowledgement evidence is complete.
 
 Business identity settings: pikar-ai; Tanzania; joel@pikar-ai.com. Postal address remains an explicit missing input. Billing remains disabled by the user's instruction, including after a successful technical deployment. Legal review and provider readiness are separate from this configuration record.
 
