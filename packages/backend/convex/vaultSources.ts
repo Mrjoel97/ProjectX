@@ -8,8 +8,9 @@
 // so the browser subscribes and the SOURCE card fills live, guarded on ctx.tenantId.
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 /**
  * Persist one card row for a thread. Append-only: a re-search — or a revise — inserts a NEW row

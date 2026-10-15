@@ -17,7 +17,8 @@ import { resolveDashboardWindow } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { MAX_WINDOW_MS, readBusiness, readOperations } from "./reportsBusiness";
 import { readAuditPage } from "./reportsGovernance";
 

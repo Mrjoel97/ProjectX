@@ -50,6 +50,64 @@ import {
 } from "./llm";
 import schema from "./schema";
 
+test("ordinary research reserves before egress and settles before response parsing", async () => {
+  const events: string[] = [];
+  const runMutation = vi.fn(async () => {
+    events.push(events.length === 0 ? "reserve" : "settle");
+    return "reservation";
+  });
+  vi.stubEnv("TAVILY_API_KEY", "test-key");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      events.push("fetch");
+      return new Response("invalid JSON", { status: 200 });
+    }),
+  );
+  try {
+    const tools = buildWebResearchTool(undefined, undefined, {
+      ctx: { runMutation } as never,
+      tenantId: "research-test",
+    }) as unknown as { webResearch: { execute(args: { query: string }): Promise<unknown> } };
+    await expect(
+      tools.webResearch.execute({ query: "public product information" }),
+    ).rejects.toThrow();
+    expect(events).toEqual(["reserve", "fetch", "settle"]);
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  }
+});
+
+test("research transport ambiguity retains the reservation; refused admission issues no request", async () => {
+  const runMutation = vi.fn(async () => "reservation");
+  const fetchMock = vi.fn(async () => {
+    throw new Error("network lost");
+  });
+  vi.stubEnv("TAVILY_API_KEY", "test-key");
+  vi.stubGlobal("fetch", fetchMock);
+  try {
+    const build = () =>
+      buildWebResearchTool(undefined, undefined, {
+        ctx: { runMutation } as never,
+        tenantId: "research-test",
+      }) as unknown as { webResearch: { execute(args: { query: string }): Promise<unknown> } };
+    await expect(build().webResearch.execute({ query: "public information" })).rejects.toThrow(
+      "network lost",
+    );
+    expect(runMutation).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    runMutation.mockRejectedValueOnce(new Error("PAID_BUDGET_EXHAUSTED"));
+    await expect(build().webResearch.execute({ query: "public information" })).rejects.toThrow(
+      "PAID_BUDGET_EXHAUSTED",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  }
+});
+
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",

@@ -1,4 +1,9 @@
+> Last verified: 2026-10-15 — Current canvas and render inputs read exact plan/block/kind indexes, selecting newest current or succeeded slots without scanning immutable attempt history. Live admission checks query queued/submitted status indexes; malformed active batches over100 fail closed. Batch readers cap100lines with explicit overflow refusal. Retry selection uses newest createdAt. spendForPeriod now returns500-row page totals, isDone/continueCursor, and unrounded estUsd: follow all cursors, sum estUsd then round once; never label one page as the period total. listJobs supports small histories up to1000 and otherwise requires listJobsPage (100rows). Local520-attempt history/paged-accounting regression passes.
+
 # Playbook: Media Canvas (finished reels and standalone images)
+
+> Last verified: 2026-10-15 — production builds no longer statically import the local filesystem renderer. The adapter is dynamically imported behind NODE_ENV !== production as well as the existing explicit MEDIA_RENDER_LOCAL and non-Vercel checks. Local rendering now requires development mode; hosted rendering continues through the Vercel sandbox. Audit media.landed uses null for an absent provider request reference under the stricter audit payload contract. No live render was performed.
+
 
 > Last verified: 2026-09-12 — `/dashboard/workspace?thread=<thread>&plan=<plan>&view=canvas`
 > selects the exact tenant-owned plan through `plans.byId`. Missing, inaccessible, malformed
@@ -5652,3 +5657,7 @@ downstream of it.
      `apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx` is registered as a single FILE, not via
      its directory: `cockpit.md` already claims that directory, and a change to MediaCanvas.tsx should
      demand BOTH playbooks — it is a cockpit surface and a media surface at once. -->
+
+## Reliability extraction — 2026-10-15
+
+Last verified: 2026-10-15 — stock audio/video/photo selection moved to the pure core stockSelection module. Media adapters supply the existing configured duration tolerances and keep their public compatibility exports. No provider requests, prices, ranking or output shapes change. Existing media selection tests are the regression contract.

@@ -21,7 +21,7 @@
 //     `agentSteps`. Plan 14-09 pins that with a mutation-verified static scan.
 //
 import { DOCUMENT_ANALYST_SKILL } from "@pikar/contracts/skill";
-import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
+import { DEFAULT_MODEL } from "@pikar/cost";
 import {
   buildDocDigest,
   DOC_REVIEW_CONFIDENCE,
@@ -40,10 +40,11 @@ import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
-import { internalAction } from "./_generated/server";
 import { tenantAction, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { fixtureSeamFor, resolveModel } from "./lib/models";
+import { paidBudgetModel } from "./lib/paidBudgetModel";
+import { internalAction } from "./lib/tenantLifecycle";
 
 /**
  * Collect the passages of THIS session's document that match `query`. Returns `[]` — never
@@ -132,39 +133,44 @@ async function docScopedPassages(
  * `function_call_output`, and the user hears silence for the rest of a turn inside a capped
  * 15 minutes (Pitfall 5) — so every failure is the honest `{passages: [], found: false}` instead.
  */
+const searchDocumentForTenant = async (
+  ctx: GenericActionCtx<DataModel> & { tenantId: string },
+  { sessionId, query }: { sessionId: Id<"voiceSessions">; query: string },
+): Promise<{ passages: string[]; found: boolean }> => {
+  try {
+    const passages = await docScopedPassages(ctx, ctx.tenantId, sessionId, query);
+
+    // The §4 split, stated once, here, because this is the one new place report content moves:
+    //   CONTENT PLANE — `passages` go to the MODEL over the WebRTC data channel and nowhere else.
+    //   LOG PLANE     — refs, a hash and a count. The query is the user's own words and the
+    //                   passages ARE report content; neither may enter the audit table.
+    // This is the module's ONLY log-plane write: no `agentSteps` row (that table has no text
+    // field by construction and `llmRedaction.test.ts` scans a closed allow-list), no `telemetry`,
+    // no `deadLetters`.
+    // Derived OUTSIDE the payload literal, matching `gmail.ts:279`'s `mailbox.searched` exactly.
+    // Both values are §4-legal either way — a hash is not the query and a length is a count — but
+    // keeping the literal to bare refs/counts means the static scan in `llmRedaction.test.ts` needs
+    // NO exception for "content mentioned only as an argument to contentHash()". A scan with fewer
+    // carve-outs is a stronger scan: every exception is somewhere a real leak could hide.
+    const queryHash = await contentHash(query);
+    const resultCount = passages.length;
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: String(sessionId),
+      eventType: "voicedoc.searched",
+      actor: "user",
+      payload: { sessionId, queryHash, resultCount },
+    });
+
+    return { passages, found: passages.length > 0 };
+  } catch {
+    return { passages: [], found: false };
+  }
+};
+
 export const searchDocument = tenantAction({
   args: { sessionId: v.id("voiceSessions"), query: v.string() },
-  handler: async (ctx, { sessionId, query }): Promise<{ passages: string[]; found: boolean }> => {
-    try {
-      const passages = await docScopedPassages(ctx, ctx.tenantId, sessionId, query);
-
-      // The §4 split, stated once, here, because this is the one new place report content moves:
-      //   CONTENT PLANE — `passages` go to the MODEL over the WebRTC data channel and nowhere else.
-      //   LOG PLANE     — refs, a hash and a count. The query is the user's own words and the
-      //                   passages ARE report content; neither may enter the audit table.
-      // This is the module's ONLY log-plane write: no `agentSteps` row (that table has no text
-      // field by construction and `llmRedaction.test.ts` scans a closed allow-list), no `telemetry`,
-      // no `deadLetters`.
-      // Derived OUTSIDE the payload literal, matching `gmail.ts:279`'s `mailbox.searched` exactly.
-      // Both values are §4-legal either way — a hash is not the query and a length is a count — but
-      // keeping the literal to bare refs/counts means the static scan in `llmRedaction.test.ts` needs
-      // NO exception for "content mentioned only as an argument to contentHash()". A scan with fewer
-      // carve-outs is a stronger scan: every exception is somewhere a real leak could hide.
-      const queryHash = await contentHash(query);
-      const resultCount = passages.length;
-      await ctx.runMutation(internal.audit.log, {
-        tenantId: ctx.tenantId,
-        correlationId: String(sessionId),
-        eventType: "voicedoc.searched",
-        actor: "user",
-        payload: { sessionId, queryHash, resultCount },
-      });
-
-      return { passages, found: passages.length > 0 };
-    } catch {
-      return { passages: [], found: false };
-    }
-  },
+  handler: searchDocumentForTenant,
 });
 
 // ── 14-05: the review producer (SC2) ─────────────────────────────────────────
@@ -407,8 +413,13 @@ async function modelDocReview(
     buildDocDigest({ title: doc.title, text: doc.text, truncated: doc.extractionTruncated }),
   ].join("\n");
 
-  const { object, usage } = await generateObject({
-    model: resolveModel(DEFAULT_MODEL),
+  const { object } = await generateObject({
+    model: paidBudgetModel({
+      ctx,
+      tenantId,
+      model: resolveModel(DEFAULT_MODEL),
+      modelId: DEFAULT_MODEL,
+    }),
     schema: docReviewSchema,
     system: skill.body,
     prompt,
@@ -418,20 +429,7 @@ async function modelDocReview(
 
   // The intake.ts idiom for a model call outside the governed llm.ts loop — the priced usage is
   // charged against the same daily spend limiter, so a doc review cannot spend off-budget.
-  const priced = priceUsage(DEFAULT_MODEL, usage);
-  if (priced.ok)
-    // FIN-01 correlation. `sessionId` names WHICH review this money bought; the per-execution
-    // `runId` is the discriminator. `reviewDocument` is an ACTION, so a re-entry re-runs the
-    // `generateObject` above for real money — a correlation of session alone would suppress that
-    // second row and leave the ledger below the limiter, the unrecoverable direction. The
-    // idempotence a re-review needs already lives in `reviewSession`'s read-guard, not here.
-    await ctx.runMutation(internal.guardrails.recordSpend, {
-      tenantId,
-      costUsd: priced.value,
-      correlationId: `voicedoc:review:${sessionId}:${crypto.randomUUID()}`,
-      model: DEFAULT_MODEL,
-      kind: "docReview",
-    });
+
   return object;
 }
 
@@ -687,5 +685,15 @@ export const pickableDocs = tenantQuery({
       else if (DOC_IN_PROGRESS.has(row.status)) processingCount += 1;
     }
     return { docs, processingCount };
+  },
+});
+
+export const searchDocumentFromVoice = internalAction({
+  args: { sessionId: v.id("voiceSessions"), query: v.string() },
+  handler: async (ctx, a): Promise<{ passages: string[]; found: boolean }> => {
+    const session = await ctx.runQuery(internal.voice.getSession, { sessionId: a.sessionId });
+    if (!session || session.status !== "active" || session.endsAt <= Date.now())
+      throw new Error("VOICE_SESSION_INACTIVE");
+    return searchDocumentForTenant({ ...ctx, tenantId: session.tenantId }, a);
   },
 });

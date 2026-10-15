@@ -5,7 +5,7 @@ import {
 } from "@pikar/core/researchControl";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation } from "./_generated/server";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 const RESEARCH_CONTROL_TOMBSTONE_MS = 24 * 60 * 60 * 1000;
 

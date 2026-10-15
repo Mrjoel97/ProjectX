@@ -12,7 +12,7 @@ import { buildTelemetry, notificationMessage } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 export const onPipelineComplete = internalMutation({
   args: {
@@ -72,6 +72,17 @@ export const onPipelineComplete = internalMutation({
     const request = await ctx.db.get(requestId);
     if (!request) return;
 
+    // Workflow failure is not proof of non-delivery. A provider receipt survives later
+    // telemetry failures; an uncertain attempt must remain held for reconciliation.
+    if (request.deliveryAttempt) {
+      if (request.deliveryAttempt.state === "confirmed") {
+        await ctx.db.patch(requestId, { status: "sent" });
+      } else {
+        await ctx.runMutation(internal.delivery.markUnknown, { requestId });
+      }
+      return;
+    }
+
     await ctx.db.patch(requestId, { status: "failed" });
 
     // Idempotent: never a second telemetry row for the same request.
@@ -123,6 +134,16 @@ export const deadLetterRecipient = internalMutation({
     error: v.string(),
   },
   handler: async (ctx, { tenantId, requestId, correlationId, workflowId, error }) => {
+    const deliveryRequest = await ctx.db.get(requestId);
+    if (!deliveryRequest || deliveryRequest.tenantId !== tenantId) throw new Error("NOT_FOUND");
+    if (deliveryRequest.deliveryAttempt) {
+      if (deliveryRequest.deliveryAttempt.state === "confirmed") {
+        await ctx.db.patch(requestId, { status: "sent" });
+      } else {
+        await ctx.runMutation(internal.delivery.markUnknown, { requestId });
+      }
+      return;
+    }
     await ctx.db.insert("deadLetters", {
       tenantId,
       correlationId,

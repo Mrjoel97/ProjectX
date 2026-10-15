@@ -1,5 +1,10 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
+> Last verified: 2026-10-15 — default checkout text endings are now LF through .gitattributes (including Windows); existing working trees need a clean checkout to apply attributes. Next.js uses the proxy.ts entrypoint with unchanged default-deny routing; source scanners reference the new name. The local media adapter is dynamically imported only outside production builds, so production tracing cannot follow local temporary filesystem paths. Local production-mode rendering is intentionally unavailable; use development mode for MEDIA_RENDER_LOCAL. These changes still require clean Windows/Linux CI and production-build qualification before portability/build warnings are marked closed.
+
+
+> 2026-10-15 evaluator identity refresh: golden and native vertical source inventories now cover paidBudgetModel, authRevocations and the shared JWT lifetime. Regenerated both pinned artifacts after accounting, tenant admission, delivery and grounding changes; golden cases remain 46 and vertical cases remain 40 across six lanes. This deliberately invalidates prior evaluator evidence; generated fingerprints and offline self-checks do not constitute new live/provider evaluation. Provider-lane record parsing and the golden source-order guard accept both LF and CRLF without relaxing their decision or call-order requirements.
+
 > 2026-09-12: backend declares the existing TypeScript 7.0.2 compiler directly. Convex 1.42.1
 > checks `node_modules/typescript/bin/tsc` relative to the backend; a root-only declaration
 > let its default `try` mode skip the compiler even while workspace `tsc` passed. Production
@@ -373,7 +378,12 @@ observations are recorded in `docs/playbooks/media.md § Reconciliation`.
 
 Run it by hand any time: `cd packages/backend && pnpm check:fal-catalog`.
 
-## Known gaps & deferred work
+## Historical early-phase gaps (superseded where noted)
+
+Current release behavior is documented in [the operations guide](../operations.md) and
+`.github/workflows/deploy-production.yml`. The older deployment/codegen statements below describe
+the original local gate, not the current production pipeline. Live environment protection and
+provider acceptance still require verification.
 
 - **Deployment is not automated.** The gate proves the artifact *builds*; it does not deploy.
   Vercel deployment, the custom-domain decision and the deploy pipeline belong to Phase 25.

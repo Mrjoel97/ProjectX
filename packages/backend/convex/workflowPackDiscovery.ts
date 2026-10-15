@@ -217,10 +217,11 @@ export const listPackPriorVersions = ownerQuery({
     for (const packId of WORKFLOW_PACK_IDS) {
       const rows = await ctx.db
         .query("skills")
-        .withIndex("by_name_status", (q) =>
+        .withIndex("by_name_status_version", (q) =>
           q.eq("name", WORKFLOW_PACKS[packId].skillName).eq("status", "archived"),
         )
-        .collect();
+        .order("desc")
+        .take(1);
       if (rows.length === 0) continue;
       out.push({ packId, version: rows.reduce((a, b) => (b.version > a.version ? b : a)).version });
     }
@@ -242,8 +243,11 @@ export const listPackCandidates = ownerQuery({
       // the first browser run skipped every @preview test for exactly this reason.
       const rows = await ctx.db
         .query("skills")
-        .withIndex("by_name_status", (q) => q.eq("name", spec.skillName).eq("status", "candidate"))
-        .collect();
+        .withIndex("by_name_status_version", (q) =>
+          q.eq("name", spec.skillName).eq("status", "candidate"),
+        )
+        .order("desc")
+        .take(1);
       if (rows.length === 0) continue;
       const candidate = rows.reduce((a, b) => (b.version > a.version ? b : a));
 

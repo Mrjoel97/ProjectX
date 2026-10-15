@@ -14,9 +14,9 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
-import { internalAction } from "./_generated/server";
 import { contentHash } from "./lib/hash";
 import { fixtureSeamFor } from "./lib/models";
+import { internalAction } from "./lib/tenantLifecycle";
 
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 // Exported so notifyExternal.ts reuses the GOVERNED send endpoint (OPSG-05) — the external
@@ -234,11 +234,7 @@ export async function prepareGovernedMessage(
 // Inferring it from the body forces resolution of `internal.{pipeline,gmailAuth,audit}`,
 // which (with llm.ts's actions doing the same) tips TS past its circular-inference limit
 // and collapses sibling actions to `any` (Convex guidelines §96).
-type SendResult =
-  // 19-05: `suppressed` is a PERMANENT refusal, unlike the two reauth reasons beside it — see the
-  // `deliverApprovedPlan` branch that terminates the row rather than holding it.
-  | { delivered: false; reason: "not_connected" | "refresh_failed" | "suppressed" }
-  | { delivered: true; messageId: string };
+type SendResult = import("./delivery").DeliveryResult;
 
 export const send = internalAction({
   args: { requestId: v.id("requests") },
@@ -280,34 +276,30 @@ export const send = internalAction({
     // Gmail wants URL-SAFE base64 of the raw MIME; Graph wants standard. That one-line difference
     // is the entire divergence between the two transports — everything above it is shared.
     const raw = base64Url(prepared.mime);
-    const sendRes = await fetch(SEND_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${access.token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(req.threadId ? { raw, threadId: req.threadId } : { raw }),
-    });
-    if (sendRes.status >= 500) {
-      // Transient: THROW so the retrier retries; a terminal failure flows onComplete →
-      // deadLetters → OPSG-07.
-      throw new Error(`gmail.send: transient ${sendRes.status}`);
+    const claim = await ctx.runMutation(internal.delivery.claim, { requestId, provider: "google" });
+    if (!claim.proceed) return claim.result;
+    try {
+      const sendRes = await fetch(SEND_ENDPOINT, {
+        method: "POST",
+        signal: AbortSignal.timeout(30_000),
+        headers: {
+          Authorization: `Bearer ${access.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(req.threadId ? { raw, threadId: req.threadId } : { raw }),
+      });
+      // No provider response body enters errors, logs or dead letters.
+      // Even HTTP errors are conservatively held: this adapter cannot prove non-delivery.
+      if (!sendRes.ok) throw new Error("DELIVERY_NOT_CONFIRMED");
+      const sent = (await sendRes.json()) as { id?: unknown };
+      if (typeof sent.id !== "string" || !sent.id) throw new Error("DELIVERY_RECEIPT_MISSING");
+      const messageId = sent.id;
+      await ctx.runMutation(internal.delivery.confirm, { requestId, messageId });
+      return { delivered: true, messageId };
+    } catch {
+      await ctx.runMutation(internal.delivery.markUnknown, { requestId });
+      return { delivered: false, reason: "outcome_unknown" };
     }
-    if (!sendRes.ok) {
-      throw new Error(`gmail.send: ${sendRes.status} ${await sendRes.text()}`);
-    }
-    const sent = (await sendRes.json()) as { id: string };
-
-    // Record the message id as an audit ref — refs/ids ONLY, never the body/PII (CLAUDE.md §4).
-    // Status stays untouched: the pipeline owns the `sent` transition after retrier.run returns.
-    await ctx.runMutation(internal.audit.log, {
-      tenantId: req.tenantId,
-      correlationId: req.correlationId,
-      eventType: "gmail.sent",
-      actor: "system",
-      payload: { requestId, messageId: sent.id },
-    });
-    return { delivered: true, messageId: sent.id };
   },
 });
 

@@ -1067,3 +1067,13 @@ which is how `CONNECTOR_CREDENTIAL_KEY_V1`/`_V2` escaped classification entirely
   `stripe` SDK. Ceiling: no typed Stripe event objects. Upgrade path: add `stripe` and use
   `constructEventAsync(..., Stripe.createSubtleCryptoProvider())` — `http.ts` cannot be
   `"use node"`, so the sync `constructEvent` is never an option.
+
+
+> 2026-10-15 lifecycle enforcement: application internal mutations/actions use the shared tenantLifecycle builders. Tenant-owned writes refuse deleting/deleted accounts; cleanup deletes and retained compliance metadata remain available. The guard migration preserves connector/provider contracts; local identity/deletion and subsystem suites provide verification, not hosted provider qualification.
+
+
+## Release decision — commercial checkout disabled (2026-10-15)
+
+The owner explicitly deferred commercial billing for this release. `COMMERCIAL_BILLING_ENABLED = false` is code-owned release configuration: installed Stripe keys or price IDs cannot enable `billing.startCheckout`. The authenticated endpoint returns `commercial_billing_disabled` before any Stripe request; a future enabled release also requires `CONFIG_CONFIRMED`. Reopening subscriptions needs a reviewed configuration change and merchant/tax setup qualification. Existing subscriber portal access, cancellation/erasure, webhook accounting and invoice reads remain available. The settings panel discloses this state. Tanzania operating location and the pikar-ai product name do not establish a Stripe head-office address or tax registration; those remain unconfirmed.
+
+Validation: real-constant disabled-release test verifies zero outbound calls even with credentials installed. Existing 72 transport/accounting tests run against an explicitly mocked future-approved configuration, preserving portal/cancellation coverage without any production bypass.

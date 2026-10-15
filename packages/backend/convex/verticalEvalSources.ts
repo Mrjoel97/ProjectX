@@ -4,13 +4,9 @@ import { VERTICAL_IDS, type VerticalId } from "@pikar/core/verticalPacks";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import {
-  internalAction,
-  internalMutation,
-  internalQuery,
-  type QueryCtx,
-} from "./_generated/server";
+import { internalQuery, type QueryCtx } from "./_generated/server";
 import { contentHash } from "./lib/hash";
+import { internalAction, internalMutation } from "./lib/tenantLifecycle";
 import { sealedIn } from "./vaultFolders";
 
 export const pinArgs = {

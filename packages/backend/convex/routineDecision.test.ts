@@ -962,7 +962,7 @@ describe("nothing imports the recurrence spike", () => {
   ].filter((root) => existsSync(join(repoRoot, root)));
 
   const scanned = [
-    // `apps/web`'s own top-level modules — `middleware.ts`, `next.config.ts` — live in no `app/`
+    // `apps/web`'s own top-level modules — `proxy.ts`, `next.config.ts` — live in no `app/`
     // directory and were never scanned.
     ...readdirSync(join(repoRoot, "apps/web"), { withFileTypes: true })
       .filter((e) => e.isFile())
@@ -988,7 +988,7 @@ describe("nothing imports the recurrence spike", () => {
       "packages/revenue/src/index.ts", // the root a verifier planted the import in
       "packages/pii/src/index.ts",
       "packages/audit/src/index.ts",
-      "apps/web/middleware.ts", // outside apps/web/app entirely
+      "apps/web/proxy.ts", // outside apps/web/app entirely
     ]) {
       expect(scanned, must).toContain(join(repoRoot, must));
     }

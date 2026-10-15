@@ -18,7 +18,7 @@ import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { retainUntilDate, serializeAuditNdjson } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction } from "./_generated/server";
+import { internalAction } from "./lib/tenantLifecycle";
 
 const SKIP_MSG = "worm export skipped (stub)";
 // 25.3 (G17): one run exports as many pages as fit in its budget, not ONE 10k page per day — a

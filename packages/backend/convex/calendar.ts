@@ -24,8 +24,9 @@ import {
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { type ActionCtx, internalAction } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
 import { freshAccessToken } from "./gmail";
+import { internalAction } from "./lib/tenantLifecycle";
 
 const FREEBUSY_ENDPOINT = "https://www.googleapis.com/calendar/v3/freeBusy";
 const EVENTS_INSERT_ENDPOINT = "https://www.googleapis.com/calendar/v3/calendars/primary/events";

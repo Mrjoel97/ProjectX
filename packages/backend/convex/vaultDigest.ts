@@ -24,7 +24,7 @@
 // in the request or in any document — see the seam note below for the two content channels that
 // used to select it, and for why the credential half alone was not enough.
 import { FOLDER_DIGEST_SKILL } from "@pikar/contracts/skill";
-import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
+import { DEFAULT_MODEL } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import {
   capGraphText,
@@ -36,15 +36,12 @@ import { generateText } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import {
-  internalAction,
-  internalMutation,
-  internalQuery,
-  type QueryCtx,
-} from "./_generated/server";
+import { internalQuery, type QueryCtx } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { fixtureSeamFor, resolveModel } from "./lib/models";
+import { paidBudgetModel } from "./lib/paidBudgetModel";
+import { internalAction, internalMutation } from "./lib/tenantLifecycle";
 import { startIngest } from "./vaultIngest";
 
 // Per-call wall-clock ceiling. Retrying synthesis requires an explicit user rebuild.
@@ -309,7 +306,6 @@ export const buildFolderDigest = internalAction({
     // collapse every rebuild after the first onto one `actual` row and leave the ledger BELOW the
     // limiter, the unrecoverable direction. Exactly one model call per run, so `runId` alone
     // separates run N from run N+1; `folderId` rides along as a typed ref instead.
-    const runId = crypto.randomUUID();
     // Load the digest prompt FIRST — before the offline seam, deliberately (blueprint.ts:245-246):
     // an unseeded deployment must never synthesise from a hardcoded fallback, and the SMOKE path
     // has to exercise the registry too or the seam hides an unseeded backend. Throws
@@ -400,27 +396,20 @@ export const buildFolderDigest = internalAction({
       // and the artifact stored in the vault is one markdown document (vaultExtract.ts:119-124).
       // `capGraphText` is the OUTER guard only — the per-member budget above is what actually
       // bounds this string.
-      const { text, usage } = await generateText({
-        model: resolveModel(DEFAULT_MODEL),
+      const { text } = await generateText({
+        model: paidBudgetModel({
+          ctx,
+          tenantId,
+          model: resolveModel(DEFAULT_MODEL),
+          modelId: DEFAULT_MODEL,
+          rail: "ingest",
+        }),
         system: skill.body,
         prompt: capGraphText(safePrompt),
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      const priced = priceUsage(DEFAULT_MODEL, usage);
-      if (priced.ok) {
-        await ctx.runMutation(internal.guardrails.recordSpend, {
-          tenantId,
-          costUsd: priced.value,
-          // `recordSpend` has NO `reserved` param — the rail selector applies regardless, and the
-          // digest's real cost must move the ingest window it was priced against.
-          rail: "ingest",
-          correlationId: `vault:digest:${folderId}:${runId}`,
-          model: DEFAULT_MODEL,
-          kind: "vault.folder_digest", // code-owned token, refs only (§4)
-          folderId,
-        });
-      }
+
       markdown = text;
     }
 

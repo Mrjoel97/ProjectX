@@ -191,3 +191,25 @@ describe("blueprintPulse", () => {
     expect(out.globals.plansInFlight).toBe(1);
   });
 });
+
+it("bounds pulse scans and exposes lower-bound counts rather than claiming complete totals", async () => {
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 60; i++) {
+      await ctx.db.insert("agentSteps", seedStep("tenantA", { startedAt: NOW - i - 1 }));
+      await ctx.db.insert("plans", {
+        tenantId: "tenantA",
+        threadId: "t",
+        status: "done",
+        createdAt: NOW - i - 1,
+      });
+    }
+  });
+  const out = await t
+    .withIdentity({ subject: "tenantA|s" })
+    .query(api.blueprint.blueprintPulse, { now: NOW });
+  expect(out.truncated).toBe(true);
+  expect(out.truncatedSegments).toContain("offer");
+  expect(out.segments.offer?.runs30d).toBe(50);
+  expect(out.globals.plansDone30d).toBe(50);
+});

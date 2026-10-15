@@ -48,10 +48,12 @@ import type { Doc, Id } from "./_generated/dataModel";
 // `lib/allowlist.ts`: the import guard's regex matches only the lowercase public builders
 // (`query`/`mutation`/`action`) — the `internal*` variants are the sanctioned exception and need
 // no allow-list entry. The tenant wrappers cannot serve here; see the seam's own comment.
-import { internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server";
+import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { fixtureSeamFor, resolveModel } from "./lib/models";
+import { paidBudgetModel } from "./lib/paidBudgetModel";
+import { internalAction, internalMutation } from "./lib/tenantLifecycle";
 import schema from "./schema";
 import { startIngest } from "./vaultIngest";
 import { rag } from "./vaultRag";
@@ -141,7 +143,14 @@ export const status = tenantQuery({
     // Same predicate as `currentProfileDoc` (newest non-failed profile doc), so it IS that read
     // rather than a second copy of it. This runs on every authenticated page render — see the
     // `by_tenant_kind` note in schema.ts for why it must never widen to the whole vault again.
-    needsOnboarding: !(await currentProfileDoc(ctx, ctx.tenantId)),
+    needsOnboarding:
+      !(await currentProfileDoc(ctx, ctx.tenantId)) &&
+      !(
+        await ctx.db
+          .query("foundationInterviews")
+          .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+          .unique()
+      )?.docIds?.length,
   }),
 });
 
@@ -169,29 +178,39 @@ export const getProfile = tenantQuery({
  * no classification of any kind (defect 1a). A `SMOKE::profile::` sentinel short-circuits to a
  * deterministic fixture (no model call — the offline/test path).
  */
+const extractProfileForTenant = async (
+  ctx: ActionCtx & { tenantId: string },
+  { intakeText }: { intakeText: string },
+): Promise<ProfileInput> => {
+  // Load the extraction prompt FIRST (no hardcoded prompt — §5); fails closed unseeded, so the
+  // load is exercised even on the offline path.
+  const skill: { body: string; version: number } = await ctx.runQuery(
+    internal.skills.getActiveSkill,
+    { name: BUSINESS_PROFILE_SKILL },
+  );
+
+  if (intakeText.startsWith(SMOKE_PROFILE_PREFIX) && fixtureSeamFor(ctx.tenantId))
+    return smokeProfileFixture();
+
+  const { object } = await generateObject({
+    model: paidBudgetModel({
+      ctx,
+      tenantId: ctx.tenantId,
+      model: resolveModel(DEFAULT_MODEL),
+      modelId: DEFAULT_MODEL,
+    }),
+    schema: profileSchema,
+    system: skill.body,
+    prompt: intakeText,
+    abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+    maxRetries: 1,
+  });
+  return object;
+};
+
 export const extractProfile = tenantAction({
   args: { intakeText: v.string() },
-  handler: async (ctx, { intakeText }): Promise<ProfileInput> => {
-    // Load the extraction prompt FIRST (no hardcoded prompt — §5); fails closed unseeded, so the
-    // load is exercised even on the offline path.
-    const skill: { body: string; version: number } = await ctx.runQuery(
-      internal.skills.getActiveSkill,
-      { name: BUSINESS_PROFILE_SKILL },
-    );
-
-    if (intakeText.startsWith(SMOKE_PROFILE_PREFIX) && fixtureSeamFor(ctx.tenantId))
-      return smokeProfileFixture();
-
-    const { object } = await generateObject({
-      model: resolveModel(DEFAULT_MODEL),
-      schema: profileSchema,
-      system: skill.body,
-      prompt: intakeText,
-      abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-      maxRetries: 1,
-    });
-    return object;
-  },
+  handler: extractProfileForTenant,
 });
 
 // ── The conversational onboarding turn (design §6, ONBD-01) ───────────────────
@@ -388,49 +407,59 @@ export type ConverseResult = {
  * not add a write here — it would re-open "who owns the state" and put conversational prose on the
  * log plane, which §4 forbids.
  */
+const converseForTenant = async (
+  ctx: ActionCtx & { tenantId: string },
+  a: { slots: OnboardingSlots; userMessage: string; history?: { role: string; text: string }[] },
+): Promise<ConverseResult> => {
+  // §5, FAIL CLOSED, and FIRST — see the doc comment. Moving this below the SMOKE branch would
+  // make every offline turn run without a governed prompt (SC#3c is mutation-checked on exactly
+  // that reordering).
+  const skill: { body: string; version: number } = await ctx.runQuery(
+    internal.skills.getActiveSkill,
+    { name: ONBOARDING_AGENT_SKILL },
+  );
+
+  const missingBefore = missingSlots(a.slots);
+  const nextSlot = missingBefore[0];
+  const prompt = turnPrompt(a.slots, a.userMessage, a.history ?? [], nextSlot);
+
+  const object =
+    a.userMessage.startsWith(SMOKE_ONBOARD_PREFIX) && fixtureSeamFor(ctx.tenantId)
+      ? smokeTurnFixture(a.userMessage)
+      : (
+          await generateObject({
+            model: paidBudgetModel({
+              ctx,
+              tenantId: ctx.tenantId,
+              model: resolveModel(DEFAULT_MODEL),
+              modelId: DEFAULT_MODEL,
+            }),
+            schema: turnSchema,
+            system: skill.body,
+            prompt,
+            abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+            maxRetries: 1,
+          })
+        ).object;
+
+  const slots = mergeSlots(a.slots, object.slotUpdates);
+  const missing = missingSlots(slots);
+  return {
+    reply: object.reply,
+    slots,
+    missing,
+    nextSlot: missing[0] ?? null,
+    done: canComplete(slots),
+  };
+};
+
 export const converse = tenantAction({
   args: {
     slots: vSlots,
     userMessage: v.string(),
     history: v.optional(v.array(v.object({ role: v.string(), text: v.string() }))),
   },
-  handler: async (ctx, a): Promise<ConverseResult> => {
-    // §5, FAIL CLOSED, and FIRST — see the doc comment. Moving this below the SMOKE branch would
-    // make every offline turn run without a governed prompt (SC#3c is mutation-checked on exactly
-    // that reordering).
-    const skill: { body: string; version: number } = await ctx.runQuery(
-      internal.skills.getActiveSkill,
-      { name: ONBOARDING_AGENT_SKILL },
-    );
-
-    const missingBefore = missingSlots(a.slots);
-    const nextSlot = missingBefore[0];
-    const prompt = turnPrompt(a.slots, a.userMessage, a.history ?? [], nextSlot);
-
-    const object =
-      a.userMessage.startsWith(SMOKE_ONBOARD_PREFIX) && fixtureSeamFor(ctx.tenantId)
-        ? smokeTurnFixture(a.userMessage)
-        : (
-            await generateObject({
-              model: resolveModel(DEFAULT_MODEL),
-              schema: turnSchema,
-              system: skill.body,
-              prompt,
-              abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-              maxRetries: 1,
-            })
-          ).object;
-
-    const slots = mergeSlots(a.slots, object.slotUpdates);
-    const missing = missingSlots(slots);
-    return {
-      reply: object.reply,
-      slots,
-      missing,
-      nextSlot: missing[0] ?? null,
-      done: canComplete(slots),
-    };
-  },
+  handler: converseForTenant,
 });
 
 // ── Commit / edit — the persistBrief clone (SC#2/#3, ONBD-02) ─────────────────
@@ -452,9 +481,8 @@ function populatedFieldCount(p: ProfileInput): number {
 // tenant scope + retrieval come FREE from startIngest / vaultGroundHydrated (§1). `existing` re-embeds
 // an edit IN PLACE on the same row: the stale rag entry is deleted (clean replace) and the row is
 // reset to `processing` before re-ingest. `text` is vault CONTENT (§4) — kept on the row, never a log.
-// ponytail: an edit re-attributes the graph to the SAME sourceDocId but doesn't GC the prior version's
-// edges (upsertGraph dedups new ones; a short structured profile yields few) — the ceiling is routing
-// through vault.deleteVaultDoc's full cascade if profile-graph staleness ever matters.
+// Replacements clear prior graph contributions in bounded pages before version-checked re-ingest.
+// The stable profile id preserves existing references without retaining superseded graph facts.
 /** NOT exported. `validateProfile` lives at the CALL site, not in here — every caller used to have
  *  to remember to run it first, and the `proposals.ts` applier didn't (fix, finding 1: it wrote a
  *  blank-skeleton profile straight through this function with no validation at all, while a
@@ -466,8 +494,9 @@ async function writeProfileDoc(
   tenantId: string,
   profile: BusinessProfile,
   existing?: Doc<"vaultDocuments">,
+  appendix = "",
 ): Promise<Id<"vaultDocuments">> {
-  const text = serializeProfile(profile);
+  const text = serializeProfile(profile) + appendix;
   const hash = await contentHash(text);
   const size = new TextEncoder().encode(text).length;
   const title = profile.name || "Business profile";
@@ -483,6 +512,7 @@ async function writeProfileDoc(
       size,
       status: "processing",
       ragEntryId: undefined,
+      graphCleanupHash: hash,
       failureReason: undefined,
     });
     vaultDocId = existing._id;
@@ -501,7 +531,13 @@ async function writeProfileDoc(
       createdAt: Date.now(),
     });
   }
-  await startIngest(ctx, { vaultDocId, tenantId, correlationId: crypto.randomUUID() });
+  if (existing)
+    await ctx.scheduler.runAfter(0, internal.vaultGraph.clearAndReingest, {
+      vaultDocId,
+      tenantId,
+      expectedContentHash: hash,
+    });
+  else await startIngest(ctx, { vaultDocId, tenantId, correlationId: crypto.randomUUID() });
   return vaultDocId;
 }
 
@@ -521,10 +557,11 @@ export async function validateAndWriteProfile(
   tenantId: string,
   profile: BusinessProfile,
   existing?: Doc<"vaultDocuments">,
+  appendix = "",
 ): Promise<{ ok: true; vaultDocId: Id<"vaultDocuments"> } | { ok: false; errors: string[] }> {
   const check = validateProfile(profile);
   if (!check.ok) return { ok: false, errors: check.errors };
-  const vaultDocId = await writeProfileDoc(ctx, tenantId, profile, existing);
+  const vaultDocId = await writeProfileDoc(ctx, tenantId, profile, existing, appendix);
   return { ok: true, vaultDocId };
 }
 
@@ -559,14 +596,22 @@ export async function currentProfileDoc(
   ctx: QueryCtx | MutationCtx,
   tenantId: string,
 ): Promise<Doc<"vaultDocuments"> | null> {
-  const profiles = await ctx.db
-    .query("vaultDocuments")
-    .withIndex("by_tenant_kind", (q) => q.eq("tenantId", tenantId).eq("kind", PROFILE_KIND))
-    .collect();
-  const newest = profiles
-    .filter((d) => d.status !== "failed")
-    .sort((a, b) => b.createdAt - a.createdAt);
-  return newest[0] ?? null;
+  const profiles = await Promise.all(
+    (["ready", "processing", "pending_extraction", "extracting"] as const).map((status) =>
+      ctx.db
+        .query("vaultDocuments")
+        .withIndex("by_tenant_kind_status", (q) =>
+          q.eq("tenantId", tenantId).eq("kind", PROFILE_KIND).eq("status", status),
+        )
+        .order("desc")
+        .first(),
+    ),
+  );
+  return (
+    profiles
+      .filter((d): d is Doc<"vaultDocuments"> => d !== null)
+      .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null
+  );
 }
 
 /**
@@ -586,12 +631,21 @@ export async function onboardingCompletedAt(
   ctx: QueryCtx | MutationCtx,
   tenantId: string,
 ): Promise<number | null> {
-  const profiles = await ctx.db
-    .query("vaultDocuments")
-    .withIndex("by_tenant_kind", (q) => q.eq("tenantId", tenantId).eq("kind", PROFILE_KIND))
-    .collect();
-  const committed = profiles.filter((d) => d.status !== "failed").map((d) => d.createdAt);
-  return committed.length === 0 ? null : Math.min(...committed);
+  const profiles = await Promise.all(
+    (["ready", "processing", "pending_extraction", "extracting"] as const).map((status) =>
+      ctx.db
+        .query("vaultDocuments")
+        .withIndex("by_tenant_kind_status", (q) =>
+          q.eq("tenantId", tenantId).eq("kind", PROFILE_KIND).eq("status", status),
+        )
+        .order("asc")
+        .first(),
+    ),
+  );
+  const timestamps = profiles
+    .filter((d): d is Doc<"vaultDocuments"> => d !== null)
+    .map((d) => d.createdAt);
+  return timestamps.length ? Math.min(...timestamps) : null;
 }
 
 /**
@@ -900,4 +954,23 @@ export const updateProfile = tenantMutation({
     });
     return { vaultDocId };
   },
+});
+
+export const extractProfileInternal = internalAction({
+  args: { tenantId: v.string(), ...{ intakeText: v.string() } },
+  handler: async (ctx, a): Promise<ProfileInput> =>
+    extractProfileForTenant({ ...ctx, tenantId: a.tenantId }, a),
+});
+
+export const converseInternal = internalAction({
+  args: {
+    tenantId: v.string(),
+    ...{
+      slots: vSlots,
+      userMessage: v.string(),
+      history: v.optional(v.array(v.object({ role: v.string(), text: v.string() }))),
+    },
+  },
+  handler: async (ctx, a): Promise<ConverseResult> =>
+    converseForTenant({ ...ctx, tenantId: a.tenantId }, a),
 });

@@ -38,6 +38,29 @@ const TOTAL_CHAR_CAP = 8000;
 const harness = () => convexTest(schema, modules);
 type T = ReturnType<typeof harness>;
 
+test("reviewed foundation kinds have owner authority, but agent-origin content cannot impersonate them", async () => {
+  const t = harness();
+  for (const kind of ["business_profile", "business_foundation_operations"]) {
+    // These production kinds are written only by explicit profile/proposal/foundation approval.
+    const approved = await seedDoc(t, {
+      kind,
+      source: "agent",
+      text: "The owner confirmed this operating reference.",
+    });
+    expect((await searchVault(t, `SMOKE::${approved}`)).evidence[0]?.authority).toBe(
+      "tenant_owned",
+    );
+    // Arbitrary createDocument output carries origin:agent; the origin wins over any kind label.
+    const agent = await seedDoc(t, {
+      kind,
+      source: "agent",
+      origin: "agent",
+      text: "The agent invented this plan.",
+    });
+    expect((await searchVault(t, `SMOKE::${agent}`)).evidence[0]?.authority).toBe("agent_authored");
+  }
+});
+
 const seedDoc = (t: T, overrides: Record<string, unknown> = {}, tenantId = TENANT) =>
   t.run((ctx) =>
     ctx.db.insert("vaultDocuments", {
@@ -185,7 +208,7 @@ describe("the vault adapter returns cited, bounded, tenant-owned evidence", () =
     expect(evidence[0]?.authority).toBe("agent_authored");
   });
 
-  // ── The three writers that ingest agent prose with NO `origin` at all ────────────────────────
+  // ── Writers that ingest unreviewed agent prose with NO `origin` at all ────────────────────────
 
   test.each([
     // `evaluations.ts:1150` persistNextStepMemo — `text: plan.body`, which `plans.ts:169` records
@@ -194,11 +217,9 @@ describe("the vault adapter returns cited, bounded, tenant-owned evidence", () =
     ["next_step_memo", "evaluation", "evaluations.ts:1150"],
     // `voice.ts:349` persistBrief — markdown from `internal.llm.draftVoiceBrief`. startIngest :363.
     ["brief", "voice", "voice.ts:349"],
-    // `onboarding.ts:492` — PROFILE_KIND is "business_profile". startIngest :506.
-    ["business_profile", "agent", "onboarding.ts:492"],
   ])("AGENT PROSE WITH NO ORIGIN (%s, from %s) IS NOT CITED AS THE OWNER'S OWN WORD", async (kind, source, _site) => {
     // `authorityFor` decided "the tenant wrote it" from the ABSENCE of an `origin`, and these
-    // three landed writers store none — so the agent's own memo, brief and onboarding profile
+    // landed writers store none — so the agent's own memo and brief
     // were each cited at `tenant_owned`, the STRONGEST class. Driven through the REAL adapter
     // rather than the pure function, because that is the path production takes.
     const t = harness();
@@ -215,7 +236,7 @@ describe("the vault adapter returns cited, bounded, tenant-owned evidence", () =
     // The text is still retrievable and still cited — the fix is the CLASS, not suppression.
     expect(evidence[0]?.text).toContain("raise prices");
     expect(evidence[0]?.authority).not.toBe("tenant_owned");
-    // MUTATION: put `docKind === "web_research"` back in `authorityFor` -> all three RED.
+    // MUTATION: put `docKind === "web_research"` back in `authorityFor` -> both RED.
     expect(evidence[0]?.authority).toBe("third_party_research");
   });
 

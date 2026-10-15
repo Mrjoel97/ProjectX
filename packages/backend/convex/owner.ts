@@ -7,8 +7,9 @@
 
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 /**
  * Does the CALLER own this deployment? Returns one boolean and nothing else.
@@ -91,10 +92,10 @@ export const findUserIdByEmail = internalQuery({
     const rows = await ctx.db
       .query("users")
       .withIndex("email", (q) => q.eq("email", email.trim().toLowerCase()))
-      .collect();
+      .take(2);
     if (rows.length > 1) {
       // Count only, never the addresses or ids of the other rows (CLAUDE.md §4).
-      throw new Error(`AMBIGUOUS_EMAIL: ${rows.length} user rows share this address`);
+      throw new Error(`AMBIGUOUS_EMAIL: at least ${rows.length} user rows share this address`);
     }
     const user = rows[0];
     return user === undefined ? null : { userId: user._id, owner: user.owner === true };
@@ -125,10 +126,11 @@ export const inspectUsersByEmail = internalQuery({
     const rows = await ctx.db
       .query("users")
       .withIndex("email", (q) => q.eq("email", email.trim().toLowerCase()))
-      .collect();
+      .take(101);
     return {
-      count: rows.length,
-      rows: rows.map((u) => ({
+      count: Math.min(rows.length, 100),
+      truncated: rows.length > 100,
+      rows: rows.slice(0, 100).map((u) => ({
         userId: u._id,
         owner: u.owner === true,
         createdAt: u._creationTime,

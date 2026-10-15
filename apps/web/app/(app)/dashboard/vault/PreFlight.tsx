@@ -1,5 +1,7 @@
 "use client";
 
+import { uploadTranscriptionAudio } from "../../../lib/uploadTranscriptionAudio";
+
 // THE PRE-FLIGHT — AN INLINE `clay-card` PANEL IN THE DROPZONE'S SLOT, DELIBERATELY NOT A MODAL.
 //
 // This is an a11y decision, not a layout preference. The app has exactly two `aria-modal` blocks,
@@ -189,6 +191,11 @@ export function PreFlight({
       const entry = picked.manifest[i];
       if (!file || !entry) continue;
       try {
+        const transcriptionStorageId = await uploadTranscriptionAudio(
+          file,
+          entry.mimeType,
+          generateUploadUrl,
+        );
         const url = await generateUploadUrl();
         const res = await fetch(url, {
           method: "POST",
@@ -200,6 +207,7 @@ export function PreFlight({
         await uploadFolderFile({
           folderId,
           storageId,
+          transcriptionStorageId,
           filename: file.name,
           mimeType: entry.mimeType,
           size: entry.size,

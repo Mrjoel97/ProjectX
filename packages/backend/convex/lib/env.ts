@@ -34,6 +34,29 @@ export type EnvSpec = {
 };
 
 export const ENV_MANIFEST: readonly EnvSpec[] = [
+  {
+    name: "VOICE_SERVER_CONTROL_VERIFIED",
+    tier: "feature",
+    whatBreaks:
+      "Live voice remains disabled until audio-only WebRTC, server sideband controls and trusted termination are verified; typed onboarding remains available.",
+  },
+  {
+    name: "FOUNDATION_ONBOARDING_ENABLED",
+    tier: "feature",
+    whatBreaks:
+      "Voice-led foundation onboarding stays gated until set to 1; existing foundation drafts remain available in typed mode.",
+  },
+  {
+    name: "AUTH_RESEND_KEY",
+    tier: "feature",
+    whatBreaks:
+      "Password sign-in, verification and recovery fail closed without the transactional email API key.",
+  },
+  {
+    name: "AUTH_EMAIL_FROM",
+    tier: "feature",
+    whatBreaks: "Password authentication requires a verified transactional sender address.",
+  },
   // Operator attestations for real golden evaluations, not credentials or fixture switches.
   // Ordinary production readiness never requires running a paid evaluation.
   {

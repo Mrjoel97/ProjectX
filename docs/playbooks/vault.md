@@ -1,3 +1,11 @@
+> Last verified: 2026-10-15 — Document entity previews return at most256 relationships and show a partial-results notice. Deletion removes128 graph edges per transaction and schedules a durable continuation until all edges/orphan nodes are removed. Drive folder refresh resolves the exact tenant/driveFolderId index instead of scanning all folders. Local300-edge deletion regression passes.
+
+> Last verified: 2026-10-15 — audio transcription now reserves a 100-cent policy allowance before egress, disables SDK retries, and settles provider-reported cost or a known reported duration. Missing billing/duration retains its hold instead of becoming zero. This allowance is not a verified duration ceiling: compressed byte limits cannot establish that guarantee. Ordinary research calls also reserve existing fixed per-call fee ceilings before Tavily transport.
+
+> Last verified: 2026-10-15 — Graph extraction, classification, OCR, folder-digest generation and scoped ingestion/search embeddings now admit and settle at the provider boundary, before later parse/index/persistence failures. Ingest outputs carry optional budgetSettled receipts to avoid folded double charges while retaining compatibility with old workflow outputs. Paid ingest actions disable automatic workflow retries. Unknown costs retain holds. Existing folder reservations remain, conservatively overlapping call reservations; tight budgets may require operator recovery after reconciliation. Transcription still requires trustworthy duration admission before this gap is fully closed.
+
+> Last verified: 2026-10-15 — graph expansion now reads indexed seed/adjacency pages with hard limits (8 seed docs, 2 hops, 128 nodes, 1,024 returned edge rows, 64 rows/read, 64 output docs). No whole-tenant edge collection. `expansionStats` exposes conservative truncation/counts internally. Existing grounding still filters sealed and ineligible documents. Focused graph/sealing tests pass; live latency evidence remains pending.
+
 > Last verified: 2026-09-14 — an explicitly requested research PDF is now a deterministic
 > attachment on the original `web_research` Vault document. The markdown text, content hash,
 > sources, labels and source plan remain the artifact of record; `attachResearchPdf` adds the PDF
@@ -4540,3 +4548,9 @@ property-position regex, not `includes`.
 is that we SEND both shared-drive parameters, never that Google honours them for a real shared
 drive. One real import against a real shared-drive folder, confirming a non-zero file count, is the
 gate — and it is the ONLY thing that can settle it.
+
+## Revision-bound replacement — 2026-10-15
+
+Last verified: 2026-10-15 — new ingestion runs carry the document content hash into graph, classification and terminal writes; stale revisions no-op. Profile replacement marks graphCleanupHash and schedules clearAndReingest, deleting128 edges per transaction with shared-node degree/orphan maintenance before one replacement ingestion. Recovery skips pending cleanup. Existing deployed workflows without a hash retain compatibility; drain or cancel those runs before enabling foundation onboarding. Unit tests cover stale writers and preservation of shared graph nodes.
+
+Last verified: 2026-10-15 — Browser audio/video uploads now retain original bytes and a tenant-owned canonical mono16kHz PCM WAV sidecar. The server validates the sidecar and derives duration from actual samples before paid admission; the maximum is ten minutes. Unsupported browser codecs require a supported audio file or transcript. Legacy compressed media must be re-uploaded; malformed sidecars fail before provider egress. Sidecars participate in document/account deletion and export storage inventories.

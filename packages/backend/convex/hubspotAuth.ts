@@ -37,7 +37,7 @@ import {
 } from "@pikar/revenue/providers/hubspot";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
-import { type ActionCtx, internalAction } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
 import { hashExternalAccountId, requireCredentialKey } from "./connectorCredentials";
 import { readPages } from "./connectorFetch";
 import {
@@ -47,6 +47,7 @@ import {
   postTokenForm,
 } from "./connectorOAuth";
 import { tenantAction } from "./lib/functions";
+import { internalAction } from "./lib/tenantLifecycle";
 
 const PROVIDER = "hubspot" as const;
 

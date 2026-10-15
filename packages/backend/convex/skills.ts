@@ -68,6 +68,7 @@ import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafte
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
 import { folderDigestSkillBody } from "@pikar/contracts/skills/folderDigest";
+import { foundationVoiceSkillBody } from "@pikar/contracts/skills/foundationVoice";
 import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor";
 import { growthOsDiagnosticSkillBody } from "@pikar/contracts/skills/growthOsDiagnostic";
 import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
@@ -120,14 +121,10 @@ import { v } from "convex/values";
 import skillsLock from "../skills-lock.json";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import {
-  internalMutation,
-  internalQuery,
-  type MutationCtx,
-  type QueryCtx,
-} from "./_generated/server";
+import { internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { ownerMutation, ownerQuery, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { hasNativeVerticalEvidence } from "./verticalEvalEvidence";
 
 /**
@@ -641,23 +638,16 @@ export const candidatesForReview = ownerQuery({
   handler: async (ctx) => {
     const out = [];
     for (const name of GATED_SKILLS) {
-      const rows = await ctx.db
+      const active = await ctx.db
         .query("skills")
-        .withIndex("by_name_status", (q) => q.eq("name", name))
-        .collect();
-      const active = rows.find((r) => r.status === "active") ?? null;
-      // ONLY candidates AHEAD of what is live. `reduce(max)` over every candidate answers "newest
-      // candidate", which reads like "next version" and is not: optimizer dry-runs leave candidate
-      // rows behind at lower versions, and once a real upgrade lands those stale rows keep being
-      // offered forever. Observed 2026-08-09 — the page showed `v17 -> v16` for cockpit-agent and
-      // `v4 -> v3` for two others, and every Activate click could only either hit EVAL_GATE (they
-      // carry no evidence) or, if evidence ever existed, silently ROLL A LIVE AGENT BACK.
-      // Rollback is a deliberate operator act through `activateSkill`, never a review-queue button.
-      const candidates = rows.filter(
-        (r) => r.status === "candidate" && (active === null || r.version > active.version),
-      );
-      if (candidates.length === 0) continue;
-      const candidate = candidates.reduce((a, b) => (b.version > a.version ? b : a));
+        .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
+        .unique();
+      const candidate = await ctx.db
+        .query("skills")
+        .withIndex("by_name_status_version", (q) => q.eq("name", name).eq("status", "candidate"))
+        .order("desc")
+        .first();
+      if (!candidate || (active && candidate.version <= active.version)) continue;
       out.push({
         name,
         fromVersion: active?.version ?? null,
@@ -751,6 +741,7 @@ const SEEDS = [
   // question from `missingSlots` and computes `done` from `canComplete`, so no body edit can
   // make the conversation finish with a required slot empty. `converse` loads it FAIL-CLOSED.
   { name: ONBOARDING_AGENT_SKILL, body: onboardingAgentSkillBody },
+  { name: "foundation-voice", body: foundationVoiceSkillBody },
   // GATED (12-02, BEVL-01): the 4 evaluation-framework rubrics the engine loads to assess a
   // business, + the 3 specialist skills an approved gap-action names (execution deferred to
   // Phase 15+). Bootstrap seeds each v1 ACTIVE; a body edit publishes a candidate the eval
@@ -849,8 +840,9 @@ export const seedSkills = internalMutation({
     for (const { name, body } of SEEDS) {
       const rows = await ctx.db
         .query("skills")
-        .withIndex("by_name_status", (q) => q.eq("name", name))
-        .collect();
+        .withIndex("by_name_version", (q) => q.eq("name", name))
+        .order("desc")
+        .take(1);
 
       if (rows.length === 0) {
         await ctx.db.insert("skills", {
@@ -885,7 +877,10 @@ export const seedSkills = internalMutation({
       }
 
       // Non-gated: publish-and-activate, unchanged behavior.
-      const active = rows.find((r) => r.status === "active");
+      const active = await ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
+        .unique();
       if (active) await ctx.db.patch(active._id, { status: "archived" });
       await ctx.db.insert("skills", {
         name,
@@ -940,8 +935,9 @@ export const insertCandidate = internalMutation({
 
     const rows = await ctx.db
       .query("skills")
-      .withIndex("by_name_status", (q) => q.eq("name", name))
-      .collect();
+      .withIndex("by_name_version", (q) => q.eq("name", name))
+      .order("desc")
+      .take(1);
 
     if (rows.length === 0) {
       throw new Error(
@@ -952,7 +948,11 @@ export const insertCandidate = internalMutation({
     const newest = rows.reduce((a, b) => (b.version > a.version ? b : a));
     // fromVersion pins the LIVE version (the before); degenerate no-active registries fall back to
     // the newest (== max) version.
-    const fromVersion = rows.find((r) => r.status === "active")?.version ?? newest.version;
+    const active = await ctx.db
+      .query("skills")
+      .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
+      .unique();
+    const fromVersion = active?.version ?? newest.version;
 
     // Idempotent vs the NEWEST row (Pitfall 1): an identical body inserts nothing. The allocation
     // itself is the SHARED rule — `rows` is never empty here (guarded above), so this is
@@ -1044,11 +1044,11 @@ export const PROVENANCE_PIN_ERROR = "PROVENANCE_PIN";
  */
 /** The newest row for a pack name, or null. Shared by the publisher and the six-pack seeder. */
 async function newestPackRow(ctx: MutationCtx, name: string): Promise<Doc<"skills"> | null> {
-  const rows = await ctx.db
+  return await ctx.db
     .query("skills")
-    .withIndex("by_name_status", (q) => q.eq("name", name))
-    .collect();
-  return rows.length === 0 ? null : rows.reduce((a, b) => (b.version > a.version ? b : a));
+    .withIndex("by_name_version", (q) => q.eq("name", name))
+    .order("desc")
+    .first();
 }
 
 const isNativePackSkill = (name: string): boolean =>
@@ -1195,8 +1195,9 @@ export const inspectPackCandidates = internalQuery({
     for (const name of WORKFLOW_PACK_SKILL_NAMES) {
       const rows = await ctx.db
         .query("skills")
-        .withIndex("by_name_status", (q) => q.eq("name", name))
-        .collect();
+        .withIndex("by_name_version", (q) => q.eq("name", name))
+        .order("desc")
+        .take(1001);
       if (rows.length === 0) {
         out.push({ name, present: false as const });
         continue;
@@ -1208,7 +1209,8 @@ export const inspectPackCandidates = internalQuery({
         skillId: String(newest._id),
         version: newest.version,
         status: newest.status,
-        versionCount: rows.length,
+        versionCount: Math.min(rows.length, 1000),
+        versionCountCapped: rows.length > 1000,
         bodyHash: await contentHash(newest.body),
         bodyBytes: new TextEncoder().encode(newest.body).length,
         // The three gate planes, as booleans against THIS exact version — the same questions
@@ -1274,7 +1276,7 @@ export const seedRevenueCandidates = internalMutation({
       const rows = await ctx.db
         .query("skills")
         .withIndex("by_name_status", (q) => q.eq("name", pin.name))
-        .collect();
+        .take(2);
       const provenance = revenueProvenanceFor(pin);
       const exact = rows.find(
         (row) =>

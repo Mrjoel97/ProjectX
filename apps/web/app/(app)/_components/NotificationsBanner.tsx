@@ -30,15 +30,23 @@ const KIND_HREF: Record<string, string> = {
 // idiom (fewest new concepts). If notification volume ever grows past a handful, swap for a
 // rail bell + popover panel (the BellIcon on the "Approvals" nav item is the intended home).
 export function NotificationsBanner() {
-  const notifications = useQuery(api.notifications.list);
+  const notifications = useQuery(api.notifications.unreadWindow);
   const markRead = useMutation(api.notifications.markRead);
 
   // undefined = still loading → render nothing (no flash), same as DeadLetterBadge.
-  const unread = (notifications ?? []).filter((n) => !n.read && n.kind !== "gmail_reconnect");
-  if (unread.length === 0) return null;
+  const unread = (notifications?.items ?? []).filter(
+    (n) => !n.read && n.kind !== "gmail_reconnect",
+  );
+  if (unread.length === 0 && !notifications?.truncated) return null;
 
   return (
     <section className="notif-banner" aria-label="Notifications">
+      {notifications?.truncated && (
+        <p role="status">
+          Showing the 100 newest unread notifications. Dismiss reviewed items to reveal older
+          notices.
+        </p>
+      )}
       <ul className="notif-list">
         {unread.map((n) => {
           const href = KIND_HREF[n.kind];

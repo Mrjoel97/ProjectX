@@ -39,13 +39,14 @@ function hashString(s: string): number {
  * (no request, no skillVersion) are skipped. The Python dataloader.py consumes this shape verbatim.
  */
 export const buildTrajectoryExport = internalQuery({
-  args: { skillName: v.optional(v.literal(COCKPIT_AGENT_SKILL)) },
-  handler: async (ctx, { skillName }) => {
+  args: { skillName: v.optional(v.literal(COCKPIT_AGENT_SKILL)), cursor: v.optional(v.string()) },
+  handler: async (ctx, { skillName, cursor }) => {
     const name = skillName ?? COCKPIT_AGENT_SKILL;
-    const feedback = await ctx.db
+    const page = await ctx.db
       .query("feedback")
-      .withIndex("by_skill", (q) => q.eq("skillName", name))
-      .collect();
+      .withIndex("by_skill_created", (q) => q.eq("skillName", name))
+      .paginate({ cursor: cursor ?? null, numItems: 100 });
+    const feedback = page.page;
 
     const items: Array<{
       id: string;
@@ -102,6 +103,6 @@ export const buildTrajectoryExport = internalQuery({
       });
     }
 
-    return { skillName: name, items };
+    return { skillName: name, items, isDone: page.isDone, continueCursor: page.continueCursor };
   },
 });

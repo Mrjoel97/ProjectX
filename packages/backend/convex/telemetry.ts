@@ -13,7 +13,7 @@
 
 import { buildTelemetry } from "@pikar/core";
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 /** The accumulated outcome the terminal transition hands in (mirrors TerminalOutcome). */
 const terminalOutcome = v.object({

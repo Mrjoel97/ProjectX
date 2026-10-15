@@ -7,8 +7,9 @@
 // banned by the import guard (guardrails.ts / telemetry.ts precedent — no allowlist entry).
 import { v } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { ownerMutation, ownerQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 // Default-on-read: a missing/false optimizerConfig row means the optimizer is DORMANT
 // (enabled=false, zero seed, no migration). Exported — Plan 03 eligibility and Plan 07 CI

@@ -21,8 +21,9 @@
 import type { AnyDataModel, GenericMutationCtx } from "convex/server";
 import { v } from "convex/values";
 import type { DataModel, Id } from "./_generated/dataModel";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { ownerMutation, ownerQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 /** Crockford-style: no I, L, O or U, so a code read off a screen cannot be mistyped into another
  *  live code. 32 symbols × 16 characters = 80 bits. */

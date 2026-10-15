@@ -1,3 +1,5 @@
+> Last verified: 2026-10-15 — provider decision marker parsing accepts LF and CRLF; offline self-tests explicitly exercise both. Decision vocabulary, evidence rules, live gates and release seals are unchanged.
+
 # Playbook: Revenue connectors - shared lifecycle, gates and release semantics
 
 > Last verified: 2026-09-30 — ADR-053 changes only HubSpot's release criterion to

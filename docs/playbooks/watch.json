@@ -18,7 +18,9 @@
     "biome.json",
     "tsconfig.base.json",
     "scripts/check-playbooks.mjs",
-    "scripts/check-planning.mjs"
+    "scripts/check-planning.mjs",
+    "apps/web/proxy.ts",
+    ".gitattributes"
   ],
   "beta-admission.md": [
     "packages/backend/convex/invites.ts",
@@ -27,16 +29,25 @@
     "apps/web/app/(auth)/signup/",
     "apps/web/app/(app)/admin/",
     "apps/web/app/page.tsx",
-    "apps/web/app/homeEntry.test.ts"
+    "apps/web/app/homeEntry.test.ts",
+    "packages/backend/convex/lib/authEmail.ts",
+    "packages/backend/convex/authSecurity.test.ts",
+    "apps/web/app/(auth)/signin/",
+    "apps/web/app/(auth)/PasswordChallenge.tsx"
   ],
   "authorization.md": [
     "packages/backend/convex/lib/functions.ts",
+    "packages/backend/convex/lib/tenantLifecycle.ts",
+    "packages/backend/convex/uploads",
+    "packages/backend/test/uploadFixtures.ts",
     "packages/backend/convex/lib/allowlist.ts",
     "packages/backend/convex/owner.ts",
     "packages/backend/convex/owner.test.ts",
     "packages/backend/convex/tenant.test.ts",
     "packages/backend/convex/importGuard.test.ts",
-    "apps/web/app/(app)/ops/"
+    "apps/web/app/(app)/ops/",
+    "packages/backend/convex/authRevocations",
+    "packages/core/src/authLifetime.ts"
   ],
   "growth-diagnostic.md": [
     "packages/core/src/researchEvidence",
@@ -77,7 +88,10 @@
     "packages/core/src/goals.ts",
     "packages/core/src/goals.test.ts",
     "packages/backend/convex/goals.ts",
-    "packages/backend/convex/goals.test.ts"
+    "packages/backend/convex/goals.test.ts",
+    "packages/core/src/foundation",
+    "packages/backend/convex/foundation",
+    "packages/backend/convex/lib/foundationValidators"
   ],
   "agent-runtime.md": [
     "packages/backend/convex/opsSignals.ts",
@@ -151,7 +165,9 @@
     "apps/web/e2e/command-center.spec.ts",
     "apps/web/app/privacy/",
     "packages/core/src/connectionsSurface.test.ts",
-    "apps/web/app/(app)/deleteFirst.test.ts"
+    "apps/web/app/(app)/deleteFirst.test.ts",
+    "apps/web/app/legal.ts",
+    "apps/web/app/terms/"
   ],
   "cockpit.md": [
     "scripts/check-phase23-probe-controls",
@@ -227,7 +243,10 @@
     "packages/backend/convex/graph.ts",
     "packages/backend/convex/graph.test.ts",
     "packages/backend/convex/delivery.ts",
-    "packages/backend/convex/requests.ts"
+    "packages/backend/convex/requests.ts",
+    "packages/backend/convex/lib/webResearchTools.ts",
+    "packages/backend/convex/lib/markdownPdf.ts",
+    "packages/backend/convex/retrievalBounds.test.ts"
   ],
   "audit-dead-letter.md": [
     "packages/backend/convex/researchControl",
@@ -267,7 +286,9 @@
     "apps/web/e2e/voice.spec.ts",
     "packages/backend/convex/voiceDoc.ts",
     "packages/backend/convex/voiceDoc.test.ts",
-    "apps/web/e2e/voice-doc.spec.ts"
+    "apps/web/e2e/voice-doc.spec.ts",
+    "packages/backend/convex/voiceControl.ts",
+    "packages/backend/convex/lib/ws.d.ts"
   ],
   "skill-registry.md": [
     "packages/backend/convex/skills.ts",
@@ -285,13 +306,15 @@
     "packages/backend/convex/skilloptExport.ts",
     "packages/core/src/optimizerBreach.ts",
     "skillopt/",
-    ".github/workflows/skillopt.yml"
+    ".github/workflows/skillopt.yml",
+    "scripts/skillopt-export.mjs"
   ],
   "intake.md": [
     "packages/extraction/",
     "packages/backend/convex/intake.ts",
     "packages/backend/convex/intakeDb.ts",
-    "apps/web/app/(app)/dashboard/workspace/IntakeControls.tsx"
+    "apps/web/app/(app)/dashboard/workspace/IntakeControls.tsx",
+    "apps/web/app/lib/normalizeAudio.ts"
   ],
   "vault.md": [
     "packages/vault/",
@@ -319,7 +342,8 @@
     "apps/web/app/(app)/dashboard/vault/",
     "apps/web/e2e/vault.spec.ts",
     "packages/backend/scripts/run-smoke-vault.mjs",
-    "packages/backend/convex/vaultRag.test.ts"
+    "packages/backend/convex/vaultRag.test.ts",
+    "apps/web/app/lib/uploadTranscriptionAudio.ts"
   ],
   "media.md": [
     "packages/backend/convex/reliabilitySweep.ts",
@@ -329,6 +353,7 @@
     "packages/core/src/assembly.ts",
     "packages/core/src/render.ts",
     "packages/core/src/captions.ts",
+    "packages/core/src/stockSelection.ts",
     "packages/backend/convex/media.ts",
     "packages/backend/convex/media.test.ts",
     "packages/backend/convex/mediaComplete.ts",
@@ -339,7 +364,8 @@
     "apps/web/scripts/bake-sandbox-snapshot.mjs",
     "apps/web/scripts/music/",
     "packages/backend/scripts/run-storyboard-bakeoff.mjs",
-    "packages/backend/scripts/storyboard-briefs.json"
+    "packages/backend/scripts/storyboard-briefs.json",
+    "packages/backend/convex/lib/mediaRead.ts"
   ],
   "contacts-crm.md": [
     "packages/core/src/marketingLead",
@@ -356,6 +382,8 @@
     "packages/backend/convex/goldenBudget.test.ts",
     "packages/backend/convex/guardrails.ts",
     "packages/backend/convex/lib/evalBudgetModel.ts",
+    "packages/backend/convex/lib/paidBudgetModel",
+    "packages/backend/convex/paidAdmission.test.ts",
     "packages/backend/convex/evalBudget",
     "packages/cost/src/evalBudget.ts",
     "packages/cost/src/goldenProviderBudget",
@@ -376,7 +404,8 @@
     "packages/backend/convex/env.test.ts",
     "packages/backend/convex/fixtureSeam.test.ts",
     "packages/backend/convex/ops.ts",
-    ".github/workflows/deploy-production.yml"
+    ".github/workflows/deploy-production.yml",
+    "scripts/check-release-auth.mjs"
   ],
   "workflow-packs.md": [
     "packages/core/src/workflowPack",

@@ -1,11 +1,22 @@
 // @vitest-environment node
+
+import { getFunctionName } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { internal } from "./_generated/api";
 import { buildWebResearchTool } from "./llm";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+const rateModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
+function makeTest() {
+  const t = convexTest(schema, modules);
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateModules);
+  return t;
+}
 const requestId = "00000000-0000-4000-8000-000000000001";
 const tenantId = "research-owner";
 const page = "https://example.com/pricing";
@@ -15,7 +26,7 @@ afterEach(() => {
 });
 
 test("native admission is immutable and concurrent claims share one finite allowance", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   const input = { tenantId, requestId, limit: 2 };
   const ids = await Promise.all([
     t.mutation(internal.researchControl.admit, input),
@@ -71,7 +82,7 @@ test("native admission is immutable and concurrent claims share one finite allow
 });
 
 test("expired controls retain a replay tombstone and their one-shot cleanup later removes it", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   const controlId = await t.mutation(internal.researchControl.admit, {
     tenantId,
     requestId,
@@ -102,7 +113,7 @@ test("expired controls retain a replay tombstone and their one-shot cleanup late
 });
 
 test("closure, expiry and zero mode never refill when readmitted", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   for (const mode of ["closed", "expired", "zero"] as const) {
     const root = crypto.randomUUID();
     const input = { tenantId, requestId: root, limit: mode === "zero" ? 0 : 2 };
@@ -128,7 +139,7 @@ test("closure, expiry and zero mode never refill when readmitted", async () => {
 });
 
 test("reconstructed tools and concurrent children share native claims before extraction; failed extraction consumes its slot", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   const controlId = await t.mutation(internal.researchControl.admit, {
     tenantId,
     requestId,
@@ -171,6 +182,7 @@ test.each([
   "true",
   "ambiguous",
 ])("claim response %s cannot authorize extraction", async (response) => {
+  const t = makeTest();
   vi.stubEnv("TAVILY_API_KEY", "synthetic");
   const fetchMock = vi.fn(async (_url: unknown) => ({
     ok: true,
@@ -182,9 +194,16 @@ test.each([
     requestId,
     controlId: "synthetic" as never,
     ctx: {
-      runMutation: async () => {
-        if (response === "ambiguous") throw new Error("transport");
-        return response;
+      runMutation: async (fn: Parameters<typeof getFunctionName>[0], args: never) => {
+        if (getFunctionName(fn) === getFunctionName(internal.researchControl.claim)) {
+          if (response === "ambiguous") throw new Error("transport");
+          return response;
+        }
+        if (getFunctionName(fn) === getFunctionName(internal.guardrails.reservePaidCall))
+          return t.mutation(internal.guardrails.reservePaidCall, args);
+        if (getFunctionName(fn) === getFunctionName(internal.guardrails.settlePaidCall))
+          return t.mutation(internal.guardrails.settlePaidCall, args);
+        throw new Error("unexpected mutation in research tool test");
       },
     } as never,
   }) as unknown as Record<
@@ -197,10 +216,13 @@ test.each([
   await webResearch.execute({ query: "pricing" }, {} as never);
   await readPage.execute({ url: page, focus: "price" }, {} as never);
   expect(fetchMock).toHaveBeenCalledTimes(1);
+  const costs = await t.run((ctx) => ctx.db.query("spendEvents").collect());
+  expect(costs.filter((row) => row.phase === "reserved")).toHaveLength(1);
+  expect(costs.filter((row) => row.phase === "actual")).toHaveLength(1);
 });
 
 test("zero mode searches but performs no page extraction", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   const controlId = await t.mutation(internal.researchControl.admit, {
     tenantId,
     requestId,

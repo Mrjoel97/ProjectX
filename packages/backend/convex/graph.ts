@@ -18,9 +18,9 @@
 import { microsoftMailReady } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction } from "./_generated/server";
 import { prepareGovernedMessage } from "./gmail";
 import { fixtureSeamFor } from "./lib/models";
+import { internalAction } from "./lib/tenantLifecycle";
 import { freshGraphToken } from "./microsoftCalendar";
 
 const GRAPH_SEND_ENDPOINT = "https://graph.microsoft.com/v1.0/me/sendMail";
@@ -37,17 +37,7 @@ const MAX_MIME_BYTES = 3 * 1024 * 1024;
 // Explicit return type (guidelines §96): never inferred through the internal-api graph, or a
 // sibling action collapses to `any`. Mirrors gmail.ts's SendResult, plus the two refusals that
 // only exist on this side.
-type GraphSendResult =
-  | {
-      delivered: false;
-      reason:
-        | "not_connected"
-        | "refresh_failed"
-        | "suppressed"
-        | "mail_scope_missing"
-        | "too_large";
-    }
-  | { delivered: true; messageId: string };
+type GraphSendResult = import("./delivery").DeliveryResult;
 
 export const send = internalAction({
   args: { requestId: v.id("requests") },
@@ -95,37 +85,30 @@ export const send = internalAction({
     const raw = Buffer.from(prepared.mime, "utf8");
     if (raw.byteLength > MAX_MIME_BYTES) return { delivered: false, reason: "too_large" };
 
-    const sendRes = await fetch(GRAPH_SEND_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${access.token}`,
-        "Content-Type": "text/plain",
-      },
-      body: raw.toString("base64"),
+    const claim = await ctx.runMutation(internal.delivery.claim, {
+      requestId,
+      provider: "microsoft",
     });
-
-    if (sendRes.status === 429 || sendRes.status >= 500) {
-      // Transient: THROW so the retrier retries; a terminal failure flows onComplete →
-      // deadLetters → OPSG-07. Same taxonomy as the Gmail arm, with 429 added because Graph
-      // throttles far more readily than Gmail does.
-      throw new Error(`graph.send: transient ${sendRes.status}`);
+    if (!claim.proceed) return claim.result;
+    try {
+      const sendRes = await fetch(GRAPH_SEND_ENDPOINT, {
+        method: "POST",
+        signal: AbortSignal.timeout(30_000),
+        headers: {
+          Authorization: `Bearer ${access.token}`,
+          "Content-Type": "text/plain",
+        },
+        body: raw.toString("base64"),
+      });
+      // No provider response body enters errors, logs or dead letters.
+      // Even HTTP errors are conservatively held: this adapter cannot prove non-delivery.
+      if (!sendRes.ok) throw new Error("DELIVERY_NOT_CONFIRMED");
+      const messageId = "";
+      await ctx.runMutation(internal.delivery.confirm, { requestId, messageId });
+      return { delivered: true, messageId };
+    } catch {
+      await ctx.runMutation(internal.delivery.markUnknown, { requestId });
+      return { delivered: false, reason: "outcome_unknown" };
     }
-    if (!sendRes.ok) {
-      throw new Error(`graph.send: ${sendRes.status} ${await sendRes.text()}`);
-    }
-
-    // 202 Accepted with an EMPTY body is the documented success. Do not parse it, and do not
-    // invent an id: the audit ref below records that the send happened and through which provider,
-    // which is all Graph actually tells us.
-    await ctx.runMutation(internal.audit.log, {
-      tenantId: req.tenantId,
-      correlationId: req.correlationId,
-      eventType: "graph.sent",
-      actor: "system",
-      // Refs and counts ONLY (CLAUDE.md §4). `messageId` is deliberately absent rather than "".
-      payload: { requestId, provider: "microsoft" },
-    });
-    // The contract needs a string; Graph gives none. Say so in the value rather than faking an id.
-    return { delivered: true, messageId: "" };
   },
 });

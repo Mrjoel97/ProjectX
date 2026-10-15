@@ -1,3 +1,20 @@
+> Last verified: 2026-10-15 — Goal history now uses listGoalsPage and a visible Load older goals control in BlueprintPanel. Blueprint grounding reads the three earliest dated active goals through tenant/status/targetDate/createdAt, preserving deadline ordering without loading all goals. Legacy listGoals is bounded to100 per status.
+
+> Last verified: 2026-10-15 — Local foundation interview implementation; no hosted voice UAT or activation is claimed.
+
+## Voice-led foundation interview (2026-10-15)
+
+- FOUNDATION_ONBOARDING_ENABLED=1 selects the new flow; unset retains legacy onboarding for new users. Existing foundation drafts remain readable and discardable when disabled. Server admission rejects new interviews, typed/voice answers, edits, checkpoints, late extraction commits and publication before paid work or writes.
+- The foundation-voice registry skill leads the interview through the existing WebRTC hook. Only save_foundation_answer is exposed; tool results determine essential completion. It cannot publish, select tiers, send messages, or execute business actions. Typed input and supported Vault document uploads feed the same tenant interview.
+- foundationInterviews is the durable revision-CAS draft. Essentials reuse the existing profile extractor, server-owned missingSlots conversation, and fact-derived tier. Enrichment preserves direct user statements, marks current versus planned information, and does not fabricate missing operations. Inputs are bounded to 100 answers, 8,000 characters each, 100,000 total answer characters; profile edits are separately bounded.
+- Six deterministic reference documents cover overview (compatible business_profile), offers/customers, operating model, sales/delivery, goals/metrics, and constraints/decisions. Statement event IDs and optional owned upload references preserve provenance. Drafts are not Vault documents.
+- Review renders all six documents and old/new Blueprint. Explicit on-screen publication requires both the displayed revision and a hash of the projected documents/Blueprint. A stale tab or independently changed Blueprint/tier invalidates approval. The mutation saves tier facts, six approved documents, Blueprint references, revision history and publication state atomically. Ingestion is asynchronous and its status remains visible; failed indexing does not force re-onboarding.
+- Revisions retain approved content snapshots outside default retrieval. All six current document IDs remain stable. Replacement clears obsolete RAG pointers and schedules bounded graph cleanup before version-checked re-ingestion. Blueprint remains excluded from embedding and graph extraction. Drain older unversioned ingestion workflows before enabling the feature.
+- foundationTranscripts stores finalized text checkpoints only, never raw audio, with seven-day expiry. Hourly retention deletes at most 100 rows per transaction and schedules continuation. These three tables are tenant-owned in native export/erasure. Discard restores the latest approved snapshot when present, preserving document references; only unpublished changes and temporary checkpoints are removed.
+- Profile lookup now uses four indexed status-specific first-row reads, preserving newest profile and earliest completion without collecting all profiles. Blueprint pulse reads newest 50 rows per specialist/status; truncated counts are lower bounds and timing is a sample, disclosed in the UI.
+- Local checks: backend foundation/voice/onboarding isolation tests; browser component tests for explicit approval, stale revision and typed fallback. Live speech quality, interruptions, provider usage reconciliation, microphone/device behavior and authenticated cross-device UAT remain release evidence gates.
+- Rollback: unset FOUNDATION_ONBOARDING_ENABLED; keep additive tables/indexes and active registry seed. Existing approved documents remain usable; drafts are read-only with discard available until the switch is enabled again. Resume enrichment through Continue business setup on the profile/Blueprint surface.
+
 # Playbook: Persona Onboarding & Business Profile
 
 > Last verified: 2026-09-30 — Connections warning correction, local only. Revoked rows retain
@@ -1601,3 +1618,5 @@ cannot see:
 - **The closing beat costs a second `converse` call.** `ponytail:` ceiling — `converse` derives
   `nextSlot` from the PRE-merge slots. Upgrade path: have it also report a post-merge closing
   instruction so one call covers the last turn. A backend change; plan 15.1-07 did not own it.
+
+Verification 2026-10-15: foundation flag-off direct RPC tests cover unset and explicit-off configuration, no provider calls or content writes, preserved reads/discard, and read-only UI without save/publish controls.

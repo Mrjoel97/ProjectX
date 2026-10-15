@@ -1,3 +1,4 @@
+import { seedOwnedUpload } from "../test/uploadFixtures";
 // @vitest-environment node
 //
 // Lane-1 (03.8-02) offline coverage for the extractDoc dispatcher — EXTR-B/D/E/F.
@@ -73,7 +74,9 @@ async function uploadBytes(
   const asT = t.withIdentity({ subject: TENANT });
   // .slice() re-homes a Uint8Array<ArrayBufferLike> (pdf-lib output) onto a plain ArrayBuffer.
   const part: BlobPart = typeof bytes === "string" ? bytes : bytes.slice();
-  const storageId = await t.run((ctx) => ctx.storage.store(new Blob([part], { type: mimeType })));
+  const storageId = await t.run((ctx) =>
+    seedOwnedUpload(ctx, TENANT, new Blob([part], { type: mimeType })),
+  );
   const { vaultDocId } = await asT.mutation(api.vault.vaultUpload, {
     storageId,
     filename,
@@ -1042,8 +1045,8 @@ describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern
       "mediaType: mimeType",
       "AbortSignal.timeout(CALL_TIMEOUT_MS)",
       "maxRetries: 1",
-      "priceUsage(DEFAULT_MODEL",
-      "runMutation(internal.guardrails.recordSpend",
+      "paidBudgetModel({",
+      "rail: spendRail",
     ]) {
       expect(src, `vaultExtract.ts is missing "${needle}"`).toContain(needle);
     }
@@ -1071,7 +1074,9 @@ describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern
     // document-level correlation: 50 pages, 50 hosted calls, 50 limiter movements, but ONE
     // `actual` row carrying one page's cents. The ledger would then sit BELOW the limiter, and a
     // missing movement is indistinguishable from money never spent.
-    expect(src, "the hosted call must take an explicit correlation").toContain("correlationId,");
+    expect(src, "each hosted invocation uses a fresh middleware reservation").toContain(
+      "paidBudgetModel({",
+    );
     expect(src, "each page needs its OWN correlation segment").toMatch(
       /pages\[i\]!,\s*"application\/pdf",\s*`\$\{correlation\}:p\$\{i\}`/,
     );

@@ -52,3 +52,20 @@ test("a missing pinned source fails closed instead of certifying a partial evalu
   rmSync(join(root, "packages/backend/convex/llm.ts"));
   assert.throws(() => computeEvaluatorRevision(root), { code: "ENOENT" });
 });
+
+test("extracted research, PDF and media-query behavior remains part of evaluator identity", (t) => {
+  const root = fixtureRoot(t);
+  const before = computeEvaluatorRevision(root);
+  for (const relativePath of [
+    "packages/backend/convex/lib/webResearchTools.ts",
+    "packages/backend/convex/lib/markdownPdf.ts",
+    "packages/backend/convex/lib/mediaRead.ts",
+  ]) {
+    const path = join(root, relativePath),
+      original = readFileSync(path, "utf8");
+    writeFileSync(path, original.replace("value = 1", "value = 2"));
+    assert.notEqual(computeEvaluatorRevision(root), before, relativePath);
+    writeFileSync(path, original);
+  }
+  assert.equal(computeEvaluatorRevision(root), before);
+});

@@ -172,10 +172,7 @@ describe("native funnel lifecycle", () => {
     });
   });
   test("router mounts only funnel GET and preserves existing integration routes", () => {
-    const middleware = readFileSync(
-      new URL("../../../apps/web/middleware.ts", import.meta.url),
-      "utf8",
-    );
+    const middleware = readFileSync(new URL("../../../apps/web/proxy.ts", import.meta.url), "utf8");
     expect(middleware).not.toMatch(/["']\/(?:f|funnels|contacts)(?:\/|["'])/);
     expect(existsSync(new URL("../../../apps/web/app/f", import.meta.url))).toBe(false);
     const source = readFileSync(new URL("./http.ts", import.meta.url), "utf8");

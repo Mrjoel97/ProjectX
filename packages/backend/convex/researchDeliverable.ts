@@ -5,8 +5,9 @@ import { vResultValidator, vWorkflowId } from "@convex-dev/workflow";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { workflow } from "./index";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 export const RESEARCH_DELIVERABLE_REASON = v.union(
   v.literal("research_failed"),

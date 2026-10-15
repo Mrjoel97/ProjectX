@@ -31,9 +31,10 @@ import { hasAssetSource } from "@pikar/core/storyboard";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { internalMutation } from "./_generated/server";
 import { dispatchWorkflowLive } from "./dispatchRun";
+import { activeMediaJobs, currentMediaJobs, readMediaBatch } from "./lib/mediaRead";
 import { flipParentWhenSiblingsDone } from "./lib/planRow";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { migrations } from "./migrations";
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
@@ -102,11 +103,13 @@ const notifyStall = (ctx: MutationCtx, tenantId: string): Promise<null> =>
     message: WATCHDOG_NOTIFY_MESSAGE,
   });
 
-const jobsForPlan = (ctx: MutationCtx, plan: Doc<"plans">): Promise<Doc<"mediaJobs">[]> =>
-  ctx.db
-    .query("mediaJobs")
-    .withIndex("by_plan", (q) => q.eq("tenantId", plan.tenantId).eq("planId", plan._id))
-    .collect();
+const jobsForPlan = async (ctx: MutationCtx, plan: Doc<"plans">): Promise<Doc<"mediaJobs">[]> => {
+  const rows = [
+    ...(await currentMediaJobs(ctx, plan.tenantId, plan)),
+    ...(await activeMediaJobs(ctx, plan.tenantId, plan._id)),
+  ];
+  return [...new Map(rows.map((row) => [row._id, row])).values()];
+};
 
 /** A line the provider may still call back about. Mirrors `mediaComplete.TERMINAL` from the other
  *  side — while one of these exists, a stalled PLAN is the job sweep's problem, not the plan
@@ -137,12 +140,9 @@ export const sweepStuckMediaJobs = migrations.define({
     // The batch is the unit because it is the unit the user approved. Read BEFORE the terminal
     // below so the row being swept cannot count as its own precedent; a later row in the same pass
     // sees this one's reason and stays quiet.
-    const alreadyRaised = (
-      await ctx.db
-        .query("mediaJobs")
-        .withIndex("by_batch", (q) => q.eq("tenantId", row.tenantId).eq("batchId", row.batchId))
-        .collect()
-    ).some((s) => s.failureReason === WATCHDOG_JOB_REASON);
+    const alreadyRaised = (await readMediaBatch(ctx, row.tenantId, row.batchId)).some(
+      (s) => s.failureReason === WATCHDOG_JOB_REASON,
+    );
 
     await ctx.runMutation(internal.mediaComplete.landResult, {
       jobId: row._id,
@@ -182,7 +182,9 @@ async function lastRenderActivity(
     const rows = await ctx.db
       .query("audit")
       .withIndex("by_correlation", (q) => q.eq("correlationId", batchId))
-      .collect();
+      .order("desc")
+      .take(1001);
+    if (rows.length > 1000) return Date.now(); // Unknown historical activity conservatively defers terminalization.
     for (const r of rows) if (r.eventType === MANUAL_RETRY_EVENT) last = Math.max(last, r.ts);
   }
   return last;
@@ -270,7 +272,8 @@ async function dispatchLive(ctx: MutationCtx, plan: Doc<"plans">): Promise<boole
   // The legacy arm, for rows staged before 42-02 and for any future entry point that has not moved
   // to a workflow. Matched by `args.planId` rather than by function NAME, so a fourth dispatch
   // entry point is covered the day it is written instead of the day someone remembers this list.
-  const scheduled = await ctx.db.system.query("_scheduled_functions").collect();
+  const scheduled = await ctx.db.system.query("_scheduled_functions").take(1001);
+  if (scheduled.length > 1000) return true; // Unknown legacy liveness must never terminalize paid work.
   return scheduled.some(
     (s) =>
       (s.state.kind === "pending" || s.state.kind === "inProgress") &&

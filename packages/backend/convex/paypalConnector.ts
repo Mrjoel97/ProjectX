@@ -71,10 +71,11 @@ import {
 import { normalizeAll } from "@pikar/revenue/providers/shared";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { type ActionCtx, internalAction } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
 import { requireCredentialKey } from "./connectorCredentials";
 import { readPages } from "./connectorFetch";
 import { tenantAction } from "./lib/functions";
+import { internalAction } from "./lib/tenantLifecycle";
 import {
   classifyGrantSubject,
   parsePayPalCredential,

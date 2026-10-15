@@ -17,8 +17,8 @@ import {
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
-import { internalAction, internalMutation } from "./_generated/server";
 import { rateLimiter } from "./guardrails";
+import { internalAction, internalMutation } from "./lib/tenantLifecycle";
 import { migrations } from "./migrations";
 
 /**

@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { useQuery } from "convex/react";
+import { usePaginatedQuery } from "convex/react";
 
 // BETA-04: this list is a reactive useQuery subscription — the Convex platform pushes every
 // status change, so a new request appears and its status advances (submitted → routing →
@@ -37,15 +37,19 @@ function StatusPill({ status }: { status: string }) {
 }
 
 export default function Requests() {
-  const rows = useQuery(api.requests.list, {});
+  const {
+    results: rows,
+    status,
+    loadMore,
+  } = usePaginatedQuery(api.requests.listPage, {}, { initialNumItems: 25 });
 
   return (
     <section style={{ maxWidth: "48rem" }}>
       <h1>Requests</h1>
 
-      {rows === undefined && <p style={{ color: "#666" }}>Loading…</p>}
+      {status === "LoadingFirstPage" && <p style={{ color: "#666" }}>Loading…</p>}
 
-      {rows?.length === 0 && (
+      {status !== "LoadingFirstPage" && rows.length === 0 && (
         <p style={{ color: "#666" }}>
           No requests yet. <a href="/submit">Submit one</a> to see it appear here live.
         </p>
@@ -84,6 +88,12 @@ export default function Requests() {
           ))}
         </ul>
       )}
+      {status === "CanLoadMore" && (
+        <button type="button" onClick={() => loadMore(25)}>
+          Load more
+        </button>
+      )}
+      {status === "LoadingMore" && <p>Loading more…</p>}
     </section>
   );
 }

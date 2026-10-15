@@ -137,7 +137,7 @@ jobs:
         if: steps.eligibility.outputs.proceed == 'true'
         run: |
           # feedback->request rows only (08-04); the golden eval-cases/*.json are NEVER exported.
-          curl -fsS -H "Authorization: Bearer $SKILLOPT_TOKEN" "$SKILLOPT_HTTP_URL/skillopt/export" -o export.json
+          node scripts/skillopt-export.mjs export.json
 
       - name: Fetch active cockpit-agent body -> skills/initial.md
         if: steps.eligibility.outputs.proceed == 'true'

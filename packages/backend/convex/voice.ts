@@ -1,3 +1,4 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 // Plan-06 VOIC-02/VOIC-03: the server-side voice-session engine — a THIN adapter (§1) over the
 // pure @pikar/voice FSM/cap math + the in-repo scheduler/CAS/ingest precedents. Domain logic
 // (capEndsAt, isEnded) lives in @pikar/voice; @pikar/cost prices the metering; this file only
@@ -14,9 +15,10 @@ import { capEndsAt, DEFAULT_REALTIME_MODEL, isEnded } from "@pikar/voice";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalAction, internalMutation, internalQuery } from "./_generated/server";
-import { tenantMutation } from "./lib/functions";
+import { internalQuery } from "./_generated/server";
+import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { internalAction, internalMutation } from "./lib/tenantLifecycle";
 import { startIngest } from "./vaultIngest";
 
 // ── Reads (parallel-session guard + brief resolvers) ─────────────────────────
@@ -54,25 +56,58 @@ export const getSession = internalQuery({
  * decision "never burn capped 15-minute time discussing a document the agent cannot actually see"
  * is only true if the SERVER refuses a non-ready or cross-tenant document.
  */
-export const startSession = tenantMutation({
+export const startSession = internalMutation({
   args: {
+    tenantId: v.optional(v.string()),
+    controlled: v.optional(v.boolean()),
     callId: v.string(),
+    reservationId: v.optional(v.id("spendEvents")),
+    onboarding: v.optional(v.boolean()),
     language: v.optional(v.string()),
     // The ONE report under discussion (DOCV-01). Optional — the Phase-6 path is unchanged without it.
     docRef: v.optional(v.id("vaultDocuments")),
   },
   handler: async (
     ctx,
-    { callId, language, docRef },
+    { callId, language, docRef, reservationId, onboarding, tenantId: suppliedTenant, controlled },
   ): Promise<{ sessionId: Id<"voiceSessions"> }> => {
+    const tenantId = suppliedTenant ?? String((await getAuthUserId(ctx)) ?? "");
+    if (!tenantId) throw new Error("UNAUTHENTICATED");
     // Validate the doc scope BEFORE any write — never after. A rejected document must not leave an
     // `active` row holding a watchdog. Read straight off `ctx.db` (this file's own endSessionClean /
     // abortSession ownership idiom): `internal.vault.getDoc` carries no `status`, so it structurally
     // cannot answer the readiness half of this check.
     // Thrown messages are a STATUS, never content — no title, no text, no character count (§4).
+    if (onboarding && docRef) throw new Error("voice: incompatible purpose");
+    if (!reservationId) throw new Error("voice: reservation required");
+    const reservation = await ctx.db.get(reservationId);
+    if (
+      !reservation ||
+      reservation.tenantId !== tenantId ||
+      reservation.kind !== "paid_call" ||
+      reservation.phase !== "reserved" ||
+      reservation.model !== DEFAULT_REALTIME_MODEL ||
+      Date.now() - reservation.createdAt > 120000
+    )
+      throw new Error("voice: invalid reservation");
+    if (
+      await ctx.db
+        .query("voiceSessions")
+        .withIndex("by_spendReservationId", (q) => q.eq("spendReservationId", reservationId))
+        .first()
+    )
+      throw new Error("voice: reservation already used");
+    if (
+      onboarding &&
+      !(await ctx.db
+        .query("foundationInterviews")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+        .unique())
+    )
+      throw new Error("voice: interview missing");
     if (docRef !== undefined) {
       const doc = await ctx.db.get(docRef);
-      if (!doc || doc.tenantId !== ctx.tenantId) throw new Error("voicedoc: document not found");
+      if (!doc || doc.tenantId !== tenantId) throw new Error("voicedoc: document not found");
       if (doc.status !== "ready" || !doc.text?.trim())
         throw new Error("voicedoc: document not ready");
     }
@@ -82,7 +117,7 @@ export const startSession = tenantMutation({
     // then its abnormal-end path (hangup + auto-store) runs asynchronously.
     const prior = await ctx.db
       .query("voiceSessions")
-      .withIndex("by_tenant_status", (q) => q.eq("tenantId", ctx.tenantId).eq("status", "active"))
+      .withIndex("by_tenant_status", (q) => q.eq("tenantId", tenantId).eq("status", "active"))
       .first();
     if (prior) {
       if (prior.watchdogFnId) await ctx.scheduler.cancel(prior.watchdogFnId);
@@ -90,11 +125,15 @@ export const startSession = tenantMutation({
     }
 
     const startedAt = Date.now();
-    const endsAt = capEndsAt(startedAt);
+    const endsAt = controlled ? startedAt + 300_000 : capEndsAt(startedAt);
     const sessionId = await ctx.db.insert("voiceSessions", {
-      tenantId: ctx.tenantId,
+      tenantId: tenantId,
       status: "active",
+      controlled,
+      controlExpiresAt: controlled ? endsAt + 30 * 60_000 : undefined,
       callId,
+      onboarding,
+      spendReservationId: reservationId,
       startedAt,
       endsAt,
       inAudioTok: 0,
@@ -115,7 +154,7 @@ export const startSession = tenantMutation({
     // Refs-only session_started audit: {sessionId} + at most the docRef — both IDS. Never the
     // callId (a secret handle), never the document title, text or a character count of it (§4).
     await ctx.runMutation(internal.audit.log, {
-      tenantId: ctx.tenantId,
+      tenantId: tenantId,
       correlationId: String(sessionId),
       eventType: "voice.session_started",
       actor: "user",
@@ -140,6 +179,8 @@ export const markEndedClean = internalMutation({
     if (!s || isEnded(s.status)) return null; // CAS no-op (already ended / fire race)
     if (s.watchdogFnId) await ctx.scheduler.cancel(s.watchdogFnId); // safe: status still active ⇒ pending id
     await ctx.db.patch(sessionId, { status: "ended_clean" });
+    await ctx.scheduler.runAfter(30 * 60_000, internal.voice.clearTransientControl, { sessionId });
+    if (s.callId) await ctx.scheduler.runAfter(0, internal.voice.terminateProvider, { sessionId });
     await ctx.runMutation(internal.audit.log, {
       tenantId: s.tenantId,
       correlationId: String(sessionId),
@@ -171,6 +212,7 @@ export const markEndedAbnormal = internalMutation({
     const s = await ctx.db.get(sessionId);
     if (!s || isEnded(s.status)) return null; // CAS no-op (clean end won the race)
     await ctx.db.patch(sessionId, { status: "ended_abnormal" });
+    await ctx.scheduler.runAfter(30 * 60_000, internal.voice.clearTransientControl, { sessionId });
     await ctx.runMutation(internal.audit.log, {
       tenantId: s.tenantId,
       correlationId: String(sessionId),
@@ -218,7 +260,7 @@ export const endSessionClean = tenantMutation({
     // The vaultDocId is returned so the review UI can mark this brief "reviewed" — it never re-surfaces
     // in the dropped-session banner (VOIC-03: the banner is for briefs the user has NOT yet seen).
     let vaultDocId: Id<"vaultDocuments"> | undefined;
-    if (editedMarkdown) {
+    if (editedMarkdown && !s.onboarding) {
       const stored = await ctx.runMutation(internal.voice.persistBrief, {
         sessionId,
         markdown: editedMarkdown,
@@ -261,20 +303,67 @@ export const forceEndSession = internalAction({
   args: { sessionId: v.id("voiceSessions") },
   handler: async (ctx, { sessionId }): Promise<{ ended: true } | { noop: true }> => {
     const flipped = await ctx.runMutation(internal.voice.markEndedAbnormal, { sessionId });
-    if (!flipped) return { noop: true }; // CAS no-op — already ended
-    if (flipped.callId) {
-      try {
-        await ctx.runAction(internal.voiceToken.hangupCall, { callId: flipped.callId });
-      } catch {
-        // Refs-only: the hangup status is not re-thrown — a gone/already-ended call must not block
-        // the brief. The 15-min cap is already enforced by the abnormal-end transition above.
-      }
-    }
+    // Provider termination has its own receipt. An ended UI status proves nothing about billing.
+    await ctx.runAction(internal.voice.terminateProvider, { sessionId });
+    if (!flipped) return { noop: true };
     // Auto-store: no transcript is available for a gone-tab fire, so draftVoiceBrief runs over an
     // empty transcript → a minimal brief the user reviews on next open (RESEARCH Pitfall 3, beta).
     // ponytail: empty-transcript brief; upgrade path is a client beacon carrying the last transcript.
-    await ctx.runAction(internal.voice.storeBrief, { sessionId });
+    const session = await ctx.runQuery(internal.voice.getSession, { sessionId });
+    if (!session?.onboarding) await ctx.runAction(internal.voice.storeBrief, { sessionId });
     return { ended: true };
+  },
+});
+
+/** Acknowledged provider hangup, independently retried after clean/abnormal UI ends.
+ * Exhausted attempts remain explicitly unresolved; never release a billing hold here. */
+export const terminationReceipt = internalMutation({
+  args: {
+    sessionId: v.id("voiceSessions"),
+    confirmed: v.boolean(),
+    noRetry: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { sessionId, confirmed, noRetry }) => {
+    const s = await ctx.db.get(sessionId);
+    if (!s || s.hangupConfirmedAt) return;
+    const attempts = (s.hangupAttempts ?? 0) + 1;
+    await ctx.db.patch(sessionId, {
+      hangupAttempts: attempts,
+      ...(confirmed
+        ? { hangupConfirmedAt: Date.now(), hangupUnresolved: false }
+        : { hangupUnresolved: true }),
+    });
+    if (!confirmed && !noRetry && attempts < 12)
+      await ctx.scheduler.runAfter(
+        Math.min(60_000, 1000 * 2 ** attempts),
+        internal.voice.terminateProvider,
+        { sessionId },
+      );
+  },
+});
+
+export const terminateProvider = internalAction({
+  args: { sessionId: v.id("voiceSessions"), retryForErasure: v.optional(v.boolean()) },
+  handler: async (ctx, { sessionId, retryForErasure }): Promise<void> => {
+    const session = await ctx.runQuery(internal.voice.getSession, { sessionId });
+    if (
+      !session?.callId ||
+      session.hangupConfirmedAt ||
+      (!retryForErasure && (session.hangupAttempts ?? 0) >= 12)
+    )
+      return;
+    let confirmed = false;
+    try {
+      await ctx.runAction(internal.voiceToken.hangupCall, { callId: session.callId });
+      confirmed = true;
+    } catch {
+      /* Transport ambiguity retains the reservation and schedules a durable retry. */
+    }
+    await ctx.runMutation(internal.voice.terminationReceipt, {
+      sessionId,
+      confirmed,
+      noRetry: retryForErasure,
+    });
   },
 });
 
@@ -301,6 +390,7 @@ export const recordUsage = tenantMutation({
   ): Promise<{ ok: boolean }> => {
     const s = await ctx.db.get(sessionId);
     if (!s || s.tenantId !== ctx.tenantId) throw new Error("voice: session not found");
+    if (s.controlled) return { ok: false }; // Browser events never alter trusted counters.
     // Fail closed BEFORE any write — a bad delta never mutates a counter (no negative/NaN spend).
     const priced = priceRealtime(inAudioTok, outAudioTok, textInTok, textOutTok);
     if (!priced.ok) return { ok: false };
@@ -318,6 +408,9 @@ export const recordUsage = tenantMutation({
       textInTok: s.textInTok + textInTok,
       textOutTok: s.textOutTok + textOutTok,
     });
+    // Browser telemetry is not authoritative billing. Admission-held sessions keep their
+    // conservative hold until trusted provider reconciliation, without double charging deltas.
+    if (s.spendReservationId) return { ok: true };
     await ctx.runMutation(internal.guardrails.recordSpend, {
       tenantId: ctx.tenantId,
       costUsd: priced.value,
@@ -407,5 +500,139 @@ export const storeBrief = internalAction({
       markdown = ABANDONED_BRIEF_MD; // gone-tab abnormal end — no transcript to draft over
     }
     return await ctx.runMutation(internal.voice.persistBrief, { sessionId, markdown });
+  },
+});
+
+export const controlState = tenantQuery({
+  args: { sessionId: v.id("voiceSessions") },
+  handler: async (ctx, { sessionId }) => {
+    const s = await ctx.db.get(sessionId);
+    if (!s || s.tenantId !== ctx.tenantId) throw new Error("voice: session not found");
+    return {
+      status: s.status,
+      ready: !!s.controlReady,
+      events: s.controlEvents ?? [],
+      offset: s.controlEventOffset ?? 0,
+      endsAt: s.endsAt,
+    };
+  },
+});
+export const sendText = tenantMutation({
+  args: { sessionId: v.id("voiceSessions"), text: v.string() },
+  handler: async (ctx, { sessionId, text }) => {
+    const s = await ctx.db.get(sessionId);
+    if (
+      !s ||
+      s.tenantId !== ctx.tenantId ||
+      !s.controlled ||
+      s.status !== "active" ||
+      s.endsAt <= Date.now()
+    )
+      throw new Error("VOICE_SESSION_INACTIVE");
+    if (!text.trim() || text.length > 4000 || (s.controlCommands?.length ?? 0) >= 8)
+      throw new Error("VOICE_INPUT_LIMIT");
+    const seq = (s.controlCommandSeq ?? 0) + 1;
+    if (seq > 80) throw new Error("VOICE_INPUT_LIMIT");
+    await ctx.db.patch(sessionId, {
+      controlCommandSeq: seq,
+      controlCommands: [...(s.controlCommands ?? []), { seq, text }],
+    });
+  },
+});
+export const controlUpdate = internalMutation({
+  args: {
+    sessionId: v.id("voiceSessions"),
+    ready: v.optional(v.boolean()),
+    event: v.optional(v.string()),
+    consumedSeq: v.optional(v.number()),
+  },
+  handler: async (ctx, a) => {
+    const s = await ctx.db.get(a.sessionId);
+    if (!s?.controlled) return;
+    const patch: {
+      controlReady?: boolean;
+      controlEvents?: string[];
+      controlEventOffset?: number;
+      controlCommands?: { seq: number; text: string }[];
+    } = {};
+    if (a.ready !== undefined) patch.controlReady = a.ready;
+    if (a.event !== undefined) {
+      if (a.event.length > 16000) throw new Error("VOICE_EVENT_LIMIT");
+      const events = [...(s.controlEvents ?? []), a.event];
+      patch.controlEvents = events.slice(-64);
+      patch.controlEventOffset = (s.controlEventOffset ?? 0) + Math.max(0, events.length - 64);
+    }
+    if (a.consumedSeq !== undefined)
+      patch.controlCommands = (s.controlCommands ?? []).filter((c) => c.seq > (a.consumedSeq ?? 0));
+    await ctx.db.patch(a.sessionId, patch);
+  },
+});
+export const recordTrustedUsage = internalMutation({
+  args: {
+    sessionId: v.id("voiceSessions"),
+    responseId: v.string(),
+    reservationId: v.id("spendEvents"),
+    inAudioTok: v.number(),
+    outAudioTok: v.number(),
+    textInTok: v.number(),
+    textOutTok: v.number(),
+  },
+  handler: async (ctx, a) => {
+    const s = await ctx.db.get(a.sessionId);
+    if (!s?.controlled) throw new Error("VOICE_UNCONTROLLED");
+    if (s.trustedResponseIds?.includes(a.responseId)) return;
+    if ((s.trustedResponseIds?.length ?? 0) >= 20) throw new Error("VOICE_RESPONSE_LIMIT");
+    const priced = priceRealtime(a.inAudioTok, a.outAudioTok, a.textInTok, a.textOutTok);
+    if (!priced.ok) throw new Error("VOICE_USAGE_UNKNOWN");
+    const settled = await ctx.runMutation(internal.guardrails.settlePaidCall, {
+      tenantId: s.tenantId,
+      reservationId: a.reservationId,
+      costUsd: priced.value,
+    });
+    await ctx.db.patch(a.sessionId, {
+      trustedResponseIds: [...(s.trustedResponseIds ?? []), a.responseId],
+      inAudioTok: s.inAudioTok + a.inAudioTok,
+      outAudioTok: s.outAudioTok + a.outAudioTok,
+      textInTok: s.textInTok + a.textInTok,
+      textOutTok: s.textOutTok + a.textOutTok,
+    });
+    if (settled.breached)
+      await ctx.scheduler.runAfter(0, internal.voice.forceEndSession, { sessionId: a.sessionId });
+  },
+});
+
+export const clearTransientControl = internalMutation({
+  args: { sessionId: v.id("voiceSessions") },
+  handler: async (ctx, { sessionId }) => {
+    const s = await ctx.db.get(sessionId);
+    if (s && s.status !== "active")
+      await ctx.db.patch(sessionId, {
+        controlEvents: undefined,
+        controlCommands: undefined,
+        controlExpiresAt: undefined,
+      });
+  },
+});
+
+export const sweepTransientControl = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const expired = await ctx.db
+      .query("voiceSessions")
+      .withIndex("by_controlExpiresAt", (q) =>
+        q.gt("controlExpiresAt", 0).lte("controlExpiresAt", Date.now()),
+      )
+      .take(100);
+    for (const s of expired) {
+      await ctx.db.patch(s._id, {
+        controlEvents: undefined,
+        controlCommands: undefined,
+        controlExpiresAt: undefined,
+      });
+      if (s.status === "active")
+        await ctx.scheduler.runAfter(0, internal.voice.forceEndSession, { sessionId: s._id });
+    }
+    if (expired.length === 100)
+      await ctx.scheduler.runAfter(0, internal.voice.sweepTransientControl, {});
   },
 });

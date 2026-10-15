@@ -54,6 +54,33 @@ const seedDoc = (
     }),
   );
 
+test("grounding rejects superseded entries, pending revisions and foreign documents", async () => {
+  const t = convexTest(schema, modules);
+  const docId = await seedDoc(t, { ragEntryId: "current-entry" });
+  const foreign = await seedDoc(t, {}, "foreign");
+  expect(
+    await t.query(internal.vault.currentGroundingDocs, {
+      tenantId: TENANT,
+      candidates: [
+        { docId, entryId: "old-entry" },
+        { docId, entryId: "current-entry" },
+        { docId: foreign },
+      ],
+    }),
+  ).toEqual(["current-entry"]);
+  await t.run((ctx) => ctx.db.patch(docId, { graphCleanupHash: "new-revision" }));
+  expect(
+    await t.query(internal.vault.currentGroundingDocs, {
+      tenantId: TENANT,
+      candidates: [{ docId }, { docId, entryId: "current-entry" }],
+    }),
+  ).toEqual([]);
+  await t.run((ctx) => ctx.db.patch(docId, { graphCleanupHash: undefined, status: "processing" }));
+  expect(
+    await asTenant(t).action(api.vaultGround.vaultGround, { query: `SMOKE::${docId}` }),
+  ).toEqual({ docIds: [], context: [] });
+});
+
 /** Attribute an edge (fromName—toName) to a source doc via the real upsert (cross-doc dedup). */
 const seedEdge = (
   t: ReturnType<typeof convexTest>,

@@ -346,7 +346,8 @@ const FACT_OWNING_PROVIDER_AUTHORITIES: readonly string[] = [
  * landed in Phase 18, because agent rows were then structurally never ingested. It stopped being
  * true when three later writers began ingesting LLM prose with NO origin at all:
  * `evaluations.ts:1150` (`persistNextStepMemo`, `text: plan.body`), `voice.ts:349` (`persistBrief`,
- * markdown from `internal.llm.draftVoiceBrief`) and `onboarding.ts:492` (the profile document).
+ * markdown from `internal.llm.draftVoiceBrief`). Explicitly human-approved business profiles
+ * and deterministic foundation projections are allowlisted separately; arbitrary generated prose is not.
  * Absence of an origin is now an ABSENCE OF EVIDENCE, so authorship is established POSITIVELY from
  * `TENANT_AUTHORED_DOC_KINDS` below instead, and an unrecognised kind fails to the weaker class.
  *
@@ -384,7 +385,17 @@ export const AGENT_AUTHORED_ORIGINS: readonly string[] = [
  * above should each store `origin: "agent"`, at which point they land at `agent_authored` through
  * the origin rule and this allowlist goes back to being a backstop.
  */
-export const TENANT_AUTHORED_DOC_KINDS: readonly string[] = ["upload", "brain_dump", "document"];
+export const TENANT_AUTHORED_DOC_KINDS: readonly string[] = [
+  "upload",
+  "brain_dump",
+  "document",
+  "business_profile",
+  "business_foundation_offers",
+  "business_foundation_operations",
+  "business_foundation_delivery",
+  "business_foundation_goals",
+  "business_foundation_constraints",
+];
 
 /**
  * The fixed adapter mapping, plus the downgrades. The model supplies none of this.

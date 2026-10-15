@@ -342,3 +342,5 @@ pending cases require owner review and issuance or explicit `abandonCase` before
 Cleanup tombstones and issuance remain immutable, accounting is preserved, and WORM freeze still wins.
 Actual complete six-lane semantic reviews, responsive UAT and release/rollback drills are outstanding;
 offline SDK transport shims and authorization tests are implementation verification only.
+
+Last verified: 2026-10-15 — Native evaluator source identity now includes paid model admission, erased-identity admission and shared JWT lifetime. Regenerated the six-lane, 40-case pins after runtime changes. The case corpus is unchanged; prior evaluator evidence is retired. Offline pin checks pass, with no new live/provider evaluation claimed.

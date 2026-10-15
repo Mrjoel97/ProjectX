@@ -20,6 +20,7 @@ export const listItems = tenantQuery({
     return await ctx.db
       .query("demoItems")
       .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
-      .collect();
+      .order("desc")
+      .take(100);
   },
 });

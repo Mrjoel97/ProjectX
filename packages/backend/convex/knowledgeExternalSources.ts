@@ -63,9 +63,9 @@ import type { Projection } from "@pikar/revenue";
 import type { HubSpotDeal, HubSpotRow } from "@pikar/revenue/providers/hubspot";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction } from "./_generated/server";
 import { DEFAULT_WINDOW_DAYS, readHubSpotDataset } from "./hubspot";
 import type { AccessTokenResult } from "./hubspotAuth";
+import { internalAction } from "./lib/tenantLifecycle";
 
 /**
  * The external knowledge sources THIS module serves, mapped to the action that serves each.

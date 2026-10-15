@@ -17,8 +17,8 @@
 // executePlan (plan 07) is its sole starter (the zero-sends-before-Approve invariant).
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation } from "./_generated/server";
 import { workflow } from "./index";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 export const deliverApprovedPlan = workflow.define({
   args: {
@@ -71,6 +71,21 @@ export const deliverApprovedPlan = workflow.define({
           },
         });
       } catch (e) {
+        // A downstream audit/telemetry failure cannot turn an accepted or uncertain send into
+        // a definitive failed delivery. Durable receipts survive workflow/action retries.
+        const attempt = await step.runQuery(internal.delivery.receipt, { requestId });
+        if (attempt?.state === "confirmed") {
+          await step.runMutation(internal.plans.recordDeliveryTerminal, {
+            planId,
+            requestId,
+            outcome: "sent",
+          });
+          continue;
+        }
+        if (attempt) {
+          await step.runMutation(internal.delivery.markUnknown, { requestId });
+          continue;
+        }
         // Per-recipient isolation (SC5): dead-letter THIS row on its own cid, keep the loop going.
         // The terminal transition runs first and is idempotent on request.status, so workflow or
         // action retries can never double-increment the plan's failed counter.

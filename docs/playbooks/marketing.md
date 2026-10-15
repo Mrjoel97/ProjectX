@@ -125,3 +125,7 @@ This direct existing-context method was authorized after exported-session restor
 ### Activated navigation verified
 
 Last verified: 2026-09-12 — after the exact user approval, production`4df076dbdc8330c54ace5a3996259f3e71318024` passed CI34696845981/deploy34697141228 and durable production verification. Existing-context Playwright checks at13:48:12.226Z passed real desktop1440/mobile390 navigation from Vault by keyboard Enter and pointer click, active `aria-current="page"`, keyboard focus and document fit. Marketing is now visible in both navigation surfaces. The test link stayed deactivated at `[2,1,1]`, with no token panel or recovery control; original workspace state was preserved. See31-07-SUMMARY.md and ignored marketing-postactivation-result.json/screenshots for exact evidence. This verifies approved navigation without rewriting the disclosed standalone exported-session suite failures or claiming a fresh full-matrix rerun.
+
+Next.js 16 routing now uses apps/web/proxy.ts. The funnel route-isolation regression reads that entry point; native funnel public routes and privacy boundaries are unchanged.
+
+Last verified: 2026-10-15 — Next.js proxy migration verified against the funnel route-isolation regression.

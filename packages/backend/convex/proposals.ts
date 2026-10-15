@@ -301,5 +301,6 @@ export const listPending = tenantQuery({
     ctx.db
       .query("proposals")
       .withIndex("by_tenant_status", (q) => q.eq("tenantId", ctx.tenantId).eq("status", "pending"))
-      .collect(),
+      .order("desc")
+      .take(100),
 });

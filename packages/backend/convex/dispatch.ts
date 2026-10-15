@@ -45,7 +45,6 @@ import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
-import { internalAction } from "./_generated/server";
 import {
   DISPATCH_ARGS,
   ENVELOPE_FRACTION,
@@ -54,6 +53,7 @@ import {
 } from "./lib/dispatchShared";
 import { traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
+import { internalAction } from "./lib/tenantLifecycle";
 import { runSpecialistTurn } from "./llm";
 
 /** Depth 1 = executive → specialist. A specialist can never dispatch anything, which makes

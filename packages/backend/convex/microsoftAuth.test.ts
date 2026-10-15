@@ -377,7 +377,8 @@ describe("25-06: no second OAuth surface exists, and mail readiness is derived n
     // `providerGates.connectPermitted`; see docs/playbooks/revenue-connectors.md.
     // 11 -> 12 at 31-03: the approved GET-only /f/ bearer route increments fixed aggregate
     // counters and redirects to trusted Vault bytes. It is not another OAuth callback.
-    expect(routes).toBe(12);
+    expect(routes).toBe(14);
+    expect(httpSource.match(/path:\s*"\/uploads"/g)).toHaveLength(2);
     expect(httpSource.match(/pathPrefix:\s*"\/f\/"/g)).toHaveLength(1);
     const microsoftCallbacks = [...httpSource.matchAll(/microsoft/gi)].length;
     expect(microsoftCallbacks).toBeGreaterThan(0);
@@ -385,7 +386,7 @@ describe("25-06: no second OAuth surface exists, and mail readiness is derived n
     const paths = new Set(
       [...httpSource.matchAll(/path:\s*"([^"]*microsoft[^"]*)"/gi)].map(([, p]) => p),
     );
-    expect(paths.size).toBeLessThanOrEqual(1);
+    expect([...paths]).toEqual(["/microsoft/callback"]);
   });
 
   test("mailReady is FALSE on a legacy calendar-only grant, and connected is still true", async () => {

@@ -1,3 +1,9 @@
+> 2026-10-15 operator probes: probeGemini now defaults to the reviewed ordinary model and uses paidBudgetModel with operator:probeGemini attribution; it is no longer exempt from deployment admission. Direct google/stealth probes refuse before egress because they lack a reviewed provider billing ceiling. Supported explicit or/... pins must pass the same provider contract and usage checks.
+
+> Last verified: 2026-10-15 — audio transcription now reserves a 100-cent policy allowance before egress, disables SDK retries, and settles provider-reported cost or a known reported duration. Missing billing/duration retains its hold instead of becoming zero. This allowance is not a verified duration ceiling: compressed byte limits cannot establish that guarantee. Ordinary research calls also reserve existing fixed per-call fee ceilings before Tavily transport.
+
+> Last verified: 2026-10-15 — Ordinary paid calls now atomically reserve tenant and deployment rails using spendEvents, then settle provider-reported USD once before parsing. Unknown outcomes retain holds; duplicate settlements cannot refund twice. Legacy recordSpend replays now protect both limiter and ledger. The middleware enforces existing reviewed OpenRouter bounds and 8192 output-token maximum. Ingest uses its own rails; per-call and folder holds conservatively overlap until folder closure, so a tight budget may stop a previously estimated folder. No automatic unknown-hold expiry or speculative refund exists. Voice admission is a 100-cent policy allowance, not a hard provider ceiling; browser telemetry cannot settle or refund it. Trusted voice reconciliation and audio-transcription admission remain release blockers. Provider bounds must be reverified against account terms before live acceptance.
+
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
 Last verified: 2026-09-13 — evaluation-mode page extraction claims the same durable

@@ -14,7 +14,11 @@ import { isTrustedFunnelStorageUrl } from "./funnels";
 import { verifyState } from "./gmailAuth";
 import { MICROSOFT_TOKEN_ENDPOINT, verifyMicrosoftState } from "./microsoftAuth";
 
+import { uploadHttp } from "./uploads";
+
 const http = httpRouter();
+http.route({ path: "/uploads", method: "POST", handler: uploadHttp });
+http.route({ path: "/uploads", method: "OPTIONS", handler: uploadHttp });
 
 // Wire Convex Auth sign-in/callback httpAction routes.
 auth.addHttpRoutes(http);
@@ -379,7 +383,9 @@ http.route({
     if (!expected || auth !== `Bearer ${expected}`) {
       return new Response("unauthorized", { status: 401 });
     }
-    const data = await ctx.runQuery(internal.skilloptExport.buildTrajectoryExport, {});
+    const data = await ctx.runQuery(internal.skilloptExport.buildTrajectoryExport, {
+      cursor: new URL(req.url).searchParams.get("cursor") ?? undefined,
+    });
     return Response.json(data);
   }),
 });
@@ -520,7 +526,7 @@ http.route({
 // ── The public unsubscribe route (PIPE-01, plan 19-04) ────────────────────────────────────────
 //
 // The phase's ONLY public unauthenticated route. It lives HERE and not in `apps/web` because
-// `apps/web/middleware.ts` is default-deny (`isPublic` = `/`, `/privacy`, `/terms`, `/signin`,
+// `apps/web/proxy.ts` is default-deny (`isPublic` = `/`, `/privacy`, `/terms`, `/signin`,
 // `/signup`): a page there costs a security-sensitive matcher edit PLUS a bearer-secret hop back
 // into Convex to write the suppression. The Convex site origin is untouched by that middleware,
 // which is why the fal webhook above works at all.
@@ -540,7 +546,7 @@ http.route({
 //
 // ponytail: inline styles mirroring the BRAND tokens. An httpAction cannot import globals.css, and
 // moving this page to apps/web costs a default-deny middleware edit (isPublic in
-// apps/web/middleware.ts) plus a bearer-secret hop back into Convex to write the suppression.
+// apps/web/proxy.ts) plus a bearer-secret hop back into Convex to write the suppression.
 // Upgrade path: make that trade when this page needs to be more than one paragraph.
 
 /** `<base64url(tenantId|recipient)>.<hmacHex>` — `gmailAuth.verifyState`'s idiom, verbatim. */

@@ -7,6 +7,7 @@ import {
   ENTITY_ADDRESS,
   HAS_PLACEHOLDERS,
   LEAD_AUTHORITY,
+  OPERATING_COUNTRY,
   SITE,
 } from "../legal";
 
@@ -26,17 +27,17 @@ export default function Privacy() {
       {HAS_PLACEHOLDERS && (
         <p className="notice">
           <strong>Draft — not yet in force.</strong> This document has not been reviewed by a
-          qualified lawyer, and the controlling legal entity has not been formed. Bracketed
-          placeholders below must be resolved before publication. The production build is blocked
-          until they are.
+          qualified lawyer. The registered address and other bracketed legal details below remain
+          unconfirmed. Publication under the existing review deferral does not complete legal
+          review.
         </p>
       )}
 
       <h2>1. Who we are</h2>
       <p>
         Pikar AI (&ldquo;Pikar&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;) provides a governed AI
-        assistant that plans and carries out tasks you ask for, including sending email on your
-        behalf after you have reviewed and approved it.
+        assistant, operated from {OPERATING_COUNTRY}, that plans and carries out tasks you ask for,
+        including sending email on your behalf after you have reviewed and approved it.
       </p>
       <p>
         The <strong>data controller</strong> for the purposes of the UK and EU General Data

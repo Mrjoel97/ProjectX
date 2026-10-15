@@ -8,7 +8,7 @@
 // than in their own module: authorization and tenancy must derive from ONE identity
 // resolution, or the two can drift and disagree about who the caller is.
 
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { getAuthSessionId, getAuthUserId } from "@convex-dev/auth/server";
 import {
   customAction,
   customCtx,
@@ -26,6 +26,8 @@ import {
   type QueryCtx,
   query,
 } from "../_generated/server";
+import { identityIsRevoked } from "../authRevocations";
+import { lifecycleActionContext, lifecycleDatabase } from "./tenantLifecycle";
 
 /**
  * Resolve the caller's scope from the authenticated identity. Fails closed:
@@ -43,9 +45,19 @@ import {
  * `tenantId` stays a plain string for backwards compatibility — every existing table
  * stores it as `v.string()`, and it is already exactly this userId segment.
  */
-async function requireScope(ctx: Parameters<typeof getAuthUserId>[0]) {
+async function requireScope(ctx: QueryCtx | MutationCtx | ActionCtx, allowDeleting = false) {
   const userId = await getAuthUserId(ctx);
   if (!userId) throw new Error("UNAUTHENTICATED");
+  const sessionId = (await getAuthSessionId(ctx)) ?? undefined;
+  const revoked =
+    "db" in ctx
+      ? await identityIsRevoked(ctx, String(userId), sessionId, allowDeleting)
+      : await ctx.runQuery(internal.authRevocations.isRevoked, {
+          userId: String(userId),
+          sessionId,
+          allowDeleting,
+        });
+  if (revoked) throw new Error("UNAUTHENTICATED");
   return { userId, tenantId: String(userId) };
 }
 
@@ -72,10 +84,16 @@ export async function requireOwner(ctx: QueryCtx | MutationCtx) {
 }
 
 /** Tenant-scoped query builder. ctx gains `userId` + `tenantId`. */
-export const tenantQuery = customQuery(query, customCtx(requireScope));
+export const tenantQuery = customQuery(
+  query,
+  customCtx((ctx) => requireScope(ctx)),
+);
 
 /** Tenant-scoped mutation builder. ctx gains `userId` + `tenantId`. */
-export const tenantMutation = customMutation(mutation, customCtx(requireScope));
+export const tenantMutation = customMutation(
+  mutation,
+  customCtx(async (ctx) => ({ ...(await requireScope(ctx)), db: lifecycleDatabase(ctx) })),
+);
 
 /**
  * Tenant-scoped action builder. ctx gains `userId` + `tenantId`. The agent runs in an
@@ -83,7 +101,18 @@ export const tenantMutation = customMutation(mutation, customCtx(requireScope));
  * `action` stays import-banned outside this file (CLAUDE.md §2). No DB read happens
  * here — an action has no `ctx.db`.
  */
-export const tenantAction = customAction(action, customCtx(requireScope));
+export const tenantErasureAction = customAction(
+  action,
+  customCtx((ctx) => requireScope(ctx, true)),
+);
+
+export const tenantAction = customAction(
+  action,
+  customCtx(async (ctx) => {
+    const scope = await requireScope(ctx);
+    return { ...scope, ...lifecycleActionContext(ctx, scope.tenantId) };
+  }),
+);
 
 /**
  * The ACTION half of the owner primitive (27-09). Identical rule to `requireOwner` — exact
@@ -106,7 +135,10 @@ export async function requireOwnerAction(ctx: ActionCtx) {
 export const ownerQuery = customQuery(query, customCtx(requireOwner));
 
 /** Owner-only mutation builder. Rejects a non-owner BEFORE the handler writes anything. */
-export const ownerMutation = customMutation(mutation, customCtx(requireOwner));
+export const ownerMutation = customMutation(
+  mutation,
+  customCtx(async (ctx) => ({ ...(await requireOwner(ctx)), db: lifecycleDatabase(ctx) })),
+);
 
 /**
  * Owner-only action builder. Rejects a non-owner BEFORE the handler runs anything.
@@ -115,4 +147,10 @@ export const ownerMutation = customMutation(mutation, customCtx(requireOwner));
  * two of the three is exactly why the pack preview had nowhere to put its check. A future
  * owner-only action must use this rather than re-deriving the rule in a handler.
  */
-export const ownerAction = customAction(action, customCtx(requireOwnerAction));
+export const ownerAction = customAction(
+  action,
+  customCtx(async (ctx) => {
+    const scope = await requireOwnerAction(ctx);
+    return { ...scope, ...lifecycleActionContext(ctx, scope.tenantId) };
+  }),
+);

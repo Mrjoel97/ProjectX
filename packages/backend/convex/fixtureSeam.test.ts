@@ -246,15 +246,20 @@ describe("#9 vault.vaultSearch — the typed browse query", () => {
     keyed();
     // With a key set the real path embeds the query over the network. Stub the transport so the
     // proof is "the request was attempted", not a live 401 from a provider in a unit run.
-    vi.stubGlobal("fetch", () => {
+    const fetchMock = vi.fn(() => {
       throw new Error("REAL_EMBEDDING_PATH");
     });
+    vi.stubGlobal("fetch", fetchMock);
     try {
       const t = await harness();
       const id = await seedDoc(t, "t_unlisted", "plain text", "h-srch-1");
       await expect(
         asTenant(t, "t_unlisted").action(api.vault.vaultSearch, { query: `SMOKE::${id}` }),
-      ).rejects.toThrow(/REAL_EMBEDDING_PATH/);
+      ).rejects.toThrow(/EVAL_EMBEDDING_RESPONSE_UNRESOLVED/);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const costs = await t.run((ctx) => ctx.db.query("spendEvents").collect());
+      expect(costs.filter((row) => row.phase === "reserved")).toHaveLength(1);
+      expect(costs.filter((row) => row.phase === "actual")).toHaveLength(0);
     } finally {
       vi.unstubAllGlobals();
     }

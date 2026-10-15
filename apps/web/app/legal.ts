@@ -4,9 +4,10 @@ export const SITE = "https://pikar-ai.com";
 export const CONTACT = "joel@pikar-ai.com";
 export const EFFECTIVE = "10 July 2026";
 
-// Unresolved until a legal entity exists. Rendered verbatim, so nobody can mistake
-// a draft for real terms.
-export const ENTITY = "[LEGAL ENTITY — NOT YET FORMED]";
+// Business identity supplied by the operator on 2026-10-15. Remaining legal
+// particulars still require confirmation; identity alone does not complete review.
+export const ENTITY = "pikar-ai";
+export const OPERATING_COUNTRY = "Tanzania";
 export const ENTITY_ADDRESS = "[REGISTERED ADDRESS — TBD]";
 export const GOVERNING_LAW = "[GOVERNING LAW — TBD]";
 export const VENUE = "[COURTS / VENUE — TBD]";

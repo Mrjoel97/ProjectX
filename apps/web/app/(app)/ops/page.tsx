@@ -58,10 +58,18 @@ function EvalSignals() {
 
   const dc = signals.decisionCounts;
   const dlqRate =
-    signals.requestCount > 0 ? Math.round((100 * signals.dlqTotal) / signals.requestCount) : null;
+    signals.complete && signals.requestCount > 0
+      ? Math.round((100 * signals.dlqTotal) / signals.requestCount)
+      : null;
 
   return (
     <div className="stat-grid">
+      {signals.complete === false && (
+        <p role="status" style={{ gridColumn: "1 / -1", color: "var(--ink-soft)" }}>
+          Partial view: newest {signals.rowCap} records per source, within 90 days. Counts and costs
+          below describe this sample; they are not complete totals.
+        </p>
+      )}
       <StatTile
         label="Review outcomes (30 days)"
         icon={<MailIcon size={16} />}
@@ -99,7 +107,9 @@ function EvalSignals() {
         value={`${signals.dlqNew} new / ${signals.dlqTotal} total`}
         caption={
           dlqRate === null
-            ? "No telemetry rows in the window."
+            ? signals.complete === false
+              ? "Rate unavailable for a partial view."
+              : "No telemetry rows in the window."
             : `${dlqRate}% of ${signals.requestCount} requests in the window.`
         }
       />
@@ -896,6 +906,9 @@ export function ComplianceView({ headingLevel = "h1" }: { headingLevel?: "h1" | 
         <p className="caps-label" style={{ margin: 0 }}>
           Dead letters — your tenant
         </p>
+        {deadLetters?.length === 100 && (
+          <p>Showing the newest 100 unresolved items. Resolving an item reveals older items.</p>
+        )}
         {deadLetters === undefined ? (
           <p style={{ margin: 0, color: "var(--ink-soft)" }}>Loading…</p>
         ) : deadLetters.length === 0 ? (

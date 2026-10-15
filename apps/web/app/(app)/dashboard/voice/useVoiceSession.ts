@@ -1,19 +1,9 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import {
-  CALLS_URL,
-  CAP_MS,
-  graceExpired,
-  REALTIME_CLIENT_EVENTS,
-  REALTIME_EVENTS,
-  REALTIME_FUNCTION_CALL,
-  readUsage,
-  SEARCH_DOCUMENT_TOOL,
-  SESSION_TOOL_KEYS,
-  TOOL_CHOICE_AUTO,
-} from "@pikar/voice";
-import { useAction, useMutation } from "convex/react";
+import type { FoundationSection } from "@pikar/core/foundation";
+import { graceExpired, REALTIME_CLIENT_EVENTS, REALTIME_EVENTS } from "@pikar/voice";
+import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -22,25 +12,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type SessionId = FunctionArgs<typeof api.voice.recordUsage>["sessionId"];
 // Same derivation for the vaultDocuments id: `?doc=` arrives as a plain string from the route, and
 // startSession's own arg type is the only place the branded id shape is available to this client.
-type DocRef = NonNullable<FunctionArgs<typeof api.voice.startSession>["docRef"]>;
+type DocRef = NonNullable<FunctionArgs<typeof api.voiceToken.connect>["docId"]>;
 
-// VOIC-01/02 — the browser half of the live voice session (RESEARCH Pattern 1). This hook owns the
-// WebRTC lifecycle end-to-end: mint an ephemeral secret (never the key), capture the mic with echo
-// cancellation, do the SDP handshake with OpenAI's `/v1/realtime/calls`, relay the Location-header
-// `call_id` to voice.startSession (Pitfall 1 — the watchdog has nothing to target otherwise), then
-// assemble the two-sided transcript, forward throttled `response.done` usage to voice.recordUsage,
-// and drive the speaking orb + countdown. Mic-loss pause/recover + silence fall-through (Task 4)
-// arm on top of this via the pure `graceExpired` predicate.
-//
-// ponytail: raw RTCPeerConnection + one "oai-events" data channel — no @openai/agents-realtime SDK
-// (the escape hatch named in the plan, taken ONLY if live-verify shows event handling is heavy). No
-// new npm dep. All Realtime literals (endpoints, model, event `type` names) import from @pikar/voice
-// so nothing here re-hardcodes a post-cutoff shape.
-
-// Usage flush cadence — response.done is per-agent-turn (already low frequency), but batch anyway so
-// a fast back-and-forth doesn't spray mutations. ponytail: 5s + a final flush on end.
-const USAGE_FLUSH_MS = 5_000;
-// Emphasize + nudge the agent to wrap up at T-2min (RESEARCH Pattern 3). Sent once over the channel.
+// Browser audio transport with server-owned signaling, controls, tools and usage.
+// No provider credential or data channel is available to this client.
 const WRAP_UP_MS = 2 * 60_000;
 // Grace/silence windows — Claude's Discretion (CONTEXT). ponytail: 30s mic re-acquire, 90s dead-air
 // (well past the persona's "still there?" check-in). BOTH consume cap time — the watchdog is never
@@ -71,14 +46,12 @@ export type VoiceSession = {
   sendText: (text: string) => void;
 };
 
-/** A tool call the model emitted, as it appears inside `response.done`'s `response.output[]`. */
-type FnCallItem = { type?: string; name?: string; call_id?: string; arguments?: string };
-
 type ServerEvent = {
+  item_id?: string;
+  event_id?: string;
   type?: string;
   transcript?: string;
   delta?: string;
-  response?: { usage?: Parameters<typeof readUsage>[0]; output?: FnCallItem[] };
 };
 
 /**
@@ -87,11 +60,19 @@ type ServerEvent = {
  *   model's `search_document` calls are relayed to Convex (Task 2). Absent ⇒ the Phase-6 general
  *   voice session, byte-identical behaviour: no new branch, no new event, no extra send.
  */
-export function useVoiceSession(docId?: string): VoiceSession {
-  const mint = useAction(api.voiceToken.mintClientSecret);
-  const startSession = useMutation(api.voice.startSession);
-  const searchDocument = useAction(api.voiceDoc.searchDocument);
-  const recordUsage = useMutation(api.voice.recordUsage);
+export type OnboardingVoiceOptions = {
+  onboarding: true;
+  onAnswer: (args: {
+    answer: string;
+    section: FoundationSection;
+    intent: "current" | "planned";
+    eventId: string;
+  }) => Promise<unknown>;
+};
+export function useVoiceSession(docId?: string, options?: OnboardingVoiceOptions): VoiceSession {
+  const onboarding = options?.onboarding === true;
+  const connectProvider = useAction(api.voiceToken.connect);
+  const postText = useMutation(api.voice.sendText);
   const endSessionClean = useMutation(api.voice.endSessionClean);
   const abortSession = useMutation(api.voice.abortSession);
 
@@ -106,14 +87,15 @@ export function useVoiceSession(docId?: string): VoiceSession {
   // Imperative WebRTC + timing handles (refs so the event handlers read live values without
   // re-subscribing). None of these belong in React state — they never render.
   const pcRef = useRef<RTCPeerConnection | null>(null);
-  const dcRef = useRef<RTCDataChannel | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const senderRef = useRef<RTCRtpSender | null>(null);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const sessionIdRef = useRef<SessionId | null>(null);
   const startedAtRef = useRef<number | null>(null);
+  const endsAtRef = useRef<number | null>(null);
+  const eventCursorRef = useRef(0);
+  const trustedState = useQuery(api.voice.controlState, sessionId ? { sessionId } : "skip");
   const agentTurnRef = useRef<string | null>(null);
-  const usageAccumRef = useRef({ inAudioTok: 0, outAudioTok: 0, textInTok: 0, textOutTok: 0 });
   const wrapSentRef = useRef(false);
   // True while an agent response is in flight (first delta / audio start → response.done). The
   // wrap-up nudge is a `response.create`; sent mid-response it silently 400s ("conversation already
@@ -124,210 +106,130 @@ export function useVoiceSession(docId?: string): VoiceSession {
   const lastActivityRef = useRef<number>(0);
   const endedRef = useRef(false);
 
-  const send = useCallback((event: Record<string, unknown>) => {
-    const dc = dcRef.current;
-    if (dc && dc.readyState === "open") dc.send(JSON.stringify(event));
-  }, []);
-
-  const flushUsage = useCallback(() => {
-    const u = usageAccumRef.current;
-    const id = sessionIdRef.current;
-    if (!id) return;
-    if (u.inAudioTok || u.outAudioTok || u.textInTok || u.textOutTok) {
-      usageAccumRef.current = { inAudioTok: 0, outAudioTok: 0, textInTok: 0, textOutTok: 0 };
-      // Fire-and-forget: metering is best-effort telemetry, the 15-min cap is the real cost bound.
-      // recordUsage fails CLOSED server-side on a bad delta, so a dropped flush is never a NaN charge.
-      void recordUsage({ sessionId: id, ...u }).catch(() => {});
-    }
-  }, [recordUsage]);
+  const send = useCallback(
+    (event: Record<string, unknown>) => {
+      const id = sessionIdRef.current;
+      const item = event.item as { content?: { type?: string; text?: string }[] } | undefined;
+      const text = item?.content?.find((p) => p.type === "input_text")?.text;
+      if (id && event.type === REALTIME_CLIENT_EVENTS.createItem && text)
+        void postText({ sessionId: id, text }).catch(() =>
+          setError("Could not send text. Please retry."),
+        );
+    },
+    [postText],
+  );
 
   // Tear down every media/timer handle exactly once. Safe to call from end(), an error, unmount, or
   // the abnormal fall-through — endedRef guards a double teardown.
   const teardown = useCallback(() => {
     endedRef.current = true;
-    flushUsage();
     for (const t of micStreamRef.current?.getTracks() ?? []) t.stop();
     micStreamRef.current = null;
-    try {
-      dcRef.current?.close();
-    } catch {
-      /* already closed */
-    }
     try {
       pcRef.current?.close();
     } catch {
       /* already closed */
     }
-    dcRef.current = null;
     pcRef.current = null;
     senderRef.current = null;
     if (audioElRef.current) {
       audioElRef.current.srcObject = null;
       audioElRef.current = null;
     }
-  }, [flushUsage]);
+  }, []);
 
-  // ── Inbound data-channel events → transcript + orb + metering ────────────────
-  const onEvent = useCallback(
-    (raw: MessageEvent) => {
-      let ev: ServerEvent;
-      try {
-        ev = JSON.parse(raw.data as string) as ServerEvent;
-      } catch {
-        return; // a non-JSON frame is not ours to read
-      }
-      switch (ev.type) {
-        case REALTIME_EVENTS.userSpeechStarted:
-          lastActivityRef.current = Date.now();
-          setSpeaking("user");
-          break;
-        case REALTIME_EVENTS.userSpeechStopped:
-          setSpeaking((s) => (s === "user" ? null : s));
-          break;
-        case REALTIME_EVENTS.assistantAudioStarted:
-          lastActivityRef.current = Date.now();
-          responseActiveRef.current = true;
-          setSpeaking("agent");
-          break;
-        case REALTIME_EVENTS.assistantAudioStopped:
-          setSpeaking((s) => (s === "agent" ? null : s));
-          break;
-        case REALTIME_EVENTS.inputTranscriptDone: {
-          const text = (ev.transcript ?? "").trim();
-          lastActivityRef.current = Date.now();
-          if (text) {
-            setTranscript((t) => [
-              ...t,
-              { id: `u-${Date.now()}-${t.length}`, speaker: "user", text, final: true },
-            ]);
-          }
-          break;
-        }
-        case REALTIME_EVENTS.outputTranscriptDelta: {
-          const delta = ev.delta ?? "";
-          if (!delta) break;
-          lastActivityRef.current = Date.now();
-          responseActiveRef.current = true; // a text-only response has no audio-start to flag it
+  // Trusted server subscription events update the transcript and speaking indicator.
+  const onEvent = useCallback((raw: MessageEvent) => {
+    let ev: ServerEvent;
+    try {
+      ev = JSON.parse(raw.data as string) as ServerEvent;
+    } catch {
+      return; // a non-JSON frame is not ours to read
+    }
+    switch (ev.type) {
+      case REALTIME_EVENTS.userSpeechStarted:
+        lastActivityRef.current = Date.now();
+        setSpeaking("user");
+        break;
+      case REALTIME_EVENTS.userSpeechStopped:
+        setSpeaking((s) => (s === "user" ? null : s));
+        break;
+      case REALTIME_EVENTS.assistantAudioStarted:
+        lastActivityRef.current = Date.now();
+        responseActiveRef.current = true;
+        setSpeaking("agent");
+        break;
+      case REALTIME_EVENTS.assistantAudioStopped:
+        responseActiveRef.current = false;
+        setSpeaking((s) => (s === "agent" ? null : s));
+        break;
+      case REALTIME_EVENTS.inputTranscriptDone: {
+        const text = (ev.transcript ?? "").trim();
+        lastActivityRef.current = Date.now();
+        if (text) {
           setTranscript((t) => {
-            const id = agentTurnRef.current;
-            const prev = id ? t.find((x) => x.id === id) : undefined;
-            if (!prev) {
-              const newId = `a-${Date.now()}-${t.length}`;
-              agentTurnRef.current = newId;
-              return [...t, { id: newId, speaker: "agent", text: delta, final: false }];
-            }
-            return t.map((x) => (x.id === prev.id ? { ...x, text: x.text + delta } : x));
+            const id = ev.item_id ?? ev.event_id ?? `u-${Date.now()}-${t.length}`;
+            return t.some((turn) => turn.id === id)
+              ? t
+              : [...t, { id, speaker: "user", text, final: true }];
           });
-          break;
         }
-        case REALTIME_EVENTS.outputTranscriptDone: {
+        break;
+      }
+      case REALTIME_EVENTS.outputTranscriptDelta: {
+        const delta = ev.delta ?? "";
+        if (!delta) break;
+        lastActivityRef.current = Date.now();
+        responseActiveRef.current = true; // a text-only response has no audio-start to flag it
+        setTranscript((t) => {
           const id = agentTurnRef.current;
-          agentTurnRef.current = null;
-          // The done event carries the AUTHORITATIVE full transcript for the response. Finalize the
-          // streamed turn if one exists — but if no `.delta` ever created a turn (a response can emit
-          // `.done` with no delta stream, or the deltas were missed), DON'T drop the agent's words:
-          // create the final turn from the full transcript. Dropping it here is what holed the brief.
-          const full = (ev.transcript ?? "").trim();
-          setTranscript((t) => {
-            const prev = id ? t.find((x) => x.id === id) : undefined;
-            if (prev)
-              return t.map((x) =>
-                x.id === prev.id ? { ...x, final: true, text: full || x.text } : x,
-              );
-            if (!full) return t;
-            return [
-              ...t,
-              { id: `a-${Date.now()}-${t.length}`, speaker: "agent", text: full, final: true },
-            ];
-          });
-          break;
-        }
-        case REALTIME_EVENTS.responseDone: {
-          // Response boundary: if a transcript `.done` was missed (barge-in / cancel), finalize any
-          // still-open agent turn and clear the ref so the NEXT response's deltas start a fresh turn
-          // instead of bleeding into — and overwriting — this one (the "text stopped showing partway
-          // through the call" symptom). Idempotent when `.done` already ran (ref is null).
-          const openId = agentTurnRef.current;
-          if (openId) {
-            agentTurnRef.current = null;
-            setTranscript((t) => t.map((x) => (x.id === openId ? { ...x, final: true } : x)));
+          const prev = id ? t.find((x) => x.id === id) : undefined;
+          if (!prev) {
+            const newId = `a-${Date.now()}-${t.length}`;
+            agentTurnRef.current = newId;
+            return [...t, { id: newId, speaker: "agent", text: delta, final: false }];
           }
-          responseActiveRef.current = false; // response finished → the wrap-up nudge may fire now
-          const usage = ev.response?.usage;
-          if (usage) {
-            const u = readUsage(usage);
-            usageAccumRef.current.inAudioTok += u.inAudioTok;
-            usageAccumRef.current.outAudioTok += u.outAudioTok;
-            usageAccumRef.current.textInTok += u.textInTok;
-            usageAccumRef.current.textOutTok += u.textOutTok;
-          }
-
-          // ── The voice-doc retrieval relay (DOCV-01 / SC1's drill-in) ──────────────────────
-          // TRIGGERED FROM response.done ON PURPOSE, adding no new pinned event name: this event is
-          // already live-verified in this repo AND the guides state it carries the complete
-          // function_call item. `response.function_call_arguments.done` sits in exactly the
-          // MEDIUM-confidence class realtime.ts warns about, and its field list was never verified.
-          //
-          // Placed AFTER `responseActiveRef` is cleared, which is what makes the `response.create`
-          // below legal — sent mid-response it silently 400s ("conversation already has an active
-          // response"), the failure mode that once swallowed the wrap-up nudge entirely.
-          //
-          // NO `docId &&` guard: a Phase-6 session declares no tools, so `output[]` can never hold a
-          // function_call item and this loop is already a no-op there. A condition would instead
-          // silently disable any tool added later.
-          for (const item of ev.response?.output ?? []) {
-            if (item.type !== REALTIME_FUNCTION_CALL.itemType) continue;
-            const callId = item.call_id;
-            const sid = sessionIdRef.current;
-            if (!callId || !sid) continue;
-            void (async () => {
-              // ALWAYS send an output, even on failure (Pitfall 5). A tool call with no
-              // function_call_output leaves the model waiting and the user hearing silence for the
-              // remainder of a capped 15 minutes — an honest "found nothing" beats a dead turn.
-              let output: string;
-              try {
-                // Only the model's free-text `query` crosses. The document id is NEVER sent:
-                // searchDocument reads `docRef` off the server session row, so nothing the model
-                // says can widen the scope or name a different document.
-                const { query } = JSON.parse(item.arguments ?? "{}") as { query?: string };
-                output = JSON.stringify(
-                  await searchDocument({ sessionId: sid, query: query ?? "" }),
-                );
-              } catch {
-                output = JSON.stringify({ passages: [], found: false, error: "unavailable" });
-              }
-              send({
-                type: REALTIME_CLIENT_EVENTS.createItem,
-                item: {
-                  type: REALTIME_FUNCTION_CALL.outputItemType,
-                  [REALTIME_FUNCTION_CALL.callIdField]: callId,
-                  output,
-                },
-              });
-              send({ type: REALTIME_CLIENT_EVENTS.createResponse });
-            })();
-          }
-          break;
-        }
-        default:
-          // UAT diagnostic (ponytail: remove/quiet at phase close): if the agent speaks but no text
-          // appears, the real event name OpenAI sent shows up here — the pinned output_audio_transcript
-          // names are the MEDIUM-confidence risk realtime.ts flags. Filter the console by "[voice]".
-          // `function_call` is included for Open Question 4's live verify: if a tool call never
-          // reaches the relay above, the name OpenAI actually sent surfaces here.
-          if (
-            ev.type?.includes("transcript") ||
-            ev.type?.includes("audio") ||
-            ev.type?.includes("function_call")
-          )
-            console.debug("[voice] unhandled audio/transcript/function_call event:", ev.type);
-          break;
+          return t.map((x) => (x.id === prev.id ? { ...x, text: x.text + delta } : x));
+        });
+        break;
       }
-    },
-    // The retrieval relay closes over both: `send` is stable ([] deps) and `searchDocument` is a
-    // Convex action hook, so this list does not churn the data-channel handler in practice.
-    [searchDocument, send],
-  );
+      case REALTIME_EVENTS.outputTranscriptDone: {
+        const id = agentTurnRef.current;
+        agentTurnRef.current = null;
+        // The done event carries the AUTHORITATIVE full transcript for the response. Finalize the
+        // streamed turn if one exists — but if no `.delta` ever created a turn (a response can emit
+        // `.done` with no delta stream, or the deltas were missed), DON'T drop the agent's words:
+        // create the final turn from the full transcript. Dropping it here is what holed the brief.
+        const full = (ev.transcript ?? "").trim();
+        setTranscript((t) => {
+          const prev = id ? t.find((x) => x.id === id) : undefined;
+          if (prev)
+            return t.map((x) =>
+              x.id === prev.id ? { ...x, final: true, text: full || x.text } : x,
+            );
+          if (!full) return t;
+          return [
+            ...t,
+            { id: `a-${Date.now()}-${t.length}`, speaker: "agent", text: full, final: true },
+          ];
+        });
+        break;
+      }
+      default:
+        // UAT diagnostic (ponytail: remove/quiet at phase close): if the agent speaks but no text
+        // appears, the real event name OpenAI sent shows up here — the pinned output_audio_transcript
+        // names are the MEDIUM-confidence risk realtime.ts flags. Filter the console by "[voice]".
+        // `function_call` is included for Open Question 4's live verify: if a tool call never
+        // reaches the relay above, the name OpenAI actually sent surfaces here.
+        if (
+          ev.type?.includes("transcript") ||
+          ev.type?.includes("audio") ||
+          ev.type?.includes("function_call")
+        )
+          console.debug("[voice] unhandled audio/transcript/function_call event:", ev.type);
+        break;
+    }
+  }, []);
 
   // Mic loss mid-call (hardware unplug / OS revoke → track "ended", or a failed re-acquire): drop the
   // dead track but keep the peer connection + data channel alive so reconnect() can re-add cleanly.
@@ -345,8 +247,6 @@ export function useVoiceSession(docId?: string): VoiceSession {
   const connect = useCallback(async () => {
     // `?doc=` is an unbranded route string; both server calls below re-validate it (ownership +
     // `status: "ready"`), so the cast asserts shape for TypeScript, never trust.
-    const { clientSecret, toolsAtMint } = await mint(docId ? { docId: docId as DocRef } : {});
-
     const micStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
@@ -363,73 +263,50 @@ export function useVoiceSession(docId?: string): VoiceSession {
       void audioEl.play().catch(() => {});
     };
 
-    const dc = pc.createDataChannel("oai-events");
-    dcRef.current = dc;
-    dc.onmessage = onEvent;
-
-    // RESEARCH Open Question 3's CONTINGENCY BRANCH. The REST and TypeScript references disagree on
-    // whether `client_secrets` accepts `tools` in the mint body; `mintClientSecret` tries mint-time
-    // first and, on a 400 ONLY, re-POSTs without them and reports `toolsAtMint: false` (14-04). In
-    // that case the session exists but has no tool, so we declare it here over the data channel.
-    // Event-driven, NOT a timeout: `createDataChannel` returns before the channel opens, and `send`
-    // silently drops a closed-channel write — so a naive immediate send would lose the declaration
-    // with no error. Which branch the API actually accepted gets recorded, with a date, on the
-    // `LIVE-VERIFIED` line in `packages/voice/src/realtime.ts` during 14-09's live verify.
-    if (docId && !toolsAtMint) {
-      dc.addEventListener(
-        "open",
-        () => {
-          send({
-            type: REALTIME_CLIENT_EVENTS.updateSession,
-            session: {
-              [SESSION_TOOL_KEYS.tools]: [SEARCH_DOCUMENT_TOOL],
-              [SESSION_TOOL_KEYS.toolChoice]: TOOL_CHOICE_AUTO,
-            },
-          });
-        },
-        { once: true },
-      );
-    }
-
     const track = micStream.getAudioTracks()[0];
     if (!track) throw new Error("no microphone track");
     senderRef.current = pc.addTrack(track, micStream);
+    const opus =
+      RTCRtpSender.getCapabilities("audio")?.codecs.filter(
+        (codec) => codec.mimeType.toLowerCase() === "audio/opus",
+      ) ?? [];
+    if (opus.length !== 1) throw new Error("Audio codec unavailable");
+    pc.getTransceivers()[0]?.setCodecPreferences(opus);
     // Mic hardware yanked mid-call (unplug / OS revoke) fires "ended" — the Task-4 pause hook.
     track.addEventListener("ended", () => onMicLost());
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    // ponytail: POST the raw SDP offer with the ephemeral secret; the session config (model, persona,
-    // VAD, transcription) is baked into the minted secret, so no query params here. RE-CONFIRM the
-    // Location-header call_id shape (`…/v1/realtime/calls/{call_id}`) on the first live 200 — the
-    // whole watchdog force-terminate hangs on it (Pitfall 1).
-    const res = await fetch(CALLS_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${clientSecret}`, "Content-Type": "application/sdp" },
-      body: offer.sdp ?? "",
+    const connected = await connectProvider({
+      offerSdp: offer.sdp ?? "",
+      ...(docId ? { docId: docId as DocRef } : {}),
+      ...(onboarding ? { onboarding: true } : {}),
     });
-    if (!res.ok) throw new Error(`realtime handshake: ${res.status}`);
-    const answerSdp = await res.text();
-    await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
-
-    const callId = res.headers.get("Location")?.split("/").pop() ?? "";
-    if (!callId) throw new Error("realtime handshake: missing call_id");
-
-    // Relay immediately — startSession arms the ONE server watchdog against this callId.
-    // `docRef` is the SERVER's record of what this session is about: every later retrieval reads the
-    // document id off this row, never off anything the model or the browser says afterwards.
-    // startSession re-validates ownership + `status: "ready"` and throws `voicedoc: document not
-    // found` / `not ready` — the client is not the trust boundary here (14-03).
-    const { sessionId: id } = await startSession({
-      callId,
-      ...(docId ? { docRef: docId as DocRef } : {}),
-    });
-    sessionIdRef.current = id;
-    setSessionId(id);
+    sessionIdRef.current = connected.sessionId;
+    setSessionId(connected.sessionId);
+    endsAtRef.current = connected.endsAt;
+    eventCursorRef.current = 0;
+    await pc.setRemoteDescription({ type: "answer", sdp: connected.answerSdp });
     startedAtRef.current = Date.now();
     lastActivityRef.current = Date.now();
-  }, [mint, onEvent, startSession, onMicLost, docId, send]);
+  }, [connectProvider, onMicLost, docId, onboarding]);
+
+  useEffect(() => {
+    if (!trustedState) return;
+    trustedState.events.forEach((event, index) => {
+      const cursor = trustedState.offset + index;
+      if (cursor >= eventCursorRef.current) {
+        onEvent(new MessageEvent("message", { data: event }));
+        eventCursorRef.current = cursor + 1;
+      }
+    });
+    if (trustedState.status !== "active" && !endedRef.current) {
+      teardown();
+      setStatus("ended");
+      setSpeaking(null);
+    }
+  }, [trustedState, onEvent, teardown]);
 
   const start = useCallback(async () => {
     if (status === "connecting" || status === "live") return;
@@ -440,15 +317,17 @@ export function useVoiceSession(docId?: string): VoiceSession {
       await connect();
       setStatus("live");
     } catch (e) {
+      if (sessionIdRef.current)
+        void abortSession({ sessionId: sessionIdRef.current }).catch(() => {});
       teardown();
       setStatus("error");
       setError(
         e instanceof Error && /denied|Permission|NotAllowed/i.test(e.message)
           ? "Microphone access is required to start a voice session."
-          : "Couldn't start the session. Please try again.",
+          : "Voice is unavailable right now. You can continue by typing.",
       );
     }
-  }, [status, connect, teardown]);
+  }, [status, connect, teardown, abortSession]);
 
   const end = useCallback(async () => {
     if (endedRef.current) return;
@@ -519,7 +398,7 @@ export function useVoiceSession(docId?: string): VoiceSession {
       const startedAt = startedAtRef.current;
       if (startedAt === null) return;
       const now = Date.now();
-      const left = Math.max(0, CAP_MS - (now - startedAt));
+      const left = Math.max(0, (endsAtRef.current ?? startedAt + 300_000) - now);
       setRemainingMs(left);
       setNearingCap(left <= WRAP_UP_MS);
 
@@ -570,10 +449,6 @@ export function useVoiceSession(docId?: string): VoiceSession {
 
   // Best-effort cleanup on unmount / tab close (the server watchdog is the authoritative backstop).
   useEffect(() => teardown, [teardown]);
-  useEffect(() => {
-    const iv = setInterval(flushUsage, USAGE_FLUSH_MS);
-    return () => clearInterval(iv);
-  }, [flushUsage]);
 
   return {
     status,

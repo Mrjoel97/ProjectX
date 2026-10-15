@@ -27,6 +27,7 @@ import {
   parseChannel,
   SEND_TIME_HORIZON_MS,
 } from "@pikar/core";
+import { MAX_PLAN_RECIPIENTS } from "@pikar/core/emailIntent";
 import { researchPageLimit } from "@pikar/core/researchControl";
 // 20-07: the SHOT_TYPES boundary check for the media pre-step. Deep specifier — `storyboard` is not
 // re-exported from the package root (media.ts:23 carries the same pair of lines).
@@ -38,7 +39,7 @@ import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { type ActionCtx, internalMutation, type MutationCtx } from "./_generated/server";
+import type { ActionCtx, MutationCtx } from "./_generated/server";
 // 2026-08-10: the FINANCE terminal, direct-called for exactly the reasons the CRM one below is.
 import { applyFinanceClaims, type FinanceApplyRefusal } from "./cash";
 // 19-06 ACTN-05: the CRM terminal. Called DIRECTLY (not via runMutation) so the whole operation
@@ -50,6 +51,7 @@ import { persistNextStepMemo } from "./evaluations";
 import { retrier, workflow } from "./index";
 import { MAX_FAN_OUT } from "./lib/dispatchShared";
 import { requireOwnerAction, tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 // 20-07 MEDIA-01: the whole-reel reservation, called DIRECTLY (not via runMutation) so it lands in
 // the same serializable transaction as the proposed -> approved CAS. See its doc comment.
 import {
@@ -1264,6 +1266,7 @@ export const executePlan = tenantMutation({
           // address on /dashboard/profile, or pick recipients who have not unsubscribed.
           | "no_postal_address"
           | "all_recipients_suppressed"
+          | "too_many_recipients"
           | ReserveRefusal
           // 2026-08-10: the finance_write arm's two refusals — `applyFinanceClaims` RETURNS them
           // rather than throwing (its own doc comment explains why), so this dispatcher's ONLY job
@@ -1538,6 +1541,8 @@ export const executePlan = tenantMutation({
     // plan `approved` with zero `requests` rows and no workflow — a half-approved state nothing
     // can resume (the 20-07 lesson).
     const allRecipients = plan.recipients ?? [];
+    if (allRecipients.length > MAX_PLAN_RECIPIENTS)
+      return { ok: false, reason: "too_many_recipients" };
     const withheld = await ctx.runQuery(internal.contacts.suppressedAmong, {
       tenantId: ctx.tenantId,
       addresses: allRecipients,
@@ -1823,7 +1828,9 @@ export const moveScheduledPlan = tenantMutation({
     const requests = await ctx.db
       .query("requests")
       .withIndex("by_plan", (q) => q.eq("planId", planId))
-      .collect();
+      .take(MAX_PLAN_RECIPIENTS + 1);
+    if (requests.length > MAX_PLAN_RECIPIENTS)
+      throw new Error("Legacy plan exceeds 100 recipients; split it before rescheduling");
     if (requests.length === 0) return { result: "not_scheduled" };
 
     await ctx.scheduler.cancel(plan.scheduledFunctionId);
@@ -1905,7 +1912,9 @@ export const reschedulePlan = tenantMutation({
     const orphans = await ctx.db
       .query("requests")
       .withIndex("by_plan", (q) => q.eq("planId", planId))
-      .collect();
+      .take(MAX_PLAN_RECIPIENTS + 1);
+    if (orphans.length > MAX_PLAN_RECIPIENTS)
+      throw new Error("Legacy plan exceeds 100 recipients; split it before rescheduling");
     for (const r of orphans) await ctx.db.delete(r._id);
     // Flip to "proposed" — the EXISTING executePlan re-approve path re-seeds + re-arms (no new arm site).
     await ctx.db.patch(planId, {

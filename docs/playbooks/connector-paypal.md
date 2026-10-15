@@ -218,3 +218,6 @@ third parties requires **partner status and partner-manager coordination**.
   support: a parked PayPal must not block a subset release, but it *does* block Phase 28 completion
   (REVN-03).
 - PayPal invoice dispatch, refunds and dispute changes are explicitly deferred by the phase boundary.
+
+
+> 2026-10-15 lifecycle enforcement: application internal mutations/actions use the shared tenantLifecycle builders. Tenant-owned writes refuse deleting/deleted accounts; cleanup deletes and retained compliance metadata remain available. The guard migration preserves connector/provider contracts; local identity/deletion and subsystem suites provide verification, not hosted provider qualification.

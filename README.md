@@ -9,6 +9,9 @@ with the Workflow / Agent / RAG / Rate-Limiter / Action-Retrier components · Co
 
 ---
 
+Current setup, deployment, recovery and configuration: [operations guide](docs/operations.md).
+Release gates and outstanding evidence: [release readiness](docs/release-readiness.md).
+
 ## Repository layout
 
 ```
@@ -57,10 +60,9 @@ git config core.hooksPath .githooks    # see .githooks/README.md for the one-lin
                                        # graphify-out/.graphify_python it also needs
 ```
 
-> **Codegen ordering (important).** `convex/_generated/` is produced by Convex codegen and
-> is **git-ignored** — it does not exist in a fresh clone. `pnpm typecheck` (and any import of
-> `./_generated/*`) **fails until step 2 has run at least once**. Always run `npx convex dev`
-> before typechecking a fresh clone.
+> **Codegen ordering.** Generated Convex API files are tracked. A clean clone can run static checks
+> after installing dependencies. Configure a development deployment for interactive work; regenerate
+> and review API files when backend interfaces change. Never use production for local codegen.
 
 Scripted gate (after step 2 has configured a deployment):
 
@@ -94,8 +96,9 @@ Two separate secret stores — never mix them:
 - **Convex environment variables** (`npx convex env set KEY value`) hold every server-side
   secret a Convex function touches: LLM/API keys, AWS creds, OAuth **client secrets**, and
   sidecar URLs (`PRESIDIO_URL`, etc.). Set them per deployment; never commit them.
-- **Vercel environment variables** hold only client-safe / deploy values:
-  `NEXT_PUBLIC_CONVEX_URL` and `CONVEX_DEPLOY_KEY`. Nothing else.
+- **Vercel environment variables** include `NEXT_PUBLIC_CONVEX_URL`, `MEDIA_RENDER_SECRET`, and
+  `MEDIA_SANDBOX_SNAPSHOT_ID`. `CONVEX_DEPLOY_KEY` belongs in the protected GitHub deployment
+  environment, not the web host. See the operations guide for the current configuration planes.
 
 `.env.local` files are git-ignored and are written by the Convex CLI — do not commit them.
 

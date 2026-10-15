@@ -259,18 +259,22 @@ export const contactPulseForTenant = internalQuery({
     if (!contact || contact.tenantId !== tenantId) {
       return { state: "unavailable" as const, reason: "unknown_ref" as const };
     }
-    const followUps = await ctx.db
-      .query("followUps")
-      .withIndex("by_tenant_contact", (q) =>
-        q.eq("tenantId", tenantId).eq("contactId", ref.contactId),
-      )
-      .collect();
     const now = Date.now();
+    const followUp = await ctx.db
+      .query("followUps")
+      .withIndex("by_tenant_contact_status_dueAt", (q) =>
+        q
+          .eq("tenantId", tenantId)
+          .eq("contactId", ref.contactId)
+          .eq("status", "open")
+          .lte("dueAt", now),
+      )
+      .first();
     const pulse = customerPulse(
       {
         disputeOpen: false,
         invoiceOverdue: false,
-        followUpOverdue: followUps.some((row) => row.status === "open" && row.dueAt <= now),
+        followUpOverdue: followUp !== null,
         lastActivityAt: null,
         coverage: "partial",
       },

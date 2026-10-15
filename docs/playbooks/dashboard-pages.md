@@ -3195,3 +3195,7 @@ The channel CTA now populates an unsent workspace composer through a closed inte
 ## Marketing pre-activation browser suite (31-06)
 
 Last verified: 2026-09-12 — `e2e/marketing-uat.spec.ts` collects three serial, non-retrying scenarios with recordings disabled: responsive/keyboard channel checks, authenticated tracked-link management plus genuinely anonymous original-byte requests, and an explicitly retained synthetic suppressed contact. The runbook in marketing.md requires an exact stored artifact/hash, a real exported authenticated browser state and an explicit example.test fixture; it never provisions owners, extracts JWTs, chooses arbitrary customer data or calls a model/provider. The ten focused Marketing/prefill tests pass, including the new mutation-hook negative-space guard. Live execution and navigation activation remain pending deployment qualification and31-07 acceptance.
+
+Last verified: 2026-10-15 — Delivery report badges distinguish unknown external outcomes and expose mailbox reconciliation. Ordinary status labels remain readable.
+
+Last verified: 2026-10-15 — The operator confirmed legal name pikar-ai, operating country Tanzania and support joel@pikar-ai.com. Legal banners now accurately describe unresolved address/review rather than asserting an unformed entity or an active build block. Commercial billing must stay disabled for this release by explicit operator instruction; registered address remains pending.

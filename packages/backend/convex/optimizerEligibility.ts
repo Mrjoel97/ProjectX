@@ -24,11 +24,14 @@ export const optimizerEligibility = internalQuery({
     // variant (filter by createdAt) is the upgrade path when feedback volume grows.
     const rows = await ctx.db
       .query("feedback")
-      .withIndex("by_skill", (q) => q.eq("skillName", skillName))
-      .collect();
+      .withIndex("by_skill_created", (q) => q.eq("skillName", skillName))
+      .order("desc")
+      .take(1001);
 
-    const total = rows.length;
-    const downCount = rows.filter((r) => r.rating === "down").length;
+    const truncated = rows.length > 1000;
+    const sample = rows.slice(0, 1000);
+    const total = sample.length;
+    const downCount = sample.filter((r) => r.rating === "down").length;
 
     // Default-on-read: a missing row means DORMANT defaults and no cooldown anchor (lastRunAt
     // lives only on a persisted row, read off it directly to keep the type number | undefined).
@@ -50,6 +53,7 @@ export const optimizerEligibility = internalQuery({
       reason,
       negativeRate,
       sampleCount: total,
+      truncated,
       threshold: cfg.negativeRateThreshold,
       skillName,
     };

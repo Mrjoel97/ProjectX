@@ -53,6 +53,9 @@ export const NONTAXABLE_TAX_CODE = "txcd_00000000";
  */
 export const CONFIG_CONFIRMED: boolean = false;
 
+/** Owner release decision, 2026-10-15: no new commercial subscriptions this release. */
+export const COMMERCIAL_BILLING_ENABLED: boolean = false;
+
 /**
  * The `Stripe-Version` we pin on every outbound request, from 28.1-05 onward.
  *

@@ -1,3 +1,5 @@
+> Last verified: 2026-10-15 — The compatibility pending-proposal reader returns the newest100 pending rows. Resolving a row reveals older pending rows; this response is a bounded working queue, not a lifetime total.
+
 # Playbook: Proposals (document/chat/voice-derived facts, one-click accept)
 
 > Last verified: 2026-08-15 (Task 6, `proposals-table-and-applier` plan — playbook created after

@@ -40,6 +40,8 @@ vi.mock("convex/react", () => ({
 const shellSource = readFileSync(fileURLToPath(new URL("../layout.tsx", import.meta.url)), "utf8");
 
 const signals = {
+  complete: true,
+  rowCap: 1000,
   reviewOutcomes: { sent: 3, rejected: 0, expired: 0, failed: 0, blocked: 0 },
   // 26-14: the REAL literals the backend emits (`review.ts`'s validator union), with NON-ZERO
   // counts. This mock said `edit: 0` — a key nothing writes, at the one value that cannot tell a

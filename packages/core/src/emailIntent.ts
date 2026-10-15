@@ -411,3 +411,6 @@ export function parseSendTime(
   if (bare) return { kind: "ambiguous" }; // "at 4" — hour with no meridiem, no day
   return { kind: "none" };
 }
+
+/** Maximum recipients in one approved email plan; larger work must be split for bounded fan-out. */
+export const MAX_PLAN_RECIPIENTS = 100;

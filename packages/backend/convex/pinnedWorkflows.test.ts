@@ -1055,6 +1055,15 @@ describe("runCount counts this pin's runs and no others", () => {
     return res.id;
   };
 
+  test("counts more than two audit pages without dropping filtered events", async () => {
+    const t = setup();
+    await seedPack(t, "pack-brand-review", packBrandReviewSkillBody);
+    const pin = await pinFor(t, A, "brand-review");
+    await seedAuditRuns(t, A, pin, 401);
+    await seedAuditRuns(t, A, pin, 9, "workflow_pin.other");
+    expect(await t.action(internal.pinnedWorkflows.runCount, { pinId: pin })).toBe(401);
+  });
+
   test("another pin's runs, another tenant's runs and another event type are all excluded", async () => {
     const t = setup();
     await seedPack(t, "pack-brand-review", packBrandReviewSkillBody);
@@ -1071,9 +1080,9 @@ describe("runCount counts this pin's runs and no others", () => {
     await seedAuditRuns(t, A, mine, 5, "workflow_pin.something_else");
 
     // MUTATION: `const prefix = "pin:"` → red (14). That mutation was previously invisible.
-    expect(await t.query(internal.pinnedWorkflows.runCount, { pinId: mine })).toBe(3);
-    expect(await t.query(internal.pinnedWorkflows.runCount, { pinId: myOtherPack })).toBe(2);
-    expect(await t.query(internal.pinnedWorkflows.runCount, { pinId: theirs })).toBe(4);
+    expect(await t.action(internal.pinnedWorkflows.runCount, { pinId: mine })).toBe(3);
+    expect(await t.action(internal.pinnedWorkflows.runCount, { pinId: myOtherPack })).toBe(2);
+    expect(await t.action(internal.pinnedWorkflows.runCount, { pinId: theirs })).toBe(4);
   });
 });
 

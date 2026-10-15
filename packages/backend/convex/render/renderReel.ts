@@ -33,9 +33,11 @@ import { v } from "convex/values";
 import { internal } from "./../_generated/api";
 import type { Doc, Id } from "./../_generated/dataModel";
 import type { MutationCtx } from "./../_generated/server";
-import { internalAction, internalMutation, internalQuery } from "./../_generated/server";
+import { internalQuery } from "./../_generated/server";
 import { retrier } from "./../index";
 import { contentHash } from "./../lib/hash";
+import { currentMediaJobs, readMediaBatch } from "../lib/mediaRead";
+import { internalAction, internalMutation } from "../lib/tenantLifecycle";
 import { requireEnvMedia } from "./../media";
 import { maybeBurnCaptions } from "./../mediaComplete";
 import { startIngest } from "./../vaultIngest";
@@ -144,10 +146,7 @@ export const batchToRender = internalQuery({
     a,
   ): Promise<{ ok: true; value: RenderInputs } | { ok: false; reason: RenderRefusal }> => {
     // The index PREFIX is the tenant boundary — never a full-table scan, never a cross-tenant read.
-    const rows = await ctx.db
-      .query("mediaJobs")
-      .withIndex("by_batch", (q) => q.eq("tenantId", a.tenantId).eq("batchId", a.batchId))
-      .collect();
+    const rows = await readMediaBatch(ctx, a.tenantId, a.batchId);
 
     // `stt` (captions, plan 20-17) sits at blockIndex -1 and is not an assembly input. `image` is
     // (20.2 wave 5): an `animated_image` scene buys ONE still and the assembler pans across it.
@@ -207,10 +206,7 @@ export const batchToRender = internalQuery({
     //
     // A failed or blocked attempt is history and is skipped here — `not_all_succeeded` above is
     // what refuses a batch still in flight, and that check stays on the batch's OWN rows.
-    const landed = await ctx.db
-      .query("mediaJobs")
-      .withIndex("by_plan", (q) => q.eq("tenantId", a.tenantId).eq("planId", planId))
-      .collect();
+    const landed = await currentMediaJobs(ctx, a.tenantId, plan, true);
 
     const byIndex = new Map<
       number,
@@ -633,10 +629,7 @@ async function deleteIntermediates(
   tenantId: string,
   batchId: string,
 ): Promise<void> {
-  const spent = await ctx.db
-    .query("mediaJobs")
-    .withIndex("by_batch", (q) => q.eq("tenantId", tenantId).eq("batchId", batchId))
-    .collect();
+  const spent = await readMediaBatch(ctx, tenantId, batchId);
   const deleted = new Set<string>();
   for (const row of spent) {
     // Idempotent: a second pass over an already-cleaned batch finds no id and does nothing.
@@ -661,10 +654,7 @@ async function captionsStillOwed(
   tenantId: string,
   batchId: string,
 ): Promise<boolean> {
-  const rows = await ctx.db
-    .query("mediaJobs")
-    .withIndex("by_batch", (q) => q.eq("tenantId", tenantId).eq("batchId", batchId))
-    .collect();
+  const rows = await readMediaBatch(ctx, tenantId, batchId);
   const stt = rows.find((r) => r.kind === "stt");
   if (!stt) return false; // captions were never reserved — 20-16's behaviour, unchanged
   const plan = await ctx.db.get(stt.planId);
@@ -1037,12 +1027,13 @@ export const captionsToBurn = internalQuery({
     if (!plan || plan.tenantId !== a.tenantId) return null;
     if (plan.renderStatus !== "rendered" || !plan.renderStorageId) return null;
     if (!plan.captionOffsetsS || !plan.sidecarStorageId) return null;
-    const stt = (
-      await ctx.db
-        .query("mediaJobs")
-        .withIndex("by_plan", (q) => q.eq("tenantId", a.tenantId).eq("planId", a.planId))
-        .collect()
-    ).find((r) => r.kind === "stt");
+    const stt = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_plan_slot_kind_created", (q) =>
+        q.eq("tenantId", a.tenantId).eq("planId", a.planId).eq("blockIndex", -1).eq("kind", "stt"),
+      )
+      .order("desc")
+      .first();
     if (stt?.status !== "succeeded" || !stt.assetStorageId) return null;
     return {
       transcriptStorageId: stt.assetStorageId,

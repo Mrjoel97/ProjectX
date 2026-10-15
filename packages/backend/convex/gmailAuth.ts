@@ -11,8 +11,9 @@ import { DRIVE_READONLY_SCOPE, GOOGLE_SCOPES, hasScope } from "@pikar/core";
 import { isExpiringSoon, REFRESH_TOKEN_TTL_MS } from "@pikar/core/tokenExpiry";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { tenantAction, tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { migrations } from "./migrations";
 
 const GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -108,14 +109,11 @@ export const store = internalMutation({
     // mirroring flagExpiringTokens' direct insert below (same table, no notify path involved).
     // Requests held at `awaiting_reauth` are NOT touched: nothing resumes them yet (see
     // disconnectGoogle's note), so clearing them here would claim a send that never happens.
-    for (const n of await ctx.db
-      .query("notifications")
-      .withIndex("by_tenant_kind_read", (q) =>
-        q.eq("tenantId", args.tenantId).eq("kind", "gmail_reconnect").eq("read", false),
-      )
-      .collect()) {
-      await ctx.db.patch(n._id, { read: true });
-    }
+    await ctx.runMutation(internal.notifications.retireReconnectWarnings, {
+      tenantId: args.tenantId,
+      kind: "gmail_reconnect",
+      before: Date.now(),
+    });
   },
 });
 

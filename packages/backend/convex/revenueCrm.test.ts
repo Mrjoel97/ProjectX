@@ -306,3 +306,22 @@ describe("the module cannot write — a read surface that writes is the second C
     }
   });
 });
+
+test("large suppression sets remain bounded and cannot re-admit an omitted address", async () => {
+  const h = await harness();
+  const id = await addContact(h, h.tenantA, { email: "late@example.test" });
+  await addFollowUp(h, h.tenantA, id, Date.now() - DAY);
+  await h.t.run(async (ctx) => {
+    for (let i = 0; i < 502; i++)
+      await ctx.db.insert("suppressions", {
+        tenantId: h.tenantA,
+        address: i === 501 ? "late@example.test" : String(i) + "@example.test",
+        suppressedAt: 1,
+        source: "user-marked",
+      });
+  });
+  const result = await h.asA.query(api.revenueCrm.attentionList, {});
+  expect(result.rows).toEqual([]);
+  expect(result.capped).toBe(true);
+  expect(result.coverage).toBe("partial");
+});

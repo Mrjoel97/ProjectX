@@ -14,8 +14,8 @@ import { NOTIFICATION_KINDS, type NotificationKind, notificationMessage } from "
 // (the same sanctioned send, not a new write verb). A dead/absent token → return silently (the
 // already-inserted in-app row is the guarantee; email is a bonus channel).
 import { v } from "convex/values";
-import { internalAction } from "./_generated/server";
 import { base64Url, buildMime, freshAccessToken, SEND_ENDPOINT } from "./gmail";
+import { internalAction } from "./lib/tenantLifecycle";
 
 // The user's own mailbox address (send-to-self). A GET, never a write — so the read-only-mailbox
 // invariant holds and gmail.ts's POST-target scan is untouched (the only POST here is the send).

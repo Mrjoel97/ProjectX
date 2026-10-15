@@ -766,7 +766,7 @@ end`,
             },
           ],
         }),
-      ).rejects.toThrow(/no network is allowed/);
+      ).rejects.toThrow(/PAID_MODEL_RESPONSE_UNRESOLVED/);
     });
 
     test("the same seed in `fields` DOES reach the fixture — the refusal above is the CHANNEL, not a broken seam", async () => {

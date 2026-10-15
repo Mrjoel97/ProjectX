@@ -244,3 +244,10 @@ Steps **2** (branding), **7** (Customer Portal), **8** (Smart Retries) have no A
 tooling available here, and step **11** (the three `convex env set` calls) needs secrets only the
 owner holds. None of them block the code: every plan in this phase is provable offline against a
 stubbed `fetch`. They block *live traffic*, which is a later gate.
+
+
+## Release decision — commercial checkout disabled (2026-10-15)
+
+The owner explicitly deferred commercial billing for this release. `COMMERCIAL_BILLING_ENABLED = false` is code-owned release configuration: installed Stripe keys or price IDs cannot enable `billing.startCheckout`. The authenticated endpoint returns `commercial_billing_disabled` before any Stripe request; a future enabled release also requires `CONFIG_CONFIRMED`. Reopening subscriptions needs a reviewed configuration change and merchant/tax setup qualification. Existing subscriber portal access, cancellation/erasure, webhook accounting and invoice reads remain available. The settings panel discloses this state. Tanzania operating location and the pikar-ai product name do not establish a Stripe head-office address or tax registration; those remain unconfirmed.
+
+Validation: real-constant disabled-release test verifies zero outbound calls even with credentials installed. Existing 72 transport/accounting tests run against an explicitly mocked future-approved configuration, preserving portal/cancellation coverage without any production bypass.

@@ -1,3 +1,11 @@
+> Last verified: 2026-10-15 — The compatibility byThread artifact reader is bounded to the newest100 rows rather than loading every artifact ever attached to a thread. It is not a complete archive export; tenant data export remains the full cursor-based plane.
+
+> 2026-10-15 transcription duration boundary: paid intake transcription now requires canonical mono16kHz16bit PCM WAV, exactly one fixed header/data chunk, no trailing bytes, and at most600seconds derived from sample bytes. Browser intake attachment/dictation normalizes supported audio through Web Audio first. Unsupported decoding is refused; the server never trusts browser duration metadata. Offline fixture allowlists remain unchanged. Conservative100cent admission remains until trusted cost settlement.
+
+> Last verified: 2026-10-15 — audio transcription now reserves a 100-cent policy allowance before egress, disables SDK retries, and settles provider-reported cost or a known reported duration. Missing billing/duration retains its hold instead of becoming zero. This allowance is not a verified duration ceiling: compressed byte limits cannot establish that guarantee. Ordinary research calls also reserve existing fixed per-call fee ceilings before Tavily transport.
+
+> Last verified: 2026-10-15 — Visual extraction now uses per-call budget admission and immediate provider-cost settlement. Audio transcription retains the earlier accounting path and is not covered by a verified duration-based admission ceiling; release readiness must continue to show that remaining gap.
+
 > Last verified: 2026-09-12 — registered authoring-probe threads accept only their two budgeted
 > text turns. The shared intake entry refuses file attachment and dictation before extraction,
 > transcription, persistence or embedding; those provider paths are outside this probe envelope.

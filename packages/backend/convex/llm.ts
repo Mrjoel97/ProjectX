@@ -72,8 +72,6 @@ import {
   formatSpec,
   grantsFor,
   type InboxMessageMeta,
-  type InlineRun,
-  inlineRuns,
   isFallbackEligible,
   isNeedsYou,
   isWorkflowPackSkill,
@@ -92,8 +90,6 @@ import {
   SPECIALISTS,
   selectForDigest,
   type ToolGrants,
-  tokenizeMarkdown,
-  toWinAnsi,
   validateFigureClaim,
 } from "@pikar/core";
 import {
@@ -105,7 +101,6 @@ import { verticalIdForSkill } from "@pikar/core/verticalPacks";
 import {
   CHEAP_MODEL,
   DEFAULT_MODEL,
-  GEMINI_MODEL,
   MEDIA_FALLBACK_MODEL,
   MEDIA_MODEL,
   PACK_FALLBACK_MODEL,
@@ -116,13 +111,6 @@ import {
   RESEARCH_MODEL,
   searchFeeUsd,
 } from "@pikar/cost";
-import {
-  goldenTavilyBilling,
-  goldenTavilyExtractRequest,
-  goldenTavilyObservedCredits,
-  goldenTavilyObservedUsd,
-  goldenTavilySearchRequest,
-} from "@pikar/cost/goldenProviderBudget";
 import { scanText } from "@pikar/pii";
 // Subpath import (NOT the barrel), the vaultExtract discipline: SheetJS is ~1 MB and enters only
 // the `use node` modules that write or read a workbook. STATIC, per Pitfall 9 — see sheets.ts.
@@ -143,10 +131,8 @@ import {
 import { MockLanguageModelV4 } from "ai/test";
 import type { GenericActionCtx } from "convex/server";
 import { ConvexError, v } from "convex/values";
-import { type Color, PDFDocument, type PDFFont, rgb, StandardFonts } from "pdf-lib";
 import { api, components, internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
-import { internalAction } from "./_generated/server";
 import {
   applyGmailCapability,
   GMAIL_CONNECTION_REQUIRED_REPLY,
@@ -158,11 +144,29 @@ import { VARIANT_FAILED_MEMO } from "./lib/dispatchShared";
 import { type EvalContext, evalBudgetModel, type ImageInput } from "./lib/evalBudgetModel";
 import { fogIntegration, traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
+import { markdownToPdf } from "./lib/markdownPdf";
 import {
   fixtureSeamFor,
   NODE_ONLY_MODEL_PREFIX,
   resolveModel as resolveSharedModel,
 } from "./lib/models";
+import { internalAction } from "./lib/tenantLifecycle";
+import { buildWebResearchTool, sourcesFromToolOutput } from "./lib/webResearchTools";
+
+export { markdownToPdf } from "./lib/markdownPdf";
+export {
+  buildWebResearchTool,
+  PAGE_READ_CHARS,
+  PAGE_READS_PER_RUN,
+  parseExtractResult,
+  parseWebResults,
+  sourcesFromToolOutput,
+  WEB_RESULT_MIN_SCORE,
+  WEB_RESULTS_PER_SEARCH,
+  type WebResult,
+} from "./lib/webResearchTools";
+
+import { paidBudgetModel } from "./lib/paidBudgetModel";
 import { assertResearchControlContext, TOOL_CONTEXT_ARGS } from "./lib/toolContextArgs";
 import { isExplicitVideoCreationRequest } from "./mediaIntent";
 import { buildRevenueTools } from "./revenueTools";
@@ -338,384 +342,6 @@ const resolveModel = (id: string): LanguageModel => {
   // AI Studio if a key is set, else Vertex. `googleVertex()` still throws its own worded error when
   // NEITHER credential exists, so "no Google config at all" stays one clear message rather than two.
   return (googleAiStudio() ?? googleVertex())(bare);
-};
-
-/** One retrieved web result. `snippet` is Tavily's extracted page text, NOT model prose. */
-export type WebResult = { url: string; title: string; snippet: string };
-
-/** How many results one search returns to the model. Small on purpose: each snippet is ~1.4k chars
- *  and they all ride `inputTokens` on the NEXT step, so this is the main lever on research cost. */
-export const WEB_RESULTS_PER_SEARCH = 5;
-
-/**
- * The relevance floor a Tavily result must clear to count as EVIDENCE.
- *
- * **MEASURED, not guessed (2026-08-07).** Real research queries and the deliberately-invented entity
- * from fixture 33 separate cleanly on Tavily's own `score`:
- *   real (fixture 32, two queries):  0.8145 0.8052 0.7879 0.7730 0.7376 / 0.7409 … 0.6022
- *   invented (fixture 33):           exact-name searches return NOTHING AT ALL (n=0); only a loose
- *                                    query mixing real words returns anything, topping out at 0.5100
- *                                    before a cliff to 0.0962, 0.0466, 0.0446, 0.0409.
- * 0.55 sits in the gap: above every near-miss, below every genuine result.
- *
- * WHY A FLOOR IS NEEDED AT ALL, given exact-name searches already return zero. `sources` is
- * AGGREGATED ACROSS EVERY SEARCH IN A RUN, and the specialist is instructed to search once per
- * sub-question. One loose sub-question drags near-misses into the aggregate, and the honesty verdict
- * (`declaredQuestionScope && sources.length === 0`) then can never fire — a run that found nothing
- * reports itself as sourced. The hosted OpenAI search never exposed this because it returned no
- * sources for an unanswerable query; that property has to be reconstructed here.
- *
- * ponytail: one flat threshold. The margin (0.51 → 0.60) is real but THIN and rests on five sampled
- * queries — fixtures 32 and 33 are its regression test, and they pull in opposite directions, which
- * is what makes them a calibration set rather than two unrelated cases. If a genuine result ever
- * lands below this, prefer raising `max_results` or splitting the query over lowering the floor.
- */
-export const WEB_RESULT_MIN_SCORE = 0.55;
-
-/**
- * Map Tavily's `/search` response to our result shape. Pure and exported for the offline test —
- * the network half is untestable without a key, this half is where the mistakes live.
- *
- * Two things are DROPPED rather than passed through, both because a source list is the evidence half
- * of the research verdict: anything without a parseable absolute URL (the reader cannot open it), and
- * anything below `WEB_RESULT_MIN_SCORE` (a near-miss is not evidence, however topical it looks).
- */
-export const parseWebResults = (payload: unknown): WebResult[] => {
-  const rows = (payload as { results?: unknown })?.results;
-  if (!Array.isArray(rows)) return [];
-  const out: WebResult[] = [];
-  for (const r of rows) {
-    const url = (r as { url?: unknown })?.url;
-    if (typeof url !== "string") continue;
-    try {
-      new URL(url); // absolute + parseable, or it is not a citation
-    } catch {
-      continue;
-    }
-    // A MISSING score is kept, deliberately: absence means the provider did not rank this response,
-    // and silently discarding everything would turn a provider change into an empty evidence list —
-    // the same silent-zero failure this whole path is built to avoid. Only an EXPLICIT low score
-    // drops a row.
-    const score = (r as { score?: unknown })?.score;
-    if (typeof score === "number" && score < WEB_RESULT_MIN_SCORE) continue;
-    out.push({
-      url,
-      title: String((r as { title?: unknown })?.title ?? ""),
-      snippet: String((r as { content?: unknown })?.content ?? ""),
-    });
-  }
-  return out;
-};
-
-/** Phase 39 (RSCH-01): how many pages one research run may READ. Each read is a step and ~6k chars
- *  of input on every later step, so this is the second cost lever beside `WEB_RESULTS_PER_SEARCH`. */
-export const PAGE_READS_PER_RUN = 6;
-/** The char cap on one read page. `/extract` with a `query` returns the top-ranked chunks joined by
- *  `[...]`, so the cap trims the tail of an already-focused excerpt, not the middle of an argument. */
-export const PAGE_READ_CHARS = 6000;
-
-/** Tavily `/extract`'s response, reduced to the one page asked for. Exported for the unit test. */
-export const parseExtractResult = (
-  payload: unknown,
-  url: string,
-): { content: string; truncated: boolean } | { error: string } => {
-  const p = payload as {
-    results?: { url?: unknown; raw_content?: unknown }[];
-    failed_results?: { url?: unknown; error?: unknown }[];
-  };
-  const hit = Array.isArray(p?.results)
-    ? p.results.find((r) => r?.url === url && typeof r?.raw_content === "string")
-    : undefined;
-  if (hit) {
-    const raw = hit.raw_content as string;
-    return { content: raw.slice(0, PAGE_READ_CHARS), truncated: raw.length > PAGE_READ_CHARS };
-  }
-  const failed = Array.isArray(p?.failed_results)
-    ? p.failed_results.find((r) => r?.url === url)
-    : undefined;
-  return { error: String(failed?.error ?? "no content returned for that page") };
-};
-
-/**
- * The sources carried by ONE `webResearch` tool-result part.
- *
- * Separate from `parseWebResults` because the shapes differ and conflating them hid a latent bug:
- * the API response calls the text `content` while our own tool output calls it `snippet`, and the
- * stored output has no `score` at all (already filtered at execute time). Re-running the API parser
- * over our own output happened to work only because the call site reads url/title — one field rename
- * away from silently emptying every source list.
- */
-export const sourcesFromToolOutput = (output: unknown): { url: string; title: string }[] => {
-  const rows = (output as { results?: unknown })?.results;
-  if (!Array.isArray(rows)) return [];
-  const out: { url: string; title: string }[] = [];
-  for (const r of rows) {
-    const url = (r as { url?: unknown })?.url;
-    if (typeof url !== "string") continue;
-    try {
-      new URL(url);
-    } catch {
-      continue;
-    }
-    out.push({ url, title: String((r as { title?: unknown })?.title ?? "") });
-  }
-  return out;
-};
-
-/**
- * ACTN-03. The web-research tool record.
- *
- * **LOCAL AND PROVIDER-EXECUTED ARE DIFFERENT ANIMALS, AND THIS ONE IS NOW LOCAL (2026-08-07).**
- * It used to be `openai.tools.webSearch` / `vertex.tools.googleSearch` — a hosted tool the VENDOR
- * ran. That coupled research to whichever vendor `RESEARCH_MODEL` named (sending one vendor's
- * hosted tool to the other is a 400), and it died outright when the only funded vendor ran out:
- * OpenAI hit $0 and Gemini's free tier grants ZERO Google Search entitlement, so fixtures
- * 32/33/34 could not pass on either door. Tavily is a plain HTTP API we call ourselves, so
- * research now works on ANY model — the vendor-matching constraint documented at `RESEARCH_MODEL`
- * in @pikar/cost is retired by construction, not worked around.
- *
- * **THREE CONSEQUENCES AT THE CALL SITE, all of which had to change together:**
- *   1. `providerExecuted` is FALSE for a local tool, so `runAgentLoop` can no longer count searches
- *      by that flag. It counts `toolName === "webResearch"` instead — and the literal is safe now
- *      precisely BECAUSE we own the tool: the old comment warned against a name literal because the
- *      PROVIDER chose the emitted name (`web_search`) and could rename it. Nobody renames this one.
- *   2. `res.sources` is empty — that array is populated from provider `url_citation` annotations,
- *      which only a hosted tool emits. Sources are now read from this tool's own RESULT parts,
- *      which is strictly better evidence: still structured, still provider-supplied (Tavily's JSON),
- *      still never parsed out of model prose.
- *   3. `onToolExecutionStart` DOES fire for a local tool, so `agentSteps.tool` needs the
- *      `webResearch` literal — schema.ts said "deliberately NO webResearch companion" and that
- *      reasoning inverted with this change. Without the literal the step insert throws inside a
- *      callback the AI SDK SWALLOWS: no trace in prod, every offline test still green.
- *
- * Module scope and exported so `probeGemini` and `cockpitTools.test.ts` use THE SAME record the
- * research loop does — a probe that builds its own tool proves a fiction (the 15.3 `classifyOne`
- * lesson).
- */
-export const buildWebResearchTool = (
-  evaluation?: {
-    ctx: GenericActionCtx<DataModel>;
-    tenantId: string;
-    budgetId: Id<"spendEvents">;
-  },
-  requestControl?: {
-    ctx: GenericActionCtx<DataModel>;
-    tenantId: string;
-    controlId: Id<"researchControls">;
-    requestId: string;
-  },
-): ToolSet => {
-  // Phase 39 (RSCH-01). THE CONTAINMENT for page reads, and it is structural: `readPage` accepts
-  // ONLY a URL that `webResearch` returned in THIS record's lifetime (one build = one run). An
-  // injected page cannot steer the specialist to an arbitrary host, because the model never gets to
-  // name a host — it can only pick from what the search provider returned. `reads` caps the count.
-  const returned = new Set<string>();
-  let reads = 0;
-  let unresolvedProviderCall = false;
-  const fetchBudgeted = async (
-    endpoint: "search" | "extract",
-    apiKey: string,
-    request:
-      | ReturnType<typeof goldenTavilySearchRequest>
-      | ReturnType<typeof goldenTavilyExtractRequest>,
-  ) => {
-    // Trusted deployment account attestation, never a model/tool argument. Missing metadata
-    // refuses before transport; an ambiguous response retains its full reservation.
-    const { creditUsd, billingMode } = goldenTavilyBilling(
-      process.env.GOLDEN_TAVILY_BILLING,
-      process.env.GOLDEN_TAVILY_CREDIT_USD,
-    );
-    if (!evaluation) throw new Error("EVAL_BUDGET_REQUIRED");
-    if (unresolvedProviderCall) throw new Error("EVAL_TAVILY_RESPONSE_UNRESOLVED");
-    const reservationId = await evaluation.ctx.runMutation(internal.guardrails.reserveEvalCall, {
-      tenantId: evaluation.tenantId,
-      budgetId: evaluation.budgetId,
-      callId: crypto.randomUUID(),
-      model: request.call.kind,
-      outputTokens: 0,
-      providerCall: request.call,
-    });
-    unresolvedProviderCall = true;
-    const response = await fetch(`https://api.tavily.com/${endpoint}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(request.body),
-      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-    });
-    const body: unknown = await response.json();
-    const costUsd = goldenTavilyObservedUsd(body, creditUsd, billingMode);
-    const tavilyCredits = goldenTavilyObservedCredits(body);
-    if (costUsd === null || tavilyCredits === null) throw new Error("EVAL_COST_UNKNOWN");
-    const settled = await evaluation.ctx.runMutation(internal.guardrails.settleEvalCall, {
-      tenantId: evaluation.tenantId,
-      reservationId,
-      costUsd,
-      tavilyCredits,
-    });
-    if (settled.breached) throw new Error("EVAL_PROVIDER_EXCEEDED_RESERVATION");
-    if (!response.ok) throw new Error("EVAL_TAVILY_PROVIDER_FAILED");
-    unresolvedProviderCall = false;
-    return body;
-  };
-  return {
-    webResearch: tool({
-      description:
-        "Search the live web and get back real pages with their URLs. Use it for anything you " +
-        "cannot answer from the conversation or the vault — recent events, external companies, " +
-        "prices, published figures. Search ONCE PER SUB-QUESTION rather than once per run: each " +
-        "call is a fresh independent query. Every claim you make from a result must cite that " +
-        "result's URL.",
-      inputSchema: jsonSchema<{ query: string }>({
-        type: "object",
-        properties: {
-          query: {
-            type: "string",
-            description: "A focused natural-language search query for ONE sub-question.",
-          },
-        },
-        required: ["query"],
-        additionalProperties: false,
-      }),
-      execute: async ({ query }): Promise<{ results: WebResult[]; note?: string }> => {
-        const apiKey = process.env.TAVILY_API_KEY;
-        // Structural absence beats a thrown error here: a missing key is an OPERATOR fault, and a
-        // throw inside a tool ends the specialist's whole run. Returning an empty result set lets the
-        // model finish and say it found nothing — which the evidence verdict then reports honestly.
-        if (!apiKey) return { results: [], note: "web search unavailable: TAVILY_API_KEY unset" };
-        // §4 REDACT-BEFORE-EGRESS. This is a NEW third-party boundary — the query is model-authored
-        // and could echo tenant content from the prompt. The hosted tools had the same exposure to
-        // their own vendor; Tavily is one more party, so the same rule that governs every other
-        // outbound call governs this one. Fail CLOSED: an unscannable query is not sent.
-        const scan = scanText(query);
-        if (!scan.ok)
-          return { results: [], note: "web search skipped: query failed redaction scan" };
-        if (evaluation) {
-          const body = await fetchBudgeted(
-            "search",
-            apiKey,
-            goldenTavilySearchRequest(scan.value.safeText, WEB_RESULTS_PER_SEARCH),
-          );
-          const results = parseWebResults(body);
-          for (const r of results) returned.add(r.url);
-          return { results };
-        }
-        const res = await fetch("https://api.tavily.com/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({
-            query: scan.value.safeText,
-            max_results: WEB_RESULTS_PER_SEARCH,
-            search_depth: "basic",
-          }),
-          signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-        });
-        // Same reasoning as the missing key: a 429 (monthly credits gone) or a 5xx must not kill the
-        // run. The model is told plainly, and `sources: []` makes the verdict honest downstream.
-        if (!res.ok) return { results: [], note: `web search failed: HTTP ${res.status}` };
-        const results = parseWebResults(await res.json());
-        for (const r of results) returned.add(r.url);
-        return { results };
-      },
-    }),
-    readPage: tool({
-      description:
-        "Read one page that a webResearch call returned, focused on what you need from it. Use it " +
-        "before you cite a result for a claim that matters — a snippet is a lead, the page is the " +
-        "evidence. Only URLs returned by your own searches in this run can be read; each read " +
-        "costs a step, so read the two or three pages that carry the answer, not every result.",
-      inputSchema: jsonSchema<{ url: string; focus: string }>({
-        type: "object",
-        properties: {
-          url: { type: "string", description: "A URL exactly as a webResearch result gave it." },
-          focus: {
-            type: "string",
-            description: "What you are looking for on this page, in one line (ranks the excerpt).",
-          },
-        },
-        required: ["url", "focus"],
-        additionalProperties: false,
-      }),
-      execute: async ({
-        url,
-        focus,
-      }): Promise<{
-        url: string;
-        content: string;
-        truncated?: boolean;
-        note?: string;
-        pageReadAt?: number;
-      }> => {
-        const refused = (note: string) => ({ url, content: "", note });
-        // Structural absence of a path to an arbitrary host: not a returned URL ⇒ not fetched.
-        if (!returned.has(url))
-          return refused("readPage refused: that URL was not returned by a search in this run");
-        if (reads >= PAGE_READS_PER_RUN)
-          return refused(`readPage refused: this run has read its ${PAGE_READS_PER_RUN} pages`);
-        const apiKey = process.env.TAVILY_API_KEY;
-        if (!apiKey) return refused("page read unavailable: TAVILY_API_KEY unset");
-        // §4 REDACT-BEFORE-EGRESS, the webResearch rule: `focus` is model-authored and could echo
-        // tenant content; an unscannable focus is not sent. The URL itself came from the provider.
-        const scan = scanText(focus);
-        if (!scan.ok) return refused("page read skipped: focus failed redaction scan");
-        reads += 1;
-        if (requestControl) {
-          let claimed = false;
-          try {
-            claimed = await requestControl.ctx.runMutation(internal.researchControl.claim, {
-              tenantId: requestControl.tenantId,
-              controlId: requestControl.controlId,
-              requestId: requestControl.requestId,
-              attemptId: crypto.randomUUID(),
-            });
-          } catch {
-            /* An ambiguous claim cannot authorize provider egress. */
-          }
-          if (claimed !== true)
-            return refused("readPage refused: request page allowance is unavailable or exhausted");
-        }
-        if (evaluation) {
-          const body = await fetchBudgeted(
-            "extract",
-            apiKey,
-            goldenTavilyExtractRequest([url], scan.value.safeText),
-          );
-          const parsed = parseExtractResult(body, url);
-          if ("error" in parsed) return refused(`page read failed: ${parsed.error}`);
-          if (!parsed.content.trim()) return refused("page read failed: empty excerpt");
-          return {
-            url,
-            content: parsed.content,
-            truncated: parsed.truncated,
-            pageReadAt: Date.now(),
-          };
-        }
-        const res = await fetch("https://api.tavily.com/extract", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({
-            urls: [url],
-            extract_depth: "basic",
-            format: "markdown",
-            query: scan.value.safeText,
-            chunks_per_source: 3,
-          }),
-          signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-        });
-        // A failed read must not kill the run (the webResearch rule): the model is told, and the
-        // claim stays snippet-backed, which the skill body tells it to say.
-        if (!res.ok) return refused(`page read failed: HTTP ${res.status}`);
-        const parsed = parseExtractResult(await res.json(), url);
-        if ("error" in parsed) return refused(`page read failed: ${parsed.error}`);
-        if (!parsed.content.trim()) return refused("page read failed: empty excerpt");
-        return {
-          url,
-          content: parsed.content,
-          truncated: parsed.truncated,
-          pageReadAt: Date.now(),
-        };
-      },
-    }),
-  };
 };
 
 /**
@@ -982,17 +608,13 @@ export const probeGemini = internalAction({
     /** Grounded runs only. What the rail WOULD have been charged on top of tokens. */
     feeUsd?: number;
   }> => {
-    const id = model ?? (grounded ? RESEARCH_MODEL : GEMINI_MODEL);
-    // Widened 2026-08-24 for the ox-alpha trial. The guard's job is to refuse ids this probe cannot
-    // report on HONESTLY — not to police the vendor. Everything below (resolve → generate → price →
-    // classify) is vendor-agnostic, and the plain `openai/` lane is deliberately still excluded:
-    // it is the funded-account lane every eval already exercises, so a probe there proves nothing
-    // new and costs real money.
-    if (!id.startsWith("google/") && !id.startsWith("stealth/")) {
+    const id = model ?? (grounded ? RESEARCH_MODEL : DEFAULT_MODEL);
+    // Probes obey the same reviewed provider bounds and deployment rail as paid product calls.
+    if (!id.startsWith("or/")) {
       return {
         verdict: "bad_credential",
         model: id,
-        detail: `not a google/ or stealth/ model id: ${id}`,
+        detail: `probe requires a reviewed OpenRouter billing contract: ${id}`,
       };
     }
     // THE `tool_vendor_mismatch` GUARD WAS DELETED HERE 2026-08-24, and this note is its headstone
@@ -1021,7 +643,13 @@ export const probeGemini = internalAction({
     try {
       result = await generateText({
         telemetry: { integrations: [fogIntegration({ traceName: "gemini-probe" })] },
-        model: resolved,
+        model: paidBudgetModel({
+          ctx: _ctx,
+          tenantId: "operator:probeGemini",
+          model: resolved,
+          modelId: id,
+        }),
+        maxRetries: 0,
         // Fixed, tiny, and verifiable: a wrong answer is as diagnostic as an error, and the token
         // count stays small enough that a probe is never a meaningful cost.
         //
@@ -1044,7 +672,15 @@ export const probeGemini = internalAction({
         maxOutputTokens: grounded ? 2048 : 512,
         // Only when grounded — an unused tools record still ships a tool declaration to the
         // provider, and the plain probe's job is to isolate "can it answer at all".
-        ...(grounded ? { tools: buildWebResearchTool(), stopWhen: stepCountIs(4) } : {}),
+        ...(grounded
+          ? {
+              tools: buildWebResearchTool(undefined, undefined, {
+                ctx: _ctx,
+                tenantId: "operator:probeGemini",
+              }),
+              stopWhen: stepCountIs(4),
+            }
+          : {}),
       });
     } catch (e) {
       // NAME only, matching the llm.fallback audit convention — a provider error body can echo
@@ -1066,7 +702,9 @@ export const probeGemini = internalAction({
       .flatMap((st) => st.content)
       .filter((p) => p.type === "tool-call")
       .map((p) => ({ toolName: p.toolName, providerExecuted: p.providerExecuted === true }));
-    const searchCalls = toolCalls.filter((c) => c.providerExecuted).length;
+    const searchCalls = toolCalls.filter(
+      (c) => c.toolName === "webResearch" || c.providerExecuted,
+    ).length;
     const sources = (result.sources ?? [])
       .filter(
         (src): src is typeof src & { sourceType: "url"; url: string } => src.sourceType === "url",
@@ -1200,7 +838,7 @@ const ZERO_USAGE = { inputTokens: 0, outputTokens: 0, totalTokens: 0 } as unknow
 // `usage` shape lifted straight from the AI SDK's own return — version-independent, and
 // (paired with the handler return annotations below) keeps these actions out of the
 // `internal`-graph circular inference that sibling "use node" modules push past TS's limit.
-type GenUsage = Awaited<ReturnType<typeof generateObject>>["usage"];
+type GenUsage = Awaited<ReturnType<typeof generateObject>>["usage"] & { budgetSettled?: boolean };
 
 // The redacted-text reader's shape (the ONLY text source — GRDL-01). Explicit so the
 // runQuery result never resolves through the `internal` graph (guidelines §96).
@@ -1299,7 +937,11 @@ export const routeUncached = internalAction({
       const parsed = parseRouting(object);
       if (!parsed.ok) throw new Error(parsed.reason); // "unknown_route" — plain Error → DLQ
       await auditCalled(model);
-      return { routing: parsed.value, usage, generatedAt: Date.now() };
+      return {
+        routing: parsed.value,
+        usage: { ...usage, budgetSettled: true },
+        generatedAt: Date.now(),
+      };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e; // our bug / parse fail / config → DLQ
       await ctx.runMutation(internal.audit.log, {
@@ -1326,7 +968,11 @@ export const routeUncached = internalAction({
       const parsed = parseRouting(object);
       if (!parsed.ok) throw new Error(parsed.reason);
       await auditCalled(CHEAP_MODEL);
-      return { routing: parsed.value, usage, generatedAt: Date.now() };
+      return {
+        routing: parsed.value,
+        usage: { ...usage, budgetSettled: true },
+        generatedAt: Date.now(),
+      };
     }
   },
 });
@@ -1396,7 +1042,12 @@ export const draftUncached = internalAction({
         maxRetries: evalBudgetId ? 0 : 1,
       });
       await auditCalled(model);
-      return { subject: object.subject, body: object.body, usage, generatedAt: Date.now() };
+      return {
+        subject: object.subject,
+        body: object.body,
+        usage: { ...usage, budgetSettled: true },
+        generatedAt: Date.now(),
+      };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
       await ctx.runMutation(internal.audit.log, {
@@ -1429,7 +1080,12 @@ export const draftUncached = internalAction({
         maxRetries: 0,
       });
       await auditCalled(CHEAP_MODEL);
-      return { subject: object.subject, body: object.body, usage, generatedAt: Date.now() };
+      return {
+        subject: object.subject,
+        body: object.body,
+        usage: { ...usage, budgetSettled: true },
+        generatedAt: Date.now(),
+      };
     }
   },
 });
@@ -2123,6 +1779,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           requestId: toolCtx.researchRequestId ?? "",
         }
       : undefined,
+    { ctx, tenantId },
   );
   const saveAsDocumentTool = buildSaveAsDocumentTool();
 
@@ -5106,11 +4763,14 @@ function goldenModel(
   tenantId: string,
   modelId: string,
   budgetId?: Id<"spendEvents">,
+  reserveOrdinary = true,
 ): LanguageModel {
   const model = resolveModel(modelId);
   return budgetId
     ? evalBudgetModel({ ctx, tenantId, budgetId, model, modelId, mode: "golden", onCost: () => {} })
-    : model;
+    : reserveOrdinary
+      ? paidBudgetModel({ ctx, tenantId, model, modelId })
+      : model;
 }
 
 // The activity trace's closed tool union, DERIVED from the schema (agentSteps.ts does the same with
@@ -5493,7 +5153,17 @@ async function runAgentLoop(
             },
             ...(evalContext ? {} : { mode: "golden" as const }),
           })
-        : m.model,
+        : m.model instanceof MockLanguageModelV4
+          ? m.model
+          : paidBudgetModel({
+              ctx,
+              tenantId,
+              model: m.model,
+              modelId: m.id,
+              onCost: (cost) => {
+                costUsd += cost;
+              },
+            }),
       system,
       ...(visualInput
         ? {
@@ -5569,7 +5239,9 @@ async function runAgentLoop(
         });
       },
     });
-    if (!activeBudgetId)
+
+    // Test-only injected models have no external cost metadata; retain fixture arithmetic.
+    if (!activeBudgetId && m.model instanceof MockLanguageModelV4)
       costUsd += await recordModelSpend(
         ctx,
         tenantId,
@@ -5693,7 +5365,7 @@ async function runAgentLoop(
     // SAME attempt as the token cost recorded above — bare `agentloop:${loopId}:a${attempt}` would
     // be that row's identity, so the fee would return the token row and be silently dropped,
     // under-drawing the ledger by exactly the per-call fee this block exists to charge.
-    if (!activeBudgetId && feeUsd > 0)
+    if (!activeBudgetId && feeUsd > 0 && m.model instanceof MockLanguageModelV4)
       await ctx.runMutation(internal.guardrails.recordSpend, {
         tenantId,
         costUsd: feeUsd,
@@ -7247,7 +6919,7 @@ export const draftDocument = internalAction({
       }
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "document-drafter" })] },
-        model: goldenModel(ctx, tenantId, DEFAULT_MODEL, evalBudgetId),
+        model: goldenModel(ctx, tenantId, DEFAULT_MODEL, evalBudgetId, true),
         schema: documentSchema,
         system: skill.body,
         prompt: safeText,
@@ -7258,15 +6930,7 @@ export const draftDocument = internalAction({
       // replay of this one. Sharing `document:${runId}` would make the ledger keep whichever
       // landed first and silently drop the other (recordSpend's identity is
       // (tenantId, correlationId, phase)).
-      if (!evalBudgetId)
-        await recordModelSpend(
-          ctx,
-          tenantId,
-          DEFAULT_MODEL,
-          usage,
-          "document_draft",
-          `document:${runId}:a0`,
-        );
+
       return { ok: true, title: object.title, markdown: object.markdown };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
@@ -7278,22 +6942,14 @@ export const draftDocument = internalAction({
         };
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "document-drafter" })] },
-        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId),
+        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId, true),
         schema: documentSchema,
         system: skill.body,
         prompt: safeText,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      if (!evalBudgetId)
-        await recordModelSpend(
-          ctx,
-          tenantId,
-          CHEAP_MODEL,
-          usage,
-          "document_draft",
-          `document:${runId}:a1`,
-        );
+
       return { ok: true, title: object.title, markdown: object.markdown };
     }
   },
@@ -7522,7 +7178,7 @@ export const digestInbox = internalAction({
     try {
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "inbox-digest" })] },
-        model: goldenModel(ctx, tenantId, DEFAULT_MODEL, evalBudgetId),
+        model: goldenModel(ctx, tenantId, DEFAULT_MODEL, evalBudgetId, true),
         schema: digestSchema,
         system: skill.body,
         prompt,
@@ -7532,36 +7188,20 @@ export const digestInbox = internalAction({
       // `:a0` / `:a1` below — the CHEAP_MODEL retry in the catch is a SECOND fully-billed call, not
       // a replay of this one. Sharing `digest:${runId}` would make the ledger record whichever
       // landed first and drop the other.
-      if (!evalBudgetId)
-        await recordModelSpend(
-          ctx,
-          tenantId,
-          DEFAULT_MODEL,
-          usage,
-          "inbox_digest",
-          `digest:${runId}:a0`,
-        );
+
       return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "inbox-digest" })] },
-        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId),
+        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId, true),
         schema: digestSchema,
         system: skill.body,
         prompt,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      if (!evalBudgetId)
-        await recordModelSpend(
-          ctx,
-          tenantId,
-          CHEAP_MODEL,
-          usage,
-          "inbox_digest",
-          `digest:${runId}:a1`,
-        );
+
       return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
     }
   },
@@ -7627,42 +7267,26 @@ export const draftReply = internalAction({
     try {
       const { text, usage } = await generateText({
         telemetry: { integrations: [fogIntegration({ agentName: "reply-drafter" })] },
-        model: goldenModel(ctx, tenantId, DEFAULT_MODEL, evalBudgetId),
+        model: goldenModel(ctx, tenantId, DEFAULT_MODEL, evalBudgetId, true),
         system: skill.body,
         prompt,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: evalBudgetId ? 0 : 1,
       });
       // `:a0` / `:a1` — the fallback below is a second billed draft, not a replay of this one.
-      if (!evalBudgetId)
-        await recordModelSpend(
-          ctx,
-          tenantId,
-          DEFAULT_MODEL,
-          usage,
-          "reply_draft",
-          `reply:${runId}:a0`,
-        );
+
       return { body: text.trim() };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
       const { text, usage } = await generateText({
         telemetry: { integrations: [fogIntegration({ agentName: "reply-drafter" })] },
-        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId),
+        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId, true),
         system: skill.body,
         prompt,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      if (!evalBudgetId)
-        await recordModelSpend(
-          ctx,
-          tenantId,
-          CHEAP_MODEL,
-          usage,
-          "reply_draft",
-          `reply:${runId}:a1`,
-        );
+
       return { body: text.trim() };
     }
   },
@@ -7748,7 +7372,7 @@ export const draftVoiceBrief = internalAction({
     try {
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "voice-brief-drafter" })] },
-        model: goldenModel(ctx, tenantId, DEFAULT_MODEL, evalBudgetId),
+        model: goldenModel(ctx, tenantId, DEFAULT_MODEL, evalBudgetId, true),
         schema: briefSchema,
         system: skill.body,
         prompt,
@@ -7756,304 +7380,21 @@ export const draftVoiceBrief = internalAction({
         maxRetries: evalBudgetId ? 0 : 1,
       });
       // `:a0` / `:a1` — the fallback below is a second billed brief, not a replay of this one.
-      if (!evalBudgetId)
-        await recordModelSpend(
-          ctx,
-          tenantId,
-          DEFAULT_MODEL,
-          usage,
-          "voice_brief",
-          `brief:${runId}:a0`,
-        );
+
       return buildBriefMarkdown(object, transcript, language);
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "voice-brief-drafter" })] },
-        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId),
+        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId, true),
         schema: briefSchema,
         system: skill.body,
         prompt,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      if (!evalBudgetId)
-        await recordModelSpend(
-          ctx,
-          tenantId,
-          CHEAP_MODEL,
-          usage,
-          "voice_brief",
-          `brief:${runId}:a1`,
-        );
+
       return buildBriefMarkdown(object, transcript, language);
     }
   },
 });
-
-// ── Pure-JS PDF renderer (CKPT-02, V1 + V2) ──────────────────────────────────
-// markdownToPdf turns the drafter's simple markdown into a deterministic PDF using ONLY pdf-lib
-// Standard-14 fonts (Helvetica family) — NEVER embedFont(ttf), which pulls fontkit and inlines
-// TTF bytes, breaking the Convex esbuild bundle (no runtime font-file reads). Lives HERE in the
-// sole "use node" module (a second node module re-trips the TS circular-inference cliff). Every
-// drawn string passes through toWinAnsi so drawText can never throw on smart punctuation / astral
-// glyphs (V2). CreationDate/ModDate are pinned to the epoch → byte-identical output (V1). The
-// whole render is wrapped so ANY throw becomes a rejection — never a partial/empty PDF.
-// ponytail: line-based renderer over Standard-14; add marked/fontkit only if rich markdown or
-// embedded fonts land.
-
-const PAGE_W = 612; // US-Letter, points
-const PAGE_H = 792;
-const MARGIN = 64;
-const CONTENT_W = PAGE_W - 2 * MARGIN;
-const LEADING = 1.42;
-
-// A restrained, professional palette (deterministic — no theme input, so bytes stay reproducible).
-const INK = rgb(0.13, 0.15, 0.18); // body text, near-black
-const ACCENT = rgb(0.09, 0.33, 0.45); // headings, rules, list markers — deep teal
-const RULE = rgb(0.82, 0.85, 0.87); // hairline section + table borders
-const TH_BG = rgb(0.93, 0.96, 0.97); // table header fill
-
-// Point size per block kind (headings bold + accent; body/list regular ink).
-const SIZE: Record<string, number> = {
-  h1: 16,
-  h2: 13.5,
-  h3: 11.5,
-  para: 10.5,
-  bullet: 10.5,
-  ordered: 10.5,
-};
-const TABLE_SIZE = 9.5;
-
-// One laid-out word carrying the font it renders in (regular vs bold), for run-aware wrapping.
-type Word = { text: string; font: PDFFont };
-
-// Greedy word-wrap for a single already-sanitized string at one font/size (used for table cells).
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  const words = text.split(/\s+/).filter((w) => w.length > 0);
-  if (words.length === 0) return [""];
-  const lines: string[] = [];
-  let cur = "";
-  for (const w of words) {
-    const trial = cur ? `${cur} ${w}` : w;
-    if (cur === "" || font.widthOfTextAtSize(trial, size) <= maxWidth) cur = trial;
-    else {
-      lines.push(cur);
-      cur = w;
-    }
-  }
-  lines.push(cur);
-  return lines;
-}
-
-// Wrap styled inline runs into lines of (word,font) segments so bold survives word-wrap. Each run's
-// text is sanitized (toWinAnsi) and split into words; words carry their run's font.
-function layoutRuns(
-  runs: InlineRun[],
-  regular: PDFFont,
-  bold: PDFFont,
-  size: number,
-  maxWidth: number,
-): Word[][] {
-  const words: Word[] = [];
-  for (const run of runs) {
-    const font = run.bold ? bold : regular;
-    for (const w of toWinAnsi(run.text)
-      .split(/\s+/)
-      .filter((x) => x.length > 0))
-      words.push({ text: w, font });
-  }
-  if (words.length === 0) return [[]];
-  const space = regular.widthOfTextAtSize(" ", size);
-  const lines: Word[][] = [];
-  let cur: Word[] = [];
-  let width = 0;
-  for (const word of words) {
-    const ww = word.font.widthOfTextAtSize(word.text, size);
-    const add = cur.length === 0 ? ww : space + ww;
-    if (cur.length > 0 && width + add > maxWidth) {
-      lines.push(cur);
-      cur = [word];
-      width = ww;
-    } else {
-      cur.push(word);
-      width += add;
-    }
-  }
-  if (cur.length > 0) lines.push(cur);
-  return lines;
-}
-
-export async function markdownToPdf(title: string, markdown: string): Promise<Uint8Array> {
-  try {
-    const doc = await PDFDocument.create();
-    // Metadata: title feeds the human-facing document name; pin the dates for deterministic bytes.
-    doc.setTitle(toWinAnsi(title));
-    doc.setCreationDate(new Date(0));
-    doc.setModificationDate(new Date(0));
-
-    const body = await doc.embedFont(StandardFonts.Helvetica);
-    const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-
-    let page = doc.addPage([PAGE_W, PAGE_H]);
-    let y = PAGE_H - MARGIN;
-    const space = (h: number) => {
-      if (y - h < MARGIN) {
-        page = doc.addPage([PAGE_W, PAGE_H]);
-        y = PAGE_H - MARGIN;
-      }
-    };
-
-    // Draw a block of inline runs with optional list marker (a filled square bullet drawn as a
-    // shape — no glyph-encoding dependency — or a bold accent number). Wrapped lines hang-indent
-    // under the text, not the marker.
-    const drawBlock = (
-      runs: InlineRun[],
-      size: number,
-      opts: {
-        indent?: number;
-        textIndent?: number;
-        color?: Color;
-        baseFont?: PDFFont;
-        numberMarker?: string;
-        dotMarker?: boolean;
-      } = {},
-    ) => {
-      const indent = opts.indent ?? 0;
-      const textIndent = opts.textIndent ?? indent;
-      const color = opts.color ?? INK;
-      const sp = body.widthOfTextAtSize(" ", size);
-      const lines = layoutRuns(runs, opts.baseFont ?? body, bold, size, CONTENT_W - textIndent);
-      const lh = size * LEADING;
-      lines.forEach((line, li) => {
-        space(lh);
-        const baseline = y - size;
-        if (li === 0 && opts.dotMarker)
-          page.drawRectangle({
-            x: MARGIN + indent,
-            y: baseline + size * 0.28,
-            width: 3,
-            height: 3,
-            color: ACCENT,
-          });
-        if (li === 0 && opts.numberMarker)
-          page.drawText(opts.numberMarker, {
-            x: MARGIN + indent,
-            y: baseline,
-            size,
-            font: bold,
-            color: ACCENT,
-          });
-        let x = MARGIN + textIndent;
-        for (const word of line) {
-          page.drawText(word.text, { x, y: baseline, size, font: word.font, color });
-          x += word.font.widthOfTextAtSize(word.text, size) + sp;
-        }
-        y -= lh;
-      });
-    };
-
-    // A GitHub-style table: header row filled + bold, body rows with hairline column/row borders.
-    const drawTable = (header: string[], rows: string[][]) => {
-      const cols = Math.max(header.length, ...rows.map((r) => r.length), 1);
-      const colW = CONTENT_W / cols;
-      const pad = 5;
-      const rowOf = (cells: string[], isHeader: boolean) => {
-        const wrapped = Array.from({ length: cols }, (_, c) =>
-          wrapText(toWinAnsi(cells[c] ?? ""), isHeader ? bold : body, TABLE_SIZE, colW - 2 * pad),
-        );
-        const h = Math.max(1, ...wrapped.map((l) => l.length)) * (TABLE_SIZE * 1.3) + 2 * pad;
-        space(h);
-        const top = y;
-        if (isHeader)
-          page.drawRectangle({ x: MARGIN, y: top - h, width: CONTENT_W, height: h, color: TH_BG });
-        wrapped.forEach((cellLines, c) => {
-          let cy = top - pad - TABLE_SIZE;
-          for (const ln of cellLines) {
-            page.drawText(ln, {
-              x: MARGIN + c * colW + pad,
-              y: cy,
-              size: TABLE_SIZE,
-              font: isHeader ? bold : body,
-              color: INK,
-            });
-            cy -= TABLE_SIZE * 1.3;
-          }
-        });
-        page.drawRectangle({
-          x: MARGIN,
-          y: top - h,
-          width: CONTENT_W,
-          height: h,
-          borderColor: RULE,
-          borderWidth: 0.6,
-        });
-        for (let c = 1; c < cols; c++)
-          page.drawLine({
-            start: { x: MARGIN + c * colW, y: top },
-            end: { x: MARGIN + c * colW, y: top - h },
-            thickness: 0.6,
-            color: RULE,
-          });
-        y = top - h;
-      };
-      y -= 6;
-      rowOf(header, true);
-      for (const r of rows) rowOf(r, false);
-      y -= 8;
-    };
-
-    // Title block: the document title in bold accent + a hairline rule beneath.
-    {
-      const tsize = 21;
-      for (const line of wrapText(toWinAnsi(title), bold, tsize, CONTENT_W)) {
-        space(tsize * 1.2);
-        page.drawText(line, { x: MARGIN, y: y - tsize, size: tsize, font: bold, color: ACCENT });
-        y -= tsize * 1.2;
-      }
-      y -= 5;
-      space(2);
-      page.drawRectangle({ x: MARGIN, y, width: CONTENT_W, height: 1.5, color: ACCENT });
-      y -= 16;
-    }
-
-    for (const tok of tokenizeMarkdown(markdown)) {
-      if (tok.kind === "table") {
-        drawTable(tok.header, tok.rows);
-        continue;
-      }
-      if (tok.kind === "h1" || tok.kind === "h2" || tok.kind === "h3") {
-        const size = SIZE[tok.kind]!;
-        y -= size * 0.5; // breathing room before a heading
-        drawBlock(inlineRuns(tok.text), size, { color: ACCENT, baseFont: bold });
-        if (tok.kind !== "h3") {
-          y -= 2;
-          space(2);
-          page.drawRectangle({ x: MARGIN, y, width: CONTENT_W, height: 0.6, color: RULE });
-          y -= 6;
-        } else {
-          y -= 2;
-        }
-        continue;
-      }
-      const size = SIZE[tok.kind] ?? 10.5;
-      y -= size * (LEADING - 1) * 0.6; // small gap before the block
-      if (tok.kind === "bullet") {
-        drawBlock(inlineRuns(tok.text), size, { indent: 6, textIndent: 20, dotMarker: true });
-      } else if (tok.kind === "ordered") {
-        drawBlock(inlineRuns(tok.text), size, {
-          indent: 4,
-          textIndent: 22,
-          numberMarker: `${tok.num}.`,
-        });
-      } else {
-        drawBlock(inlineRuns(tok.text), size, {});
-      }
-    }
-
-    return await doc.save();
-  } catch (e) {
-    // Render failure blocks approval — surface it, never return a partial/empty PDF (CONTEXT).
-    throw new Error(`markdownToPdf: render failed (${(e as Error)?.name ?? "unknown"})`);
-  }
-}

@@ -1,3 +1,4 @@
+import { emptyFoundationProfile } from "@pikar/core/foundation";
 import {
   AUDIT_ARCHIVE_STATEMENT,
   TENANT_EXPORT_SCHEMA_VERSION,
@@ -224,4 +225,45 @@ test("a page carries download links for the files its rows point at", async () =
   expect(mine[0]?.url, "the file is listed but has no download link").toBeTruthy();
   // TENANT ISOLATION, on the same assertion: another tenant's blob must never appear.
   expect(files.map((f) => f.storageId)).not.toContain(String(seeded.theirs));
+});
+
+test("foundation transcripts and approved revisions export only to their owner", async () => {
+  const t = convexTest(schema, modules);
+  const { owner, other } = await t.run(async (ctx) => {
+    const owner = await ctx.db.insert("users", {});
+    const other = await ctx.db.insert("users", {});
+    for (const tenantId of [owner, other]) {
+      await ctx.db.insert("foundationTranscripts", {
+        tenantId,
+        eventId: "event1",
+        text: tenantId === owner ? "my interview" : "foreign interview",
+        speaker: "user",
+        expiresAt: Date.now() + 1000,
+      });
+      await ctx.db.insert("foundationRevisions", {
+        profile: emptyFoundationProfile(),
+        slots: {},
+        answers: [],
+        docIds: [],
+        tenantId,
+        revision: 1,
+        documents: [
+          {
+            section: "operations",
+            title: "Operating model",
+            text: tenantId === owner ? "my operations" : "foreign operations",
+            kind: "business_foundation_operations",
+          },
+        ],
+        createdAt: Date.now(),
+      });
+    }
+    return { owner, other };
+  });
+  const exported = await downloadExport(t, owner);
+  expect(exported.tables.foundationTranscripts).toHaveLength(1);
+  expect(exported.tables.foundationRevisions).toHaveLength(1);
+  expect(JSON.stringify(exported.tables.foundationTranscripts)).toContain("my interview");
+  expect(JSON.stringify(exported.tables.foundationRevisions)).toContain("my operations");
+  expect(JSON.stringify(exported.tables)).not.toContain(String(other));
 });

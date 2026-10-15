@@ -1,5 +1,10 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-10-15 — existing tenant/owner boundary tests and account export/deletion tests were rerun. Password verification/reset now has real framework lifecycle tests (mocked sender); verification and recovery do not grant owner or change tenant identity.
+
+**Erasure/JWT boundary (2026-10-15):** deletion establishes a durable opaque identity fence after provider disconnect attempts and before component/table removal. Public tenant/owner calls refuse deleting/deleted identities; the erasure entrypoint alone permits retry while deleting. Shared internal mutation builders guard tenant-owned inserts, patches and replacements in the same transaction as the lifecycle read; deletes and immutable audit/global records remain available. Tenant-bound actions route component writes through a transactional gateway, preventing already-running Agent/RAG work from committing after the fence. Password reset retains a one-hour-plus-skew session-validation marker after the installed provider invalidates old sessions: old JWT identities fail immediately and the new session works. No fixture/environment bypass exists. Erasure fences persist as opaque IDs to block arbitrarily delayed workers; reset markers use bounded expiry cleanup. Storage writes check before/after storing with compensating deletion on a raced fence; preissued unattached upload blobs remain subject to the existing 24-hour orphan-retention policy. Already-dispatched provider side effects cannot be recalled. Local tests cover all public wrappers, internal insert/patch/replace, real Agent component writes, reset-session rotation, retry, unaffected identities and bounded cleanup.
+
+
 > Last verified: 2026-09-10 — `isolation.test.ts` now discovers `ownerAction` exports alongside
 > owner queries/mutations and invokes the action lane with a real typed Vault-id fixture.
 > The Data operator preview is covered by the derived non-owner rejection test; its own tests
@@ -692,3 +697,11 @@ tenant scope as *offline-proven*, not *observed*.
 - **The `users` mirror in `schema.ts` is a hand-copy** of the pinned package's table. `ponytail:`
   the ceiling is that Convex has no table-extend API; the upgrade path is a package-provided
   extend helper if one ever ships. Guarded only by the version pin and this playbook.
+
+
+**Upload ownership (2026-10-15):** authenticated upload issuance now returns a one-use, 15-minute tenant-bound HTTP ticket URL with the same string contract. The HTTP handler accepts only SITE_URL origin, streams raw bytes through a capped 200MiB counter to a server-only storage upload URL, and binds the returned id itself. Client-supplied storage ids cannot mint receipts. Vault originals/PCM sidecars, request attachments and intake reads require a matching receipt. Failed completion after erasure deletes its own newly stored blob. Expired tickets and unattached completed uploads (24 hours) are purged in bounded hourly pages; attached receipts are exported/deleted with the tenant. Existing attached files remain readable; unbound historical raw storage ids cannot be newly attached and must be uploaded again. Offline HTTP tests cover provenance, replay, origin/size refusal, cross-tenant ownership and erasure races. Hosted maximum-size streaming remains a deployment acceptance check.
+
+Last verified: 2026-10-15 — Owner email ambiguity checks inspect at most2 rows; owner listing inspects101 and reports truncation after100. Operations partial-sample copy prevents bounded samples being represented as complete totals.
+
+
+Voice erasure retains provider call handles until an acknowledged hangup. Each bounded voice deletion page is preceded by a provider termination attempt; unresolved calls refuse the page and remain available for an explicit deletion retry. The lifecycle guard permits only hangup receipt fields and destructive clearing of transient voice events/commands during deletion; it never permits new transcript/business content. Reset-invalidated sessions remain refused even on the erasure retry exception. Provider side effects already dispatched before the fence cannot be recalled.

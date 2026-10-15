@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
 import { PACK_EVENT_PAGE_MAX } from "./workflowPackEventLog";
@@ -16,6 +16,10 @@ const OTHER = "user_b";
 // (the handler's Date.now() default is exercised only when sinceMs is omitted).
 const NOW = 1_800_000_000_000;
 const SINCE = NOW - 7 * 24 * 60 * 60 * 1000;
+beforeEach(() => {
+  vi.spyOn(Date, "now").mockReturnValue(NOW);
+});
+afterEach(() => vi.restoreAllMocks());
 
 type T = ReturnType<typeof convexTest>;
 
@@ -225,7 +229,7 @@ describe("opsSignals.evalSignals (EVAL-02 read side)", () => {
       .query(api.opsSignals.evalSignals, { sinceMs: SINCE });
 
     for (const [key, value] of Object.entries(s)) {
-      if (typeof value === "number") continue;
+      if (typeof value === "number" || (key === "complete" && typeof value === "boolean")) continue;
       // The only non-number values allowed are flat records of numbers.
       expect(typeof value, `field ${key} must be a number or a record of numbers`).toBe("object");
       for (const [innerKey, inner] of Object.entries(value as Record<string, unknown>)) {
@@ -622,4 +626,27 @@ describe("opsSignals.revenueSignals (Phase 28 bounded projection)", () => {
     };
     visit(report);
   });
+});
+
+test("eval signal sources are bounded and disclose incomplete totals", async () => {
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 1002; i++)
+      await ctx.db.insert("audit", {
+        tenantId: TENANT,
+        correlationId: String(i),
+        eventType: "llm.fallback",
+        actor: "system",
+        payload: {},
+        ts: NOW - i,
+      });
+  });
+  const result = await t
+    .withIdentity({ subject: TENANT })
+    .query(api.opsSignals.evalSignals, { sinceMs: SINCE });
+  expect(result.complete).toBe(false);
+  expect(result.fallbackCount).toBe(1000);
+  await expect(
+    t.withIdentity({ subject: TENANT }).query(api.opsSignals.evalSignals, { sinceMs: NOW + 1 }),
+  ).rejects.toThrow("INVALID_SIGNAL_WINDOW");
 });

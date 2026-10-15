@@ -1,28 +1,21 @@
 "use node";
 
-// Lane 4 (Phase 3.8, EXTR-I) — vault video/audio transcription rail. The Pattern-1 spine:
-// preCall gate → markExtracting → load bytes (ctx.storage.get, NEVER via args — node-action
-// args cap at 5 MiB, vault files go to 8 MiB) → SMOKE::transcribe:: sniff →
-// TRANSCRIBABLE_CONTAINER_MIME check (unsupported container → markFailed, the HONEST failure:
-// a .mov gets a visible reason, never an eternal pending row) → experimental_transcribe
-// (the intake.ts transcribeAudio shape, COPIED — "use node" modules never import each other,
-// §96 circular-inference rule) → scanText fail-closed gate → counts-only audit (§4) →
-// ingestExtractedText seam. Every governed stop is a RETURN, never a throw.
-//
-// No skill row: transcription takes no prompt (§5 does not apply). Zero new deps.
+// Transcription: governed gate → tenant-owned normalized audio → byte-derived duration
+// → paid admission → provider → privacy scan → counts-only audit → ingestion.
+// Keep the original file for download; never trust a compressed container's duration header.
+// No prompt or new skill is required for transcription.
 import { OR_TRANSCRIPTION_MODEL, priceTranscription } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import { TRANSCRIBABLE_CONTAINER_MIME, VAULT_EXTRACT_CHAR_CAP } from "@pikar/vault";
+import { inspectPcmWav } from "@pikar/voice/pcm";
 import { experimental_transcribe as transcribe } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction } from "./_generated/server";
 import { fixtureSeamFor, transcriptionModel, transcriptionUsage } from "./lib/models";
+import { internalAction } from "./lib/tenantLifecycle";
 
-// Per-call wall-clock ceiling. NOT intake.ts's 45s (that's tuned for seconds-long mic clips):
-// a vault video runs up to 25 MB ≈ many minutes of audio, and the call = upload + transcription —
-// a 20 MB mp4 was observed aborting at 45s. 8 min sits under Convex's 10-min node-action limit
-// with headroom for the rest of the spine (bytes load, seam mutations, embed scheduling).
+// Eight minutes leaves room below the Node action limit for storage and ingestion.
+// This request timeout is independent of the ten-minute input-audio ceiling.
 const CALL_TIMEOUT_MS = 480_000;
 
 // ── SMOKE:: offline seam (same sentinel family as intake.ts) ─────────────────────────────
@@ -39,10 +32,9 @@ function decodeUtf8(bytes: Uint8Array): string {
 
 /**
  * Transcribe a vault video/audio upload and feed the transcript through the ingest seam.
- * The endpoint accepts mp4/webm/mpeg containers directly (audio track demuxed server-side);
- * the vault's video cap (VAULT_VIDEO_CAP_BYTES = 25 MB) is enforced at upload and sits at/under
- * the API's 25 MB limit, so every video that can enter the vault fits the API — the failure paths
- * are an unsupported container or the governed gate.
+ * Browser uploads retain the original and supply a canonical mono 16 kHz PCM WAV sidecar.
+ * Validate its bytes and derive duration before reserving spend. Legacy canonical WAVs work
+ * directly; other legacy media need re-upload with normalized audio. Maximum duration: 10 minutes.
  */
 export const transcribeDoc = internalAction({
   args: {
@@ -59,7 +51,6 @@ export const transcribeDoc = internalAction({
     // A doc-scoped constant would collapse them onto the first attempt's `actual` row and leave
     // the ledger BELOW the limiter, the unrecoverable direction. One transcription call per
     // execution, so the nonce alone separates attempt N from attempt N+1.
-    const runId = crypto.randomUUID();
     const fail = (reason: string): Promise<null> =>
       ctx.runMutation(internal.vault.markFailed, { vaultDocId, reason }).then(() => null);
 
@@ -86,51 +77,60 @@ export const transcribeDoc = internalAction({
 
       // 3. Metadata + bytes (bytes via storage, never args).
       const doc = await ctx.runQuery(internal.vault.getDocForExtraction, { vaultDocId, tenantId });
-      const blob = doc.storageId ? await ctx.storage.get(doc.storageId) : null;
+      const audioStorageId = doc.transcriptionStorageId ?? doc.storageId;
+      const blob = audioStorageId ? await ctx.storage.get(audioStorageId) : null;
       if (!blob) return fail("missing_bytes");
       const bytes = new Uint8Array(await blob.arrayBuffer());
 
       // 4. SMOKE sniff FIRST (offline/dev spine — no API call, no spend), then
-      // 5. the mime-only container check: unsupported → honest failure, no byte work, no spend.
+      // 5. Legacy container compatibility, then canonical PCM verification before spend.
       const sniffed = decodeUtf8(bytes);
       let rawText: string;
       let durationSeconds = 0;
       if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX) && fixtureSeamFor(tenantId)) {
         rawText = sniffed.slice(SMOKE_TRANSCRIBE_PREFIX.length);
-      } else if (!TRANSCRIBABLE_CONTAINER_MIME.has(doc.mimeType)) {
+      } else if (!doc.transcriptionStorageId && !TRANSCRIBABLE_CONTAINER_MIME.has(doc.mimeType)) {
         return fail("unsupported_video_container");
       } else {
-        // 6. The transcription call + duration-priced spend.
-        // Model: whisper-1, NOT gpt-4o-transcribe. gpt-4o-transcribe rejects video-container mp4
-        // ("This model does not support the format you provided") — it wants audio-only input;
-        // whisper-1 demuxes the audio track from mp4/webm/mpeg video. Both bill at 0.006/min
-        // (TRANSCRIPTION_PRICING), so the cost model is unchanged.
-        // ponytail: no duration cap — 25 MB of compressed video bounds duration in practice
-        // (~a few min typical); audio-extract/chunk is the upgrade path if a >25 MB video (or a
-        // duration limit) ever needs to be supported.
-        // 33.2-05: through OpenRouter (lib/models.ts). The provider's own bill first — on the
-        // routed id the SDK reports no duration, and pricing `?? 0` would record $0 spend.
+        // Byte-derived PCM duration is trusted; compressed container metadata is not.
+        let pcm: ReturnType<typeof inspectPcmWav>;
+        try {
+          pcm = inspectPcmWav(bytes);
+        } catch {
+          return fail("normalized_audio_required");
+        }
+        const model = transcriptionModel(OR_TRANSCRIPTION_MODEL);
+        const ceiling = priceTranscription(pcm.seconds);
+        if (!ceiling.ok) return fail("transcription_price_unavailable");
+        const reservationId = await ctx.runMutation(internal.guardrails.reservePaidCall, {
+          tenantId,
+          callId: crypto.randomUUID(),
+          model: OR_TRANSCRIPTION_MODEL,
+          ceilingCents: Math.max(1, Math.ceil(ceiling.value * 100)),
+          rail: spendRail,
+        });
         const result = await transcribe({
-          model: transcriptionModel(OR_TRANSCRIPTION_MODEL),
+          model,
+          maxRetries: 0,
           audio: bytes,
           abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         });
         const usage = transcriptionUsage(result);
-        durationSeconds = result.durationInSeconds ?? usage.seconds ?? 0;
+        durationSeconds = pcm.seconds;
+        const seconds = result.durationInSeconds ?? usage.seconds ?? pcm.seconds;
         const priced =
-          usage.costUsd === undefined
-            ? priceTranscription(durationSeconds)
-            : { ok: true as const, value: usage.costUsd };
-        if (priced.ok) {
-          await ctx.runMutation(internal.guardrails.recordSpend, {
-            tenantId,
-            costUsd: priced.value,
-            rail: spendRail,
-            correlationId: `vault:transcribe:${vaultDocId}:${runId}`,
-            model: OR_TRANSCRIPTION_MODEL,
-            kind: "vault.transcribe", // code-owned token, refs only (§4)
-          });
-        }
+          usage.costUsd === undefined && seconds !== undefined
+            ? priceTranscription(seconds)
+            : undefined;
+        const costUsd = usage.costUsd ?? (priced?.ok ? priced.value : undefined);
+        if (costUsd === undefined || !Number.isFinite(costUsd) || costUsd < 0)
+          throw new Error("PAID_TRANSCRIPTION_COST_UNKNOWN");
+        const settled = await ctx.runMutation(internal.guardrails.settlePaidCall, {
+          tenantId,
+          reservationId,
+          costUsd,
+        });
+        if (settled.breached) throw new Error("PAID_TRANSCRIPTION_EXCEEDED_ALLOWANCE");
         rawText = result.text;
       }
 

@@ -25,9 +25,10 @@ import {
 } from "@pikar/billing/signature";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation, type MutationCtx } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { recordBillingMovement } from "./billingLedger";
 import { hmacHex } from "./gmailAuth";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 /** A fact is an id or it is absent. `v.null()` rather than `v.optional` so the shape is total —
  *  an omitted key and a null one would otherwise be two ways to say the same thing. */

@@ -19,7 +19,7 @@ import { buildBriefingView } from "@pikar/core/briefing";
 // The voice-doc framework literal, imported rather than re-typed: schema.ts, voiceDoc.ts and this
 // card must agree, and one shared constant is the only way a rename cannot silently desync them.
 import { DOC_REVIEW_FRAMEWORK } from "@pikar/voice";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useState } from "react";
@@ -28,6 +28,7 @@ import { MarkdownDocument } from "../MarkdownDocument";
 // PDFs, images and video, the extraction/failure states and the entity chips. A second document
 // viewer would be a second thing to keep in step with `previewState`.
 import { PreviewModal } from "../vault/PreviewModal";
+import { DeliveryReview } from "./DeliveryReview";
 import { MediaCanvas, ProposalFailureCanvas } from "./MediaCanvas";
 import { RevenuePackPanel } from "./RevenuePackPanel";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
@@ -367,6 +368,7 @@ export const PLAN_REFUSALS: Record<string, PlanNote> = {
     text: "This email is ready, but Gmail is not connected. Connect it to send this approved message.",
     link: { href: "/connect-gmail", label: "Connect Gmail" },
   },
+  too_many_recipients: { text: "Split this email into plans of at most 100 recipients." },
   no_postal_address: {
     text: "Add your postal address before sending — the law requires it in every email's footer.",
     // href and label travel TOGETHER (Task 8 review). They used to be an optional `href` beside a
@@ -1453,11 +1455,15 @@ function FeedbackControl({ requestId }: { requestId: RequestId }) {
 function ReportCard({ planId }: { planId: PlanId }) {
   // LIVE projection (plans.reportForPlan): one row per recipient, filling as the fan-out
   // patches requests.status and the gmail.sent audit lands the messageId. Reactive — no polling.
-  const rows = useQuery(api.plans.reportForPlan, { planId });
+  const {
+    results: rows,
+    status,
+    loadMore,
+  } = usePaginatedQuery(api.plans.reportPage, { planId }, { initialNumItems: 25 });
   return (
     <div style={box}>
       <div style={label}>REPORT</div>
-      {rows === undefined ? (
+      {status === "LoadingFirstPage" ? (
         <p style={{ ...dim, marginTop: "0.5rem" }}>Loading…</p>
       ) : rows.length === 0 ? (
         <p style={{ ...dim, marginTop: "0.5rem" }}>No recipients yet.</p>
@@ -1476,7 +1482,11 @@ function ReportCard({ planId }: { planId: PlanId }) {
               key={r.correlationId}
               style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}
             >
-              <span style={badge(r.status)}>{deliveryStatusLabel(r.status)}</span>
+              <span style={badge(r.status)}>
+                {r.deliveryAttempt?.state === "unknown" && !r.deliveryAttempt.reviewedOutcome
+                  ? "Delivery outcome unknown"
+                  : deliveryStatusLabel(r.status)}
+              </span>
               <span style={{ fontWeight: 600 }}>{r.recipient}</span>
               {r.messageId && <span style={dim}>msg {r.messageId}</span>}
               {/* Delivered-with-attachment: re-download the EXACT sent bytes (immutable per storage
@@ -1502,6 +1512,7 @@ function ReportCard({ planId }: { planId: PlanId }) {
                   CLAUDE.md §4). ponytail: a dedicated per-correlation audit-trail view is a later
                   slice — surfacing the id (selectable) is the honest link target for now. */}
               <code style={{ ...dim, marginLeft: "auto" }}>audit: {r.correlationId}</code>
+              <DeliveryReview row={r} />
               {/* IMPR-01: feedback lives on the DELIVERED response — only a sent row is a real
                   outcome to rate (and only a sent row has an attributable skillVersion to score). */}
               {r.status === "sent" && <FeedbackControl requestId={r.requestId} />}
@@ -1509,6 +1520,12 @@ function ReportCard({ planId }: { planId: PlanId }) {
           ))}
         </ul>
       )}
+      {status === "CanLoadMore" && (
+        <button type="button" onClick={() => loadMore(25)}>
+          Load more recipients
+        </button>
+      )}
+      {status === "LoadingMore" && <p role="status">Loading more recipients…</p>}
     </div>
   );
 }

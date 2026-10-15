@@ -1,21 +1,25 @@
 import Google from "@auth/core/providers/google";
 import MicrosoftEntraID from "@auth/core/providers/microsoft-entra-id";
+import {
+  ConvexCredentials,
+  type ConvexCredentialsUserConfig,
+} from "@convex-dev/auth/providers/ConvexCredentials";
 import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
+import { AUTH_JWT_DURATION_MS } from "@pikar/core/authLifetime";
+import { internal } from "./_generated/api";
 import { admitIdentity } from "./invites";
+import {
+  authEmailProvider,
+  requireAuthEmailConfiguration,
+  reserveAuthEmail,
+} from "./lib/authEmail";
 
-// Email + password is a real sign-in method (alongside Google and Microsoft). The `profile`
-// mapping captures the sign-up Full Name onto the users row; password rules enforce a minimum
-// length. Email verification + password reset are the security fast-follow — they use
-// this provider's `verify`/`reset` options and need a transactional email sender.
-// ponytail: length-only password rule for the closed beta; strength/breach checks +
-// verify/reset land with the email sender.
-// EXPORTED, like `google` and `microsoft` below, for ONE reason: `invites.test.ts` drives
-// `admitIdentity` with synthetic `provider` objects, and a hand-written `{id, type}` in a test
-// proves nothing about the provider the runtime actually hands the callback. The test
-// materializes THESE values through the auth package's own `providerDefaults` merge. Convex
-// ignores non-function module exports (the `guardrails.ts` precedent).
-export const password = Password({
+// Verification is always required: missing sender configuration fails closed. Existing
+// password accounts verify on their next sign-in; OAuth admission is unchanged.
+const passwordBase = Password({
+  verify: authEmailProvider("verify"),
+  reset: authEmailProvider("reset"),
   profile(params) {
     const p: { email: string; name?: string; inviteCode?: string } = {
       email: params.email as string,
@@ -30,7 +34,39 @@ export const password = Password({
     return p;
   },
   validatePasswordRequirements: (pw) => {
-    if (pw.length < 8) throw new Error("Password must be at least 8 characters.");
+    if (typeof pw !== "string" || pw.length < 8)
+      throw new Error("Password must be at least 8 characters.");
+  },
+});
+
+// The pinned provider stores its implementation in options (Auth.js providerDefaults
+// materializes it). Preserve token replay/expiry checks and reset session invalidation,
+// while hiding account-existence errors at the public boundary.
+const passwordOptions = (passwordBase as unknown as { options: ConvexCredentialsUserConfig })
+  .options;
+export const password = ConvexCredentials({
+  ...passwordOptions,
+  async authorize(params, ctx) {
+    const resetRequest = params.flow === "reset";
+    try {
+      requireAuthEmailConfiguration();
+      if (resetRequest) {
+        if (typeof params.email !== "string" || params.email.length > 320) return null;
+        await reserveAuthEmail(ctx, params.email);
+      }
+      const result = await passwordOptions.authorize(params, ctx);
+      if (params.flow === "reset-verification" && result) {
+        await ctx.runMutation(internal.authRevocations.requireLiveSessions, {
+          userId: result.userId,
+        });
+      }
+      return result;
+    } catch {
+      // Same result for missing account, throttling, provider outage, and successful
+      // request. Never expose the installed provider's InvalidAccountId error.
+      if (resetRequest) return null;
+      throw new Error("AUTHENTICATION_FAILED");
+    }
   },
 });
 
@@ -101,6 +137,7 @@ export const microsoft = MicrosoftEntraID({
 // stays on the raw-builder allowlist (CLAUDE.md §2) — convexAuth wires the generated fns itself.
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [google, microsoft, password],
+  jwt: { durationMs: AUTH_JWT_DURATION_MS },
   callbacks: {
     /**
      * BETA-01 — THE admission boundary. Runs inside the single `auth:store` mutation, before

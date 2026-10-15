@@ -2,7 +2,7 @@
 // watchdog is a durable scheduler.runAt timer, so the tests arm it, advance/inspect the scheduled
 // system rows, and assert the clean/abnormal CAS transitions. `fetch` is stubbed (hangupCall). The
 // brief → vault ingest is driven by the draftVoiceBrief SMOKE sentinel (offline, no model/network).
-import { CAP_MS } from "@pikar/voice";
+import { CAP_MS, DEFAULT_REALTIME_MODEL } from "@pikar/voice";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 // Register the components the voice spine touches offline (vaultTranscribe.test.ts set): rateLimiter
@@ -18,6 +18,19 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
+const seedReservation = (t: ReturnType<typeof convexTest>, tenantId: string) =>
+  t.run((ctx) =>
+    ctx.db.insert("spendEvents", {
+      tenantId,
+      rail: "reasoning",
+      phase: "reserved",
+      amountCents: 100,
+      correlationId: crypto.randomUUID(),
+      model: DEFAULT_REALTIME_MODEL,
+      kind: "paid_call",
+      createdAt: Date.now(),
+    }),
+  );
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const rateLimiterModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
@@ -34,6 +47,33 @@ const workpoolModules = import.meta.glob(
 
 const TENANT = "tenant_voice_session";
 const FAKE_KEY = "sk-voice-test-key";
+
+test("voice admission rejects missing, foreign, expired and reused reservations", async () => {
+  vi.useFakeTimers();
+  try {
+    const t = setup();
+    const a = asTenant(t);
+    await expect(a.mutation(internal.voice.startSession, { callId: "missing" })).rejects.toThrow(
+      "reservation required",
+    );
+    const foreign = await seedReservation(t, "other");
+    await expect(
+      a.mutation(internal.voice.startSession, { callId: "foreign", reservationId: foreign }),
+    ).rejects.toThrow("invalid reservation");
+    const expired = await seedReservation(t, TENANT);
+    await t.run((ctx) => ctx.db.patch(expired, { createdAt: Date.now() - 120001 }));
+    await expect(
+      a.mutation(internal.voice.startSession, { callId: "expired", reservationId: expired }),
+    ).rejects.toThrow("invalid reservation");
+    const reservationId = await seedReservation(t, TENANT);
+    await a.mutation(internal.voice.startSession, { callId: "accepted", reservationId });
+    await expect(
+      a.mutation(internal.voice.startSession, { callId: "duplicate", reservationId }),
+    ).rejects.toThrow("already used");
+  } finally {
+    vi.useRealTimers();
+  }
+});
 
 function setup(): ReturnType<typeof convexTest> {
   const t = convexTest(schema, modules);
@@ -83,7 +123,8 @@ test("startSession persists the callId, marks active, and arms ONE watchdog at s
   try {
     const t = setup();
     const t0 = Date.now();
-    const { sessionId } = await asTenant(t).mutation(api.voice.startSession, {
+    const { sessionId } = await asTenant(t).mutation(internal.voice.startSession, {
+      reservationId: await seedReservation(t, TENANT),
       callId: "call_abc",
     });
 
@@ -116,8 +157,14 @@ test("parallel guard: a second startSession force-ends the prior active session,
     const t = setup();
     const asT = asTenant(t);
 
-    const { sessionId: first } = await asT.mutation(api.voice.startSession, { callId: "call_1" });
-    const { sessionId: second } = await asT.mutation(api.voice.startSession, { callId: "call_2" });
+    const { sessionId: first } = await asT.mutation(internal.voice.startSession, {
+      reservationId: await seedReservation(t, TENANT),
+      callId: "call_1",
+    });
+    const { sessionId: second } = await asT.mutation(internal.voice.startSession, {
+      reservationId: await seedReservation(t, TENANT),
+      callId: "call_2",
+    });
 
     // The new session is immediately active; the guard scheduled the prior's force-end (runAfter 0).
     expect((await get(t, second))?.status).toBe("active");
@@ -138,7 +185,10 @@ test("endSessionClean cancels the watchdog under a CAS and writes a refs-only se
   try {
     const t = setup();
     const asT = asTenant(t);
-    const { sessionId } = await asT.mutation(api.voice.startSession, { callId: "call_x" });
+    const { sessionId } = await asT.mutation(internal.voice.startSession, {
+      reservationId: await seedReservation(t, TENANT),
+      callId: "call_x",
+    });
 
     // The watchdog is pending before the clean end.
     let pending = (await listScheduled(t)).filter((s) => s.state.kind === "pending");
@@ -170,7 +220,10 @@ test("a clean end that races the watchdog fire is a CAS no-op (never a double-ca
   try {
     const t = setup();
     const asT = asTenant(t);
-    const { sessionId } = await asT.mutation(api.voice.startSession, { callId: "call_y" });
+    const { sessionId } = await asT.mutation(internal.voice.startSession, {
+      reservationId: await seedReservation(t, TENANT),
+      callId: "call_y",
+    });
 
     // Simulate the watchdog having already fired: the row is terminal, its scheduled id spent.
     await t.run((ctx) => ctx.db.patch(sessionId, { status: "ended_abnormal" }));
@@ -227,7 +280,7 @@ test("forceEndSession hangs up the stored callId, marks ended_abnormal, and auto
   expect(doc?.status).toBe("processing"); // ingest workflow armed
 });
 
-test("forceEndSession is a CAS no-op on an already-ended session (no double hangup)", async () => {
+test("ended UI status still terminates provider until a trusted receipt exists", async () => {
   let fetched = false;
   vi.stubGlobal("fetch", () => {
     fetched = true;
@@ -239,8 +292,25 @@ test("forceEndSession is a CAS no-op on an already-ended session (no double hang
 
   const res = await t.action(internal.voice.forceEndSession, { sessionId });
   expect(res).toEqual({ noop: true });
-  expect(fetched).toBe(false); // never re-hangs up an ended session
+  expect(fetched).toBe(true);
+  expect((await get(t, sessionId))?.hangupConfirmedAt).toBeDefined();
+  fetched = false;
+  await t.action(internal.voice.forceEndSession, { sessionId });
+  expect(fetched).toBe(false); // provider receipt, rather than UI status, suppresses replay
   expect((await get(t, sessionId))?.status).toBe("ended_clean"); // unchanged
+});
+
+test("provider hangup failure leaves a durable retry and never claims termination", async () => {
+  vi.stubGlobal("fetch", () => Promise.reject(new Error("lost acknowledgement")));
+  const t = setup();
+  const sessionId = await seedActive(t);
+  await t.action(internal.voice.terminateProvider, { sessionId });
+  const s = await get(t, sessionId);
+  expect(s?.hangupConfirmedAt).toBeUndefined();
+  expect(s?.hangupUnresolved).toBe(true);
+  expect(s?.hangupAttempts).toBe(1);
+  const scheduled = await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+  expect(scheduled.some((job) => job.name.endsWith("voice:terminateProvider"))).toBe(true);
 });
 
 test("storeBrief drafts via the SMOKE transcript and ingests a kind:brief vault doc (PII/content kept)", async () => {
@@ -315,7 +385,8 @@ test("startSession persists a READY, tenant-owned docRef and audits it as a ref 
   const t = setup();
   const docRef = await seedDoc(t);
 
-  const { sessionId } = await asTenant(t).mutation(api.voice.startSession, {
+  const { sessionId } = await asTenant(t).mutation(internal.voice.startSession, {
+    reservationId: await seedReservation(t, TENANT),
     callId: "call_doc",
     docRef,
   });
@@ -338,13 +409,21 @@ test("startSession REFUSES a non-ready document and leaves no active session beh
   for (const status of ["processing", "extracting", "pending_extraction", "failed"] as const) {
     const docRef = await seedDoc(t, { status });
     await expect(
-      asT.mutation(api.voice.startSession, { callId: "call_x", docRef }),
+      asT.mutation(internal.voice.startSession, {
+        reservationId: await seedReservation(t, TENANT),
+        callId: "call_x",
+        docRef,
+      }),
     ).rejects.toThrow(/voicedoc: document not ready/);
   }
   // A ready doc with no extracted text is equally undiscussable.
   const empty = await seedDoc(t, { text: "   " });
   await expect(
-    asT.mutation(api.voice.startSession, { callId: "call_x", docRef: empty }),
+    asT.mutation(internal.voice.startSession, {
+      reservationId: await seedReservation(t, TENANT),
+      callId: "call_x",
+      docRef: empty,
+    }),
   ).rejects.toThrow(/voicedoc: document not ready/);
 
   // No row was left `active` holding a watchdog, and nothing was scheduled.
@@ -357,14 +436,19 @@ test("startSession REFUSES another tenant's document (fail-closed, no cross-tena
   const foreign = await seedDoc(t, { tenantId: "tenant_other" });
 
   await expect(
-    asTenant(t).mutation(api.voice.startSession, { callId: "call_x", docRef: foreign }),
+    asTenant(t).mutation(internal.voice.startSession, {
+      reservationId: await seedReservation(t, TENANT),
+      callId: "call_x",
+      docRef: foreign,
+    }),
   ).rejects.toThrow(/voicedoc: document not found/);
   expect(await t.query(internal.voice.getActiveSession, { tenantId: TENANT })).toBeNull();
 });
 
 test("startSession with NO docRef is byte-equivalent to the Phase-6 path (docRef stays absent)", async () => {
   const t = setup();
-  const { sessionId } = await asTenant(t).mutation(api.voice.startSession, {
+  const { sessionId } = await asTenant(t).mutation(internal.voice.startSession, {
+    reservationId: await seedReservation(t, TENANT),
     callId: "call_plain",
   });
 

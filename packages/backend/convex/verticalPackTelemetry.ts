@@ -2,8 +2,9 @@
 import { VERTICAL_IDS, verticalSkillName } from "@pikar/core/verticalPacks";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation, type QueryCtx } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 const EVENTS = [
   "recommendation_shown",

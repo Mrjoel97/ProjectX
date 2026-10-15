@@ -26,9 +26,9 @@ export default function Terms() {
       {HAS_PLACEHOLDERS && (
         <p className="notice">
           <strong>Draft — not yet in force.</strong> This document has not been reviewed by a
-          qualified lawyer, and the contracting legal entity has not been formed. An agreement
-          naming an entity that does not exist binds no one. Bracketed placeholders below must be
-          resolved before publication. The production build is blocked until they are.
+          qualified lawyer. The registered address and other bracketed legal details below remain
+          unconfirmed. Publication under the existing review deferral does not complete legal
+          review.
         </p>
       )}
 

@@ -27,9 +27,9 @@ import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
-import { internalAction } from "./_generated/server";
 import { tenantAction } from "./lib/functions";
 import { fixtureSeamFor } from "./lib/models";
+import { internalAction } from "./lib/tenantLifecycle";
 import { rag, ragForEvaluation } from "./vaultRag";
 
 const SMOKE_PREFIX = "SMOKE::";
@@ -86,7 +86,7 @@ async function runVaultGround(
   } else {
     const activeRag = evalBudgetId
       ? ragForEvaluation({ ctx, tenantId, budgetId: evalBudgetId })
-      : rag;
+      : ragForEvaluation({ ctx, tenantId });
     const { results, entries } = await activeRag.search(ctx, {
       namespace: tenantId, // per-user scope (VALT-03)
       query,
@@ -103,9 +103,15 @@ async function runVaultGround(
     }
     hits = [];
     seedDocIds = [];
+    const currentEntries = new Set(
+      await ctx.runQuery(internal.vault.currentGroundingDocs, {
+        tenantId,
+        candidates: [...docByEntry].map(([entryId, docId]) => ({ docId, entryId })),
+      }),
+    );
     for (const r of results) {
       const docId = docByEntry.get(r.entryId);
-      if (!docId) continue;
+      if (!docId || !currentEntries.has(r.entryId)) continue;
       hits.push({ docId, score: r.score });
       if (!seedDocIds.includes(docId)) seedDocIds.push(docId);
       // Keep the matched passage(s). Several results can share one doc — concatenate in score
@@ -137,6 +143,14 @@ async function runVaultGround(
   // decision says "excluded from retrieval", which this satisfies literally. Closing the metadata
   // half means deferring `upsertGraph` to folder completion, which breaks the per-document ingest
   // workflow; that is the upgrade path, not a bug fix.
+  const currentSeeds = new Set(
+    await ctx.runQuery(internal.vault.currentGroundingDocs, {
+      tenantId,
+      candidates: seedDocIds.map((docId) => ({ docId })),
+    }),
+  );
+  hits = hits.filter((hit) => currentSeeds.has(hit.docId as Id<"vaultDocuments">));
+  seedDocIds = seedDocIds.filter((id) => currentSeeds.has(id));
   const sealedSeeds = new Set(
     await ctx.runQuery(internal.vaultFolders.sealedDocIds, { tenantId, docIds: seedDocIds }),
   );
@@ -163,12 +177,22 @@ async function runVaultGround(
     }),
   );
 
+  const currentNeighbors = new Set(
+    await ctx.runQuery(internal.vault.currentGroundingDocs, {
+      tenantId,
+      candidates: neighborDocIds.map((docId) => ({ docId: docId as Id<"vaultDocuments"> })),
+    }),
+  );
   // Merge vector seeds with graph neighbors → one deduped, ranked context block (@pikar/vault).
   return {
     ...fuse(
       hits,
       seedDocIds,
-      neighborDocIds.filter((id) => !sealedNeighbors.has(id as Id<"vaultDocuments">)),
+      neighborDocIds.filter(
+        (id) =>
+          currentNeighbors.has(id as Id<"vaultDocuments">) &&
+          !sealedNeighbors.has(id as Id<"vaultDocuments">),
+      ),
     ),
     matchedByDoc,
   };

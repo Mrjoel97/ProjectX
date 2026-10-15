@@ -855,6 +855,9 @@ describe("spendForPeriod: the D5(a) aggregate, and the three things that would m
     const t = harness();
     const res = await spend(t);
     expect(res).toEqual({
+      continueCursor: expect.any(String),
+      isDone: true,
+      estUsd: 0,
       estCents: 0,
       actualCents: 0,
       rowCount: 0,

@@ -21,8 +21,9 @@ import {
 } from "@pikar/revenue";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { recordRevenueEvent } from "./revenueTelemetry";
 
 // ── Argument validators, spelled once ─────────────────────────────────────────────────────

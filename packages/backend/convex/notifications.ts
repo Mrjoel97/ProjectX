@@ -6,19 +6,46 @@
 // fail-closed to in-app and loop-guarded — see notifyExternal.ts.
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
+
+export const NOTIFICATION_WINDOW_SIZE = 100;
 
 /** The calling tenant's notifications, unread-first then newest-first. */
 export const list = tenantQuery({
   args: {},
   handler: async (ctx) => {
+    // Compatibility reader: bounded groups. UI uses unreadWindow for explicit truncation.
+    const groups = await Promise.all(
+      [false, true].map((read) =>
+        ctx.db
+          .query("notifications")
+          .withIndex("by_tenant_read_createdAt", (q) =>
+            q.eq("tenantId", ctx.tenantId).eq("read", read),
+          )
+          .order("desc")
+          .take(NOTIFICATION_WINDOW_SIZE),
+      ),
+    );
+    return groups.flat();
+  },
+});
+
+/** Dismissing a visible row reactively reveals the next older unread row. */
+export const unreadWindow = tenantQuery({
+  args: {},
+  handler: async (ctx) => {
     const rows = await ctx.db
       .query("notifications")
-      .withIndex("by_tenant_read", (q) => q.eq("tenantId", ctx.tenantId))
-      .collect();
-    // unread (read=false=0) first; newest within each group.
-    return rows.sort((a, b) => Number(a.read) - Number(b.read) || b.createdAt - a.createdAt);
+      .withIndex("by_tenant_read_createdAt", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("read", false),
+      )
+      .order("desc")
+      .take(NOTIFICATION_WINDOW_SIZE + 1);
+    return {
+      items: rows.slice(0, NOTIFICATION_WINDOW_SIZE),
+      truncated: rows.length > NOTIFICATION_WINDOW_SIZE,
+    };
   },
 });
 
@@ -60,5 +87,29 @@ export const notify = internalMutation({
     });
     // Best-effort external channel — never blocks/rolls back the in-app row above.
     await ctx.scheduler.runAfter(0, internal.notifyExternal.dispatch, { tenantId, kind });
+  },
+});
+
+/** OAuth consent retires only warnings that existed at that consent,100 per transaction. */
+export const retireReconnectWarnings = internalMutation({
+  args: {
+    tenantId: v.string(),
+    kind: v.union(v.literal("gmail_reconnect"), v.literal("microsoft_calendar_reconnect")),
+    before: v.number(),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    const rows = await ctx.db
+      .query("notifications")
+      .withIndex("by_tenant_kind_read_created", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("kind", args.kind)
+          .eq("read", false)
+          .lte("createdAt", args.before),
+      )
+      .take(100);
+    for (const row of rows) await ctx.db.patch(row._id, { read: true });
+    if (rows.length === 100)
+      await ctx.scheduler.runAfter(0, internal.notifications.retireReconnectWarnings, args);
   },
 });

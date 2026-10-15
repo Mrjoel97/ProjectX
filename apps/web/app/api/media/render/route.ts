@@ -21,7 +21,6 @@ import { assembleScriptBody } from "@pikar/backend/render/assembleScript";
 import { burnCapsScriptBody } from "@pikar/backend/render/burnCapsScript";
 import { handleRenderRequest, type SandboxLike } from "@pikar/core/render";
 import { Sandbox } from "@vercel/sandbox";
-import { createLocalSandbox } from "./localSandbox";
 
 export const runtime = "nodejs";
 
@@ -55,7 +54,7 @@ export async function POST(req: Request): Promise<Response> {
   if (wantsLocal && onVercel) {
     console.error("MEDIA_RENDER_LOCAL is set on a Vercel deployment and is being IGNORED.");
   }
-  const useLocal = wantsLocal && !onVercel;
+  const useLocal = wantsLocal && !onVercel && process.env.NODE_ENV !== "production";
 
   return await handleRenderRequest(req, {
     secret: process.env.MEDIA_RENDER_SECRET,
@@ -72,7 +71,9 @@ export async function POST(req: Request): Promise<Response> {
     burnScript: burnCapsScriptBody,
     fetch: globalThis.fetch,
     createSandbox: async (options): Promise<SandboxLike> => {
-      if (useLocal) return await createLocalSandbox();
+      if (process.env.NODE_ENV !== "production" && useLocal) {
+        return await (await import("./localSandbox")).createLocalSandbox();
+      }
       // NO token/teamId/projectId argument, and there must never be one. `options` is
       // `buildSandboxOptions(...)`, never an inline literal — that is what keeps
       // `persistent: false` and `networkPolicy: "deny-all"` assertable without a real VM.

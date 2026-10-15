@@ -1120,3 +1120,6 @@ it.
   Reopening this is an amendment to PIPE-01, not a schema tweak.
 - **Invariant 1 has no automated enforcement.** It is a source-level obligation checked by reading
   the resolution path. Stated as a gap, not a footnote.
+
+
+> 2026-10-15 lifecycle enforcement: application internal mutations/actions use the shared tenantLifecycle builders. Tenant-owned writes refuse deleting/deleted accounts; cleanup deletes and retained compliance metadata remain available. The guard migration preserves connector/provider contracts; local identity/deletion and subsystem suites provide verification, not hosted provider qualification.
