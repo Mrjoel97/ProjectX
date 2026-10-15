@@ -35,6 +35,16 @@ The build requires `NEXT_PUBLIC_CONVEX_URL`; a placeholder build URL proves comp
 Live E2E, paid evaluations and provider acceptance checks require isolated accounts and explicit budgets.
 Do not treat a fixture or source-text check as provider evidence.
 
+### Offline setup and source-restoration rehearsal
+
+Use `node scripts/rehearse-release-local.mjs <exact-40-character-commit> <absolute-pnpm.cjs-path> <absolute-pnpm-store-path>` for an isolated local rehearsal. Locate the installed pnpm entry point rather than copying a machine-specific path from another operator. The script checks its version against `packageManager`, archives only committed files into a fresh ignored `.tmp/release-rehearsal-*` directory, installs with `--offline --frozen-lockfile --ignore-scripts`, and forces all package typechecks. It passes only operating-system path variables to subprocesses, uses empty user/global npm configuration, and does not invoke codegen, deployment or providers. A populated pnpm cache is a prerequisite; a cache miss is a failed rehearsal, not permission to silently fetch dependencies.
+
+Keep `evidence.json` and the adjacent step logs as local artifacts. The manifest records the exact revision, Node/pnpm versions, lockfile SHA-256, durations and exit codes. Repeat with the previous compatible release to demonstrate that its committed source still restores and typechecks. This validates local source restoration only: it does not prove browser behavior, native install hooks, schema/data compatibility, database restoration or hosted rollback. Do not publish local logs without reviewing them. The older `pnpm boot:check` runs deployment-connected codegen and an unfrozen install; use it only in a deliberately configured development environment, never as the offline release rehearsal.
+
+Local rehearsal on 2026-10-15 restored production revision `6da1bd0711870cb6eea46d87dac149414b304184` with Node 24.7.0 and pnpm 10.28.1. Frozen offline installation downloaded no packages; all 12 package typechecks passed with zero cached tasks. The lockfile remained unchanged with SHA-256 `6ccff58bc35477306e76e41e0155fb92a5c6bbdd6dbffae7dee3dcb407121663`. Local evidence: `.tmp/release-rehearsal-iRC4Nf/evidence.json` and adjacent step logs. The first sandbox attempt failed at pnpm cache project registration; rerunning with access to the existing cache succeeded. The initial execution allowed parallel package checks; the reusable script now limits them to one for constrained machines. This does not close the hosted rollback gate.
+
+The previous release `c2cf18c2cbcf4d16df4e3143271ac69471172f64` was separately restored into `.tmp/release-rehearsal-HZnaTX/` on the same date. Its frozen offline installation and all 12 uncached package typechecks also passed; its unchanged lockfile has the same hash. The two manifests prove both committed source snapshots can be restored locally without deployment credentials. Neither snapshot was deployed or connected to a live backend during this rehearsal.
+
 ## Configuration planes
 
 | Plane | Configuration and responsible role |
@@ -61,11 +71,15 @@ The workflow builds/uploads Vercel without domain promotion, checks Convex deplo
 deploys and seeds the backend, probes the application, then promotes the web artifact.
 Disable competing automatic production deployment paths. Never use Vercel to deploy Convex separately.
 
+The release workflow scopes `CONVEX_DEPLOY_KEY` to authentication checks, Convex dry-run/origin configuration/deploy and registry seeding. `VERCEL_TOKEN` is scoped to the required Vercel operations; Vercel build still needs that token. Dependency installation and CLI installation receive neither deployment credential, and checkout does not persist GitHub credentials. Project/account IDs remain job-wide because they are identifiers, not authentication tokens. Pulled Vercel runtime settings remain sensitive build inputs: step-scoped deployment credentials do not make the build environment public.
+
 Before promotion record the previous frontend artifact, backend SHA, schema compatibility and enabled
 feature flags. For a frontend-only failure restore the previous compatible Vercel artifact. For a backend
 failure disable affected features first, then deploy the previous compatible backend revision through the
 verified release process. Backend deployments do not reverse data writes: destructive schema/data changes
 need a tested forward repair or restore procedure. Run staging recovery drills before marking rollback verified.
+
+For a hosted staging rollback drill, first reserve an exclusive staging window so voice, upload and account tests cannot overlap it. Record the staging-only deployment identity, current and previous source SHAs, frontend artifact references, durable staging origin and disabled flags. Confirm the previous reader/writer code accepts the current schema and stored data; abort if that compatibility is unproven. Restore only a compatible staging frontend artifact first, verify sign-in and an isolated read/write flow, then restore the current artifact and repeat. A backend rollback is a separate exercise: prefer a forward corrective revision retaining additive schema fields, qualify its exact SHA through CI, and deploy it using the staging credential only. Record each observed result and restore the staging flags/origin before releasing the window. Never change the production domain, use its deploy key, or claim this drill succeeded from a local compilation result.
 
 ## Incidents and scheduled work
 
@@ -124,3 +138,5 @@ Production runtime `6da1bd0711870cb6eea46d87dac149414b304184` passed [PR40 CI](h
 [Staging run 38772482415](https://github.com/Mrjoel97/ProjectX/actions/runs/38772482415) confirmed OpenRouter configuration and measured hosted admin-fixture upload throughput: 1 MiB in 601 ms, 64 MiB in 1,334 ms and 200 MiB in 2,856 ms, all HTTP 200. These admin-fixture results do not qualify the authenticated browser upload relay. A separate local 200 MiB upload timed out after 125 seconds with approximately 86 MB tracked as partial data. The isolated account self-deletion succeeded; independent proof that its blobs are absent remains pending. Keep upload cancellation, partial cleanup and erasure verification open until that evidence is recorded.
 
 The isolated native password-account drill passed signup verification, replay rejection, recovery, password reset, rejection of the old JWT and acceptance of the new JWT. This closes those exercised scenarios only; expiry and browser-specific acceptance remain separate checks. No test account identifiers, tokens or storage identifiers are retained here.
+
+The corrected synthetic privacy drill passed in [staging run 38782552536](https://github.com/Mrjoel97/ProjectX/actions/runs/38782552536), using source `118b8e73a4e4e9dbb4164cdd57724e0ec799bec4` after its exact CI passed. It exercised content/file export, cross-tenant refusal, real embedding usage settlement, known storage/RAG record cleanup and preservation of the other fixture. Both fresh scopes cleaned up and the 10-cent budget closed. These are privileged fixture results, not native identity-export/account-erasure proof. Follow the distinctions in the readiness matrix before enabling a capability.
