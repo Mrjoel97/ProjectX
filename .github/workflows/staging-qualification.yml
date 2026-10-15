@@ -1,0 +1,47 @@
+name: staging-qualification
+"on":
+  push:
+    branches: [codex/staging-qualification-20261015]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  privacy:
+    if: github.repository == 'Mrjoel97/ProjectX'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: staging
+    concurrency:
+      group: staging-qualification
+      cancel-in-progress: false
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Require successful CI for the pinned source
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node <<'NODE'
+          const sha="af8174f2777ce60309e9b1c66434a8a383d41323";
+          (async()=>{for(let attempt=0;attempt<60;attempt++){
+            const response=await fetch("https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs?head_sha="+sha+"&per_page=20",{headers:{Authorization:"Bearer "+process.env.GITHUB_TOKEN,Accept:"application/vnd.github+json"},signal:AbortSignal.timeout(15000)});
+            if(!response.ok)throw Error("CI status unavailable");
+            const runs=(await response.json()).workflow_runs.filter(r=>r.name==="ci"&&r.head_sha===sha);
+            if(runs.some(r=>r.status==="completed"&&r.conclusion==="success")){console.log("Pinned source CI passed.");return;}
+            if(runs.some(r=>r.status==="completed"&&["failure","timed_out"].includes(r.conclusion)))throw Error("Pinned source CI failed");
+            await new Promise(resolve=>setTimeout(resolve,15000));
+          }throw Error("Pinned source CI did not finish in the bounded window");})().catch(()=>{console.error("Pinned source CI gate did not pass.");process.exitCode=1;});
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          ref: af8174f2777ce60309e9b1c66434a8a383d41323
+          persist-credentials: false
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: Qualify fresh synthetic storage and retrieval cleanup only in staging
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
+          PRIVACY_DRILL_RUN: "1"
+          PRIVACY_DRILL_ALLOW_PAID: "1"
+        run: node packages/backend/scripts/run-privacy-staging.mjs
