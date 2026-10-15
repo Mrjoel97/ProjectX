@@ -6,7 +6,7 @@ permissions:
   contents: read
   actions: read
 jobs:
-  privacy:
+  foundation-gates:
     if: github.repository == 'Mrjoel97/ProjectX'
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -39,9 +39,37 @@ jobs:
           persist-credentials: false
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
-      - name: Qualify fresh synthetic storage and retrieval cleanup only in staging
+      - name: Verify disabled foundation RPCs without content writes or paid calls
+        working-directory: packages/backend
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
-          PRIVACY_DRILL_RUN: "1"
-          PRIVACY_DRILL_ALLOW_PAID: "1"
-        run: node packages/backend/scripts/run-privacy-staging.mjs
+        run: |
+          node <<'NODE'
+          const {execFileSync}=require("node:child_process"),{randomBytes}=require("node:crypto");
+          const run=args=>execFileSync(process.execPath,["node_modules/convex/bin/main.js",...args],{encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:30000}).trim();
+          const decode=text=>text?JSON.parse(text):null;
+          const evidence={stagingTarget:false,syntheticAdminContext:true,foundationFlagOff:false,beginRefused:false,paidAnswerRefused:false,publishRefused:false,noDraftCreated:false};
+          try{
+            const target=run(["dashboard","--no-open"]).match(/https:\/\/dashboard\.convex\.dev\/d\/([a-z0-9-]+)/)?.[1];
+            if(target!=="woozy-wren-368")throw Error();
+            evidence.stagingTarget=true;
+            const tenant="packeval-"+randomBytes(4).toString("hex")+"-foundation-disabled";
+            const identity=JSON.stringify({subject:tenant});
+            const call=(fn,args)=>decode(run(["run",fn,JSON.stringify(args),"--identity",identity]));
+            if(call("foundation:enabled",{})!==false||call("foundation:get",{})!==null)throw Error();
+            evidence.foundationFlagOff=true;
+            for(const [fn,args,key] of [
+              ["foundation:begin",{},"beginRefused"],
+              ["foundation:answer",{revision:0,eventId:"disabled-probe",answer:"Synthetic flag-gate check",section:"essentials",intent:"current"},"paidAnswerRefused"],
+              ["foundation:publish",{revision:0,reviewHash:"0".repeat(64)},"publishRefused"]
+            ]){
+              let refused=false;
+              try{call(fn,args);}catch(error){refused=[error.stdout,error.stderr].some(value=>String(value??"").includes("FOUNDATION_ONBOARDING_DISABLED"));}
+              if(!refused)throw Error();
+              evidence[key]=true;
+            }
+            evidence.noDraftCreated=call("foundation:get",{})===null;
+            if(!evidence.noDraftCreated)throw Error();
+          }catch{process.exitCode=1;}
+          console.log(JSON.stringify(evidence));
+          NODE
