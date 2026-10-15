@@ -28,6 +28,7 @@ async function downloadExport(
   let limits: TenantDataExport["limits"] | undefined;
   const tables: Record<string, readonly unknown[]> = {};
   const omitted: Record<string, string> = {};
+  const files: TenantDataExport["files"][number][] = [];
 
   do {
     const page = await t
@@ -36,12 +37,13 @@ async function downloadExport(
     header ??= page.header;
     tables[page.table.name] = [...(tables[page.table.name] ?? []), ...page.table.rows];
     Object.assign(omitted, page.omitted);
+    files.push(...page.files);
     limits = page.limits;
     cursor = page.nextCursor ?? undefined;
   } while (cursor);
 
   if (!header || !limits) throw new Error("EMPTY_EXPORT");
-  return { header, tables, omitted, limits };
+  return { header, tables, files, omitted, limits };
 }
 
 async function seedTwoTenants() {

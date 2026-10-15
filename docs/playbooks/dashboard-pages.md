@@ -1,3 +1,5 @@
+> Last verified: 2026-10-16 — Settings JSON export preserves file descriptors from every continuation page, including later tables and null URLs for missing bytes. The aggregate contract requires files; existing header, omissions and final truncation limits are retained. A DOM regression clicks Download my data and reads the actual downloaded Blob across three pages/two tables, checking file links, rows and partial-export disclosure. File capabilities remain only in the user-requested download, with no logging or additional storage requests.
+
 # Playbook: Connected dashboard pages
 
 > Last verified: 2026-09-12 — the compact-navigation regression now pins the exact five approved

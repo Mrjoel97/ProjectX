@@ -392,6 +392,7 @@ export function summarizeTenantCredential(row: {
 }
 
 export type TenantDataExport = {
+  files: readonly TenantExportFile[];
   header: TenantExportHeader;
   tables: Readonly<Record<string, readonly unknown[]>>;
   omitted: Readonly<Record<string, string>>;

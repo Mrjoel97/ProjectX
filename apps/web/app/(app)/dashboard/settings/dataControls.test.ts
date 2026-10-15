@@ -1,7 +1,14 @@
+// @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { AUDIT_ARCHIVE_STATEMENT } from "@pikar/core/tenantData";
-import { describe, expect, test } from "vitest";
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
+import { describe, expect, test, vi } from "vitest";
+import { DataControls } from "./DataControls";
+
+const query = vi.hoisted(() => vi.fn());
+vi.mock("convex/react", () => ({ useConvex: () => ({ query }) }));
 
 const read = (relative: string) =>
   readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");
@@ -95,4 +102,84 @@ describe("tenant data control reachability", () => {
     // and it must not have quietly dropped the Google route it already promised
     expect(policy).toContain("myaccount.google.com/permissions");
   });
+});
+
+test("download retains files across same-table and later-table pages, including unavailable bytes", async () => {
+  const files = [
+    {
+      table: "vaultDocuments",
+      rowId: "doc-a",
+      storageId: "blob-a",
+      url: "https://files.invalid/a",
+    },
+    { table: "vaultDocuments", rowId: "doc-b", storageId: "blob-b", url: null },
+    { table: "mediaAssets", rowId: "media-c", storageId: "blob-c", url: "https://files.invalid/c" },
+  ];
+  const header = { schemaVersion: 1, generatedAt: "2026-10-16T00:00:00.000Z", tenantId: "fixture" };
+  const cursors = [
+    { tableIndex: 0, cursor: "next-vault" },
+    { tableIndex: 1, cursor: null },
+  ];
+  query.mockReset();
+  for (const [index, file] of files.entries()) {
+    query.mockResolvedValueOnce({
+      header,
+      table: { name: file.table, rows: [{ _id: file.rowId }] },
+      files: [file],
+      omitted: { authAccounts: "credentials omitted" },
+      nextCursor: cursors[index] ?? null,
+      limits: { pageSize: 100, totalRows: index + 1, truncated: true },
+    });
+  }
+  let downloaded: Blob | undefined;
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal(
+    "URL",
+    Object.assign(class extends URL {}, {
+      createObjectURL: vi.fn((blob: Blob) => {
+        downloaded = blob;
+        return "blob:fixture";
+      }),
+      revokeObjectURL: vi.fn(),
+    }),
+  );
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(createElement(DataControls)));
+    const button = [...container.querySelectorAll("button")].find(
+      (item) => item.textContent === "Download my data",
+    );
+    expect(button).toBeDefined();
+    await act(async () => button?.click());
+    expect(query.mock.calls.map((call) => call[1])).toEqual([
+      {},
+      { cursor: cursors[0] },
+      { cursor: cursors[1] },
+    ]);
+    expect(downloaded).toBeDefined();
+    const serialized = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = reject;
+      reader.readAsText(downloaded as Blob);
+    });
+    const exported = JSON.parse(serialized);
+    expect(exported.files).toEqual(files);
+    expect(exported.tables).toEqual({
+      vaultDocuments: [{ _id: "doc-a" }, { _id: "doc-b" }],
+      mediaAssets: [{ _id: "media-c" }],
+    });
+    expect(exported.omitted).toEqual({ authAccounts: "credentials omitted" });
+    expect(exported.limits).toEqual({ pageSize: 100, totalRows: 3, truncated: true });
+    expect(container.textContent).toContain("this file is partial");
+    expect(click).toHaveBeenCalledOnce();
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
 });
