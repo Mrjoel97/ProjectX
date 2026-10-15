@@ -24,7 +24,7 @@ Local implementation and tests never imply live deployment or provider verificat
 | Connectors | Provider operator | Per-provider gates remain binding | Current connection, scope/expiry/revoke/read evidence for each enabled provider |
 | Recurrence | Workflow operator | Existing gate remains binding | Required actual DST/OAuth/provider traces; do not enable on simulated evidence alone |
 | Skill activation | Model operator | Per-skill evidence required | Seed/version identity, evaluation, activation and rollback evidence |
-| CI portability/build | Release engineer | LF policy, CRLF-tolerant gates and Next proxy migration implemented; local checks passed; clean hosted CI and live qualification pending | Clean Windows/Linux checks and resolved or dispositioned build warnings |
+| CI portability/build | Release engineer | LF policy, CRLF-tolerant gates and Next proxy migration implemented; local checks and hosted CI passed at fab5f33; live qualification pending | Clean Windows/Linux checks and resolved or dispositioned build warnings |
 
 ## Delivery order
 
@@ -125,3 +125,9 @@ Implementation commit `5e6ce5bb5cd74bf5009697363fd82a3ccefb03b6` is pushed in [d
 The final backend run recorded4,505passed/onefailed across179files (`projectx-round2-backend-final.log`). The sole failure was the closed cron-count assertion still expecting nine rather than ten after adding bounded voice-control retention. That assertion was corrected and the complete24-test reliability sweep suite passed (`projectx-round2-cron-final.log`). No runtime behavior changed in this correction. Hosted CI on the corrected revision must still pass; these facts do not falsely describe the earlier full run as all-green.
 
 Release authentication preflight checks capture CLI output without printing credentials and reject empty/missing/multiline settings. Isolated child-process checks exercised missing settings, malformed sender and configured values, with no fake key echoed. A valid-looking key still requires real verification/recovery delivery. User-confirmed Resend domain verification does not replace this gate.
+
+## Hosted qualification — 2026-10-15
+
+[CI run38752712434](https://github.com/Mrjoel97/ProjectX/actions/runs/38752712434) passed every required step at implementation revision `fab5f33`:12package typechecks, error-level lint,22free gates, all11tested packages, operator regressions, planning evidence and production build. The full hosted backend suite passed4,506tests; web passed1,045with twoexisting skips; other packages passed2,629. Total:8,180passed/twoskipped. This supersedes the local cron-count failure for that code revision. The subsequent evidence-only documentation commit changes no runtime or test behavior.
+
+[Draft PR39](https://github.com/Mrjoel97/ProjectX/pull/39) contains the implementation. Main and production remain at the prior release; no new deployment, provider acceptance, microphone session or real mail delivery is implied by CI success. The missing production mail settings and the open live gates above remain binding.
