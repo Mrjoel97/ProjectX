@@ -72,11 +72,8 @@ test("llm.ts has EXACTLY ONE TOOL-BEARING generateText call site (one agent loop
   // relaxing the count to 2 — a bare `.toBe(2)` would silently admit a real second tenant loop the
   // day someone adds one, which is the entire failure this test exists to catch.
   //
-  // Why it is genuinely exempt rather than grandfathered: it is an operator `internalAction`, never
-  // nested inside `runAgentLoop` and never reached by a tenant request. It draws NO rail (it REPORTS
-  // the cost it would have drawn), so it cannot double-bill the spend window, and it carries its own
-  // `stopWhen`. It bears tools because that IS its job — sending the production hosted-search
-  // descriptor is the only way to learn whether the vendor accepts it.
+  // The operator loop reserves each model attempt through paidBudgetModel and each
+  // research call through the same deployment rail. Only loop topology is excluded here.
   const src = readCode("llm.ts");
   const probeStart = src.indexOf("export const probeGemini");
   expect(
@@ -93,6 +90,7 @@ test("llm.ts has EXACTLY ONE TOOL-BEARING generateText call site (one agent loop
   // Non-vacuity in the OTHER direction, and it is the one that matters for Phase 16: if the probe
   // stops sending a tool, `probe:gemini --grounded` measures nothing while still printing PASS —
   // the vacuous green this whole probe was written to avoid.
+  expect(src.slice(probeStart, probeEnd < 0 ? undefined : probeEnd)).toContain("paidBudgetModel({");
   expect(
     inProbe.length,
     "probeGemini no longer passes `tools` — `--grounded` would report PASS having never asked the " +

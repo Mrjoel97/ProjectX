@@ -12,9 +12,12 @@ import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, type MutationCtx } from "./_generated/server";
-import { tenantAction } from "./lib/functions";
+import type { MutationCtx } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
+import { revokeErasedIdentity } from "./authRevocations";
+import { tenantErasureAction } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { rag } from "./vaultRag";
 import { CURSOR_NAME } from "./wormCursor";
 
@@ -239,6 +242,15 @@ export const authorizeTenantDeletion = internalMutation({
  * names from deletableTables(); audit/global names are absent from its type and runtime source.
  * The public owner/revocation orchestration is layered over this primitive in Task 2.
  */
+export const voiceErasurePage = internalQuery({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }) =>
+    await ctx.db
+      .query("voiceSessions")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .take(TENANT_DELETE_BATCH_SIZE),
+});
+
 export const deleteTenantDataPage = internalMutation({
   args: {
     tenantId: v.string(),
@@ -355,6 +367,7 @@ export const deleteTenantDataPage = internalMutation({
             redeemedSubject: undefined,
           });
         }
+        await revokeErasedIdentity(ctx, String(user._id));
         await ctx.db.delete(user._id);
       }
       return {
@@ -396,6 +409,13 @@ export const deleteTenantDataPage = internalMutation({
     // purely to throw it away is exactly what it forbids, and it was right to fire. The system
     // table answers the same question — null when the blob is gone — and mints nothing.
     for (const row of rows) {
+      if (
+        table === "voiceSessions" &&
+        "callId" in row &&
+        row.callId &&
+        !("hangupConfirmedAt" in row && row.hangupConfirmedAt)
+      )
+        throw new Error("VOICE_TERMINATION_PENDING");
       for (const storageId of storageIdsIn(table, row as unknown as Record<string, unknown>)) {
         const id = storageId as Id<"_storage">;
         if ((await ctx.db.system.get("_storage", id)) !== null) await ctx.storage.delete(id);
@@ -500,7 +520,7 @@ const deleteTenantDataPageRef = makeFunctionReference<
 >("tenantDelete:deleteTenantDataPage");
 
 /** Owner-gated, revoke-first orchestration over bounded mutation pages. */
-export const deleteTenantData = tenantAction({
+export const deleteTenantData = tenantErasureAction({
   args: { confirmation: v.literal("DELETE MY DATA") },
   handler: async (
     ctx,
@@ -663,6 +683,7 @@ export const deleteTenantData = tenantAction({
       }),
     ];
 
+    await ctx.runMutation(internal.authRevocations.beginErasure, { userId: ctx.userId });
     const deletedByTable: Record<string, number> = {};
     // THE CHAT HISTORY, and it is deleted HERE rather than inside the paged mutation.
     //
@@ -689,6 +710,17 @@ export const deleteTenantData = tenantAction({
     let cursor: TenantDeletionCursor | undefined;
     do {
       const currentTable = deletableTables()[cursor?.tableIndex ?? 0];
+      if (currentTable === "voiceSessions") {
+        const sessions = await ctx.runQuery(internal.tenantDelete.voiceErasurePage, {
+          tenantId: ctx.tenantId,
+        });
+        for (const session of sessions)
+          if (session.callId && !session.hangupConfirmedAt)
+            await ctx.runAction(internal.voice.terminateProvider, {
+              sessionId: session._id,
+              retryForErasure: true,
+            });
+      }
       const completion =
         currentTable === "users"
           ? {

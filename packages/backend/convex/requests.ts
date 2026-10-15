@@ -10,6 +10,7 @@
 // All handlers go through tenantQuery/tenantMutation (CLAUDE.md §2) — tenantId is
 // injected from identity and an unauthenticated call fails closed (INTK-04 #1).
 import { validateSubmit } from "@pikar/core/validateSubmit";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { rateLimiter } from "./guardrails";
@@ -20,9 +21,11 @@ import { MAX_REGENERATE, REQUEST_STATUS } from "./pipeline";
 import { reviewDecisionValidator } from "./review";
 
 /** Upload-first: client PUTs each file to this URL, then submits the storageIds. */
+import { assertOwnedUpload, claimOwnedUpload, issueUpload } from "./uploads";
+
 export const generateUploadUrl = tenantMutation({
   args: {},
-  handler: async (ctx) => await ctx.storage.generateUploadUrl(),
+  handler: issueUpload,
 });
 
 const attachmentArg = v.object({
@@ -44,6 +47,7 @@ export const submit = tenantMutation({
     attachments: v.array(attachmentArg),
   },
   handler: async (ctx, { goal, recipient, attachments }) => {
+    for (const file of attachments) await assertOwnedUpload(ctx, ctx.tenantId, file.storageId);
     const correlationId = crypto.randomUUID();
 
     // Per-user submit rate limit (GRDL-06) — BEFORE validateSubmit and any insert,
@@ -112,6 +116,7 @@ export const submit = tenantMutation({
     // Metadata only — the agent sees filename/mime/size, never file contents (INTK-01).
     const attachmentRefs = [];
     for (const a of attachments) {
+      await claimOwnedUpload(ctx, ctx.tenantId, a.storageId);
       attachmentRefs.push(
         await ctx.db.insert("attachments", {
           tenantId: ctx.tenantId,
@@ -146,20 +151,42 @@ export const submit = tenantMutation({
   },
 });
 
-/** The caller's requests, newest-first, optionally filtered by status. */
+/** Legacy bounded subscription; new list screens use listPage for complete history. */
 export const list = tenantQuery({
   args: { status: v.optional(REQUEST_STATUS) },
-  handler: async (ctx, { status }) => {
-    const rows = status
+  handler: async (ctx, { status }) =>
+    status
       ? await ctx.db
           .query("requests")
-          .withIndex("by_tenant_status", (q) => q.eq("tenantId", ctx.tenantId).eq("status", status))
-          .collect()
+          .withIndex("by_tenant_status_createdAt", (q) =>
+            q.eq("tenantId", ctx.tenantId).eq("status", status),
+          )
+          .order("desc")
+          .take(100)
       : await ctx.db
           .query("requests")
-          .withIndex("by_tenant_status", (q) => q.eq("tenantId", ctx.tenantId))
-          .collect();
-    return rows.sort((a, b) => b.createdAt - a.createdAt);
+          .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", ctx.tenantId))
+          .order("desc")
+          .take(100),
+});
+
+/** Tenant-scoped cursor pagination, newest first even when status is not specified. */
+export const listPage = tenantQuery({
+  args: { status: v.optional(REQUEST_STATUS), paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { status, paginationOpts }) => {
+    const query = status
+      ? ctx.db
+          .query("requests")
+          .withIndex("by_tenant_status_createdAt", (q) =>
+            q.eq("tenantId", ctx.tenantId).eq("status", status),
+          )
+      : ctx.db
+          .query("requests")
+          .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", ctx.tenantId));
+    return await query.order("desc").paginate({
+      ...paginationOpts,
+      numItems: Math.min(100, Math.max(1, paginationOpts.numItems)),
+    });
   },
 });
 

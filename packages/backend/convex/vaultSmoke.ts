@@ -17,8 +17,9 @@ import { fuse, GRAPH_HOP_CAP, type VectorHit } from "@pikar/vault";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { contentHash } from "./lib/hash";
+import { internalAction, internalMutation } from "./lib/tenantLifecycle";
 import { rag, ragForEvaluation } from "./vaultRag";
 
 const byteLen = (s: string): number => new TextEncoder().encode(s).length;
@@ -183,7 +184,7 @@ export const assertReady = internalQuery({
 export const assertSearchReturns = internalAction({
   args: { tenantId: v.string(), query: v.string(), expectDocId: v.id("vaultDocuments") },
   handler: async (ctx, { tenantId, query, expectDocId }): Promise<{ ok: true; count: number }> => {
-    const { entries } = await rag.search(ctx, {
+    const { entries } = await ragForEvaluation({ ctx, tenantId }).search(ctx, {
       namespace: tenantId,
       query,
       limit: 8,
@@ -211,7 +212,7 @@ export const assertGroundNeighbor = internalAction({
     ctx,
     { tenantId, query, neighborDocId },
   ): Promise<{ ok: true; docIds: string[] }> => {
-    const { results, entries } = await rag.search(ctx, {
+    const { results, entries } = await ragForEvaluation({ ctx, tenantId }).search(ctx, {
       namespace: tenantId,
       query,
       limit: 8,

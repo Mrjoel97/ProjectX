@@ -193,3 +193,6 @@ Extension path; it is stale, do not follow it.
 - `payment_intents` and `balance_transactions` are deliberately not read; see the pure module header.
 - Webhooks are out of scope. `account.application.deauthorized` is the ONLY deauth signal that
   exists on this route, and it is recorded here rather than implemented.
+
+
+> 2026-10-15 lifecycle enforcement: application internal mutations/actions use the shared tenantLifecycle builders. Tenant-owned writes refuse deleting/deleted accounts; cleanup deletes and retained compliance metadata remain available. The guard migration preserves connector/provider contracts; local identity/deletion and subsystem suites provide verification, not hosted provider qualification.

@@ -6,6 +6,7 @@ import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+import { seedOwnedUpload } from "../test/uploadFixtures";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -408,7 +409,11 @@ describe("cross-rail isolation: a drained cockpit budget cannot refuse reserved 
    *  spend, but the whole extractDoc spine runs. */
   async function seedDoc(t: ReturnType<typeof ingestHarness>): Promise<Id<"vaultDocuments">> {
     const storageId = await t.run((ctx) =>
-      ctx.storage.store(new Blob(["SMOKE::extract::folder member text"], { type: "image/png" })),
+      seedOwnedUpload(
+        ctx,
+        TENANT,
+        new Blob(["SMOKE::extract::folder member text"], { type: "image/png" }),
+      ),
     );
     const { vaultDocId } = await t
       .withIdentity({ subject: TENANT })
@@ -642,10 +647,10 @@ describe("ledger parity: reasoning and ingest movements", () => {
     });
 
     expect(await events(t)).toHaveLength(1);
-    // The LIMITER still moved twice — it has no replay suppression and must not grow one here.
-    // That divergence is what reconciliation is FOR; it is not a defect to paper over.
+    // The limiter and ledger now share the same replay suppression.
+    // A replay cannot consume enforcement headroom a second time.
     expect(await t.query(internal.guardrails.remainingDailyCents, { tenantId: T })).toBe(
-      DAILY_BUDGET_CENTS - 50,
+      DAILY_BUDGET_CENTS - 25,
     );
   });
 
@@ -840,7 +845,7 @@ describe("every recordSpend call site passes a correlation", () => {
   test("the scan found the call sites it is supposed to guard", () => {
     // Anti-vacuity: every assertion below is a per-site loop, so an empty list passes for free —
     // exactly what happens if the glob key shape or the callee name ever changes.
-    expect(callSites.length).toBeGreaterThanOrEqual(10);
+    expect(callSites.length).toBeGreaterThanOrEqual(5);
   });
 
   for (const [index, site] of callSites.entries()) {

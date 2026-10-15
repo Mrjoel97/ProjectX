@@ -6,9 +6,10 @@ import { readDataWorkbook } from "@pikar/vault/dataWorkbook";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { type ActionCtx, internalAction } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
 import { ownerAction } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { internalAction } from "./lib/tenantLifecycle";
 
 async function prepareProfile(
   ctx: ActionCtx,

@@ -10,12 +10,16 @@
 // workflow). Readers are tenantQuery so the browser subscribes and the PLAN/DRAFT/
 // REPORT cards update live; every reader is guarded on ctx.tenantId (no cross-tenant leak).
 import { CHANNELS, type Channel, isSchedulable, parseChannel } from "@pikar/core";
+import { MAX_PLAN_RECIPIENTS } from "@pikar/core/emailIntent";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery, type QueryCtx } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
+import { activeMediaJobs } from "./lib/mediaRead";
 import { hasDraftContent, isOpenRoot, newestRoot, threadRoots } from "./lib/planRow";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 // PINNED plan lifecycle (schema.ts): collecting → proposed → approved → (scheduled|delivering) → done,
 // plus the 03.5 deferred-send states scheduled (armed, pre-fire) and canceled (terminal, halted).
@@ -383,10 +387,7 @@ export const stageMediaPlan = internalMutation({
     for (const root of roots) {
       if (root.kind !== "media") continue;
       // The index PREFIX is the tenant boundary, so these are this tenant's rows by construction.
-      const jobs = await ctx.db
-        .query("mediaJobs")
-        .withIndex("by_plan", (q) => q.eq("tenantId", tenantId).eq("planId", root._id))
-        .collect();
+      const jobs = await activeMediaJobs(ctx, tenantId, root._id);
       if (jobs.some((j) => LIVE_JOB_STATUS.has(j.status))) {
         return { ok: false, reason: "reel_in_flight" };
       }
@@ -404,10 +405,14 @@ export const stageMediaPlan = internalMutation({
       // the interlocks that survive, and fail-closed is the right default on the money path. If a
       // later phase wants two live proposals on one thread, that is its decision to record.
       //
-      // `jobs.length === 0` is what makes "un-acted-on" precise rather than a guess: the moment the
+      // An indexed existence read makes "un-acted-on" precise rather than a guess: the moment the
       // user clicks Generate a row exists, and a spent proposal is no longer pending.
-      if (root.mediaMode === "image" && root.imagePrompt && jobs.length === 0) {
-        return { ok: false, reason: "image_proposal_pending" };
+      if (root.mediaMode === "image" && root.imagePrompt) {
+        const priorAttempt = await ctx.db
+          .query("mediaJobs")
+          .withIndex("by_plan_created", (q) => q.eq("tenantId", tenantId).eq("planId", root._id))
+          .first();
+        if (!priorAttempt) return { ok: false, reason: "image_proposal_pending" };
       }
     }
 
@@ -647,10 +652,7 @@ export const stageImagePlan = internalMutation({
 
     for (const root of roots) {
       if (root.kind !== "media") continue;
-      const jobs = await ctx.db
-        .query("mediaJobs")
-        .withIndex("by_plan", (q) => q.eq("tenantId", tenantId).eq("planId", root._id))
-        .collect();
+      const jobs = await activeMediaJobs(ctx, tenantId, root._id);
       if (jobs.some((job) => job.kind === "image" && LIVE_JOB_STATUS.has(job.status))) {
         return { ok: false, reason: "image_in_flight" };
       }
@@ -1263,53 +1265,80 @@ export const byId = tenantQuery({
  * `gmail.sent` audit (by_correlation) to surface the delivered messageId. No report[]
  * array is stored; requests.status + the audit insert make this fill live per recipient.
  */
+
+async function projectReport(ctx: QueryCtx & { tenantId: string }, rows: Doc<"requests">[]) {
+  const report = [];
+  for (const r of rows) {
+    if (r.tenantId !== ctx.tenantId) continue; // never leak another tenant's row
+    const sent = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", r.correlationId))
+      // CORRECTED 26-14: `graph.sent` too. The Microsoft arm writes that literal, so this join
+      // saw nothing at all for a Graph send — the provider was added without the join following
+      // it. Widening the filter alone was a NO-OP, because the only consumer was `messageId` and
+      // Graph deliberately records none (202, empty body): both before and after, a Microsoft row
+      // reported `messageId: null`. `delivered` below is what makes the proof observable.
+      .filter((q) =>
+        q.or(q.eq(q.field("eventType"), "gmail.sent"), q.eq(q.field("eventType"), "graph.sent")),
+      )
+      .first();
+    // Per-recipient delivered attachment(s): re-download the EXACT sent bytes. Storage is
+    // immutable per id, so we resolve the persisted send-time refs — never regenerate (§4: url never logged).
+    const attachments = [];
+    for (const ref of r.attachmentRefs) {
+      const att = await ctx.db.get(ref);
+      if (!att) continue;
+      attachments.push({ filename: att.filename, url: await ctx.storage.getUrl(att.storageId) });
+    }
+    report.push({
+      // The requests row id — the requestId the delivered-response feedback control keys
+      // off (api.feedback.myFeedback/submitFeedback), so a rating attributes to the exact
+      // skillVersion copied onto this row at executePlan (Plan 02/06).
+      requestId: r._id,
+      recipient: r.recipient,
+      status: r.status,
+      deliveryAttempt: r.deliveryAttempt ?? null,
+      correlationId: r.correlationId,
+      // DELIVERY IS PROVEN BY THE AUDIT ROW, NOT BY A MESSAGE ID. `messageId: null` means the
+      // provider returned none, which for Graph is every single send — inferring "not delivered"
+      // from it is a category error. Same distinction `reportsBusiness.sentMail` draws.
+      delivered: sent !== null,
+      messageId: (sent?.payload as { messageId?: string } | undefined)?.messageId ?? null,
+      attachments,
+    });
+  }
+  return report;
+}
+
+/** Compatibility reader: refuse legacy overflow instead of silently dropping outcomes. */
 export const reportForPlan = tenantQuery({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.tenantId !== ctx.tenantId) return [];
     const rows = await ctx.db
       .query("requests")
       .withIndex("by_plan", (q) => q.eq("planId", planId))
-      .collect();
+      .take(MAX_PLAN_RECIPIENTS + 1);
+    if (rows.length > MAX_PLAN_RECIPIENTS)
+      throw new Error("Use paginated delivery report for this legacy plan");
+    return projectReport(ctx, rows);
+  },
+});
 
-    const report = [];
-    for (const r of rows) {
-      if (r.tenantId !== ctx.tenantId) continue; // never leak another tenant's row
-      const sent = await ctx.db
-        .query("audit")
-        .withIndex("by_correlation", (q) => q.eq("correlationId", r.correlationId))
-        // CORRECTED 26-14: `graph.sent` too. The Microsoft arm writes that literal, so this join
-        // saw nothing at all for a Graph send — the provider was added without the join following
-        // it. Widening the filter alone was a NO-OP, because the only consumer was `messageId` and
-        // Graph deliberately records none (202, empty body): both before and after, a Microsoft row
-        // reported `messageId: null`. `delivered` below is what makes the proof observable.
-        .filter((q) =>
-          q.or(q.eq(q.field("eventType"), "gmail.sent"), q.eq(q.field("eventType"), "graph.sent")),
-        )
-        .first();
-      // Per-recipient delivered attachment(s): re-download the EXACT sent bytes. Storage is
-      // immutable per id, so we resolve the persisted send-time refs — never regenerate (§4: url never logged).
-      const attachments = [];
-      for (const ref of r.attachmentRefs) {
-        const att = await ctx.db.get(ref);
-        if (!att) continue;
-        attachments.push({ filename: att.filename, url: await ctx.storage.getUrl(att.storageId) });
-      }
-      report.push({
-        // The requests row id — the requestId the delivered-response feedback control keys
-        // off (api.feedback.myFeedback/submitFeedback), so a rating attributes to the exact
-        // skillVersion copied onto this row at executePlan (Plan 02/06).
-        requestId: r._id,
-        recipient: r.recipient,
-        status: r.status,
-        correlationId: r.correlationId,
-        // DELIVERY IS PROVEN BY THE AUDIT ROW, NOT BY A MESSAGE ID. `messageId: null` means the
-        // provider returned none, which for Graph is every single send — inferring "not delivered"
-        // from it is a category error. Same distinction `reportsBusiness.sentMail` draws.
-        delivered: sent !== null,
-        messageId: (sent?.payload as { messageId?: string } | undefined)?.messageId ?? null,
-        attachments,
+export const reportPage = tenantQuery({
+  args: { planId: v.id("plans"), paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { planId, paginationOpts }) => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.tenantId !== ctx.tenantId)
+      return { page: [], isDone: true, continueCursor: "" };
+    const result = await ctx.db
+      .query("requests")
+      .withIndex("by_plan", (q) => q.eq("planId", planId))
+      .paginate({
+        ...paginationOpts,
+        numItems: Math.min(50, Math.max(1, paginationOpts.numItems)),
       });
-    }
-    return report;
+    return { ...result, page: await projectReport(ctx, result.page) };
   },
 });

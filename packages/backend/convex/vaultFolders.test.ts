@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+import { seedOwnedUpload } from "../test/uploadFixtures";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { INGEST_DAILY_BUDGET_CENTS } from "./guardrails";
@@ -123,7 +124,9 @@ const upload = async (
     tenant?: string;
   } = {},
 ): Promise<{ vaultDocId: Id<"vaultDocuments">; deduped: boolean }> => {
-  const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["bytes"])));
+  const storageId = await t.run((ctx) =>
+    seedOwnedUpload(ctx, opts.tenant ?? TENANT, new Blob(["bytes"])),
+  );
   return await asTenant(t, opts.tenant ?? TENANT).mutation(api.vault.vaultUpload, {
     storageId,
     filename: opts.filename ?? "report.pdf",

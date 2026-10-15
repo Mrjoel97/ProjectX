@@ -38,11 +38,12 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { DatabaseReader, DatabaseWriter, MutationCtx } from "./_generated/server";
-import { internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { markAgendaProposed } from "./lib/agenda";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { flipParentWhenSiblingsDone, isOpenRoot, newestRoot } from "./lib/planRow";
+import { internalAction, internalMutation } from "./lib/tenantLifecycle";
 import schema from "./schema";
 import { startIngest } from "./vaultIngest";
 

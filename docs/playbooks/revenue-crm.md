@@ -148,3 +148,5 @@ Run vitest from **inside** the package; `vitest --root <pkg>` from the repo root
 - CRM writes, cleanup and any provider mutation are out of phase scope.
 - Free-text ingestion (notes, transcripts, invoice descriptions) is deferred pending the toolless
   summarization path.
+
+Last verified: 2026-10-15 — Attention/contact pulse uses exact open-follow-up indexes. Contact provider references use a tenant/contact/kind index. Suppression scanning reads1001 rows; overflow returns partial coverage and withholds all attention contacts rather than risking outreach to an unseen suppressed address.

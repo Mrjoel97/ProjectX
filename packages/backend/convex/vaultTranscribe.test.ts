@@ -221,3 +221,22 @@ describe("transcribeDoc — honest failures (EXTR-I)", () => {
     expect(JSON.stringify(audits)).not.toContain("secret transcript");
   });
 });
+
+test("malformed normalized sidecar cannot reach a paid transcription call", async () => {
+  const t = setup();
+  const vaultDocId = await seedDoc(t, "original", "video/quicktime", "clip.mov");
+  const transcriptionStorageId = await t.run((ctx) =>
+    ctx.storage.store(new Blob(["forged WAV"], { type: "audio/wav" })),
+  );
+  await t.run((ctx) => ctx.db.patch(vaultDocId, { transcriptionStorageId }));
+  const fetchSpy = vi
+    .spyOn(globalThis, "fetch")
+    .mockRejectedValue(new Error("unexpected provider request"));
+  try {
+    await runTranscribe(t, vaultDocId);
+    expect((await getDoc(t, vaultDocId))?.failureReason).toBe("normalized_audio_required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  } finally {
+    fetchSpy.mockRestore();
+  }
+});

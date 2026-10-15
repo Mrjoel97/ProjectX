@@ -1,5 +1,10 @@
 # Playbook: Beta Admission (BETA-01)
 
+> Last verified: 2026-10-15 — local auth lifecycle integration tests cover always-required password email verification, 15-minute OTP expiry/replay, reset account non-enumeration, password rotation and old-session invalidation. The installed Convex Auth Password/Email implementations retain token and session ownership. Signup/signin now show an OTP screen; signin includes password recovery. Resend requires AUTH_RESEND_KEY and AUTH_EMAIL_FROM (a verified sender). Missing configuration fails password authentication closed before account creation; Google/Microsoft behavior is unchanged. Existing password users verify at their next sign-in. Sender provisioning and live browser/mail acceptance remain release blockers; no email was sent during implementation.
+
+Email delivery uses a hashed normalized address rate-limit key (5/hour, burst 3) and a deployment limit (100/hour, burst 20). Reset requests consume admission before account lookup and return the same response on missing accounts, throttling, and send failure. Provider bodies/errors and codes never enter application logs. This does not claim constant-time responses. A failed send can leave an admitted, unverified password account: retry signin or request a fresh verification code after restoring the sender; do not reissue its spent invite.
+
+
 > Last verified: 2026-09-14 — `/admin` now mounts an owner-only vertical review console that
 > loads one exact native evaluation run UUID and binds every decision to the sealed output's
 > SHA-256 and UTF-8 byte length. The existing owner mount gate remains the admission boundary:

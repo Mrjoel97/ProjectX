@@ -37,9 +37,10 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { stripeHostedUrl, stripePost } from "./billingApi";
 import { ownerMutation } from "./lib/functions";
+import { internalAction, internalMutation } from "./lib/tenantLifecycle";
 
 // ── Bounds, all code-owned ────────────────────────────────────────────────────────────────────
 

@@ -49,54 +49,46 @@ async function localInputs(
     .take(ATTENTION_SCAN_CAP + 1);
   const contacts = page.slice(0, ATTENTION_SCAN_CAP);
 
-  const suppressions = await ctx.db
+  // Preserve case-folding for historical rows. A capped suppression read must never
+  // re-admit a possibly suppressed contact; disclose partial coverage and omit it.
+  const suppressionPage = await ctx.db
     .query("suppressions")
     .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
-    .collect();
-  // Lower-cased once: Phase 19 stores what the user typed, and a suppression that missed on case
-  // would silently re-admit someone who asked not to be contacted.
-  const suppressed = new Set(suppressions.map((s) => s.address.toLowerCase()));
-
-  const followUps = await ctx.db
-    .query("followUps")
-    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
-    .collect();
-  /** EARLIEST open follow-up per contact. A later one does not make an earlier one less overdue. */
-  const dueByContact = new Map<string, number>();
-  for (const f of followUps) {
-    if (f.status !== "open" || f.contactId === undefined) continue;
-    const key = String(f.contactId);
-    const current = dueByContact.get(key);
-    if (current === undefined || f.dueAt < current) dueByContact.set(key, f.dueAt);
-  }
-
-  const refs = await ctx.db
-    .query("contactProviderRefs")
-    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
-    .collect();
-  const refByContact = new Map<string, string>();
-  for (const r of refs) {
-    if (r.kind === "contact") refByContact.set(String(r.contactId), r.externalId);
-  }
-
-  const inputs = contacts.map((c): AttentionInput => {
-    const id = String(c._id);
-    return {
-      contactId: id,
-      providerRef: refByContact.get(id) ?? null,
-      suppressed: c.email !== undefined && suppressed.has(c.email.toLowerCase()),
-      followUpDueAt: dueByContact.get(id) ?? null,
-      // Phase 19 has no activity timeline of its own yet, and INVENTING one from `_creationTime`
-      // would make every contact look freshly touched on the day it was imported. Null is the
-      // honest answer, and `rankAttention` never fires `gone_quiet` from it.
+    .take(ATTENTION_SCAN_CAP + 1);
+  const suppressionCapped = suppressionPage.length > ATTENTION_SCAN_CAP;
+  const suppressed = new Set(suppressionPage.map((row) => row.address.toLowerCase()));
+  const inputs: AttentionInput[] = [];
+  for (const c of contacts) {
+    const followUp = await ctx.db
+      .query("followUps")
+      .withIndex("by_tenant_contact_status_dueAt", (q) =>
+        q.eq("tenantId", tenantId).eq("contactId", c._id).eq("status", "open"),
+      )
+      .order("asc")
+      .first();
+    const ref = await ctx.db
+      .query("contactProviderRefs")
+      .withIndex("by_tenant_contact_kind", (q) =>
+        q.eq("tenantId", tenantId).eq("contactId", c._id).eq("kind", "contact"),
+      )
+      .order("desc")
+      .first();
+    inputs.push({
+      contactId: String(c._id),
+      providerRef: ref?.externalId ?? null,
+      suppressed:
+        suppressionCapped || (c.email !== undefined && suppressed.has(c.email.toLowerCase())),
+      followUpDueAt: followUp?.dueAt ?? null,
       lastActivityAt: null,
-      // Deals and payment flags arrive with the provider lanes (28-11/28-12). Until a lane passes
-      // there is nothing to say, and saying nothing is the point.
       deal: null,
       paymentFlag: null,
-    };
-  });
-  return { inputs, scanned: contacts.length, capped: page.length > ATTENTION_SCAN_CAP };
+    });
+  }
+  return {
+    inputs,
+    scanned: contacts.length,
+    capped: suppressionCapped || page.length > ATTENTION_SCAN_CAP,
+  };
 }
 
 export type AttentionView = {
@@ -123,7 +115,12 @@ export const attentionList = tenantQuery({
   args: {},
   handler: async (ctx): Promise<AttentionView> => {
     const { inputs, scanned, capped } = await localInputs(ctx, ctx.tenantId);
-    return { rows: rankAttention(inputs, Date.now()), scanned, capped, coverage: "local" };
+    return {
+      rows: rankAttention(inputs, Date.now()),
+      scanned,
+      capped,
+      coverage: capped ? "partial" : "local",
+    };
   },
 });
 
@@ -145,14 +142,18 @@ export const contactPulse = tenantQuery({
     // so the row's own tenant is checked here or not at all.
     if (!contact || contact.tenantId !== ctx.tenantId) return "unknown";
 
-    const followUps = await ctx.db
-      .query("followUps")
-      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
-      .collect();
     const now = Date.now();
-    const followUpOverdue = followUps.some(
-      (f) => f.status === "open" && String(f.contactId) === String(contactId) && f.dueAt <= now,
-    );
+    const followUp = await ctx.db
+      .query("followUps")
+      .withIndex("by_tenant_contact_status_dueAt", (q) =>
+        q
+          .eq("tenantId", ctx.tenantId)
+          .eq("contactId", contactId)
+          .eq("status", "open")
+          .lte("dueAt", now),
+      )
+      .first();
+    const followUpOverdue = followUp !== null;
 
     return customerPulse(
       {
@@ -174,7 +175,12 @@ export const attentionForTenant = internalQuery({
   args: { tenantId: v.string() },
   handler: async (ctx, { tenantId }): Promise<AttentionView> => {
     const { inputs, scanned, capped } = await localInputs(ctx, tenantId);
-    return { rows: rankAttention(inputs, Date.now()), scanned, capped, coverage: "local" };
+    return {
+      rows: rankAttention(inputs, Date.now()),
+      scanned,
+      capped,
+      coverage: capped ? "partial" : "local",
+    };
   },
 });
 

@@ -32,12 +32,7 @@ import {
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import {
-  internalMutation,
-  internalQuery,
-  type MutationCtx,
-  type QueryCtx,
-} from "./_generated/server";
+import { internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import {
   DEPLOYMENT_INGEST_BUDGET_CENTS,
   type FolderReserveRefusal,
@@ -51,6 +46,7 @@ import {
 } from "./guardrails";
 import { workflow } from "./index";
 import { tenantMutation, tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { scheduleExtraction } from "./vault";
 import { startIngest } from "./vaultIngest";
 

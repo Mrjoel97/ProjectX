@@ -16,6 +16,7 @@ import {
   StarIcon,
   UserIcon,
 } from "../icons";
+import { PasswordChallenge } from "../PasswordChallenge";
 
 /**
  * BETA-01 signup. ONE public route serves both doors — an invited person redeeming a code, and a
@@ -55,6 +56,7 @@ function SignUp() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [challenge, setChallenge] = useState<"verify" | "reset" | null>(null);
 
   const providers = useQuery(api.invites.authProviders, {});
   // Skip the round trip until there is something worth checking.
@@ -107,7 +109,19 @@ function SignUp() {
     try {
       // The code travels with the credentials: a password email is self-asserted, so admission
       // requires the code itself as well as a matching invited address.
-      await signIn("password", { name, email, password, inviteCode: code, flow: "signUp" });
+      const result = await signIn("password", {
+        name,
+        email,
+        password,
+        inviteCode: code,
+        flow: "signUp",
+      });
+      if (!result.signingIn) {
+        setPassword("");
+        setChallenge("verify");
+        setBusy(false);
+        return;
+      }
       router.push("/dashboard");
     } catch {
       // Deliberately one message for every refusal. Distinguishing "not invited" from "already
@@ -116,6 +130,18 @@ function SignUp() {
       setBusy(false);
     }
   }
+
+  if (challenge)
+    return (
+      <PasswordChallenge
+        mode={challenge}
+        email={email}
+        onBack={() => {
+          setChallenge(null);
+          setBusy(false);
+        }}
+      />
+    );
 
   // NO INVITE → the waitlist door.
   if (!redeeming) {

@@ -16,9 +16,10 @@
 import { MICROSOFT_SCOPES, microsoftCalendarReady, microsoftMailReady } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { hmacHex } from "./gmailAuth";
 import { tenantAction, tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 // The tenant-INDEPENDENT `common` endpoint. This is the choice that lets BOTH a personal Microsoft
 // account and a work/school account through the same flow; a tenant-specific authority would admit
@@ -133,12 +134,11 @@ export const store = internalMutation({
     // A fresh consent IS the reconnect the warning asked for. Retire ONLY this provider's rows:
     // a Microsoft reconnect must never clear a `gmail_reconnect` banner, or the user loses the
     // warning about a Google connection that is still genuinely broken.
-    for (const n of await ctx.db
-      .query("notifications")
-      .withIndex("by_tenant_read", (q) => q.eq("tenantId", args.tenantId).eq("read", false))
-      .collect()) {
-      if (n.kind === "microsoft_calendar_reconnect") await ctx.db.patch(n._id, { read: true });
-    }
+    await ctx.runMutation(internal.notifications.retireReconnectWarnings, {
+      tenantId: args.tenantId,
+      kind: "microsoft_calendar_reconnect",
+      before: Date.now(),
+    });
   },
 });
 

@@ -527,6 +527,7 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
               ))}
             </dl>
 
+            {entities?.truncated && <p>Showing the first 256 relationships in this document.</p>}
             <PreviewControls
               capabilities={preview.capabilities}
               docType={docType}

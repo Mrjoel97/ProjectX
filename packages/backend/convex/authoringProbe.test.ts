@@ -5,6 +5,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import limiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
+import { seedOwnedUpload } from "../test/uploadFixtures";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
@@ -100,7 +101,9 @@ test("generic audit writes cannot forge control; expiry and alternate cockpit en
   await expect(
     owner.action(api.cockpit.startVerticalPack, { threadId, verticalId: "product", text: "Start" }),
   ).rejects.toThrow("ALTERNATE_ENTRY_REFUSED");
-  const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["synthetic"])));
+  const storageId = await t.run((ctx) =>
+    seedOwnedUpload(ctx, String(userId), new Blob(["synthetic"])),
+  );
   await expect(
     owner.action(api.intake.attachToThread, {
       threadId,

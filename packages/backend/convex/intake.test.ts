@@ -1,4 +1,5 @@
 // @vitest-environment node
+
 //
 // convex-test coverage for the backend intake spine (INTK-02/03) — the SC3
 // guardrail-ordering heart of Phase 4 (04-VALIDATION.md Wave-2 rows). Every SMOKE:: path here
@@ -15,6 +16,7 @@
 // audit.log maintains on every insert) — the Wave-0 gap this plan closes (04-VALIDATION.md).
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { seedOwnedUpload } from "../test/uploadFixtures";
 
 // Fake timers — the `vault.test.ts` / `vaultExtract.test.ts` guard, applied here for the same
 // reason (2026-08-04). Anything that reaches `startIngest` schedules the WORKFLOW component's
@@ -22,8 +24,14 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 // torn-down module runner, throwing `crypto is not defined` / `process is not defined` inside
 // whichever file the worker runs next. These tests assert synchronous effects, so the timers never
 // need to advance.
-beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.stubEnv("CONVEX_SITE_URL", "https://test.convex.site");
+});
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
 
 import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -93,7 +101,7 @@ describe("intakeDb round-trip (Wave-0 seed check)", () => {
     const url = await asT.mutation(api.intakeDb.generateUploadUrl, {});
     expect(url).toBeTruthy();
 
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["hello"])));
+    const storageId = await t.run((ctx) => seedOwnedUpload(ctx, TENANT, new Blob(["hello"])));
     const artifactId = await t.mutation(internal.intakeDb.insertArtifact, {
       tenantId: TENANT,
       threadId: "thread_x",
@@ -132,7 +140,7 @@ describe("attachToThread (INTK-02) — extract -> redact -> persist -> audit -> 
     const RAW_SSN = "123-45-6789";
     const bytes = `SMOKE::extract::Contact John at ${RAW_EMAIL} or SSN ${RAW_SSN}`;
     const storageId = await t.run((ctx) =>
-      ctx.storage.store(new Blob([bytes], { type: "image/png" })),
+      seedOwnedUpload(ctx, TENANT, new Blob([bytes], { type: "image/png" })),
     );
 
     const res = await asT.action(api.intake.attachToThread, {
@@ -182,7 +190,7 @@ describe("attachToThread (INTK-02) — extract -> redact -> persist -> audit -> 
     // intake.ts routes it into scanText's real non-string Err branch (never a fabricated Err).
     const POISON = "PII_POISON::this content must never reach audit or the conversation";
     const storageId = await t.run((ctx) =>
-      ctx.storage.store(new Blob([POISON], { type: "text/plain" })),
+      seedOwnedUpload(ctx, TENANT, new Blob([POISON], { type: "text/plain" })),
     );
 
     const res = await asT.action(api.intake.attachToThread, {
@@ -229,7 +237,7 @@ describe("attachToThread (INTK-02) — extract -> redact -> persist -> audit -> 
     );
     const bytes = "SMOKE::extract::should never be processed";
     const storageId = await t.run((ctx) =>
-      ctx.storage.store(new Blob([bytes], { type: "image/png" })),
+      seedOwnedUpload(ctx, TENANT, new Blob([bytes], { type: "image/png" })),
     );
 
     const res = await asT.action(api.intake.attachToThread, {
@@ -260,7 +268,7 @@ describe("dictateToThread (INTK-03) — transcribe -> redact -> merge VERBATIM a
     const TRANSCRIPT = "send an email to [EMAIL] about lunch";
     const bytes = `SMOKE::transcribe::${TRANSCRIPT}`;
     const storageId = await t.run((ctx) =>
-      ctx.storage.store(new Blob([bytes], { type: "audio/webm" })),
+      seedOwnedUpload(ctx, TENANT, new Blob([bytes], { type: "audio/webm" })),
     );
 
     const res = await asT.action(api.intake.dictateToThread, { threadId, storageId });
@@ -297,7 +305,9 @@ describe("attachToThread -> vault (attachments persist, not one-shot prompt cont
     filename = "profile.md",
     mimeType = "text/markdown",
   ) => {
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob([body], { type: mimeType })));
+    const storageId = await t.run((ctx) =>
+      seedOwnedUpload(ctx, TENANT, new Blob([body], { type: mimeType })),
+    );
     return asT.action(api.intake.attachToThread, {
       threadId,
       storageId,
@@ -361,7 +371,7 @@ describe("attachToThread -> vault (attachments persist, not one-shot prompt cont
     const { asT, threadId } = await seedThread(t);
     const bytes = "SMOKE::transcribe::remind me to call the lab";
     const storageId = await t.run((ctx) =>
-      ctx.storage.store(new Blob([bytes], { type: "audio/webm" })),
+      seedOwnedUpload(ctx, TENANT, new Blob([bytes], { type: "audio/webm" })),
     );
 
     await asT.action(api.intake.dictateToThread, { threadId, storageId });

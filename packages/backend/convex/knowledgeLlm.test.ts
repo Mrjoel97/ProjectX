@@ -744,41 +744,19 @@ describe("knowledgeLlm.ts is structurally toolless and code-owned", () => {
     }
     // the ONE governance write it IS allowed: the money ledger, which carries refs and a code-owned
     // kind token and no content at all.
-    expect(noComments).toContain("internal.guardrails.recordSpend");
+    expect(noComments).toContain("paidBudgetModel");
   });
 
-  test("BOTH calls write the POST-call spend ledger, with their OWN correlation id", () => {
-    // The whole `priceUsage` + `recordSpend` block could be DELETED from the synthesizer with the
-    // suite green: the only assertion was one whole-file `toContain("internal.guardrails.
-    // recordSpend")`, which the planner's copy satisfies by itself. `preCall` is the PRE-call gate
-    // and cannot see what a call cost, so an unbilled synthesis would never accumulate against the
-    // tenant's daily budget. Per HANDLER, the way the ordering scans above already do it.
+  test("BOTH calls use atomic admission and provider settlement middleware", () => {
     const noComments = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-    for (const [marker, correlation, kind] of [
-      ["planKnowledgeSearch", "knowledge:plan:", "knowledge.plan"],
-      ["synthesizeKnowledge", "knowledge:synth:", "knowledge.synthesize"],
-    ] as const) {
+    for (const marker of ["planKnowledgeSearch", "synthesizeKnowledge"]) {
       const from = noComments.indexOf(`export const ${marker} = internalAction(`);
-      expect(from, `${marker} not found`).toBeGreaterThanOrEqual(0);
+      expect(from).toBeGreaterThanOrEqual(0);
       const body = noComments.slice(from, noComments.indexOf("\n});", from));
-      expect(body, `${marker} never prices its usage`).toContain(
-        "priceUsage(DEFAULT_MODEL, usage)",
-      );
-      expect(body, `${marker} never records what it spent`).toContain(
-        "internal.guardrails.recordSpend",
-      );
-      // The ledger write must come AFTER the model call, or it is billing a call that never
-      // happened; and each call needs its OWN correlation so a retry is traceable to one of them.
-      expect(body.indexOf("generateObject(")).toBeLessThan(body.indexOf("priceUsage("));
-      expect(body).toContain(`correlationId: \`${correlation}\${runId}\``);
-      expect(body).toContain(`kind: "${kind}"`);
+      expect(body).toContain("model: paidBudgetModel(");
+      expect(body).not.toContain("internal.guardrails.recordSpend");
     }
-    // The two correlations are DIFFERENT literals — one prefix for both would make a plan charge
-    // and a synthesis charge indistinguishable in the ledger.
-    expect(noComments).toContain("knowledge:plan:");
-    expect(noComments).toContain("knowledge:synth:");
   });
-
   test("the registry load happens BEFORE the budget gate and the offline seam (§5)", () => {
     // An unseeded deployment must fail loudly rather than plan from a hardcoded fallback, and the
     // ORDER is what guarantees it — a SMOKE prompt on an unseeded deployment must still throw.

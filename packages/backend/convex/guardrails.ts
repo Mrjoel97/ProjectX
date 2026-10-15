@@ -27,10 +27,11 @@ import { v } from "convex/values";
 import { components } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { probeControl } from "./authoringProbe";
 import { dispatchWorkflowLive } from "./dispatchRun";
 import { contentHash } from "./lib/hash";
+import { internalMutation } from "./lib/tenantLifecycle";
 // The PLAIN-FUNCTION half of the ledger writer, not `ctx.runMutation`: the limiter movement and
 // its ledger row must commit or fail TOGETHER (FIN-01). A second transaction could leave the
 // window moved with no record, and an append-only table has no backfill to repair that.
@@ -814,6 +815,140 @@ export const closeEvalBudget = internalMutation({
   },
 });
 
+/** Atomic admission for one paid execution. Unknown outcomes retain their hold. */
+export const reservePaidCall = internalMutation({
+  args: {
+    tenantId: v.string(),
+    callId: v.string(),
+    model: v.string(),
+    ceilingCents: v.number(),
+    rail: vRail,
+  },
+  handler: async (
+    ctx,
+    { tenantId, callId, model, ceilingCents, rail },
+  ): Promise<Id<"spendEvents">> => {
+    if (
+      !/^[a-f0-9-]{36}$/.test(callId) ||
+      !Number.isSafeInteger(ceilingCents) ||
+      ceilingCents < 1 ||
+      ceilingCents > 100000
+    )
+      throw new Error("PAID_ADMISSION_INVALID");
+    if ((await getGuardrailConfig(ctx)).killSwitch) throw new Error("PAID_KILL_SWITCH");
+    const [tenantRail, deploymentRail] =
+      rail === "ingest"
+        ? (["ingestSpendCents", "deploymentIngestSpendCents"] as const)
+        : (["dailySpendCents", "deploymentSpendCents"] as const);
+    const correlationId = `paid:${callId}`;
+    if (
+      await ctx.db
+        .query("spendEvents")
+        .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+        .first()
+    )
+      throw new Error("PAID_CALL_ALREADY_RESERVED");
+    if (!(await rateLimiter.check(ctx, tenantRail, { key: tenantId, count: ceilingCents })).ok)
+      throw new Error("PAID_DAILY_BUDGET_EXHAUSTED");
+    if (!(await rateLimiter.check(ctx, deploymentRail, { count: ceilingCents })).ok)
+      throw new Error("PAID_DEPLOYMENT_BUDGET_EXHAUSTED");
+    await rateLimiter.limit(ctx, tenantRail, { key: tenantId, count: ceilingCents, reserve: true });
+    await rateLimiter.limit(ctx, deploymentRail, { count: ceilingCents, reserve: true });
+    return recordMovement(ctx, {
+      tenantId,
+      correlationId,
+      rail: rail === "ingest" ? "ingest" : "reasoning",
+      phase: "reserved",
+      amountCents: ceilingCents,
+      model,
+      kind: "paid_call",
+      createdAt: Date.now(),
+    });
+  },
+});
+
+/** Settles once, including zero cost. Call only with trusted provider usage. */
+export const settlePaidCall = internalMutation({
+  args: { tenantId: v.string(), reservationId: v.id("spendEvents"), costUsd: v.number() },
+  handler: async (ctx, { tenantId, reservationId, costUsd }) => {
+    const actualCents = evalActualCents(costUsd);
+    if (!Number.isSafeInteger(actualCents)) throw new Error("PAID_COST_INVALID");
+    const held = await ctx.db.get(reservationId);
+    if (
+      !held ||
+      held.tenantId !== tenantId ||
+      held.kind !== "paid_call" ||
+      held.phase !== "reserved"
+    )
+      throw new Error("PAID_RESERVATION_INVALID");
+    const [tenantRail, deploymentRail] =
+      held.rail === "ingest"
+        ? (["ingestSpendCents", "deploymentIngestSpendCents"] as const)
+        : (["dailySpendCents", "deploymentSpendCents"] as const);
+    const rows = await ctx.db
+      .query("spendEvents")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", held.correlationId))
+      .take(8);
+    const previous = rows.find(
+      (row) => row.phase === "actual" || (row.phase === "refunded" && row.evalActualUsd === 0),
+    );
+    if (previous) {
+      if (previous.evalActualUsd !== costUsd) throw new Error("PAID_SETTLEMENT_MISMATCH");
+      return { settled: true, breached: actualCents > held.amountCents };
+    }
+    const difference = actualCents - held.amountCents;
+    if (difference > 0) {
+      await rateLimiter.limit(ctx, tenantRail, { key: tenantId, count: difference, reserve: true });
+      await rateLimiter.limit(ctx, deploymentRail, { count: difference, reserve: true });
+    }
+    if (difference < 0) {
+      const refund = -difference;
+      const tenantRefund = refundableCents(
+        await rateLimiter.getValue(ctx, tenantRail, { key: tenantId }),
+        refund,
+        held.createdAt,
+      );
+      const deploymentRefund = refundableCents(
+        await rateLimiter.getValue(ctx, deploymentRail),
+        refund,
+        held.createdAt,
+      );
+      if (tenantRefund > 0)
+        await rateLimiter.limit(ctx, tenantRail, {
+          key: tenantId,
+          count: -tenantRefund,
+          reserve: true,
+        });
+      if (deploymentRefund > 0)
+        await rateLimiter.limit(ctx, deploymentRail, { count: -deploymentRefund, reserve: true });
+      await recordMovement(ctx, {
+        tenantId,
+        correlationId: held.correlationId,
+        rail: held.rail,
+        phase: "refunded",
+        amountCents: refund,
+        model: held.model,
+        kind: held.kind,
+        createdAt: Date.now(),
+        ...(actualCents === 0 ? { evalActualUsd: 0 } : {}),
+      });
+    }
+    if (actualCents > 0)
+      await recordMovement(ctx, {
+        tenantId,
+        correlationId: held.correlationId,
+        rail: held.rail,
+        phase: "actual",
+        amountCents: actualCents,
+        model: held.model,
+        kind: held.kind,
+        createdAt: Date.now(),
+        evalActualUsd: costUsd,
+      });
+    return { settled: true, breached: difference > 0 };
+  },
+});
+
 export const preCall = internalMutation({
   args: { tenantId: v.string(), rail: vRail, reserved: v.optional(v.boolean()) },
   handler: async (
@@ -884,8 +1019,22 @@ export const recordSpend = internalMutation({
     folderId: v.optional(v.id("vaultFolders")),
   },
   handler: async (ctx, { tenantId, costUsd, rail, ...ref }) => {
-    const cents = Math.ceil(costUsd * 100);
+    const cents = evalActualCents(costUsd);
+    if (!Number.isSafeInteger(cents)) throw new Error("SPEND_COST_INVALID");
     if (cents <= 0) return;
+    // Replay identity must protect the limiter as well as the append-only ledger.
+    if (ref.correlationId) {
+      const correlationId = ref.correlationId;
+      const prior = await ctx.db
+        .query("spendEvents")
+        .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+        .take(32);
+      const actual = prior.find((row) => row.tenantId === tenantId && row.phase === "actual");
+      if (actual) {
+        if (actual.amountCents !== cents) throw new Error("SPEND_REPLAY_MISMATCH");
+        return;
+      }
+    }
     // The rail selector applies HERE regardless of `reserved`: folder work skips the ingest CHECK
     // (it is pre-paid) but its actual spend must still MOVE the ingest window, or the reservation
     // would be released against a window that never recorded what the folder really cost.

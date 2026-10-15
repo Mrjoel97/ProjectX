@@ -105,8 +105,11 @@ function DeadLetterBadge() {
   const count = useQuery(api.deadLetters.newCount);
   if (!count) return null;
   return (
-    <span className="rail-badge" title={`${count} unresolved dead letter${count === 1 ? "" : "s"}`}>
-      {count}
+    <span
+      className="rail-badge"
+      title={`${count >= 100 ? "100+" : count} unresolved dead letter${count === 1 ? "" : "s"}`}
+    >
+      {count >= 100 ? "100+" : count}
     </span>
   );
 }

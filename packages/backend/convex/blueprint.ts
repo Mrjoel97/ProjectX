@@ -28,24 +28,21 @@ import {
   statedFromProfile,
   validateCandidates,
 } from "@pikar/core";
-import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
+import { DEFAULT_MODEL } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import { categoryFor } from "@pikar/vault";
 import { generateObject, jsonSchema } from "ai";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import {
-  internalAction,
-  internalMutation,
-  internalQuery,
-  type QueryCtx,
-} from "./_generated/server";
+import { internalQuery, type QueryCtx } from "./_generated/server";
 import { toGoal } from "./goals";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { resolveModel } from "./lib/models";
+import { paidBudgetModel } from "./lib/paidBudgetModel";
 import { holdsWork, isRoot } from "./lib/planRow";
+import { internalAction, internalMutation } from "./lib/tenantLifecycle";
 import { sealedIn } from "./vaultFolders";
 
 const TOP_ENTITY_COUNT = 20;
@@ -281,7 +278,7 @@ export const deriveCandidates = internalAction({
     // would collapse every rebuild after the first onto one `actual` row and put the ledger below
     // the limiter, the unrecoverable direction. There is exactly one model call per run, so the
     // runId alone separates run N from run N+1.
-    const runId = crypto.randomUUID();
+
     const skill: { body: string; version: number } = await ctx.runQuery(
       internal.skills.getActiveSkill,
       { name: BUSINESS_BLUEPRINT_SKILL },
@@ -307,24 +304,20 @@ export const deriveCandidates = internalAction({
       return { ok: true, candidates: smokeCandidatesFixture(smokeSeed) };
     }
 
-    const { object, usage } = await generateObject({
-      model: resolveModel(DEFAULT_MODEL),
+    const { object } = await generateObject({
+      model: paidBudgetModel({
+        ctx,
+        tenantId,
+        model: resolveModel(DEFAULT_MODEL),
+        modelId: DEFAULT_MODEL,
+      }),
       schema: candidatesSchema,
       system: skill.body,
       prompt: safePrompt,
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       maxRetries: 1,
     });
-    const priced = priceUsage(DEFAULT_MODEL, usage);
-    if (priced.ok) {
-      await ctx.runMutation(internal.guardrails.recordSpend, {
-        tenantId,
-        costUsd: priced.value,
-        correlationId: `blueprint:derive:${runId}`,
-        model: DEFAULT_MODEL,
-        kind: "blueprint.derive", // code-owned token, refs only (§4)
-      });
-    }
+
     return { ok: true, candidates: object.candidates };
   },
 });
@@ -581,7 +574,11 @@ export const buildBlueprintDraft = tenantAction({
   },
 });
 
+export const BLUEPRINT_PULSE_SCAN_CAP = 50;
+
 type BlueprintPulseResult = {
+  truncated: boolean;
+  truncatedSegments: string[];
   segments: Record<string, SegmentPulse>;
   globals: PulseGlobals;
 };
@@ -595,7 +592,10 @@ type BlueprintPulseResult = {
 export const blueprintPulse = tenantQuery({
   args: { now: v.number() },
   handler: async (ctx, { now }): Promise<BlueprintPulseResult> => {
+    if (!Number.isFinite(now)) throw new Error("INVALID_TIME");
     const since = now - PULSE_WINDOW_MS;
+    let truncated = false;
+    const truncatedSegments: string[] = [];
     const steps: PulseStep[] = [];
     for (const segment of BLUEPRINT_SEGMENTS) {
       const tool = dispatchToolFor(segment);
@@ -610,8 +610,13 @@ export const blueprintPulse = tenantQuery({
             .eq("tool", tool as never)
             .gt("startedAt", since),
         )
-        .collect();
-      for (const r of rows)
+        .order("desc")
+        .take(BLUEPRINT_PULSE_SCAN_CAP + 1);
+      if (rows.length > BLUEPRINT_PULSE_SCAN_CAP) {
+        truncated = true;
+        truncatedSegments.push(segment.id);
+      }
+      for (const r of rows.slice(0, BLUEPRINT_PULSE_SCAN_CAP))
         steps.push({
           tool: r.tool,
           phase: r.phase,
@@ -629,13 +634,15 @@ export const blueprintPulse = tenantQuery({
       .withIndex("by_tenant_status_createdAt", (q) =>
         q.eq("tenantId", ctx.tenantId).eq("status", "sent").gt("createdAt", since),
       )
-      .collect();
+      .order("desc")
+      .take(BLUEPRINT_PULSE_SCAN_CAP + 1);
     const done = await ctx.db
       .query("plans")
       .withIndex("by_tenant_status_createdAt", (q) =>
         q.eq("tenantId", ctx.tenantId).eq("status", "done").gt("createdAt", since),
       )
-      .collect();
+      .order("desc")
+      .take(BLUEPRINT_PULSE_SCAN_CAP + 1);
     // THREE filters, and the number was wrong in three different ways without them.
     //
     // ROOTS ONLY (ADR-037). Before Phase 42 a thread held exactly one `plans` row, so counting
@@ -662,13 +669,26 @@ export const blueprintPulse = tenantQuery({
         .withIndex("by_tenant_status_createdAt", (q) =>
           q.eq("tenantId", ctx.tenantId).eq("status", status).gt("createdAt", since),
         )
-        .collect();
-      plansInFlight += rows.filter((p) => isRoot(p) && holdsWork(p)).length;
+        .order("desc")
+        .take(BLUEPRINT_PULSE_SCAN_CAP + 1);
+      if (rows.length > BLUEPRINT_PULSE_SCAN_CAP) truncated = true;
+      plansInFlight += rows
+        .slice(0, BLUEPRINT_PULSE_SCAN_CAP)
+        .filter((p) => isRoot(p) && holdsWork(p)).length;
     }
 
     return {
+      truncated:
+        truncated ||
+        sent.length > BLUEPRINT_PULSE_SCAN_CAP ||
+        done.length > BLUEPRINT_PULSE_SCAN_CAP,
+      truncatedSegments,
       segments: aggregatePulse(steps, now),
-      globals: { sent30d: sent.length, plansDone30d: done.length, plansInFlight },
+      globals: {
+        sent30d: Math.min(sent.length, BLUEPRINT_PULSE_SCAN_CAP),
+        plansDone30d: Math.min(done.length, BLUEPRINT_PULSE_SCAN_CAP),
+        plansInFlight,
+      },
     };
   },
 });
@@ -734,8 +754,10 @@ export const spineForTenant = internalQuery({
       const { count } = await unincorporatedFor(ctx, tenantId, live.sourceDocIds);
       const goalRows = await ctx.db
         .query("goals")
-        .withIndex("by_tenant_status", (q) => q.eq("tenantId", tenantId).eq("status", "active"))
-        .collect();
+        .withIndex("by_tenant_status_target", (q) =>
+          q.eq("tenantId", tenantId).eq("status", "active").gt("targetDate", undefined),
+        )
+        .take(3);
       return renderSpine(blueprint, {
         unincorporatedCount: count,
         goals: goalRows.map(toGoal),

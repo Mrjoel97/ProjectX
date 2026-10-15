@@ -9,9 +9,9 @@ import {
 } from "@pikar/core/marketing";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 const TOKEN_DOMAIN = "pikar:funnel:v1:";
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;

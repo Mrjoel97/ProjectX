@@ -90,9 +90,9 @@ import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
 import { tenantAction, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 // ── The closed adapter registry ─────────────────────────────────────────────────────────────
 

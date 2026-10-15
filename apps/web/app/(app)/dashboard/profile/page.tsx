@@ -162,6 +162,9 @@ function ProfileSurface() {
           >
             No profile yet
           </h1>
+          <a href="/dashboard/onboarding" style={{ color: "var(--teal-600)" }}>
+            Continue business setup
+          </a>
         </header>
         <p style={{ color: "var(--ink-soft)", margin: 0 }}>
           Set up your business first, then come back here to keep it current.{" "}

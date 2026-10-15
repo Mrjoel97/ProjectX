@@ -55,11 +55,11 @@ import { estimatedBytesFor } from "@pikar/vault/driveEstimate";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { ActionCtx } from "./_generated/server";
-import { internalAction, internalMutation, type MutationCtx } from "./_generated/server";
+import type { ActionCtx, MutationCtx } from "./_generated/server";
 import { freshAccessToken } from "./gmail";
 import { tenantAction } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { internalAction, internalMutation } from "./lib/tenantLifecycle";
 import { tryComplete } from "./vaultFolders";
 
 const DRIVE_FILES_ENDPOINT = "https://www.googleapis.com/drive/v3/files";
@@ -874,12 +874,12 @@ export const diffImport = internalMutation({
     unchanged: number;
     removed: number;
   }> => {
-    const existingFolder = (
-      await ctx.db
-        .query("vaultFolders")
-        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
-        .collect()
-    ).find((f) => f.driveFolderId === driveFolderId);
+    const existingFolder = await ctx.db
+      .query("vaultFolders")
+      .withIndex("by_tenant_drive", (q) =>
+        q.eq("tenantId", tenantId).eq("driveFolderId", driveFolderId),
+      )
+      .first();
 
     const folderId =
       existingFolder?._id ??

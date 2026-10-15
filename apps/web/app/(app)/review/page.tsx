@@ -1,18 +1,26 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { useQuery } from "convex/react";
+import { usePaginatedQuery } from "convex/react";
 import Link from "next/link";
 
 // REVW-01: a LIVE queue of requests awaiting review — a real list, not a
 // single-request takeover (CONTEXT). Each row links to its collapsed gate.
 export default function ReviewQueue() {
-  const requests = useQuery(api.requests.list, { status: "awaiting_review" });
+  const {
+    results: requests,
+    status,
+    loadMore,
+  } = usePaginatedQuery(
+    api.requests.listPage,
+    { status: "awaiting_review" },
+    { initialNumItems: 25 },
+  );
 
   return (
     <section>
       <h1>Review queue</h1>
-      {requests === undefined ? (
+      {status === "LoadingFirstPage" ? (
         <p>Loading…</p>
       ) : requests.length === 0 ? (
         <p style={{ color: "#666" }}>Nothing awaiting review.</p>
@@ -39,6 +47,12 @@ export default function ReviewQueue() {
           ))}
         </ul>
       )}
+      {status === "CanLoadMore" && (
+        <button type="button" onClick={() => loadMore(25)}>
+          Load more
+        </button>
+      )}
+      {status === "LoadingMore" && <p>Loading more…</p>}
     </section>
   );
 }

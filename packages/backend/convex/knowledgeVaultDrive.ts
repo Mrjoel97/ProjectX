@@ -42,7 +42,7 @@ import {
 } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction } from "./_generated/server";
+import { internalAction } from "./lib/tenantLifecycle";
 
 // THE RESULT CONTRACT IS NOT DEFINED HERE. `KnowledgeAdapterResult`, `settleRead` and
 // `unavailableRead` live in `@pikar/core` beside `clampEvidence` and the closed state union

@@ -7,8 +7,9 @@
 // `extracted` (when present) holds REDACTED safeText ONLY (CLAUDE.md §4) — intake.ts never
 // writes raw extracted text here.
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 const KIND = v.union(
   v.literal("image"),
@@ -27,9 +28,11 @@ const STATUS = v.union(
 
 /** Upload-first: the client PUTs the file/audio blob to this URL, then calls
  *  intake.attachToThread/dictateToThread with the resulting storageId. */
+import { issueUpload } from "./uploads";
+
 export const generateUploadUrl = tenantMutation({
   args: {},
-  handler: async (ctx) => await ctx.storage.generateUploadUrl(),
+  handler: issueUpload,
 });
 
 /** Insert the artifact row at status="uploaded" (intake.ts's "use node" action has no ctx.db). */
@@ -68,7 +71,8 @@ export const byThread = tenantQuery({
     await ctx.db
       .query("intakeArtifacts")
       .withIndex("by_thread", (q) => q.eq("tenantId", ctx.tenantId).eq("threadId", threadId))
-      .collect(),
+      .order("desc")
+      .take(100),
 });
 
 /** One artifact by id (internal — intake.ts's "use node" action reads it via ctx.runQuery). */

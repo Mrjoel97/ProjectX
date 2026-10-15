@@ -160,6 +160,18 @@ function indexesOf(table: string): { indexDescriptor: string; fields: string[] }
  * Adding an index without adding it here fails the suite. That is the whole mechanism.
  */
 const NON_TENANT_LEADING: Record<string, string> = {
+  "uploadReceipts.by_ticket":
+    "internal one-use capability resolution; issuer binds tenant before URL leaves the server",
+  "uploadReceipts.by_storage":
+    "receipt ownership checks compare caller tenant before granting access; no public unscoped lookup",
+  "uploadReceipts.by_expiry":
+    "internal bounded retention cron deletes expired unbound uploads only",
+  "foundationTranscripts.by_expiry":
+    "internal bounded retention cron only; no tenant-facing caller",
+  "voiceSessions.by_spendReservationId":
+    "single-use admission lookup after reservation ownership verification",
+  "voiceSessions.by_controlExpiresAt":
+    "internal bounded retention sweep clears expired transient voice content across tenants",
   "funnels.by_token_hash":
     "31-00 approved bearer-link resolution: planned internal funnels.resolveAndIncrement resolves a domain-separated token hash, never a caller-selected tenant; management uses by_tenant",
   "audit.by_correlation": "correlation trace; internal + owner plane, joins one workflow's rows",
@@ -179,6 +191,8 @@ const NON_TENANT_LEADING: Record<string, string> = {
   "attachments.by_request": "join from a request row already tenant-checked by its own reader",
   "telemetry.by_correlation": "correlation trace, internal",
   "vaultDocuments.by_kind": "internal corpus maintenance; no tenant-facing caller",
+  "feedback.by_skill_created":
+    "bounded skill-optimizer sampling and cursor export across tenants; internal owner/token plane",
   "feedback.by_skill": "skill-optimizer aggregation across tenants; owner/token plane",
   "spendEvents.by_correlation": "correlation trace, internal",
   "spendEvents.by_eval_budget":
@@ -270,7 +284,7 @@ describe("every tenant-owned index leads with tenantId, or names why it does not
  * be blind to.
  */
 const PUBLIC_EXPORT =
-  /export const ([a-zA-Z0-9_]+) = (tenantQuery|tenantMutation|tenantAction|ownerQuery|ownerMutation|ownerAction|query|mutation|action)\(/g;
+  /export const ([a-zA-Z0-9_]+) = (tenantQuery|tenantMutation|tenantAction|tenantErasureAction|ownerQuery|ownerMutation|ownerAction|query|mutation|action)\(/g;
 
 type PublicFn = { module: string; name: string; builder: string };
 

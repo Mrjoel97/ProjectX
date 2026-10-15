@@ -749,7 +749,7 @@ the rest of the document`,
 
     await expect(
       t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
-    ).rejects.toThrow(/no network is allowed/);
+    ).rejects.toThrow(/PAID_MODEL_RESPONSE_UNRESOLVED/);
 
     // Nothing was written, so there is no fabricated digest for retrieval to serve.
     expect((await digestOf(t, folderId)).digestDocId).toBeUndefined();
@@ -769,7 +769,7 @@ the rest of the document`,
 
     await expect(
       t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
-    ).rejects.toThrow(/no network is allowed/);
+    ).rejects.toThrow(/PAID_MODEL_RESPONSE_UNRESOLVED/);
   });
 
   test("A FOLDER NAME carrying the sentinel takes the LIVE model path — it is a CLIENT argument", async () => {
@@ -783,7 +783,7 @@ the rest of the document`,
 
     await expect(
       t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
-    ).rejects.toThrow(/no network is allowed/);
+    ).rejects.toThrow(/PAID_MODEL_RESPONSE_UNRESOLVED/);
 
     expect((await digestOf(t, folderId)).digestDocId).toBeUndefined();
   });
@@ -848,7 +848,7 @@ the rest of the document`,
 
     await expect(
       t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
-    ).rejects.toThrow(/no network is allowed/);
+    ).rejects.toThrow(/PAID_MODEL_RESPONSE_UNRESOLVED/);
   });
 
   test("OPENROUTER_API_KEY ALONE closes the seam — that is the key a digest actually spends", async () => {
@@ -861,6 +861,6 @@ the rest of the document`,
 
     await expect(
       t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
-    ).rejects.toThrow(/no network is allowed/);
+    ).rejects.toThrow(/PAID_MODEL_RESPONSE_UNRESOLVED/);
   });
 });

@@ -16,7 +16,8 @@ export const newCount = tenantQuery({
     const rows = await ctx.db
       .query("deadLetters")
       .withIndex("by_tenant_status", (q) => q.eq("tenantId", ctx.tenantId).eq("status", "new"))
-      .collect();
+      .order("desc")
+      .take(100);
     return rows.length;
   },
 });
@@ -28,7 +29,8 @@ export const listNew = tenantQuery({
     await ctx.db
       .query("deadLetters")
       .withIndex("by_tenant_status", (q) => q.eq("tenantId", ctx.tenantId).eq("status", "new"))
-      .collect(),
+      .order("desc")
+      .take(100),
 });
 
 /** The server's ceiling on one page of the operator listing, and its default. */
@@ -52,7 +54,7 @@ const LIST_ALL_DEFAULT = 50;
  * two different decisions, and only the first one has been made.
  *
  * BOUNDED, because the moment this listing matters most is the moment there are thousands of rows:
- * an unbounded `.collect()` on a failing deployment is a second outage on the screen you are trying
+ * an unbounded `.order("desc").take(100)` on a failing deployment is a second outage on the screen you are trying
  * to diagnose the first one from. `truncated` says so honestly rather than pretending the page is
  * the whole story.
  *

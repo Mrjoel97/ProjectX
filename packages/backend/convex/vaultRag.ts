@@ -19,7 +19,6 @@
 // editing this one.
 
 import { RAG } from "@convex-dev/rag";
-import { priceUsage } from "@pikar/cost";
 import {
   goldenEmbeddingRequest,
   goldenOpenRouterObservedUsage,
@@ -29,8 +28,8 @@ import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
-import { internalAction } from "./_generated/server";
 import { fixtureSeamFor } from "./lib/models";
+import { internalAction } from "./lib/tenantLifecycle";
 
 // TWO EMBEDDING PROVIDERS, SELECTED BY ONE CONSTANT — the same shape `resolveModel` (llm.ts) uses
 // to route chat, reused here rather than invented. Flipping providers is a one-line change to
@@ -237,7 +236,8 @@ export const embeddingContentHash = (contentHash: string): string =>
 export type VaultEmbeddingEvaluation = {
   ctx: Pick<GenericActionCtx<DataModel>, "runMutation">;
   tenantId: string;
-  budgetId: Id<"spendEvents">;
+  budgetId?: Id<"spendEvents">;
+  rail?: "ingest";
   onCost?: (costUsd: number) => void;
 };
 
@@ -324,14 +324,22 @@ export function createVaultEmbeddingModel(evaluation?: VaultEmbeddingEvaluation)
         const pricedRequest = evaluation ? goldenEmbeddingRequest(values) : undefined;
         const reservationId =
           evaluation && pricedRequest
-            ? await evaluation.ctx.runMutation(internal.guardrails.reserveEvalCall, {
-                tenantId: evaluation.tenantId,
-                budgetId: evaluation.budgetId,
-                callId: crypto.randomUUID(),
-                model: `or/${pricedRequest.call.model}`,
-                outputTokens: 0,
-                providerCall: pricedRequest.call,
-              })
+            ? evaluation.budgetId
+              ? await evaluation.ctx.runMutation(internal.guardrails.reserveEvalCall, {
+                  tenantId: evaluation.tenantId,
+                  budgetId: evaluation.budgetId,
+                  callId: crypto.randomUUID(),
+                  model: `or/${pricedRequest.call.model}`,
+                  outputTokens: 0,
+                  providerCall: pricedRequest.call,
+                })
+              : await evaluation.ctx.runMutation(internal.guardrails.reservePaidCall, {
+                  tenantId: evaluation.tenantId,
+                  callId: crypto.randomUUID(),
+                  model: `or/${pricedRequest.call.model}`,
+                  ceilingCents: pricedRequest.ceilingCents,
+                  rail: evaluation.rail,
+                })
             : undefined;
         try {
           const response = await fetch(url, {
@@ -367,7 +375,9 @@ export function createVaultEmbeddingModel(evaluation?: VaultEmbeddingEvaluation)
             if (observed.isByok !== false)
               throw new Error("EVAL_EMBEDDING_BILLING_MODE_UNVERIFIED");
             const settlement = await evaluation.ctx.runMutation(
-              internal.guardrails.settleEvalCall,
+              evaluation.budgetId
+                ? internal.guardrails.settleEvalCall
+                : internal.guardrails.settlePaidCall,
               {
                 tenantId: evaluation.tenantId,
                 reservationId,
@@ -460,11 +470,12 @@ export const embedDoc = internalAction({
     vaultDocId: v.id("vaultDocuments"),
     tenantId: v.string(),
     evalBudgetId: v.optional(v.id("spendEvents")),
+    rail: v.optional(v.literal("ingest")),
   },
   handler: async (
     ctx,
-    { vaultDocId, tenantId, evalBudgetId },
-  ): Promise<{ entryId: string; costUsd: number }> => {
+    { vaultDocId, tenantId, evalBudgetId, rail },
+  ): Promise<{ entryId: string; costUsd: number; budgetSettled?: boolean }> => {
     let actualUsd = 0;
     const activeRag = evalBudgetId
       ? ragForEvaluation({
@@ -475,7 +486,14 @@ export const embedDoc = internalAction({
             actualUsd += cost;
           },
         })
-      : rag;
+      : ragForEvaluation({
+          ctx,
+          tenantId,
+          rail,
+          onCost: (cost) => {
+            actualUsd += cost;
+          },
+        });
     const doc = await ctx.runQuery(internal.vault.getDoc, { vaultDocId, tenantId });
 
     // Redact BEFORE embedding (§4). Fail CLOSED so raw text can never reach the embedding model.
@@ -503,7 +521,7 @@ export const embedDoc = internalAction({
     });
     if (existing) return { entryId: existing.entryId, costUsd: 0 };
 
-    const { entryId, usage } = await activeRag.add(ctx, {
+    const { entryId } = await activeRag.add(ctx, {
       namespace: tenantId,
       text: safeText,
       key: doc.contentHash,
@@ -517,7 +535,6 @@ export const embedDoc = internalAction({
     // batchEmbedContents returns no usage, so `usage.tokens` is 0. Add a pricing row AND a token
     // count together if embedding spend ever becomes material — one without the other is the silent
     // under-draw that packages/cost/src/cost.ts exists to prevent.
-    const priced = priceUsage(EMBEDDING_MODEL, { inputTokens: usage.tokens });
-    return { entryId, costUsd: evalBudgetId ? actualUsd : priced.ok ? priced.value : 0 };
+    return { entryId, costUsd: actualUsd, budgetSettled: true };
   },
 });

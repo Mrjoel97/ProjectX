@@ -19,8 +19,8 @@ import { vWorkflowId } from "@convex-dev/workflow";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
 import { workflow } from "./index";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 /** The REVW-01 decision union: what the user can do at the gate. */
 export const reviewDecisionValidator = v.union(

@@ -9,15 +9,16 @@
 // metered TO Stripe, the Customer Portal can no longer manage those subscriptions and management
 // must move to the Subscription Update API. v1 avoids this by keeping metering internal. That is
 // a migration, not a flag flip.
-import { TRIAL_DAYS } from "@pikar/billing/config";
+import { COMMERCIAL_BILLING_ENABLED, CONFIG_CONFIRMED, TRIAL_DAYS } from "@pikar/billing/config";
 import { subscriptionState } from "@pikar/billing/events";
 import { unappliedStage } from "@pikar/billing/reconcile";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { billingConfigured, stripeDelete, stripeHostedUrl, stripePost } from "./billingApi";
 import { billingCoverageFor } from "./billingLedger";
 import { tenantAction, tenantQuery } from "./lib/functions";
+import { internalAction } from "./lib/tenantLifecycle";
 
 /**
  * How long two Customer Portal requests share one idempotency key.
@@ -201,6 +202,8 @@ export const startCheckout = tenantAction({
   args: {},
   returns: doorReturns,
   handler: async (ctx): Promise<Door> => {
+    if (!COMMERCIAL_BILLING_ENABLED) return { ok: false, reason: "commercial_billing_disabled" };
+    if (!CONFIG_CONFIRMED) return { ok: false, reason: "billing_configuration_unconfirmed" };
     const priceId = requirePriceId();
     const origin = requireAppOrigin();
     const customerId = await ctx.runQuery(internal.billing.stripeCustomerFor, {

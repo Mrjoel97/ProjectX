@@ -14,10 +14,10 @@ import {
   segmentForRoute,
 } from "@pikar/core";
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
 import { applyActOnGap } from "./evaluations";
 import { syncAgenda } from "./lib/agenda";
 import { tenantMutation, tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 /**
  * The cron's hop, called by `proactiveReview.reviewOne` right after the review row is written.
@@ -83,10 +83,6 @@ export const current = tenantQuery({
       .query("agenda")
       .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
       .collect();
-    const goals = await ctx.db
-      .query("goals")
-      .withIndex("by_tenant_status", (q) => q.eq("tenantId", ctx.tenantId).eq("status", "active"))
-      .collect();
     const citations = [...new Set(latest.findings.map((f) => f.citationTitle))].slice(
       0,
       AGENDA_LIMIT,
@@ -105,6 +101,14 @@ export const current = tenantQuery({
       if (status === "dismissed") continue;
       const gap = latest.gaps[row.gapIndex];
       const segment = segmentForRoute(row.route);
+      const goal = segment
+        ? await ctx.db
+            .query("goals")
+            .withIndex("by_tenant_status_segment", (q) =>
+              q.eq("tenantId", ctx.tenantId).eq("status", "active").eq("segmentId", segment),
+            )
+            .first()
+        : null;
       items.push({
         key: row.key,
         label: row.label,
@@ -113,7 +117,7 @@ export const current = tenantQuery({
         status,
         gapIndex: row.gapIndex,
         citations,
-        goal: (segment && goals.find((g) => g.segmentId === segment)?.text) || null,
+        goal: goal?.text ?? null,
       });
     }
     const asks = latest.notEnoughData.slice(0, Math.max(0, AGENDA_LIMIT - items.length));

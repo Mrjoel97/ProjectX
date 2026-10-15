@@ -435,3 +435,9 @@ directory; without `--prod` it targets the local dev deployment rather than the 
    observed at the live gates (25-11/25-12).
 3. **This manifest covers the CONVEX deployment only.** The web build's variables are the
    pipeline's business and are not visible to `envCheck`.
+
+## Reliability release prerequisites — 2026-10-15
+
+Last verified: 2026-10-15 — use docs/operations.md and docs/release-readiness.md as the current entry points. Password verification/recovery requires AUTH_RESEND_KEY and a verified AUTH_EMAIL_FROM. Foundation onboarding is opt-in through FOUNDATION_ONBOARDING_ENABLED=1 after skill seeding, ingestion drain and live evidence. Default remains the existing typed onboarding. No configuration or live deployment was performed by this source change.
+
+Last verified: 2026-10-15 — production release now checks both password email settings before building or deploying. The CLI output stays in memory; only missing setting names are printed. This presence gate does not replace controlled verification/recovery delivery evidence. Production read-only preflight run38748292173 confirmed both absent, so deployment remains blocked pending secure provisioning.

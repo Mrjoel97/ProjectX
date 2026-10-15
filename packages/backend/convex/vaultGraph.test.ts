@@ -6,6 +6,7 @@ import { describe, expect, test } from "vitest";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
+import { clearDocumentGraphPage } from "./vaultGraph";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 
@@ -183,4 +184,58 @@ describe("expand — hop-capped, tenant-scoped BFS", () => {
     );
     expect(bobRowsA).toHaveLength(1);
   });
+});
+
+test("replacement removes only the document's graph contribution and preserves shared nodes", async () => {
+  const t = convexTest(schema, modules);
+  const old = await makeDoc(t, TENANT, "old");
+  const kept = await makeDoc(t, TENANT, "kept");
+  await t.mutation(internal.vaultGraph.upsertGraph, {
+    tenantId: TENANT,
+    sourceDocId: old,
+    ...pair("Shared", "Old"),
+  });
+  await t.mutation(internal.vaultGraph.upsertGraph, {
+    tenantId: TENANT,
+    sourceDocId: kept,
+    ...pair("Shared", "Current"),
+  });
+  expect(await t.run((ctx) => clearDocumentGraphPage(ctx, TENANT, old))).toBe(true);
+  const nodes = await t.run((ctx) => ctx.db.query("graphNodes").collect());
+  expect(nodes.map((n) => n.name).sort()).toEqual(["Current", "Shared"]);
+  expect(nodes.every((n) => n.degree === 1)).toBe(true);
+  expect(await t.run((ctx) => ctx.db.query("graphEdges").collect())).toHaveLength(1);
+});
+
+test("stale ingestion cannot publish graph, classification or terminal status over a new revision", async () => {
+  const t = convexTest(schema, modules);
+  const doc = await makeDoc(t, TENANT, "new");
+  await t.run((ctx) => ctx.db.patch(doc, { status: "processing" }));
+  await t.mutation(internal.vaultGraph.upsertGraph, {
+    tenantId: TENANT,
+    sourceDocId: doc,
+    ...pair("Old", "Stale"),
+    expectedContentHash: "old-hash",
+  });
+  await t.mutation(internal.vault.markReady, {
+    vaultDocId: doc,
+    ragEntryId: "old-entry",
+    expectedContentHash: "old-hash",
+  });
+  await t.mutation(internal.vault.markFailed, {
+    vaultDocId: doc,
+    reason: "old-failure",
+    expectedContentHash: "old-hash",
+  });
+  await t.mutation(internal.vault.applyClassification, {
+    vaultDocId: doc,
+    tenantId: TENANT,
+    identityLine: "Old classification",
+    expectedContentHash: "old-hash",
+  });
+  const current = await t.run((ctx) => ctx.db.get(doc));
+  expect(current?.status).toBe("processing");
+  expect(current?.ragEntryId).toBeUndefined();
+  expect(current?.identityLine).toBeUndefined();
+  expect(await t.run((ctx) => ctx.db.query("graphEdges").collect())).toHaveLength(0);
 });

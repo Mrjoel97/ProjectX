@@ -19,7 +19,7 @@
 
 import { DOCUMENT_CLASSIFIER_SKILL, GRAPH_EXTRACTOR_SKILL } from "@pikar/contracts/skill";
 import { DOC_TYPES, type DocType, isDocType } from "@pikar/core";
-import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
+import { DEFAULT_MODEL } from "@pikar/cost";
 import { EVAL_MAX_OUTPUT_TOKENS } from "@pikar/cost/evalBudget";
 import { scanText } from "@pikar/pii";
 // The `/constants` SUBPATH, not the barrel: the barrel re-exports the extractors, which pull xlsx
@@ -29,9 +29,11 @@ import { generateObject, jsonSchema } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
-import { internalAction, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { evalBudgetModel } from "./lib/evalBudgetModel";
 import { fixtureSeamFor, resolveModel } from "./lib/models";
+import { paidBudgetModel } from "./lib/paidBudgetModel";
+import { internalAction } from "./lib/tenantLifecycle";
 
 // Per-call wall-clock ceiling (mirrors llm.ts). One retry budget: SDK maxRetries:1.
 const CALL_TIMEOUT_MS = 45_000;
@@ -40,7 +42,12 @@ const CALL_TIMEOUT_MS = 45_000;
 // `nodes[].name`/`edges` are surface forms/labels — NEVER raw document text (§4).
 type GraphNode = { type: string; name: string };
 type GraphEdge = { from: string; to: string; rel: string };
-type ExtractedGraph = { nodes: GraphNode[]; edges: GraphEdge[]; costUsd: number };
+type ExtractedGraph = {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  costUsd: number;
+  budgetSettled?: boolean;
+};
 
 // The structured-output schema handed to generateObject. Edge endpoints reference emitted node
 // names (the graph-extractor skill's extract-only-never-invent contract).
@@ -117,8 +124,9 @@ export const extractGraph = internalAction({
     vaultDocId: v.id("vaultDocuments"),
     tenantId: v.string(),
     evalBudgetId: v.optional(v.id("spendEvents")),
+    rail: v.optional(v.literal("ingest")),
   },
-  handler: async (ctx, { vaultDocId, tenantId, evalBudgetId }): Promise<ExtractedGraph> => {
+  handler: async (ctx, { vaultDocId, tenantId, evalBudgetId, rail }): Promise<ExtractedGraph> => {
     // Load the extractor prompt FIRST (no hardcoded prompt — §5); fails closed (throws
     // NO_ACTIVE_SKILL) when unseeded, so a hardcoded fallback can never sneak in.
     const skill: { body: string; version: number } = await ctx.runQuery(
@@ -149,7 +157,7 @@ export const extractGraph = internalAction({
     // SENT (VAULT_EXTRACT_CHAR_CAP lets 400k chars be stored) — see GRAPH_EXTRACT_CHAR_CAP for the
     // head-slice ceiling and its upgrade path.
     let actualUsd = 0;
-    const { object, usage } = await generateObject({
+    const { object } = await generateObject({
       model: evalBudgetId
         ? evalBudgetModel({
             ctx,
@@ -162,7 +170,16 @@ export const extractGraph = internalAction({
               actualUsd += cost;
             },
           })
-        : resolveModel(DEFAULT_MODEL),
+        : paidBudgetModel({
+            ctx,
+            tenantId,
+            model: resolveModel(DEFAULT_MODEL),
+            modelId: DEFAULT_MODEL,
+            rail,
+            onCost: (cost) => {
+              actualUsd += cost;
+            },
+          }),
       schema: graphSchema,
       system: skill.body,
       prompt: capGraphText(safeText),
@@ -170,11 +187,11 @@ export const extractGraph = internalAction({
       maxRetries: evalBudgetId ? 0 : 1,
       ...(evalBudgetId ? { maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS } : {}),
     });
-    const priced = priceUsage(DEFAULT_MODEL, usage);
     return {
       nodes: object.nodes,
       edges: object.edges,
-      costUsd: evalBudgetId ? actualUsd : priced.ok ? priced.value : 0,
+      costUsd: actualUsd,
+      budgetSettled: true,
     };
   },
 });
@@ -183,7 +200,12 @@ export const extractGraph = internalAction({
 
 /** The classifier's output. `docType` is the CLOSED union — a model string never reaches it
  *  unvalidated (see the coercion in the handler). `identityLine` is display prose ("2025 P&L"). */
-type DocIdentity = { docType: DocType; identityLine: string; costUsd: number };
+type DocIdentity = {
+  docType: DocType;
+  identityLine: string;
+  costUsd: number;
+  budgetSettled?: boolean;
+};
 
 // Compile-time bind: the TABLE's `docType` literals and `@pikar/core`'s DOC_TYPES must agree. Both
 // directions, so neither side can silently drift wider than the other — the `tenantProfile.ts:58-67`
@@ -272,8 +294,9 @@ export const classifyDoc = internalAction({
     vaultDocId: v.id("vaultDocuments"),
     tenantId: v.string(),
     evalBudgetId: v.optional(v.id("spendEvents")),
+    rail: v.optional(v.literal("ingest")),
   },
-  handler: async (ctx, { vaultDocId, tenantId, evalBudgetId }): Promise<DocIdentity> => {
+  handler: async (ctx, { vaultDocId, tenantId, evalBudgetId, rail }): Promise<DocIdentity> => {
     try {
       // Load the classifier prompt FIRST, and BEFORE the offline seam (the `vaultDigest.ts:282`
       // ordering): the SMOKE path has to exercise the registry too, or the seam hides an unseeded
@@ -305,7 +328,7 @@ export const classifyDoc = internalAction({
       // bounds only what is SENT (DOC_CLASSIFY_CHAR_CAP, ~15× under the extractor's: identity
       // lives in the first page).
       let actualUsd = 0;
-      const { object, usage } = await generateObject({
+      const { object } = await generateObject({
         model: evalBudgetId
           ? evalBudgetModel({
               ctx,
@@ -318,7 +341,16 @@ export const classifyDoc = internalAction({
                 actualUsd += cost;
               },
             })
-          : resolveModel(DEFAULT_MODEL),
+          : paidBudgetModel({
+              ctx,
+              tenantId,
+              model: resolveModel(DEFAULT_MODEL),
+              modelId: DEFAULT_MODEL,
+              rail,
+              onCost: (cost) => {
+                actualUsd += cost;
+              },
+            }),
         schema: classifySchema,
         system: skill.body,
         prompt: capClassifyText(safeText),
@@ -326,7 +358,6 @@ export const classifyDoc = internalAction({
         maxRetries: evalBudgetId ? 0 : 1,
         ...(evalBudgetId ? { maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS } : {}),
       });
-      const priced = priceUsage(DEFAULT_MODEL, usage);
       return {
         // THE TRUST BOUNDARY between a model string and a closed `v.union`. The provider-side enum
         // is a request, not a guarantee; an out-of-union value would throw "invalid argument" at
@@ -342,7 +373,8 @@ export const classifyDoc = internalAction({
         // never fail the document" rule this function exists to keep, broken by the one field
         // nobody coerced.
         identityLine: typeof object.identityLine === "string" ? object.identityLine : "",
-        costUsd: evalBudgetId ? actualUsd : priced.ok ? priced.value : 0,
+        costUsd: actualUsd,
+        budgetSettled: true,
       };
     } catch (error) {
       // Ordinary classification may degrade cosmetically. Evaluation must preserve unknown

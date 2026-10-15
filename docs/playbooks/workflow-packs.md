@@ -1,3 +1,5 @@
+> Last verified: 2026-10-15 — Owner candidate and rollback selectors read the highest version directly from the new name/status/version index. Skill publication reads the maximum immutable version rather than loading its full history. No activation evidence gate changes; local skills and discovery suites pass.
+
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
 > Last verified: 2026-09-08 (44-05 — **THE BROWSER PLANE IS EARNED, AND A DRILL TOOK A LIVE PACK

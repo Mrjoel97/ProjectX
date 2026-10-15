@@ -34,8 +34,9 @@ import { categoryFor } from "@pikar/vault";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { contentHash } from "./lib/hash";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { startIngest } from "./vaultIngest";
 
 /** `vaultDocuments.title` is rendered in a list cell; the memo terminal caps nothing, but a research
@@ -267,10 +268,13 @@ export const recentFindingsForQuestion = internalQuery({
   handler: async (ctx, a): Promise<boolean> => {
     const recent = await ctx.db
       .query("vaultDocuments")
-      .withIndex("by_tenant_kind", (q) =>
-        q.eq("tenantId", a.tenantId).eq("kind", "web_research").gte("createdAt", a.sinceMs),
+      .withIndex("by_tenant_question_created", (q) =>
+        q
+          .eq("tenantId", a.tenantId)
+          .eq("researchQuestionHash", a.questionHash)
+          .gte("createdAt", a.sinceMs),
       )
-      .collect();
-    return recent.some((d) => d.researchQuestionHash === a.questionHash);
+      .first();
+    return recent !== null;
   },
 });

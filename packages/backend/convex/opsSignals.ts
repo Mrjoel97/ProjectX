@@ -21,6 +21,7 @@ import { PACK_EVENT_PAGE_MAX, toMetricEvent } from "./workflowPackEventLog";
 import { costForRun, latencyForRun, PACK_RUN_JOIN_MAX } from "./workflowPackOutcomes";
 
 const DEFAULT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — window shown in the card label
+export const EVAL_SIGNAL_ROW_CAP = 1000;
 
 // CORRECTED 26-14, AT THE ROOT. This list was hand-typed as ["approve", "edit", "reject",
 // "regenerate"] and "edit" IS WRITTEN BY NOTHING: `review.ts`'s `reviewDecisionValidator` says
@@ -40,14 +41,20 @@ const DECISION_KEYS = REVIEW_DECISIONS;
 export const evalSignals = tenantQuery({
   args: { sinceMs: v.optional(v.number()) },
   handler: async (ctx, { sinceMs }) => {
-    const since = sinceMs ?? Date.now() - DEFAULT_WINDOW_MS;
+    const until = Date.now();
+    const requestedSince = sinceMs ?? until - DEFAULT_WINDOW_MS;
+    if (!Number.isSafeInteger(requestedSince) || requestedSince > until)
+      throw new Error("INVALID_SIGNAL_WINDOW");
+    const since = Math.max(requestedSince, until - 90 * 24 * 60 * 60 * 1000);
 
     // Telemetry: one row per terminal request — bounded by per-tenant request
     // count at beta scale; windowed via the compound index.
-    const telemetryRows = await ctx.db
+    const telemetryPage = await ctx.db
       .query("telemetry")
       .withIndex("by_tenant_created", (q) => q.eq("tenantId", ctx.tenantId).gte("createdAt", since))
-      .collect();
+      .order("desc")
+      .take(EVAL_SIGNAL_ROW_CAP + 1);
+    const telemetryRows = telemetryPage.slice(0, EVAL_SIGNAL_ROW_CAP);
 
     // Zero-initialised from the SAME closed list the fold reads, so the card can never show a
     // key nothing writes (it showed `edit: 0` for months) or omit one that does.
@@ -79,23 +86,33 @@ export const evalSignals = tenantQuery({
     // Audit: WINDOWED read via by_tenant_ts, then filter eventType in memory.
     // NEVER an un-windowed audit collect — the table is unbounded, and the
     // auditCounts aggregate counts all events (not per-type) so it can't serve this.
-    const auditRows = await ctx.db
+    const auditPage = await ctx.db
       .query("audit")
       .withIndex("by_tenant_ts", (q) => q.eq("tenantId", ctx.tenantId).gte("ts", since))
-      .collect();
+      .order("desc")
+      .take(EVAL_SIGNAL_ROW_CAP + 1);
+    const auditRows = auditPage.slice(0, EVAL_SIGNAL_ROW_CAP);
     const fallbackCount = auditRows.filter((r) => r.eventType === "llm.fallback").length;
 
     // Dead letters: bounded table — tenant-prefix read, windowed in memory.
-    const dlqRows = (
-      await ctx.db
-        .query("deadLetters")
-        .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
-        .collect()
-    ).filter((r) => r.createdAt >= since);
+    const dlqPage = await ctx.db
+      .query("deadLetters")
+      .withIndex("by_tenant_createdAt", (q) =>
+        q.eq("tenantId", ctx.tenantId).gte("createdAt", since),
+      )
+      .order("desc")
+      .take(EVAL_SIGNAL_ROW_CAP + 1);
+    const dlqRows = dlqPage.slice(0, EVAL_SIGNAL_ROW_CAP);
     const dlqTotal = dlqRows.length;
     const dlqNew = dlqRows.filter((r) => r.status === "new").length;
 
     return {
+      complete:
+        requestedSince === since &&
+        telemetryPage.length <= EVAL_SIGNAL_ROW_CAP &&
+        auditPage.length <= EVAL_SIGNAL_ROW_CAP &&
+        dlqPage.length <= EVAL_SIGNAL_ROW_CAP,
+      rowCap: EVAL_SIGNAL_ROW_CAP,
       windowStartMs: since,
       requestCount,
       decisionCounts,

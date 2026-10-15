@@ -1,3 +1,4 @@
+import { seedOwnedUpload } from "../test/uploadFixtures";
 // EXTR-G — the migrations-based backlog sweep + retryExtraction (Phase 3.8 Lane 3), convex-test.
 //
 // The sweep is driven DIRECTLY as the internal mutation migrations.define returns, in its
@@ -132,7 +133,7 @@ const seedDoc = (
       mimeType: "application/pdf",
       size: 1,
       contentHash: `c-${Math.random()}`,
-      storageId: await ctx.storage.store(new Blob(["bytes"])),
+      storageId: await seedOwnedUpload(ctx, tenantId, new Blob(["bytes"])),
       status: "pending_extraction",
       createdAt: Date.now(),
       ...overrides,
@@ -301,7 +302,9 @@ describe("retryExtraction (EXTR-G retry mutation)", () => {
       source: "media",
       kind: "reel",
       mimeType: "text/markdown",
-      storageId: await t.run((ctx) => ctx.storage.store(new Blob(["not really an mp4"]))),
+      storageId: await t.run((ctx) =>
+        seedOwnedUpload(ctx, TENANT, new Blob(["not really an mp4"])),
+      ),
       text: "Running your business alone is tough.",
     });
 
@@ -448,7 +451,7 @@ describe("watchdogStalled — the per-attempt backstop for work that STARTED and
 describe("vaultUpload schedules permissively and arms NO watchdog (15.3-04)", () => {
   /** Upload through the REAL public mutation (the first of scheduleExtraction's three callers). */
   const upload = async (t: ReturnType<typeof convexTest>, mimeType: string, filename: string) => {
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["bytes"])));
+    const storageId = await t.run((ctx) => seedOwnedUpload(ctx, TENANT, new Blob(["bytes"])));
     const { vaultDocId } = await asTenant(t).mutation(api.vault.vaultUpload, {
       storageId,
       filename,

@@ -9,6 +9,7 @@ import { capMB, VAULT_FILE_CAP_BYTES, VAULT_VIDEO_CAP_BYTES } from "@pikar/vault
 import { useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { useRef, useState } from "react";
+import { uploadTranscriptionAudio } from "../../../lib/uploadTranscriptionAudio";
 import { UploadCloudIcon } from "./icons";
 
 // The upload dropzone + Brain-Dump paste (brand-024242 / brand-024258). Upload flow mirrors the
@@ -143,6 +144,11 @@ export function Dropzone({
     } else if (file.size > VAULT_FILE_CAP_BYTES) {
       throw new Error(`${file.name}: file too large — max ${capMB(VAULT_FILE_CAP_BYTES)}`);
     }
+    const transcriptionStorageId = await uploadTranscriptionAudio(
+      file,
+      mimeType,
+      generateUploadUrl,
+    );
     const buf = await file.arrayBuffer();
     const contentHash = await hashBytes(buf);
     const searchable = SEARCHABLE_MIME.has(mimeType);
@@ -158,6 +164,7 @@ export function Dropzone({
     const { storageId } = (await res.json()) as { storageId: StorageId };
     await vaultUpload({
       storageId,
+      transcriptionStorageId,
       filename: file.name,
       mimeType,
       size: file.size,

@@ -274,30 +274,91 @@ describe("graph.send — the Microsoft arm carries the same governance as the Go
     });
   });
 
-  test("a 5xx and a 429 THROW so the retrier retries", async () => {
+  test("5xx and 429 hold unknown outcomes and never POST again on replay", async () => {
     for (const status of [500, 503, 429]) {
       const t = harness();
       await seedMicrosoft(t);
       await seedProfile(t);
       const requestId = await seedRequest(t, "microsoft");
-      mockGraph({ sendStatus: status });
-      await expect(t.action(internal.graph.send, { requestId })).rejects.toThrow(
-        new RegExp(`transient ${status}`),
-      );
+      const mock = mockGraph({ sendStatus: status });
+      for (let replay = 0; replay < 2; replay++) {
+        await expect(t.action(internal.graph.send, { requestId })).resolves.toEqual({
+          delivered: false,
+          reason: "outcome_unknown",
+        });
+      }
+      expect(mock.graphPosts()).toHaveLength(1);
+      expect((await t.run((ctx) => ctx.db.get(requestId)))?.deliveryAttempt?.state).toBe("unknown");
     }
   });
 
-  test("a 4xx throws with the provider's own message, and does not hold the row", async () => {
+  test("provider errors are held without exposing provider response content", async () => {
     const t = harness();
     await seedMicrosoft(t);
     await seedProfile(t);
     const requestId = await seedRequest(t, "microsoft");
     mockGraph({ sendStatus: 400, sendBody: "ErrorInvalidRecipients" });
 
-    await expect(t.action(internal.graph.send, { requestId })).rejects.toThrow(
-      /400 ErrorInvalidRecipients/,
-    );
+    await expect(t.action(internal.graph.send, { requestId })).resolves.toEqual({
+      delivered: false,
+      reason: "outcome_unknown",
+    });
     expect((await t.run((ctx) => ctx.db.get(requestId)))?.status).toBe("approved");
+  });
+
+  test("a confirmed send is replayed from its durable receipt without another POST", async () => {
+    const t = harness();
+    await seedMicrosoft(t);
+    await seedProfile(t);
+    const requestId = await seedRequest(t, "microsoft");
+    const mock = mockGraph();
+    await t.action(internal.graph.send, { requestId });
+    await expect(t.action(internal.graph.send, { requestId })).resolves.toEqual({
+      delivered: true,
+      messageId: "",
+    });
+    expect(mock.graphPosts()).toHaveLength(1);
+  });
+
+  test("a lost provider response cannot cause a duplicate POST", async () => {
+    const t = harness();
+    await seedMicrosoft(t);
+    await seedProfile(t);
+    const requestId = await seedRequest(t, "microsoft");
+    const post = vi.fn(async () => {
+      throw new Error("lost response with private provider detail");
+    });
+    vi.stubGlobal("fetch", post);
+    await expect(t.action(internal.delivery.send, { requestId })).resolves.toEqual({
+      delivered: false,
+      reason: "outcome_unknown",
+    });
+    await expect(t.action(internal.delivery.send, { requestId })).resolves.toEqual({
+      delivered: false,
+      reason: "outcome_unknown",
+    });
+    expect(post).toHaveBeenCalledTimes(1);
+    const notifications = await t.run((ctx) => ctx.db.query("notifications").collect());
+    expect(JSON.stringify(notifications)).not.toContain("private provider detail");
+  });
+
+  test("provider acceptance followed by audit failure stays uncertain without resending", async () => {
+    // Deliberately omit the audit aggregate: confirmation's transaction fails after provider acceptance.
+    const t = convexTest(schema, modules);
+    await seedMicrosoft(t);
+    await seedProfile(t);
+    const requestId = await seedRequest(t, "microsoft");
+    const mock = mockGraph();
+    await expect(t.action(internal.delivery.send, { requestId })).resolves.toEqual({
+      delivered: false,
+      reason: "outcome_unknown",
+    });
+    await expect(t.action(internal.delivery.send, { requestId })).resolves.toEqual({
+      delivered: false,
+      reason: "outcome_unknown",
+    });
+    expect(mock.graphPosts()).toHaveLength(1);
+    expect((await t.run((ctx) => ctx.db.get(requestId)))?.deliveryAttempt?.state).toBe("unknown");
   });
 
   test("an empty 202 body is success, not a parse failure", async () => {

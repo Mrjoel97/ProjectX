@@ -5,6 +5,7 @@ import { useAction, useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { MicIcon, PaperclipIcon } from "../../../(auth)/icons";
+import { normalizeAudio } from "../../../lib/normalizeAudio";
 
 // The intake-specific composer controls (INTK-02 attach / INTK-03 one-shot dictate). Fully
 // self-contained — ChatPane.tsx's composer mounts ONE line `<IntakeControls threadId={threadId} />`
@@ -100,8 +101,9 @@ export const IntakeControls = forwardRef<IntakeControlsHandle, IntakeControlsPro
       setBusy(true);
       setError(null);
       try {
-        const mimeType = file.type || "application/octet-stream";
-        const storageId = await upload(file, mimeType);
+        const payload = file.type.startsWith("audio/") ? await normalizeAudio(file) : file;
+        const mimeType = payload.type || "application/octet-stream";
+        const storageId = await upload(payload, mimeType);
         if (!storageId) {
           setError(`${file.name}: upload failed.`);
           return false;
@@ -111,7 +113,7 @@ export const IntakeControls = forwardRef<IntakeControlsHandle, IntakeControlsPro
           storageId,
           filename: file.webkitRelativePath || file.name,
           mimeType,
-          size: file.size,
+          size: payload.size,
         });
         return true;
       } catch {
@@ -131,7 +133,8 @@ export const IntakeControls = forwardRef<IntakeControlsHandle, IntakeControlsPro
       setBusy(true);
       setError(null);
       try {
-        const storageId = await upload(blob, blob.type || "audio/webm");
+        const pcm = await normalizeAudio(blob);
+        const storageId = await upload(pcm, "audio/wav");
         if (!storageId) {
           setError("Dictation upload failed.");
           return false;

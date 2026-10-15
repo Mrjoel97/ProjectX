@@ -130,3 +130,23 @@ test("recentByType returns one eventType's payloads, newest first, bounded by th
   });
   expect(limited.map((r) => r.ts)).toEqual([300, 100]);
 });
+
+test.each([
+  { detail: "person@example.com" },
+  { detail: "https://example.com/callback?token=secret" },
+  { detail: "Customer's private business plan and personal financial information" },
+])("unsafe audit payload is rejected before audit and outbox writes: %j", async (payload) => {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  await expect(
+    t.mutation(internal.audit.log, {
+      tenantId: "tenant_a",
+      correlationId: "c1",
+      eventType: "request.received",
+      actor: "system",
+      payload,
+    }),
+  ).rejects.toThrow("UNSAFE_AUDIT_PAYLOAD");
+  expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([]);
+  expect(await t.run((ctx) => ctx.db.query("auditExportQueue").collect())).toEqual([]);
+});

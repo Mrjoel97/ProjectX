@@ -17,8 +17,9 @@ import { vResultValidator, vWorkflowId } from "@convex-dev/workflow";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, type MutationCtx } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { workflow } from "./index";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { migrations } from "./migrations";
 
 /**
@@ -69,11 +70,12 @@ export async function startIngest(
       correlationId,
       rail,
       reserved,
+      expectedContentHash: doc?.contentHash,
       ...(evalBudgetId ? { evalBudgetId } : {}),
     },
     {
       onComplete: internal.vaultIngest.onIngestComplete,
-      context: { tenantId, vaultDocId, correlationId },
+      context: { tenantId, vaultDocId, correlationId, expectedContentHash: doc?.contentHash },
     },
   );
 }
@@ -93,6 +95,7 @@ export const onIngestComplete = internalMutation({
       tenantId: v.string(),
       vaultDocId: v.id("vaultDocuments"),
       correlationId: v.string(),
+      expectedContentHash: v.optional(v.string()),
     }),
   },
   handler: async (ctx, { result, context }): Promise<null> => {
@@ -102,6 +105,7 @@ export const onIngestComplete = internalMutation({
     await ctx.runMutation(internal.vault.markFailed, {
       vaultDocId: context.vaultDocId,
       reason: result.kind === "failed" ? "ingest_failed" : "ingest_canceled",
+      expectedContentHash: context.expectedContentHash,
     });
     return null;
   },
@@ -125,7 +129,13 @@ export const retryStuckIngestsBatch = migrations.define({
     {
       // Evaluation outcomes may be ambiguous after interruption. Never turn an operator
       // recovery sweep into a second paid attempt; retained fixtures require explicit review.
-      if (d.evalBudgetId || d.status !== "processing" || d.ragEntryId || d.createdAt > cutoff)
+      if (
+        d.evalBudgetId ||
+        d.graphCleanupHash ||
+        d.status !== "processing" ||
+        d.ragEntryId ||
+        d.createdAt > cutoff
+      )
         return;
       // A folder member re-started by this sweep must NOT go back to spending the cockpit's
       // budget — the rail is derived from the row, because the sweep has no other context.
@@ -176,20 +186,33 @@ export const ingestDoc = workflow.define({
     rail: v.optional(v.literal("ingest")),
     reserved: v.optional(v.boolean()),
     evalBudgetId: v.optional(v.id("spendEvents")),
+    expectedContentHash: v.optional(v.string()),
   },
-  handler: async (step, { vaultDocId, tenantId, rail, reserved, evalBudgetId }): Promise<null> => {
+  handler: async (
+    step,
+    { vaultDocId, tenantId, rail, reserved, evalBudgetId, expectedContentHash },
+  ): Promise<null> => {
     // (1) Governed gate BEFORE any spend. A kill-switch / daily-budget stop marks the row failed
     // and returns — the governed stop halts ingest, never a DLQ throw (kill switch stops it).
     // Reserved folder work reaches only the kill-switch branch (guardrails.preCall).
     const gate = await step.runMutation(internal.guardrails.preCall, { tenantId, rail, reserved });
     if (!gate.ok) {
-      await step.runMutation(internal.vault.markFailed, { vaultDocId, reason: gate.reason });
+      await step.runMutation(internal.vault.markFailed, {
+        vaultDocId,
+        reason: gate.reason,
+        ...(expectedContentHash ? { expectedContentHash } : {}),
+      });
       return null;
     }
 
     // (2) Embed the redacted text (rag.add, hash-dedup) → entryId + cost.
-    const paidArgs = { vaultDocId, tenantId, ...(evalBudgetId ? { evalBudgetId } : {}) };
-    const paidOptions = evalBudgetId ? { retry: false as const } : undefined;
+    const paidArgs = {
+      vaultDocId,
+      tenantId,
+      ...(rail ? { rail } : {}),
+      ...(evalBudgetId ? { evalBudgetId } : {}),
+    };
+    const paidOptions = { retry: false as const, unstableArgs: true };
     const embed = await step.runAction(internal.vaultRag.embedDoc, paidArgs, paidOptions);
 
     // (3) Extract typed entities + relationships from the redacted text (redact-then-extract, §4).
@@ -201,6 +224,7 @@ export const ingestDoc = workflow.define({
       sourceDocId: vaultDocId,
       nodes: graph.nodes,
       edges: graph.edges,
+      ...(expectedContentHash ? { expectedContentHash } : {}),
     });
 
     // (5) Give the doc a type + a human-readable identity line (15.3-08, VALT-12). THIS IS THE
@@ -219,6 +243,7 @@ export const ingestDoc = workflow.define({
       tenantId,
       docType: identity.docType,
       identityLine: identity.identityLine,
+      ...(expectedContentHash ? { expectedContentHash } : {}),
     });
 
     // (6) Consume the ACTUAL spend against this run's rail (embed + extract + classify).
@@ -246,7 +271,10 @@ export const ingestDoc = workflow.define({
         internal.guardrails.recordSpend,
         {
           tenantId,
-          costUsd: embed.costUsd + graph.costUsd + identity.costUsd,
+          costUsd:
+            (embed.budgetSettled ? 0 : embed.costUsd) +
+            (graph.budgetSettled ? 0 : graph.costUsd) +
+            (identity.budgetSettled ? 0 : identity.costUsd),
           rail,
           correlationId: `vault:ingest:${vaultDocId}:${step.workflowId}`,
           kind: "vault.ingest", // code-owned token, refs only (§4)
@@ -258,7 +286,11 @@ export const ingestDoc = workflow.define({
       );
 
     // (7) Terminal: the doc is embedded + extracted → groundable.
-    await step.runMutation(internal.vault.markReady, { vaultDocId, ragEntryId: embed.entryId });
+    await step.runMutation(internal.vault.markReady, {
+      vaultDocId,
+      ragEntryId: embed.entryId,
+      ...(expectedContentHash ? { expectedContentHash } : {}),
+    });
     return null;
   },
 });

@@ -1,18 +1,13 @@
-// Plan-06 VOIC-01/VOIC-02: the server↔OpenAI Realtime seam. Two PLAIN-runtime actions
-// (deliberately DEFAULT-runtime, no node pragma — both are just `fetch` to api.openai.com, and a
-// SECOND node-runtime module would re-trip the TS circular-inference cliff llm.ts's header warns about).
-//
-//   mintClientSecret — hands the browser a short-lived client secret so OPENAI_API_KEY never
-//     leaves Convex (the browser does the WebRTC SDP handshake with that secret, not the key).
-//     Phase 14 (DOCV-01): an optional `docId` makes it a DOC-GROUNDED mint — document-analyst
-//     persona + a fenced digest of that report + the one read-only `search_document` tool.
-//   hangupCall       — the server's ONLY way to force-terminate a browser-direct call; the
-//     VOIC-02 watchdog's actuator (a hung/gone tab can't stop billing otherwise).
-//
-// Both read OPENAI_API_KEY from Convex env and NEVER return/log it (Pitfall 4 / playbook).
+import { getAuthUserId } from "@convex-dev/auth/server";
+// Server-owned Realtime signaling. connect is the only public entry point.
+// Internal mint secrets never leave this module/server action chain; private registration
+// arms termination before the browser receives answer SDP. See docs/playbooks/voice.md.
+
 import { DOCUMENT_ANALYST_SKILL, VOICE_SESSION_SKILL } from "@pikar/contracts/skill";
+import { SAVE_FOUNDATION_ANSWER_TOOL } from "@pikar/core/foundation";
 import {
   buildDocDigest,
+  CALLS_URL,
   CLIENT_SECRETS_URL,
   DEFAULT_REALTIME_MODEL,
   hangupUrl,
@@ -22,10 +17,13 @@ import {
   TRANSCRIPTION_MODEL,
   TURN_DETECTION_TYPE,
 } from "@pikar/voice";
+import { assertMediaOnlyOffer, trustedCallId } from "@pikar/voice/serverControl";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction, internalQuery } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { internalQuery } from "./_generated/server";
 import { tenantAction } from "./lib/functions";
+import { internalAction } from "./lib/tenantLifecycle";
 
 // ponytail: warm GA voice for gpt-realtime; the voice is a product/BRAND choice — swap the
 // literal if the persona picks another (the INSTRUCTIONS load from the registry, §5, never here).
@@ -70,7 +68,7 @@ export const docForMint = internalQuery({
 });
 
 /**
- * Mint a short-lived Realtime client secret for the browser (VOIC-01 pre-flight), optionally
+ * Internal preparation of a short-lived Realtime client secret for server signaling, optionally
  * scoped to ONE vault report (DOCV-01).
  *
  * Unscoped it uses the `voice-session` REGISTRY persona and no tool array at all. Scoped it swaps
@@ -80,37 +78,55 @@ export const docForMint = internalQuery({
  * business context as the cockpit. Both personas are registry-loaded and fail closed when
  * unseeded — never a hardcoded prompt (§5).
  *
- * Returns `{clientSecret, expiresAt, toolsAtMint}` — OPENAI_API_KEY stays in Convex env and never
+ * Returns a server-internal credential envelope — OPENAI_API_KEY stays in Convex env and never
  * enters this object, a thrown message, a log line, or an audit row (Pitfall 4).
  */
-export const mintClientSecret = tenantAction({
-  args: { docId: v.optional(v.id("vaultDocuments")) },
+export const mintClientSecret = internalAction({
+  args: {
+    tenantId: v.optional(v.string()),
+    docId: v.optional(v.id("vaultDocuments")),
+    onboarding: v.optional(v.boolean()),
+  },
   handler: async (
     ctx,
-    { docId },
-  ): Promise<{ clientSecret: string; expiresAt: number; toolsAtMint: boolean }> => {
+    { docId, onboarding, tenantId: suppliedTenant },
+  ): Promise<{
+    clientSecret: string;
+    expiresAt: number;
+    toolsAtMint: boolean;
+    reservationId: Id<"spendEvents">;
+  }> => {
+    const tenantId = suppliedTenant ?? String((await getAuthUserId(ctx)) ?? "");
+    if (!tenantId) throw new Error("UNAUTHENTICATED");
     // Persona from the registry — fail-closed (getActiveSkill throws NO_ACTIVE_SKILL) when
     // unseeded. Never a hardcoded fallback prompt (§5). The Phase-6 `voice-session` body is
     // untouched by this branch, so a Phase-14 prompt change cannot regress Phase 6.
     const skill = await ctx.runQuery(internal.skills.getActiveSkill, {
-      name: docId ? DOCUMENT_ANALYST_SKILL : VOICE_SESSION_SKILL,
+      name: onboarding ? "foundation-voice" : docId ? DOCUMENT_ANALYST_SKILL : VOICE_SESSION_SKILL,
     });
 
     // The mint is a SECOND trust boundary alongside `voice.startSession` — and the FIRST one in
     // wall-clock order, since the browser mints before it has a session row. A document must
     // exist, be this tenant's, and be `ready`; the thrown message is a STATUS, never content.
+    if (onboarding && process.env.FOUNDATION_ONBOARDING_ENABLED !== "1")
+      throw new Error("voice: onboarding unavailable");
+    if (onboarding && docId) throw new Error("voice: incompatible purpose");
     let instructions = skill.body;
+    if (onboarding) {
+      const context = await ctx.runQuery(internal.foundation.context, { tenantId: tenantId });
+      instructions += `\n<interview_data>\n${context}\n</interview_data>`;
+    }
     // The owner explicitly authorizes this tenant-scoped blueprint to cross the OpenAI Realtime
     // boundary as private session context. `spineForTenant` returns only the CONFIRMED blueprint,
     // already bounded and fenced as reference data; drafts can never leak into a voice session.
     const blueprintSpine = await ctx.runQuery(internal.blueprint.spineForTenant, {
-      tenantId: ctx.tenantId,
+      tenantId: tenantId,
     });
     if (blueprintSpine) instructions = `${instructions}\n\n${blueprintSpine}`;
     if (docId) {
       const doc = await ctx.runQuery(internal.voiceToken.docForMint, {
         vaultDocId: docId,
-        tenantId: ctx.tenantId,
+        tenantId: tenantId,
       });
       if (!doc) throw new Error("voicedoc: document not found");
       if (doc.status !== "ready") throw new Error("voicedoc: document not ready");
@@ -139,19 +155,26 @@ export const mintClientSecret = tenantAction({
         session: {
           type: "realtime",
           model: DEFAULT_REALTIME_MODEL,
+          max_output_tokens: 1024,
           instructions, // registry persona + confirmed blueprint (+ digest when doc-scoped)
           // LIVE-VERIFIED 2026-07-20: turn_detection + transcription nest under `audio.input` — a
           // top-level `session.turn_detection` 400s ("unknown parameter"); the API key is `transcription`.
           audio: {
             input: {
               transcription: { model: TRANSCRIPTION_MODEL }, // auto-detect → in-language brief
-              turn_detection: { type: TURN_DETECTION_TYPE }, // semantic_vad → barge-in
+              turn_detection: {
+                type: TURN_DETECTION_TYPE,
+                create_response: false,
+                interrupt_response: true,
+              }, // semantic_vad → barge-in
             },
             output: { voice: REALTIME_VOICE },
           },
           ...(withTools
             ? {
-                [SESSION_TOOL_KEYS.tools]: [SEARCH_DOCUMENT_TOOL], // FLAT Realtime shape, one tool
+                [SESSION_TOOL_KEYS.tools]: [
+                  onboarding ? SAVE_FOUNDATION_ANSWER_TOOL : SEARCH_DOCUMENT_TOOL,
+                ], // FLAT Realtime shape, one tool
                 [SESSION_TOOL_KEYS.toolChoice]: TOOL_CHOICE_AUTO,
               }
             : {}),
@@ -165,6 +188,7 @@ export const mintClientSecret = tenantAction({
           Authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ""}`,
           "Content-Type": "application/json",
         },
+        signal: AbortSignal.timeout(15_000),
         body: sessionBody(withTools),
       });
 
@@ -177,9 +201,18 @@ export const mintClientSecret = tenantAction({
     // {type:"session.update", session:{tools, tool_choice}} over the data channel when it is false.
     // The accepted branch gets recorded WITH A DATE on the `LIVE-VERIFIED ____-__-__:` line in
     // packages/voice/src/realtime.ts at 14-09's live verify — not filled in from a doc page.
-    const declareTools = Boolean(docId);
+    const declareTools = Boolean(docId || onboarding);
     // `true` TRIVIALLY when there is no doc scope: an unscoped session declares no tool, so there
     // is nothing left for the browser to do and its branch stays a single `if (!toolsAtMint)`.
+    // Admission allowance, not a proof of a hard provider cost cap: the current transport
+    // is browser-direct. Hold it until trusted provider reconciliation; browser usage cannot
+    // authorize a refund. Failed/abandoned mints remain visible as unresolved holds.
+    const reservationId = await ctx.runMutation(internal.guardrails.reservePaidCall, {
+      tenantId: tenantId,
+      callId: crypto.randomUUID(),
+      model: DEFAULT_REALTIME_MODEL,
+      ceilingCents: 100,
+    });
     let toolsAtMint = true;
     let res = await post(declareTools);
     if (declareTools && res.status === 400) {
@@ -197,7 +230,7 @@ export const mintClientSecret = tenantAction({
     // TRANSPORT CONTROL (where the tool array got declared), not a secret and not document
     // content. OPENAI_API_KEY stays in Convex env — structurally absent from this object, and
     // nothing here logs or audits either (Pitfall 4).
-    return { clientSecret: body.value, expiresAt: body.expires_at, toolsAtMint };
+    return { clientSecret: body.value, expiresAt: body.expires_at, toolsAtMint, reservationId };
   },
 });
 
@@ -213,10 +246,72 @@ export const hangupCall = internalAction({
     const res = await fetch(hangupUrl(callId), {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ""}` },
+      signal: AbortSignal.timeout(15_000),
     });
     // 200 = terminated. A non-200 throws with the STATUS only — the watchdog caller logs it
     // refs-only (never the key or the callId-as-secret, §4).
     if (!res.ok) throw new Error(`hangupCall: ${res.status}`);
     return { ended: true };
+  },
+});
+
+/** No reusable provider credential or provider call handle crosses this boundary.
+ * Audio-only provider acceptance is a deployment evidence gate, not an assumption. */
+export const connect = tenantAction({
+  args: {
+    offerSdp: v.string(),
+    docId: v.optional(v.id("vaultDocuments")),
+    onboarding: v.optional(v.boolean()),
+  },
+  handler: async (
+    ctx,
+    { offerSdp, docId, onboarding },
+  ): Promise<{ answerSdp: string; sessionId: Id<"voiceSessions">; endsAt: number }> => {
+    if (process.env.VOICE_SERVER_CONTROL_VERIFIED !== "1")
+      throw new Error("VOICE_CONTROL_NOT_VERIFIED");
+    assertMediaOnlyOffer(offerSdp);
+    const mint = await ctx.runAction(internal.voiceToken.mintClientSecret, {
+      tenantId: ctx.tenantId,
+      docId,
+      onboarding,
+    });
+    // The ephemeral credential exists only inside server-to-provider exchanges.
+    const response = await fetch(CALLS_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${mint.clientSecret}`, "Content-Type": "application/sdp" },
+      body: offerSdp,
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) throw new Error("VOICE_CONNECTION_REFUSED");
+    const callId = trustedCallId(response.headers.get("Location"));
+    const answerSdp = await response.text();
+    let sessionId: Id<"voiceSessions"> | undefined;
+    try {
+      if (answerSdp.length > 32_768 || /m=application|sctp/i.test(answerSdp))
+        throw new Error("VOICE_UNSAFE_ANSWER");
+      const started = await ctx.runMutation(internal.voice.startSession, {
+        tenantId: ctx.tenantId,
+        callId,
+        controlled: true,
+        reservationId: mint.reservationId,
+        onboarding,
+        docRef: docId,
+      });
+      sessionId = started.sessionId;
+      await ctx.scheduler.runAfter(0, internal.voiceControl.run, { sessionId });
+      // Returning SDP before trusted control is attached would admit an uncontrolled session.
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const session = await ctx.runQuery(internal.voice.getSession, { sessionId });
+        if (session?.controlReady && session.status === "active")
+          return { answerSdp, sessionId, endsAt: session.endsAt };
+        if (!session || session.status !== "active") break;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      throw new Error("VOICE_CONTROL_UNAVAILABLE");
+    } catch {
+      if (sessionId) await ctx.runAction(internal.voice.forceEndSession, { sessionId });
+      else await ctx.runAction(internal.voiceToken.hangupCall, { callId });
+      throw new Error("VOICE_CONTROL_UNAVAILABLE");
+    }
   },
 });

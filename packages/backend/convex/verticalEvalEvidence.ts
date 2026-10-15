@@ -15,10 +15,11 @@ import {
 } from "@pikar/contracts/verticalEvalCorpus";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { appendAudit, VERTICAL_EVAL_AUDIT_NAMESPACE, VERTICAL_EVAL_EVENT_PREFIX } from "./audit";
 import { ownerMutation, ownerQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { type Pin, pinArgs, verifyCaseState } from "./verticalEvalSources";
 import type { VerticalEvaluationResult } from "./verticalPackBinding";
 

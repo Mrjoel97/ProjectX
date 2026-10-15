@@ -12,6 +12,7 @@ import {
 } from "@pikar/core";
 import { defineSchema, defineTable } from "convex/server";
 import { type VLiteral, v } from "convex/values";
+import { foundationAnswer, foundationProfile, foundationSlots } from "./lib/foundationValidators";
 
 // Compile-time proof the Convex bundler resolves source-export workspace packages.
 void CONTRACTS_PACKAGE_NAME;
@@ -34,11 +35,11 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 62 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 67 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
-// │   users, betaWaitlist, betaInvites                                         │
+// │   users, betaWaitlist, betaInvites, authRevocations                                         │
 // │                                                                            │
 // │ ── Governance & Audit ──────────────────────────────────── ~L150           │
 // │   audit, deadLetters, skills, tenantSkills, savedPrompts,                  │
@@ -59,7 +60,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │   notifications, gmailTokens, microsoftCalendarTokens                      │
 // │                                                                            │
 // │ ── Vault (Document Store) ──────────────────────────────── ~L956           │
-// │   vaultSources, vaultDocuments, vaultFolders, vaultSheets                  │
+// │   vaultSources, vaultDocuments, vaultFolders, vaultSheets, uploadReceipts                  │
 // │                                                                            │
 // │ ── Knowledge Graph ─────────────────────────────────────── ~L1772          │
 // │   graphNodes, graphEdges                                                   │
@@ -69,6 +70,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │                                                                            │
 // │ ── Business Domain ─────────────────────────────────────── ~L1842          │
 // │   feedback, optimizerConfig, tenantProfiles, goals,                        │
+// │   foundationInterviews, foundationTranscripts, foundationRevisions          │
 // │   inboxFixtures                                                            │
 // │                                                                            │
 // │ ── Finance ─────────────────────────────────────────────── ~L1981          │
@@ -188,6 +190,63 @@ const shotElement = v.object({
 });
 
 export default defineSchema({
+  // Short-lived authentication deny-list; must survive the content erasure it enforces.
+  authRevocations: defineTable({
+    userId: v.string(),
+    expiresAt: v.number(),
+    state: v.optional(v.union(v.literal("deleting"), v.literal("deleted"))),
+    requireLiveSession: v.optional(v.boolean()),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_expiry", ["expiresAt"]),
+  uploadReceipts: defineTable({
+    tenantId: v.string(),
+    ticketHash: v.string(),
+    expiresAt: v.number(),
+    state: v.union(v.literal("issued"), v.literal("uploading"), v.literal("complete")),
+    storageId: v.optional(v.id("_storage")),
+    size: v.optional(v.number()),
+    mimeType: v.optional(v.string()),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_ticket", ["ticketHash"])
+    .index("by_storage", ["storageId"])
+    .index("by_expiry", ["expiresAt"]),
+  foundationInterviews: defineTable({
+    tenantId: v.string(),
+    revision: v.number(),
+    profile: foundationProfile,
+    slots: foundationSlots,
+    answers: v.array(foundationAnswer),
+    phase: v.union(v.literal("essential"), v.literal("enrichment")),
+    state: v.union(v.literal("active"), v.literal("review"), v.literal("published")),
+    reply: v.string(),
+    publishedRevision: v.optional(v.number()),
+    docIds: v.optional(v.array(v.id("vaultDocuments"))),
+    updatedAt: v.number(),
+  }).index("by_tenant", ["tenantId"]),
+  foundationTranscripts: defineTable({
+    tenantId: v.string(),
+    eventId: v.string(),
+    text: v.string(),
+    speaker: v.union(v.literal("user"), v.literal("agent")),
+    expiresAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_event", ["tenantId", "eventId"])
+    .index("by_expiry", ["expiresAt"]),
+  foundationRevisions: defineTable({
+    profile: foundationProfile,
+    slots: foundationSlots,
+    answers: v.array(foundationAnswer),
+    docIds: v.array(v.id("vaultDocuments")),
+    tenantId: v.string(),
+    revision: v.number(),
+    documents: v.array(
+      v.object({ section: v.string(), title: v.string(), text: v.string(), kind: v.string() }),
+    ),
+    createdAt: v.number(),
+  }).index("by_tenant", ["tenantId"]),
   // At most six attempt refs per request; no user content.
   researchControls: defineTable({
     tenantId: v.string(),
@@ -327,7 +386,8 @@ export default defineSchema({
     .index("by_status", ["status"])
     // 02-06's newCount/listNew tenantQueries filter tenant AND status — a compound
     // index avoids an in-memory cross-filter.
-    .index("by_tenant_status", ["tenantId", "status"]),
+    .index("by_tenant_status", ["tenantId", "status"])
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
 
   // Versioned skill/prompt registry (no hardcoded agent prompts — load from here).
   skills: defineTable({
@@ -360,6 +420,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_name_status", ["name", "status"])
+    .index("by_name_status_version", ["name", "status", "version"])
     .index("by_name_version", ["name", "version"]),
 
   // Tenant-owned OVERLAY over the deployment-global `skills` table above (Phase 21, SKILL-01).
@@ -708,6 +769,16 @@ export default defineSchema({
   // Raw content lives HERE (CLAUDE.md §4) — never in audit/deadLetters payloads.
   requests: defineTable({
     tenantId: v.string(),
+    // Claim persisted BEFORE provider I/O. An uncertain outcome never authorizes another send.
+    deliveryAttempt: v.optional(
+      v.object({
+        state: v.union(v.literal("in_flight"), v.literal("confirmed"), v.literal("unknown")),
+        provider: v.union(v.literal("google"), v.literal("microsoft")),
+        startedAt: v.number(),
+        messageId: v.optional(v.string()),
+        reviewedOutcome: v.optional(v.union(v.literal("sent"), v.literal("not_sent"))),
+      }),
+    ),
     correlationId: v.string(),
     goal: v.string(),
     recipient: v.string(),
@@ -777,6 +848,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"])
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"])
     .index("by_tenant_status", ["tenantId", "status"])
     // Pulse layer (living-map §3.1): windowed status reads for the tenant-wide outcome counts.
     .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
@@ -2004,7 +2076,9 @@ export default defineSchema({
   })
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_read", ["tenantId", "read"])
-    .index("by_tenant_kind_read", ["tenantId", "kind", "read"]),
+    .index("by_tenant_read_createdAt", ["tenantId", "read", "createdAt"])
+    .index("by_tenant_kind_read", ["tenantId", "kind", "read"])
+    .index("by_tenant_kind_read_created", ["tenantId", "kind", "read", "createdAt"]),
 
   // Gmail OAuth tokens — the crown jewels. Read by internal functions ONLY;
   // never returned to a client query, never in the browser, never in an audit payload.
@@ -2103,6 +2177,7 @@ export default defineSchema({
   // audit/DLQ payload). `ragEntryId` links the embedded rag entry; the graph
   // extraction runs off the redacted text at ingest.
   vaultDocuments: defineTable({
+    graphCleanupHash: v.optional(v.string()),
     tenantId: v.string(),
     // Internal evaluation lineage survives ingest recovery; no public upload accepts this ref.
     evalBudgetId: v.optional(v.id("spendEvents")),
@@ -2114,6 +2189,7 @@ export default defineSchema({
     size: v.number(),
     contentHash: v.string(), // sha-256 hex → cross-doc dedup
     storageId: v.optional(v.id("_storage")), // stored bytes for downloadable uploads
+    transcriptionStorageId: v.optional(v.id("_storage")), // canonical bounded PCM derivative
     // WHAT THE BYTES ARE, when that differs from what the ROW is. `mimeType` above is the artifact
     // of record — it drives extraction routing and searchability, and for an agent-created document
     // it is LOCKED to "text/markdown" because markdown is the thing we wrote and can ground on.
@@ -2301,7 +2377,9 @@ export default defineSchema({
     // `onboarding.currentProfileDoc` `.collect()`s its partition and re-sorts in memory, so it
     // never depended on the implicit `_creationTime` ordering this replaces. Convex rebuilds the
     // index on push; the convex-migration-helper skill lists index changes under "When Not to Use".
+    .index("by_tenant_question_created", ["tenantId", "researchQuestionHash", "createdAt"])
     .index("by_tenant_kind", ["tenantId", "kind", "createdAt"])
+    .index("by_tenant_kind_status", ["tenantId", "kind", "status", "createdAt"])
     // Phase-15.3. Serves BOTH the drill-in listing and the digest's stale set-difference, which is
     // why there is no separate `by_tenant_folder_status` — completion is counted on the folder row
     // (§2.5), never by a status query. ⚠ Read it with a bounded `.take()` and project `text` away;
@@ -2421,7 +2499,9 @@ export default defineSchema({
     driveExpectedCount: v.optional(v.number()),
     driveLandedCount: v.optional(v.number()),
     createdAt: v.number(),
-  }).index("by_tenant", ["tenantId"]),
+  })
+    .index("by_tenant_drive", ["tenantId", "driveFolderId"])
+    .index("by_tenant", ["tenantId"]),
 
   // A typed entity extracted from vault documents. Cross-doc dedup upserts to
   // ONE node on (tenantId, normalizedName) [type filtered in-handler] via
@@ -2464,6 +2544,19 @@ export default defineSchema({
   // in `vaultDocuments` (referenced by briefRef), and this row carries only session
   // control state + refs/counts (§4-clean — no transcript/PII here).
   voiceSessions: defineTable({
+    controlled: v.optional(v.boolean()),
+    controlReady: v.optional(v.boolean()),
+    controlExpiresAt: v.optional(v.number()),
+    controlEvents: v.optional(v.array(v.string())),
+    controlEventOffset: v.optional(v.number()),
+    controlCommands: v.optional(v.array(v.object({ seq: v.number(), text: v.string() }))),
+    controlCommandSeq: v.optional(v.number()),
+    trustedResponseIds: v.optional(v.array(v.string())),
+    hangupConfirmedAt: v.optional(v.number()),
+    hangupAttempts: v.optional(v.number()),
+    hangupUnresolved: v.optional(v.boolean()),
+    onboarding: v.optional(v.boolean()),
+    spendReservationId: v.optional(v.id("spendEvents")),
     tenantId: v.string(),
     // No "wrapping" status: the T-2min wrap-up is a client-side agent instruction, not
     // a server state. "active" only once callId is set (Pitfall 1); the watchdog ends
@@ -2489,7 +2582,9 @@ export default defineSchema({
   })
     .index("by_tenant", ["tenantId"]) // browse
     // getActiveSession's parallel-session guard reads the single active row for a tenant.
-    .index("by_tenant_status", ["tenantId", "status"]),
+    .index("by_tenant_status", ["tenantId", "status"])
+    .index("by_spendReservationId", ["spendReservationId"])
+    .index("by_controlExpiresAt", ["controlExpiresAt"]),
 
   // ── Phase-8 self-improvement plane (IMPR-01/02) ────────────────────────────
   // New tables + optional fields only → no migration (prior-phase discipline).
@@ -2513,6 +2608,7 @@ export default defineSchema({
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_request", ["tenantId", "requestId"]) // one editable row per (tenant, request)
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
+    .index("by_skill_created", ["skillName", "createdAt"])
     .index("by_skill", ["skillName", "skillVersion"]), // eligibility rolls the negative-rate over this
 
   // The optimizer kill switch + tunable thresholds (IMPR-02). SINGLE row, upserted by
@@ -2685,7 +2781,9 @@ export default defineSchema({
     statusChangedAt: v.number(),
   })
     .index("by_tenant", ["tenantId"])
-    .index("by_tenant_status", ["tenantId", "status"]),
+    .index("by_tenant_status", ["tenantId", "status"])
+    .index("by_tenant_status_target", ["tenantId", "status", "targetDate", "createdAt"])
+    .index("by_tenant_status_segment", ["tenantId", "status", "segmentId"]),
 
   // ── Phase-26 connected dashboard accounting foundation ────────────────────
   // Append-only reporting facts. Enforcement remains in the rate limiter; these rows retain
@@ -2839,6 +2937,17 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
+    .index("by_plan_created", ["tenantId", "planId", "createdAt"])
+    .index("by_plan_status", ["tenantId", "planId", "status"])
+    .index("by_plan_slot_kind_created", ["tenantId", "planId", "blockIndex", "kind", "createdAt"])
+    .index("by_plan_slot_kind_status_created", [
+      "tenantId",
+      "planId",
+      "blockIndex",
+      "kind",
+      "status",
+      "createdAt",
+    ])
     .index("by_plan", ["tenantId", "planId"])
     .index("by_tenant", ["tenantId"])
     .index("by_batch", ["tenantId", "batchId"])
@@ -2952,6 +3061,7 @@ export default defineSchema({
   })
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_status_dueAt", ["tenantId", "status", "dueAt"])
+    .index("by_tenant_contact_status_dueAt", ["tenantId", "contactId", "status", "dueAt"])
     .index("by_tenant_contact", ["tenantId", "contactId"]),
 
   // The send-path trust boundary, kept ADDRESS-KEYED and separate from `contacts` on purpose:
@@ -3395,6 +3505,7 @@ export default defineSchema({
     usedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
+    .index("by_tenant_live", ["tenantId", "usedAt", "expiresAt"])
     .index("by_tenant", ["tenantId"])
     // NOT tenant-leading, and it cannot be: the callback arrives with a nonce and NOTHING else —
     // no session, no tenant. That is the whole reason the row exists. Registered in
@@ -3428,6 +3539,7 @@ export default defineSchema({
   })
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_contact", ["tenantId", "contactId"])
+    .index("by_tenant_contact_kind", ["tenantId", "contactId", "kind"])
     .index("by_tenant_provider_external", ["tenantId", "provider", "externalId"]),
 
   /**

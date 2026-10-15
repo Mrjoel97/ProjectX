@@ -150,3 +150,21 @@ describe("trajectory export (IMPR-02)", () => {
     expect(out.items).toHaveLength(0);
   });
 });
+
+test("export cursor returns every scrubbed trajectory beyond the first100 rows", async () => {
+  const t = convexTest(schema, modules);
+  const expected = [];
+  for (let i = 0; i < 105; i++)
+    expected.push(await seedRated(t, { goal: "Contact a@b.com about item " + i, rating: "up" }));
+  const first = await t.query(internal.skilloptExport.buildTrajectoryExport, {});
+  expect(first.items).toHaveLength(100);
+  expect(first.isDone).toBe(false);
+  const last = await t.query(internal.skilloptExport.buildTrajectoryExport, {
+    cursor: first.continueCursor,
+  });
+  expect(last.isDone).toBe(true);
+  expect(last.items).toHaveLength(5);
+  const all = [...first.items, ...last.items];
+  expect(new Set(all.map((x) => x.id))).toEqual(new Set(expected));
+  expect(JSON.stringify(all)).not.toContain("a@b.com");
+});

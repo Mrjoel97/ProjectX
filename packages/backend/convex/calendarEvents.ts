@@ -20,8 +20,9 @@ import {
 } from "@pikar/core";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 /** The provider union, mirrored from the schema. A closed code, never provider prose. */
 const PROVIDER = v.union(v.literal("google"), v.literal("microsoft"));

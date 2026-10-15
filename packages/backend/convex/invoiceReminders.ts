@@ -19,7 +19,8 @@ import { jsonSchema, type ToolSet, tool } from "ai";
 import { type GenericActionCtx, makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import type { DataModel, Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { recordRevenueEvent, revenueSubjectRef } from "./revenueTelemetry";
 
 type ReminderProvider = "quickbooks" | "stripe";
@@ -253,7 +254,8 @@ export const evalRecipientSuppressed = internalQuery({
     const rows = await ctx.db
       .query("suppressions")
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
-      .collect();
+      .take(1001);
+    if (rows.length > 1000) return true; // Evaluation refuses contact when suppression coverage is incomplete.
     const suppressed = new Set(rows.map((row) => normalizeAddress(row.address)));
     return (plan.recipients ?? []).some((address) => suppressed.has(normalizeAddress(address)));
   },

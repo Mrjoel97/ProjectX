@@ -64,6 +64,14 @@ const view = (over: Record<string, unknown> = {}) =>
     ...over,
   });
 
+test("release-disabled checkout is disclosed while existing subscriber management remains enabled", () => {
+  const html = view();
+  expect(html).toContain('data-commercial-billing="disabled"');
+  expect(html).toContain("New paid subscriptions are unavailable in this release");
+  expect(html).toContain("Manage subscription in Stripe");
+  expect(manageSubscription("subscribed").enabled).toBe(true);
+});
+
 // ── the three subscription states ─────────────────────────────────────────────────────────
 
 describe("subscription state — unknown is not zero and is not a plan", () => {

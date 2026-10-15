@@ -16,12 +16,8 @@
 import { validateSpendMovement } from "@pikar/core";
 import { type ObjectType, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import {
-  internalMutation,
-  internalQuery,
-  type MutationCtx,
-  type QueryCtx,
-} from "./_generated/server";
+import { internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 const railValidator = v.union(v.literal("reasoning"), v.literal("media"), v.literal("ingest"));
 const phaseValidator = v.union(

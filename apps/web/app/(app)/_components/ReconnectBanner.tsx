@@ -66,7 +66,7 @@ export function reconnectLines(
 //     notification (CONTEXT: in-app only, never via the mail path it reports on).
 export function ReconnectBanner() {
   const awaitingReauth = useQuery(api.requests.list, { status: "awaiting_reauth" });
-  const notifications = useQuery(api.notifications.list);
+  const notifications = useQuery(api.notifications.unreadWindow);
   const markRead = useMutation(api.notifications.markRead);
 
   // Load the seen-set AFTER mount (SSR has no localStorage) — until then render nothing so a
@@ -77,7 +77,7 @@ export function ReconnectBanner() {
 
   const holds = (awaitingReauth ?? []).filter((r) => !seen.has(r._id));
   const unreadFor = (provider: ReconnectProvider) =>
-    (notifications ?? []).filter((n) => n.kind === RECONNECT[provider].kind && !n.read);
+    (notifications?.items ?? []).filter((n) => n.kind === RECONNECT[provider].kind && !n.read);
   const googleUnread = unreadFor("google");
   const microsoftUnread = unreadFor("microsoft");
   const unread = [...googleUnread, ...microsoftUnread];
@@ -99,6 +99,12 @@ export function ReconnectBanner() {
 
   return (
     <div style={{ display: "grid" }}>
+      {awaitingReauth?.length === 100 && (
+        <p>
+          Reconnect notices cover the newest 100 held requests.{" "}
+          <Link href="/requests">View complete request history</Link>.
+        </p>
+      )}
       {lines.map(({ provider, message }, i) => (
         <div
           key={provider}

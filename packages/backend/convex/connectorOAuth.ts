@@ -20,9 +20,9 @@
 // ctx.runMutation.
 import type { Provider, RevocationUpstream } from "@pikar/revenue";
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
 import { newConnectionId } from "./connectorCredentials";
 import { tenantMutation, tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { connectStartAllowed } from "./providerGates";
 
 // ── Argument validators ───────────────────────────────────────────────────────────────────
@@ -270,10 +270,14 @@ export const pendingConnectStates = tenantQuery({
       string,
       { provider: Provider; environment: "sandbox" | "production"; pending: number }
     >();
-    for (const row of await ctx.db
+    const liveRows = await ctx.db
       .query("connectorOAuthStates")
-      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
-      .collect()) {
+      .withIndex("by_tenant_live", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("usedAt", undefined).gt("expiresAt", now),
+      )
+      .take(101);
+    if (liveRows.length > 100) throw new Error("TOO_MANY_PENDING_CONNECTIONS");
+    for (const row of liveRows) {
       if (row.usedAt !== undefined || row.expiresAt <= now) continue;
       const key = `${row.provider}:${row.environment}`;
       const seen = counts.get(key);

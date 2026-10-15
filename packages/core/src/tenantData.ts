@@ -26,7 +26,9 @@ export type TenantTableCategory =
  * it and the source-level drift test makes an unclassified schema addition fail closed.
  */
 export const TENANT_TABLE_CLASSIFICATION = {
+  authRevocations: "global", // Opaque security metadata: durable erasure fence, expiring reset-session fence; never business content.
   users: "tenant_owned",
+  uploadReceipts: "tenant_owned",
   audit: "audit_immutable",
   // The DLQ shares the refs-only compliance plane and is never user-content export/deletion data.
   deadLetters: "audit_immutable",
@@ -68,6 +70,9 @@ export const TENANT_TABLE_CLASSIFICATION = {
   graphNodes: "tenant_owned",
   graphEdges: "tenant_owned",
   voiceSessions: "tenant_owned",
+  foundationInterviews: "tenant_owned",
+  foundationTranscripts: "tenant_owned",
+  foundationRevisions: "tenant_owned",
   feedback: "tenant_owned",
   // One deployment-wide optimizer switch/threshold row; it contains no tenant data.
   optimizerConfig: "global",
@@ -301,10 +306,11 @@ export function deletableTables(): readonly DeletableTenantTable[] {
  * generated file in the product.
  */
 export const STORAGE_ID_FIELDS = {
+  uploadReceipts: ["storageId"],
   plans: ["renderStorageId", "sidecarStorageId", "attachments[].storageId"],
   attachments: ["storageId"],
   intakeArtifacts: ["storageId"],
-  vaultDocuments: ["storageId"],
+  vaultDocuments: ["storageId", "transcriptionStorageId"],
   funnels: ["storageId"], // Fixed artifact bytes can outlive a changed/deleted Vault reference.
   mediaJobs: ["assetStorageId"],
 } as const satisfies Record<string, readonly string[]>;

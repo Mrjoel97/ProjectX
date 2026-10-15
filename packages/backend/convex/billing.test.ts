@@ -11,6 +11,15 @@ import { TRIAL_DAYS } from "@pikar/billing/config";
 import { SPEND_RAILS } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+// This suite qualifies the transport for a future approved release. billingReleaseGate.test.ts
+// uses the real release constants and proves installed credentials cannot enable checkout.
+vi.mock("@pikar/billing/config", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@pikar/billing/config")>()),
+  COMMERCIAL_BILLING_ENABLED: true,
+  CONFIG_CONFIRMED: true,
+}));
+
 import { codeOf } from "../__fixtures__/sourceScan";
 // The Phase 26 equality below drives `api.finance.summary`, the SHIPPED surface, so the real
 // rate-limiter component has to be present — a stub would prove nothing about what Finance

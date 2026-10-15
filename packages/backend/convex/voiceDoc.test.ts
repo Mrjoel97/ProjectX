@@ -1,3 +1,4 @@
+import { DEFAULT_REALTIME_MODEL } from "@pikar/voice";
 // Voice-doc discussion (DOCV-01) — convex-test. Wave-0 coverage: this file exists to prove the
 // 14-01 schema widening actually reached the SCHEMA-DERIVED write validator, with zero edits to
 // `insertEvaluation`. SC1 / SC2 / BETA-05 assertions land here in plans 14-03 and 14-05.
@@ -20,6 +21,19 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
+const seedReservation = (t: ReturnType<typeof convexTest>, tenantId: string) =>
+  t.run((ctx) =>
+    ctx.db.insert("spendEvents", {
+      tenantId,
+      rail: "reasoning",
+      phase: "reserved",
+      amountCents: 100,
+      correlationId: crypto.randomUUID(),
+      model: DEFAULT_REALTIME_MODEL,
+      kind: "paid_call",
+      createdAt: Date.now(),
+    }),
+  );
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
@@ -162,7 +176,8 @@ async function startDocSession(
   tenantId: string,
   docRef: Id<"vaultDocuments">,
 ): Promise<Id<"voiceSessions">> {
-  const { sessionId } = await asTenant(t, tenantId).mutation(api.voice.startSession, {
+  const { sessionId } = await asTenant(t, tenantId).mutation(internal.voice.startSession, {
+    reservationId: await seedReservation(t, tenantId),
     callId: `call_${tenantId}`,
     docRef,
   });
@@ -428,13 +443,18 @@ describe("BETA-05 — tenant A's voice-doc session can never reach tenant B's do
     const bDoc = await seedReadyDoc(t, TENANT_B, OTHER_TEXT, "Tenant B logistics review");
 
     await expect(
-      asTenant(t, TENANT).mutation(api.voice.startSession, {
+      asTenant(t, TENANT).mutation(internal.voice.startSession, {
+        reservationId: await seedReservation(t, TENANT),
         callId: "call_a",
         docRef: processing,
       }),
     ).rejects.toThrow(/voicedoc: document not ready/);
     await expect(
-      asTenant(t, TENANT).mutation(api.voice.startSession, { callId: "call_a", docRef: bDoc }),
+      asTenant(t, TENANT).mutation(internal.voice.startSession, {
+        reservationId: await seedReservation(t, TENANT),
+        callId: "call_a",
+        docRef: bDoc,
+      }),
     ).rejects.toThrow(/voicedoc: document not found/);
 
     // Tenant B may open a session on its OWN document — the guard is scoping, not a blanket refusal.

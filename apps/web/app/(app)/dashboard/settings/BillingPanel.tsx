@@ -31,7 +31,7 @@
 // file's source to keep it that way. Teal is a button fill with white text, never small body text
 // (BRAND §6, ~2.9:1). Section titles are the tracked-caps pattern (BRAND §3).
 import { api } from "@pikar/backend/api";
-import { CONFIG_CONFIRMED } from "@pikar/billing/config";
+import { COMMERCIAL_BILLING_ENABLED, CONFIG_CONFIRMED } from "@pikar/billing/config";
 import { unappliedStage } from "@pikar/billing/reconcile";
 import { renderTaxPosture, type TaxPosture } from "@pikar/billing/tax";
 import type { CashFigure } from "@pikar/core";
@@ -280,6 +280,12 @@ export function BillingPanelView({
 
   return (
     <div style={{ display: "grid", gap: "1.25rem" }}>
+      {!COMMERCIAL_BILLING_ENABLED ? (
+        <p role="status" data-commercial-billing="disabled" style={{ ...card, ...body }}>
+          New paid subscriptions are unavailable in this release. Existing subscribers can still
+          manage or cancel their subscription in Stripe.
+        </p>
+      ) : null}
       {/* An unrecognised `?checkout=` produces no element at all — never an empty banner. */}
       {notice && checkout ? (
         <div

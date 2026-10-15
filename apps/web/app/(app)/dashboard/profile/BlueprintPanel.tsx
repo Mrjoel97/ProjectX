@@ -15,7 +15,8 @@ import {
   segmentFill,
   segmentHeadline,
 } from "@pikar/core";
-import { useAction, useQuery } from "convex/react";
+import { useAction, usePaginatedQuery, useQuery } from "convex/react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BlueprintCanvas } from "./BlueprintCanvas";
 import { BlueprintDiff } from "./BlueprintDiff";
@@ -49,6 +50,7 @@ const EMPTY_BLUEPRINT = Object.fromEntries(
 
 export function BlueprintPanel() {
   const blueprintState = useQuery(api.blueprint.blueprintState);
+  const foundationDocs = useQuery(api.foundation.publication, {});
   const buildDraft = useAction(api.blueprint.buildBlueprintDraft);
   const [building, setBuilding] = useState(false);
   const [buildStatus, setBuildStatus] = useState<string | null>(null);
@@ -62,7 +64,12 @@ export function BlueprintPanel() {
     return () => clearInterval(t);
   }, []);
   const pulse = useQuery(api.blueprint.blueprintPulse, { now });
-  const goals = useQuery(api.goals.listGoals);
+  const {
+    results: goalRows,
+    status: goalStatus,
+    loadMore: loadMoreGoals,
+  } = usePaginatedQuery(api.goals.listGoalsPage, {}, { initialNumItems: 50 });
+  const goals = goalStatus === "LoadingFirstPage" ? undefined : goalRows;
 
   async function onBuild() {
     setBuilding(true);
@@ -154,6 +161,34 @@ export function BlueprintPanel() {
         />
       )}
 
+      {goalStatus === "CanLoadMore" && (
+        <p>
+          Showing the newest {goalRows.length} goals.{" "}
+          <button type="button" onClick={() => loadMoreGoals(50)}>
+            Load older goals
+          </button>
+        </p>
+      )}
+      {goalStatus === "LoadingMore" && <p>Loading older goals…</p>}
+      {!!foundationDocs?.length && (
+        <section aria-label="Foundational references">
+          <h3 style={{ ...label, marginBottom: "0.5rem" }}>Foundational references</h3>
+          <ul>
+            {foundationDocs.map((doc) => (
+              <li key={doc.id}>
+                {doc.title} —{" "}
+                {doc.status === "ready"
+                  ? "Ready"
+                  : doc.status === "failed"
+                    ? "Indexing needs attention"
+                    : "Indexing"}
+              </li>
+            ))}
+          </ul>
+          <Link href="/dashboard/onboarding">Review references and continue business setup</Link>
+        </section>
+      )}
+
       {buildStatus && (
         <p
           role="status"
@@ -197,7 +232,12 @@ function BlueprintReport({
   built: boolean;
   /** The primary call to action for this state, rendered under the lede. */
   action?: React.ReactNode;
-  pulse?: { segments: Record<string, SegmentPulse>; globals: PulseGlobals };
+  pulse?: {
+    segments: Record<string, SegmentPulse>;
+    globals: PulseGlobals;
+    truncated?: boolean;
+    truncatedSegments?: string[];
+  };
   /** undefined while `listGoals` is loading; SegmentAnatomy tells "Checking…" apart from "none". */
   goals?: readonly Goal[];
 }) {
@@ -300,7 +340,7 @@ function BlueprintReport({
       {pulse !== undefined &&
         (() => {
           const readout = composeReadout(pulse.segments, pulse.globals, Date.now());
-          return readout === null ? null : (
+          return readout === null && !pulse.truncated ? null : (
             <p
               role="status"
               style={{
@@ -311,6 +351,7 @@ function BlueprintReport({
               }}
             >
               {readout}
+              {pulse.truncated && " Partial activity sample: counts are lower bounds, not totals."}
             </p>
           );
         })()}
@@ -340,6 +381,7 @@ function BlueprintReport({
           segment={openSegment}
           blueprint={blueprint}
           pulse={pulse?.segments[openSegment.id]}
+          partial={pulse?.truncatedSegments?.includes(openSegment.id)}
           goals={
             goals === undefined
               ? undefined

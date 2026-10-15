@@ -102,6 +102,7 @@ const CONVEX_MODULES = [
   "audit.ts",
   "auth.config.ts",
   "auth.ts",
+  "authRevocations.ts",
   "authoringProbe.ts",
   "billing.ts",
   "billingApi.ts",
@@ -137,6 +138,7 @@ const CONVEX_MODULES = [
   "evaluations.ts",
   "feedback.ts",
   "finance.ts",
+  "foundation.ts",
   "funnels.ts",
   "gmail.ts",
   "gmailAuth.ts",
@@ -158,15 +160,23 @@ const CONVEX_MODULES = [
   "knowledgeVaultDrive.ts",
   "lib/agenda.ts",
   "lib/allowlist.ts",
+  "lib/authEmail.ts",
   "lib/dispatchShared.ts",
   "lib/env.ts",
   "lib/evalBudgetModel.ts",
   "lib/foglamp.ts",
+  "lib/foundationValidators.ts",
   "lib/functions.ts",
   "lib/hash.ts",
+  "lib/markdownPdf.ts",
+  "lib/mediaRead.ts",
   "lib/models.ts",
+  "lib/paidBudgetModel.ts",
   "lib/planRow.ts",
+  "lib/tenantLifecycle.ts",
   "lib/toolContextArgs.ts",
+  "lib/webResearchTools.ts",
+  "lib/ws.d.ts",
   "llm.ts",
   "media.ts",
   "mediaComplete.ts",
@@ -222,6 +232,7 @@ const CONVEX_MODULES = [
   "tenantDelete.ts",
   "tenantExport.ts",
   "tenantProfile.ts",
+  "uploads.ts",
   "vault.ts",
   "vaultDigest.ts",
   "vaultDrive.ts",
@@ -244,6 +255,7 @@ const CONVEX_MODULES = [
   "verticalPacks.ts",
   "verticalVisual.ts",
   "voice.ts",
+  "voiceControl.ts",
   "voiceDoc.ts",
   "voiceToken.ts",
   "workflowPackBinding.ts",
@@ -264,9 +276,12 @@ const CONVEX_MODULES = [
 // These lists are the answer to "who may schedule work at all". Each file below schedules a
 // FOLLOW-UP STEP of a run the user started: a poll for a media job, a watchdog timeout, the next
 // page of a folder walk. None re-arms itself on a cadence.
+// Readiness additions: one delivery watchdog; bounded foundation transcript/graph cleanup
+// and publication ingestion; bounded graph cleanup continuation. None adds user routines.
 const SCHEDULER_CALL_SITES = [
   "billingRollup.ts",
   "cockpit.ts",
+  "delivery.ts",
   // 42-03: `startTeamRun` schedules one durable starter per fan-out worker. It is the ONE place a
   // dispatch is queued more than once from a single call, which is exactly why the count is bounded
   // in code (`min(routes, MAX_FAN_OUT, rootEnvelope)`) and never by the model (ADR-008/ADR-038).
@@ -276,10 +291,12 @@ const SCHEDULER_CALL_SITES = [
   // Every zone decision lives OUTSIDE the convex namespace, in collect-recurrence-evidence.mjs.
   "dstProbe.ts",
   "evaluations.ts",
+  "foundation.ts",
   "llm.ts",
   "media.ts",
   "mediaComplete.ts",
   "notifications.ts",
+  "onboarding.ts",
   "proactiveReview.ts",
   // One driver-owned expiry deletion per admitted research request. It never re-arms.
   "researchControl.ts",
@@ -288,7 +305,10 @@ const SCHEDULER_CALL_SITES = [
   "vault.ts",
   "vaultDrive.ts",
   "vaultFolders.ts",
+  "vaultGraph.ts",
   "voice.ts",
+  // Server-owned voice control starts once per explicitly admitted browser session.
+  "voiceToken.ts",
 ];
 const CRON_REGISTRARS = ["crons.ts"];
 
@@ -372,12 +392,17 @@ describe("the scheduling primitives have a CLOSED, PINNED call-site set", () => 
     // fan-out passing `orgId`, `workspaceId` or an id array read green. Pinning the registered
     // NAMES instead means a sixth job of any name, per-tenant or not, is a visible diff.
     expect(registered).toEqual([
+      "expired-upload-receipts",
+      "expired-auth-revocations",
+      "foundation-transcript-retention",
       "worm-export",
       "gmail-token-expiry-scan",
       "proactive-review",
       "vault-pending-extraction-sweep",
       "reliability-sweep",
       "billing-invoice-rollup",
+      // Privacy retention of transient provider control state; never starts user work.
+      "voice-transient-retention",
     ]);
   });
 });

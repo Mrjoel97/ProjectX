@@ -1,3 +1,13 @@
+import {
+  type MusicCredit,
+  pickStockPhoto,
+  pickStockAudio as selectStockAudio,
+  pickStockVideo as selectStockVideo,
+} from "@pikar/core/stockSelection";
+import { activeMediaJobs, currentMediaJobs, readMediaBatch } from "./lib/mediaRead";
+
+export { type MusicCredit, pickStockPhoto } from "@pikar/core/stockSelection";
+
 /**
  * The media JOB reservation (MEDIA-01, D10) — the ONE money gate for Phase 20.
  *
@@ -55,11 +65,12 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
-import { internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { getGuardrailConfig, mediaRemainingCentsInner, rateLimiter } from "./guardrails";
 import { retrier } from "./index";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { internalAction, internalMutation } from "./lib/tenantLifecycle";
 import { evaluateRenderTrigger, maybeStartCaptions } from "./mediaComplete";
 // The plain-function half of the ledger writer: the limiter movement and its row must commit
 // or fail together (FIN-01). A separate ctx.runMutation would be a second transaction.
@@ -833,11 +844,19 @@ type KindTotals = { estCents: number; actualCents: number; rowCount: number };
  * is invisible in a single total.
  */
 export const spendForPeriod = internalQuery({
-  args: { tenantId: v.string(), sinceMs: v.number(), untilMs: v.number() },
+  args: {
+    tenantId: v.string(),
+    sinceMs: v.number(),
+    untilMs: v.number(),
+    cursor: v.optional(v.string()),
+  },
   handler: async (
     ctx,
     a,
   ): Promise<{
+    continueCursor: string;
+    isDone: boolean;
+    estUsd: number;
     estCents: number;
     actualCents: number;
     rowCount: number;
@@ -846,10 +865,13 @@ export const spendForPeriod = internalQuery({
     notes: { ttsReservedAt2x: boolean; reservedTotalNotDerivable: true };
   }> => {
     // The index PREFIX is the tenant boundary — never a full-table scan, never a cross-tenant read.
-    const rows = await ctx.db
+    const page = await ctx.db
       .query("mediaJobs")
-      .withIndex("by_plan", (q) => q.eq("tenantId", a.tenantId))
-      .collect();
+      .withIndex("by_tenant_createdAt", (q) =>
+        q.eq("tenantId", a.tenantId).gte("createdAt", a.sinceMs).lt("createdAt", a.untilMs),
+      )
+      .paginate({ cursor: a.cursor ?? null, numItems: 500 });
+    const rows = page.page;
 
     // HALF-OPEN [sinceMs, untilMs) so two adjacent periods never double-count a boundary row.
     const inPeriod = rows.filter((r) => r.createdAt >= a.sinceMs && r.createdAt < a.untilMs);
@@ -884,6 +906,9 @@ export const spendForPeriod = internalQuery({
     }
 
     return {
+      continueCursor: page.continueCursor,
+      isDone: page.isDone,
+      estUsd,
       // Rounded ONCE, on the total — the D12(a) discipline, at the reader this time.
       estCents: Math.round(estUsd * 100),
       actualCents,
@@ -911,44 +936,42 @@ export const spendForPeriod = internalQuery({
  * `actualCents` / `verdict` / `failureReason` are `| null` rather than optional so a JSON CLI dump
  * shows the ABSENCE explicitly instead of dropping the key. That absence is `unlanded` at row level.
  */
+const summarizeJob = (r: Doc<"mediaJobs">) => ({
+  batchId: r.batchId,
+  blockIndex: r.blockIndex,
+  kind: r.kind,
+  model: r.model,
+  status: r.status,
+  estUsd: r.estUsd,
+  actualCents: r.actualCents ?? null,
+  verdict: r.verdict ?? null,
+  failureReason: r.failureReason ?? null,
+  promptHash: r.promptHash,
+});
+/** Small-history compatibility reader; oversized histories must use the cursor endpoint. */
 export const listJobs = internalQuery({
   args: { tenantId: v.string(), planId: v.id("plans") },
-  handler: async (
-    ctx,
-    a,
-  ): Promise<
-    Array<{
-      batchId: string;
-      blockIndex: number;
-      kind: string;
-      model: string;
-      status: string;
-      estUsd: number;
-      actualCents: number | null;
-      verdict: string | null;
-      failureReason: string | null;
-      promptHash: string;
-    }>
-  > => {
+  handler: async (ctx, a) => {
     const rows = await ctx.db
       .query("mediaJobs")
-      .withIndex("by_plan", (q) => q.eq("tenantId", a.tenantId).eq("planId", a.planId))
-      .collect();
-
+      .withIndex("by_plan_created", (q) => q.eq("tenantId", a.tenantId).eq("planId", a.planId))
+      .order("desc")
+      .take(1001);
+    if (rows.length > 1000) throw new Error("MEDIA_HISTORY_REQUIRES_LIST_JOBS_PAGE");
     return rows
       .sort((x, y) => x.blockIndex - y.blockIndex || x.kind.localeCompare(y.kind))
-      .map((r) => ({
-        batchId: r.batchId,
-        blockIndex: r.blockIndex,
-        kind: r.kind,
-        model: r.model,
-        status: r.status,
-        estUsd: r.estUsd,
-        actualCents: r.actualCents ?? null,
-        verdict: r.verdict ?? null,
-        failureReason: r.failureReason ?? null,
-        promptHash: r.promptHash,
-      }));
+      .map(summarizeJob);
+  },
+});
+export const listJobsPage = internalQuery({
+  args: { tenantId: v.string(), planId: v.id("plans"), cursor: v.optional(v.string()) },
+  handler: async (ctx, a) => {
+    const result = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_plan_created", (q) => q.eq("tenantId", a.tenantId).eq("planId", a.planId))
+      .order("desc")
+      .paginate({ cursor: a.cursor ?? null, numItems: 100 });
+    return { ...result, page: result.page.map(summarizeJob) };
   },
 });
 
@@ -1137,15 +1160,6 @@ export type SubmitResult =
     }
   | { ok: false; code: string; blocked: boolean };
 
-export type MusicCredit = {
-  title: string;
-  creator: string;
-  license: string;
-  licenseUrl: string;
-  sourceUrl: string;
-  attribution: string;
-};
-
 type VisualSpec = Extract<SubmittableSpec, { kind: "video" | "image" }>;
 
 function wanBaseUrl(): string {
@@ -1324,10 +1338,7 @@ export const batchToSubmit = internalQuery({
     /** 33.1-06: the bed's mood — the music stock line's search text. */
     musicMood: string | null;
   }> => {
-    const rows = await ctx.db
-      .query("mediaJobs")
-      .withIndex("by_batch", (q) => q.eq("tenantId", a.tenantId).eq("batchId", a.batchId))
-      .collect();
+    const rows = await readMediaBatch(ctx, a.tenantId, a.batchId);
     // The index PREFIX is the tenant boundary, so the planId below is this tenant's by construction.
     const planId = rows[0]?.planId;
     const plan = planId ? await ctx.db.get(planId) : null;
@@ -1737,47 +1748,6 @@ async function fetchStockMusic(mood: string, seconds: number): Promise<SubmitRes
 /** Openverse asks callers to identify themselves; a fixed, honest string, never a tenant's. */
 const OPENVERSE_USER_AGENT = "pikar-ai/1.0 (media bed; https://pikar.ai)";
 
-/**
- * Openverse's audio rows -> the first track long enough to lie under the whole reel, with its
- * licence line. Exported for the unit tests, the way `pickStockVideo` is.
- *
- * The rules are the assembler's and the licence's, not taste:
- *  - **long enough**: the bed is looped with `-stream_loop -1` and trimmed to the reel, and a
- *    loop seam inside a 15-second reel is audible; a track shorter than the reel is skipped.
- *  - **downloadable**: a row with no `url` cannot be fetched; skipped, never guessed at.
- *  - **credited**: a row with no `attribution` cannot be used under CC BY at all; skipped. The
- *    library writes that line, so the credit the owner copies is the licence's own wording.
- */
-export function pickStockAudio(
-  body: Record<string, unknown>,
-  seconds: number,
-): { link: string; assetId: string; credit: MusicCredit } | null {
-  const results = body.results;
-  if (!Array.isArray(results)) throw new Error("shape");
-  const floorMs = (seconds - MEDIA_MUSIC_STOCK.minDurationSlackSeconds) * 1000;
-  for (const raw of results) {
-    const r = raw as Record<string, unknown>;
-    if (typeof r.duration !== "number" || r.duration < floorMs) continue;
-    if (typeof r.url !== "string" || !r.url.startsWith("https://")) continue;
-    if (typeof r.id !== "string" && typeof r.id !== "number") continue;
-    if (typeof r.attribution !== "string" || r.attribution.trim() === "") continue;
-    const str = (k: string): string => (typeof r[k] === "string" ? (r[k] as string) : "");
-    return {
-      link: r.url,
-      assetId: String(r.id),
-      credit: {
-        title: str("title"),
-        creator: str("creator"),
-        license: `${str("license")} ${str("license_version")}`.trim(),
-        licenseUrl: str("license_url"),
-        sourceUrl: str("foreign_landing_url"),
-        attribution: r.attribution.trim(),
-      },
-    };
-  }
-  return null;
-}
-
 async function fetchStock(
   spec: { media: string; seconds: number },
   query: string,
@@ -1850,81 +1820,6 @@ async function fetchStock(
       mimeType: file.headers.get("content-type") ?? (isVideo ? "video/mp4" : "image/jpeg"),
     },
   };
-}
-
-/**
- * The first clip that can COVER its scene, and the rendition of it closest to the reel's own tier.
- *
- * Two rules, both of them the assembler's rather than anyone's taste:
- *
- *  1. **Duration.** `assemble_final.sh` hard-errors when a clip is shorter than its scene by more
- *     than `minDurationSlackSeconds` — "a held still frame is not a scene". A generated clip is
- *     always exactly its grid length, so nothing has ever reached that gate; a stock clip is
- *     whatever the library has. Filtering HERE means a too-short match is a refused scene the fix
- *     menu can swap, instead of a hard render failure after every other input has landed.
- *  2. **Rendition.** The reel is 720x1280, so the file nearest that height is chosen rather than
- *     the largest. This is what keeps `MAX_STOCK_ASSET_BYTES` a backstop instead of a wall.
- *
- * Exported for the test: this is real selection logic over a shape we do not control, and it is
- * the half of the adapter worth pinning without a network.
- */
-export function pickStockVideo(
-  body: Record<string, unknown>,
-  seconds: number,
-): { link: string; assetId: string } | null {
-  const videos = body.videos;
-  if (!Array.isArray(videos)) throw new Error("shape");
-  const floor = seconds - MEDIA_DEFAULT_STOCK.minDurationSlackSeconds;
-  for (const raw of videos) {
-    const video = raw as { id?: unknown; duration?: unknown; video_files?: unknown };
-    if (typeof video.duration !== "number" || video.duration < floor) continue;
-    if (typeof video.id !== "number" && typeof video.id !== "string") continue;
-    if (!Array.isArray(video.video_files)) continue;
-    const files = video.video_files
-      .map((f) => f as { link?: unknown; file_type?: unknown; height?: unknown; width?: unknown })
-      .filter(
-        (f): f is { link: string; height: number; width: number } =>
-          typeof f.link === "string" &&
-          typeof f.height === "number" &&
-          typeof f.width === "number" &&
-          f.file_type === "video/mp4",
-      )
-      // Portrait renditions first — a landscape file from a portrait-filtered result would still
-      // set the reel's geometry, which is the failure the orientation parameter exists to prevent.
-      .sort(
-        (l, r) =>
-          Number(r.height >= r.width) - Number(l.height >= l.width) ||
-          Math.abs(l.height - 1280) - Math.abs(r.height - 1280),
-      );
-    const best = files[0];
-    if (best) return { link: best.link, assetId: String(video.id) };
-  }
-  return null;
-}
-
-/**
- * The top photo, at the rendition the Ken Burns path actually needs.
- *
- * `large2x` before `portrait`: the assembler upscales a still 4x before `zoompan` so the crop
- * window can step in quarter-pixels, and the library's `portrait` rendition is a fixed 800x1200
- * crop that would be doing that from well under the output tier. `original` is last because it can
- * be a 25-megapixel master — inside the byte cap it is simply slower for no visible gain.
- */
-export function pickStockPhoto(
-  body: Record<string, unknown>,
-): { link: string; assetId: string } | null {
-  const photos = body.photos;
-  if (!Array.isArray(photos)) throw new Error("shape");
-  for (const raw of photos) {
-    const photo = raw as { id?: unknown; src?: Record<string, unknown> };
-    if (typeof photo.id !== "number" && typeof photo.id !== "string") continue;
-    const src = photo.src ?? {};
-    const link = ["large2x", "large", "portrait", "original"]
-      .map((k) => src[k])
-      .find((u): u is string => typeof u === "string" && u.length > 0);
-    if (link) return { link, assetId: String(photo.id) };
-  }
-  return null;
 }
 
 /** Poll one Alibaba Wan task; result URLs expire after 24 h, so successful bytes are stored here. */
@@ -2426,10 +2321,7 @@ export const captionsToSubmit = internalQuery({
     model: string;
     takes: Array<{ blockIndex: number; storageId: Id<"_storage"> }>;
   } | null> => {
-    const rows = await ctx.db
-      .query("mediaJobs")
-      .withIndex("by_batch", (q) => q.eq("tenantId", a.tenantId).eq("batchId", a.batchId))
-      .collect();
+    const rows = await readMediaBatch(ctx, a.tenantId, a.batchId);
     const stt = rows.find((r) => r.kind === "stt");
     if (!stt) return null; // captions were not reserved for this deck — nothing to do, not an error
     const takes = rows
@@ -2758,10 +2650,7 @@ export const byPlan = tenantQuery({
     const plan = await ownedPlan(ctx, planId, ctx.tenantId);
     if (!plan) return [];
 
-    const rows = await ctx.db
-      .query("mediaJobs")
-      .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
-      .collect();
+    const rows = await currentMediaJobs(ctx, ctx.tenantId, plan);
 
     const deckMaxChars =
       plan.clipSeconds === undefined ? MAX_CHARS_PER_BLOCK : maxCharsFor(plan.clipSeconds);
@@ -2845,10 +2734,7 @@ export const assetUrls = tenantQuery({
     const plan = await ownedPlan(ctx, planId, ctx.tenantId);
     if (!plan) return [];
 
-    const rows = await ctx.db
-      .query("mediaJobs")
-      .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
-      .collect();
+    const rows = await currentMediaJobs(ctx, ctx.tenantId, plan);
 
     return await Promise.all(
       rows
@@ -3366,10 +3252,7 @@ export const generateImage = tenantMutation({
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
     const prompt = plan.mediaMode === "image" ? plan.imagePrompt?.trim() : undefined;
     if (!prompt) return { ok: false as const, reason: "no_image_plan" as const };
-    const rows = await ctx.db
-      .query("mediaJobs")
-      .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
-      .collect();
+    const rows = await activeMediaJobs(ctx, ctx.tenantId, planId);
     // IN-FLIGHT ONLY (25.1-03, D8). `succeeded` used to sit in this set, and NOTHING ever deletes a
     // `mediaJobs` row — so the first image a plan produced locked the button for ever, with the
     // canvas saying only "already started" about work that had finished. A finished image is
@@ -3458,8 +3341,9 @@ export const retryRender = tenantMutation({
     // inputs off the whole plan anyway, so the batch is only the trigger handle here.
     const rows = await ctx.db
       .query("mediaJobs")
-      .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
-      .collect();
+      .withIndex("by_plan_created", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
+      .order("desc")
+      .take(1);
     const latest = rows.reduce<Doc<"mediaJobs"> | null>(
       (best, r) => (best === null || r.createdAt > best.createdAt ? r : best),
       null,
@@ -3753,8 +3637,9 @@ async function rearmAfterFix(
   if (before.renderStatus !== "failed" || before.renderReason !== "incomplete_batch") return;
   const rows = await ctx.db
     .query("mediaJobs")
-    .withIndex("by_plan", (q) => q.eq("tenantId", tenantId).eq("planId", before._id))
-    .collect();
+    .withIndex("by_plan_created", (q) => q.eq("tenantId", tenantId).eq("planId", before._id))
+    .order("desc")
+    .take(1);
   const latest = rows.reduce<Doc<"mediaJobs"> | null>(
     (best, r) => (best === null || r.createdAt > best.createdAt ? r : best),
     null,
@@ -3998,3 +3883,9 @@ export const sceneCitations = tenantQuery({
     return out;
   },
 });
+
+// Compatibility exports retain the configured policy; selection itself has no framework dependency.
+export const pickStockAudio = (body: Record<string, unknown>, seconds: number) =>
+  selectStockAudio(body, seconds, MEDIA_MUSIC_STOCK.minDurationSlackSeconds);
+export const pickStockVideo = (body: Record<string, unknown>, seconds: number) =>
+  selectStockVideo(body, seconds, MEDIA_DEFAULT_STOCK.minDurationSlackSeconds);

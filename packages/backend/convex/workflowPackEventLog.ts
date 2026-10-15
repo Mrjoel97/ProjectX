@@ -34,8 +34,9 @@ import {
 } from "@pikar/core";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, type MutationCtx } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 /** Bounded page size for the read model. A metric never needs an unbounded scan. */
 export const PACK_EVENT_PAGE_MAX = 500;

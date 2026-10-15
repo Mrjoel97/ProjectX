@@ -1,3 +1,5 @@
+> Last verified: 2026-10-15 — Agenda goal lookup now uses the tenant/status/segment index and reads one active goal per displayed gap. Agenda rows themselves retain the closed route/playbook-key vocabulary; no tenant goal history is loaded for a weekly agenda. Local agenda regression suite passes.
+
 # Playbook: Business Evaluation Engine
 
 > Last verified: 2026-09-11 — the internal evaluation and gap-action paths preserve an optional

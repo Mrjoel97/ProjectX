@@ -7,6 +7,19 @@ import { cronJobs } from "convex/server";
 import { internal } from "./_generated/api";
 
 const crons = cronJobs();
+crons.hourly("expired-upload-receipts", { minuteUTC: 35 }, internal.uploads.purgeExpired, {});
+crons.hourly(
+  "expired-auth-revocations",
+  { minuteUTC: 25 },
+  internal.authRevocations.purgeExpired,
+  {},
+);
+crons.hourly(
+  "foundation-transcript-retention",
+  { minuteUTC: 15 },
+  internal.foundation.purgeTranscripts,
+  {},
+);
 crons.daily("worm-export", { hourUTC: 3, minuteUTC: 0 }, internal.worm.exportAudit, {});
 // DLVR-03 proactive half: flag Gmail tokens within ~24h of their 7-day refresh expiry
 // into an in-app "Reconnect Gmail" notification before delivery breaks. Logic lives in
@@ -79,4 +92,5 @@ crons.daily(
   internal.billingRollup.tick,
   {},
 );
+crons.interval("voice-transient-retention", { hours: 1 }, internal.voice.sweepTransientControl, {});
 export default crons;

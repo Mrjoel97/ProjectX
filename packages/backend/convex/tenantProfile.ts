@@ -37,8 +37,9 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "./_generated/server";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { migrations } from "./migrations";
 import schema from "./schema";
 

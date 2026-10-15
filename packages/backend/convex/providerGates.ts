@@ -45,14 +45,10 @@ import {
   resolveProviderEligibility,
 } from "@pikar/revenue";
 import { type Infer, v } from "convex/values";
-import {
-  internalMutation,
-  internalQuery,
-  type MutationCtx,
-  type QueryCtx,
-} from "./_generated/server";
+import { internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { PROVIDER_READ_PATHS } from "./connectorFetch";
 import { ownerMutation, ownerQuery, tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 /**
  * The wire validators. Written out because a Convex validator needs its literals inline; the

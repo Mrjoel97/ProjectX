@@ -329,3 +329,6 @@ Two things the approval did **not** dissolve:
   unresolved keeps the lane `parked`; the owner explicitly chose that outcome in 28-23.
 - Everything [PLANNED] is unbuilt; invariants 1-3 have no enforcement yet.
 - Webhooks and any accounting write (journal entries, invoice creation) are out of phase scope.
+
+
+> 2026-10-15 lifecycle enforcement: application internal mutations/actions use the shared tenantLifecycle builders. Tenant-owned writes refuse deleting/deleted accounts; cleanup deletes and retained compliance metadata remain available. The guard migration preserves connector/provider contracts; local identity/deletion and subsystem suites provide verification, not hosted provider qualification.

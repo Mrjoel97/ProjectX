@@ -15,11 +15,29 @@ export type AuditRef = string;
 export type AuditHash = string;
 
 /** Values permitted in a redaction-safe audit payload. */
-export type AuditPayloadValue = AuditRef | AuditHash | number | boolean | null | readonly string[];
+export type AuditSourceRef = {
+  ref: string;
+  docId: string;
+  hash: string;
+  storageId: string;
+  mimeType: string;
+  size: number;
+};
+
+export type AuditPayloadValue =
+  | AuditRef
+  | AuditHash
+  | number
+  | boolean
+  | null
+  | readonly string[]
+  | Readonly<Record<string, number>>
+  | readonly AuditSourceRef[];
 
 /**
  * Redaction-safe audit payload: a flat map of refs / hashes / ids / counts /
- * flags. No nested objects and no free-form content fields — keep it to metadata.
+ * flags, numeric count maps, or explicit evidence source references. No arbitrary
+ * nested objects or free-form content fields — keep it to metadata.
  */
 export interface AuditPayload {
   readonly [key: string]: AuditPayloadValue | undefined;

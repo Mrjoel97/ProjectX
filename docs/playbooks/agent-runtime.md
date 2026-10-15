@@ -1,3 +1,7 @@
+> Last verified: 2026-10-15 — evaluator source-shape guards normalize checkout line endings. The evaluator fingerprint now includes paidBudgetModel and authentication revocation/lifetime dependencies; the suite revision and manifest are refreshed to invalidate earlier evidence after these legitimate runtime changes. This refresh is identity bookkeeping, not a new evaluation or release approval.
+
+> Last verified: 2026-10-15 — Ordinary SDK loop steps and standalone document/digest/edit/voice-brief calls use paidBudgetModel admission and immediate provider-cost settlement. Errors with uncertain billing retain their hold and suppress automatic model fallback. Fixture-only MockLanguageModelV4 paths keep deterministic arithmetic. Live billing reconciliation remains unverified.
+
 > Last verified: 2026-09-14 — the native vertical evidence path exposes a closed owner review
 > console for one exact run UUID. Sealed receipts bind the output's SHA-256 and UTF-8 byte length;
 > mechanically observable outcome, required-source and forbidden-operation criteria are resolved
@@ -2247,3 +2251,5 @@ paid-call graph and prerequisites. No new paid evaluation is certified by these 
 > refs-only tombstone after replay retention. Omitted options retain the legacy six-page
 > compatibility behavior. The control is an attempt ceiling, not semantic evidence or a
 > currency budget; live acceptance remains required.
+
+Last verified: 2026-10-15 — Operations evaluation signals inspect at most1000 latest rows per source and at most90days. Results carry complete/rowCap; the dashboard labels partial samples and hides the cross-source DLQ rate when incomplete. Future or invalid time windows refuse.

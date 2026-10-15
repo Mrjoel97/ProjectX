@@ -1,6 +1,7 @@
 // Thin adapter over the `goals` table (CLAUDE.md §1). Selection, rendering and cycle-time
 // arithmetic live in `@pikar/core`'s goals module; this file scopes, validates and audits.
 import { BLUEPRINT_SEGMENTS, type Goal } from "@pikar/core";
+import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -36,10 +37,27 @@ export const listGoals = tenantQuery({
       const forStatus = await ctx.db
         .query("goals")
         .withIndex("by_tenant_status", (q) => q.eq("tenantId", ctx.tenantId).eq("status", status))
-        .collect();
+        .order("desc")
+        .take(100);
       rows.push(...forStatus);
     }
     return rows.map(toGoal);
+  },
+});
+
+/** Complete goal history is cursor-paged; legacy listGoals returns the newest100 per status. */
+export const listGoalsPage = tenantQuery({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
+    const result = await ctx.db
+      .query("goals")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .order("desc")
+      .paginate({
+        ...paginationOpts,
+        numItems: Math.min(100, Math.max(1, paginationOpts.numItems)),
+      });
+    return { ...result, page: result.page.map(toGoal) };
   },
 });
 

@@ -15,8 +15,8 @@
 // The writers are internal (called from the agent loop); the reader is a tenantQuery so the
 // browser subscribes and the trace fills live, guarded on ctx.tenantId.
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 import schema, { AGENT_STEP_REFUSAL } from "./schema";
 
 // DERIVED from schema.ts — the single source of truth for the closed tool union (the briefings.ts

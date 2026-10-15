@@ -49,9 +49,10 @@
 import type { ConnectorEnvironment } from "@pikar/revenue";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { type ActionCtx, internalAction } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
 import { classifyRevokeOutcome } from "./connectorOAuth";
 import { tenantAction } from "./lib/functions";
+import { internalAction } from "./lib/tenantLifecycle";
 
 // ── What PayPal publishes ─────────────────────────────────────────────────────────────────
 

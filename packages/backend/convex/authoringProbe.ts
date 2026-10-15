@@ -3,8 +3,9 @@ import { createThread } from "@convex-dev/agent";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery, type QueryCtx } from "./_generated/server";
+import { internalQuery, type QueryCtx } from "./_generated/server";
 import { AUTHORING_PROBE_AUDIT_NAMESPACE, appendAudit } from "./audit";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 export async function probeControl(ctx: QueryCtx, budgetId: Id<"spendEvents">) {
   const rows = await ctx.db

@@ -1,3 +1,4 @@
+import { emptyFoundationProfile } from "@pikar/core/foundation";
 import { deletableTables, type TenantDeletionCursor } from "@pikar/core/tenantData";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
@@ -1389,4 +1390,42 @@ describe("erasure severs the admission bridge (ADR-044 D3a)", () => {
     expect((await t.run((ctx) => ctx.db.get(seeded.kept)))?.email).toBe("live@example.test");
     expect((await t.run((ctx) => ctx.db.get(seeded.pending)))?.email).toBe("pending@example.test");
   });
+});
+
+test("foundation transcript and revision content is erased without touching another tenant", async () => {
+  const { t, tenantA, tenantB } = await seedTwoTenants();
+  await t.run(async (ctx) => {
+    for (const tenantId of [tenantA, tenantB]) {
+      await ctx.db.insert("foundationTranscripts", {
+        tenantId,
+        eventId: "event1",
+        text: "private interview",
+        speaker: "user",
+        expiresAt: Date.now() + 1000,
+      });
+      await ctx.db.insert("foundationRevisions", {
+        profile: emptyFoundationProfile(),
+        slots: {},
+        answers: [],
+        docIds: [],
+        tenantId,
+        revision: 1,
+        documents: [
+          {
+            section: "operations",
+            title: "Operating model",
+            text: "private operations",
+            kind: "business_foundation_operations",
+          },
+        ],
+        createdAt: Date.now(),
+      });
+    }
+  });
+  await deleteAll(t, String(tenantA), tenantA);
+  for (const table of ["foundationTranscripts", "foundationRevisions"] as const) {
+    const rows = await t.run((ctx) => ctx.db.query(table).collect());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.tenantId).toBe(String(tenantB));
+  }
 });

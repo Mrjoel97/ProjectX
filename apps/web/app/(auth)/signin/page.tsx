@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PasswordField, TextField } from "../fields";
 import { ArrowIcon, GoogleIcon, LockIcon, MailIcon, StarIcon } from "../icons";
+import { PasswordChallenge } from "../PasswordChallenge";
 
 export default function SignIn() {
   const { signIn } = useAuthActions();
@@ -14,6 +15,7 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [challenge, setChallenge] = useState<"verify" | "reset" | null>(null);
 
   /**
    * The OAuth buttons used to be `onClick={() => void signIn(…)}`. `void` discards the promise, so
@@ -46,7 +48,13 @@ export default function SignIn() {
     setError(null);
     setBusy(true);
     try {
-      await signIn("password", { email, password, flow: "signIn" });
+      const result = await signIn("password", { email, password, flow: "signIn" });
+      if (!result.signingIn) {
+        setPassword("");
+        setChallenge("verify");
+        setBusy(false);
+        return;
+      }
       router.push("/dashboard");
     } catch {
       // Convex Auth doesn't distinguish "no such user" from "wrong password" to the
@@ -55,6 +63,18 @@ export default function SignIn() {
       setBusy(false);
     }
   }
+
+  if (challenge)
+    return (
+      <PasswordChallenge
+        mode={challenge}
+        email={email}
+        onBack={() => {
+          setChallenge(null);
+          setBusy(false);
+        }}
+      />
+    );
 
   return (
     <div className="auth-card">
@@ -94,6 +114,18 @@ export default function SignIn() {
           {!busy && <ArrowIcon />}
         </button>
       </form>
+
+      <button
+        type="button"
+        className="auth-google"
+        disabled={busy}
+        onClick={() => {
+          setPassword("");
+          setChallenge("reset");
+        }}
+      >
+        Forgot your password?
+      </button>
 
       <div className="auth-or">OR</div>
 

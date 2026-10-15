@@ -402,11 +402,13 @@ export function SegmentAnatomy({
   segment,
   blueprint,
   pulse,
+  partial = false,
   goals,
 }: {
   segment: BlueprintSegment;
   blueprint: BusinessBlueprint;
   pulse?: SegmentPulse;
+  partial?: boolean;
   /** undefined while `listGoals` is loading — distinct from an empty (loaded) list. */
   goals?: readonly Goal[];
 }) {
@@ -478,6 +480,12 @@ export function SegmentAnatomy({
       </Band>
 
       <Band title="Outcomes">
+        {partial && (
+          <p style={{ ...soft, fontSize: "0.83rem" }}>
+            Showing a recent activity sample. Counts are lower bounds and timing describes only this
+            sample.
+          </p>
+        )}
         {segment.specialist === null ? (
           <p style={{ ...soft, fontSize: "0.83rem" }}>
             Nothing runs here on its own — this section moves when you update your profile or your
@@ -487,7 +495,9 @@ export function SegmentAnatomy({
           <p style={{ ...soft, fontSize: "0.83rem" }}>Checking…</p>
         ) : pulse.runs30d === 0 ? (
           <p style={{ ...soft, fontSize: "0.83rem" }}>
-            No completed {segment.specialist} runs in the last 30 days.
+            {partial
+              ? "No completed runs in this activity sample."
+              : `No completed ${segment.specialist} runs in the last 30 days.`}
           </p>
         ) : (
           <p style={{ ...soft, fontSize: "0.83rem" }}>

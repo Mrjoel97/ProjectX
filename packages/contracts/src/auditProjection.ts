@@ -256,6 +256,8 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
   "media.rendered": ["batchId", "planId", "sceneCount", "renderMs", "sidecarHash", "gatesPassed"],
   "media.variation_salvaged": [...LINEAGE, "kept", "lost", "reason"],
   "microsoft.disconnected": ["deleted", "revokedAtProvider"],
+  "onboarding.foundation_published": ["revision", "documentCount", "blueprintDocId"],
+  "delivery.user_reconciled": ["requestId", "outcome"],
   "onboarding.profile_committed": ["vaultDocId", "fieldCount", "tierSource"],
   "onboarding.profile_updated": ["vaultDocId", "fieldCount", "tierSource", "reembed"],
   "owner.granted": ["owner"],

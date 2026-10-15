@@ -10,8 +10,8 @@
 // so the browser subscribes and the BRIEFING card fills live, guarded on ctx.tenantId.
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 import schema from "./schema";
 
 // DERIVED from schema.ts — the single source of truth for the row shape (which mirrors @pikar/core's

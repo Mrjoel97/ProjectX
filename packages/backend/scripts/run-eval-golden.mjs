@@ -2498,7 +2498,8 @@ function selfCheck() {
   // 17.1-10: the live gate must prove the runner's THROWAWAY tenant is Blueprint-bearing before
   // the first paid turn. Source order is load-bearing: seeding/asserting after the fixture loop
   // would let a fully green run measure the old no-spine prompt.
-  const runnerSource = readFileSync(fileURLToPath(import.meta.url), "utf8");
+  // Source-shape guards compare logical lines, independent of Git checkout line endings.
+  const runnerSource = readFileSync(fileURLToPath(import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const blueprintSeedAt = runnerSource.indexOf('must("smoke:seedGoldenEvalBlueprint"');
   const blueprintAssertAt = runnerSource.indexOf('must("blueprint:spineForTenant"');
   const paidLoopAt = runnerSource.indexOf("for (const fixture of fixtures)", blueprintSeedAt);

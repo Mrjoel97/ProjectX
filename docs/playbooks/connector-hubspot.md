@@ -281,3 +281,6 @@ that way and whether private/public direct OAuth distribution is permitted for t
 - The Marketplace/AI-connector classification question above stays unanswered, and stays that way
   as long as the listing is deferred.
 - Webhooks, and any write scope, are out of phase scope.
+
+
+> 2026-10-15 lifecycle enforcement: application internal mutations/actions use the shared tenantLifecycle builders. Tenant-owned writes refuse deleting/deleted accounts; cleanup deletes and retained compliance metadata remain available. The guard migration preserves connector/provider contracts; local identity/deletion and subsystem suites provide verification, not hosted provider qualification.

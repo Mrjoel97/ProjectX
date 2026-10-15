@@ -203,14 +203,14 @@ describe("the cron actually registers the sweep", () => {
     expect((await getJob(t, jobId))?.status).toBe("failed");
   });
 
-  test("crons.ts holds exactly SIX jobs — a sixth is a deliberate edit here", () => {
+  test("crons.ts holds exactly NINE jobs — additions require a deliberate edit here", () => {
     // A COUNT, not a ">= 1". A cron is unattended spend and unattended writes; the number of them
     // is a fact worth having to change on purpose.
     const jobs = [
       ...cronsSrc().matchAll(/\bcrons\.(daily|weekly|interval|hourly|monthly|cron)\(/g),
     ];
-    // 28.1-07 added the sixth: `billing-invoice-rollup`, the daily invoice claim tick.
-    expect(jobs).toHaveLength(6);
+    // Six operational jobs plus bounded auth, transcript and upload retention.
+    expect(jobs).toHaveLength(9);
   });
 });
 

@@ -34,20 +34,17 @@ import {
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import {
-  internalMutation,
-  internalQuery,
-  type MutationCtx,
-  type QueryCtx,
-} from "./_generated/server";
+import { internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { vaultIngestPool } from "./index";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { fixtureSeamFor } from "./lib/models";
+import { internalMutation } from "./lib/tenantLifecycle";
 import schema from "./schema";
 import { bumpFolder } from "./vaultFolders";
+import { clearDocumentGraphPage } from "./vaultGraph";
 import { startIngest } from "./vaultIngest";
-import { rag } from "./vaultRag";
+import { rag, ragForEvaluation } from "./vaultRag";
 
 const byteLen = (s: string): number => new TextEncoder().encode(s).length;
 
@@ -212,9 +209,12 @@ export const vaultIngestText = tenantMutation({
  * later via the vaultIngestText `docId` seam). Hash-dedup applies to both (a re-upload of identical
  * bytes reuses the existing item).
  */
+import { assertOwnedUpload, claimOwnedUpload } from "./uploads";
+
 export const vaultUpload = tenantMutation({
   args: {
     storageId: v.id("_storage"),
+    transcriptionStorageId: v.optional(v.id("_storage")),
     filename: v.string(),
     mimeType: v.string(),
     size: v.number(),
@@ -225,8 +225,20 @@ export const vaultUpload = tenantMutation({
   },
   handler: async (
     ctx,
-    { storageId, filename, mimeType, size, contentHash: hash, text, folderId },
+    {
+      storageId,
+      transcriptionStorageId,
+      filename,
+      mimeType,
+      size,
+      contentHash: hash,
+      text,
+      folderId,
+    },
   ): Promise<{ vaultDocId: Id<"vaultDocuments">; deduped: boolean }> => {
+    const receipt = await assertOwnedUpload(ctx, ctx.tenantId, storageId);
+    size = Math.max(size, receipt.size ?? 0);
+    if (transcriptionStorageId) await assertOwnedUpload(ctx, ctx.tenantId, transcriptionStorageId);
     // Per-kind cap: video is bounded by the transcription API's hard limit, everything else by the
     // storage ceiling. This is the single chokepoint — all video reaches transcribeDoc only through
     // here, so no downstream size guard is needed. The MESSAGES name the cap from the constant:
@@ -261,6 +273,8 @@ export const vaultUpload = tenantMutation({
       )
       .first();
     if (dup) return { vaultDocId: dup._id, deduped: true };
+    await claimOwnedUpload(ctx, ctx.tenantId, storageId);
+    if (transcriptionStorageId) await claimOwnedUpload(ctx, ctx.tenantId, transcriptionStorageId);
 
     // Searchable ONLY when the format is wired through embed+extract AND its text is already present.
     const searchable = isSearchable(mimeType) && text !== undefined && text.length > 0;
@@ -274,6 +288,7 @@ export const vaultUpload = tenantMutation({
       size,
       contentHash: hash,
       storageId,
+      transcriptionStorageId,
       text, // present for searchable TXT/MD/CSV; undefined for binaries (awaits extraction)
       status: searchable && !folderId ? "processing" : "pending_extraction",
       folderId,
@@ -336,12 +351,22 @@ export const vaultUploadFolderFile = tenantAction({
   args: {
     folderId: v.id("vaultFolders"),
     storageId: v.id("_storage"),
+    transcriptionStorageId: v.optional(v.id("_storage")),
     filename: v.string(),
     mimeType: v.string(),
     size: v.number(),
     text: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ vaultDocId: Id<"vaultDocuments">; deduped: boolean }> => {
+    await ctx.runQuery(internal.uploads.requireOwned, {
+      tenantId: ctx.tenantId,
+      storageId: args.storageId,
+    });
+    if (args.transcriptionStorageId)
+      await ctx.runQuery(internal.uploads.requireOwned, {
+        tenantId: ctx.tenantId,
+        storageId: args.transcriptionStorageId,
+      });
     const blob = await ctx.storage.get(args.storageId);
     if (!blob) throw new Error("vault: uploaded bytes not found");
     const hash = await contentHash(new Uint8Array(await blob.arrayBuffer()));
@@ -378,27 +403,12 @@ export const deleteVaultDoc = tenantMutation({
       await rag.deleteAsync(ctx, { entryId: doc.ragEntryId as EntryId });
     }
 
-    // This doc's graph edges → delete + decrement each incident endpoint's degree, GC orphans.
-    const edges = await ctx.db
-      .query("graphEdges")
-      .withIndex("by_tenant_source", (q) =>
-        q.eq("tenantId", ctx.tenantId).eq("sourceDocId", vaultDocId),
-      )
-      .collect();
-    const touched = new Set<Id<"graphNodes">>();
-    for (const e of edges) {
-      touched.add(e.fromNodeId);
-      touched.add(e.toNodeId);
-      await ctx.db.delete(e._id);
-    }
-    for (const nodeId of touched) {
-      const node = await ctx.db.get(nodeId);
-      if (!node) continue;
-      const incident = edges.filter((e) => e.fromNodeId === nodeId || e.toNodeId === nodeId).length;
-      const newDegree = node.degree - incident;
-      if (newDegree <= 0)
-        await ctx.db.delete(nodeId); // orphan GC
-      else await ctx.db.patch(nodeId, { degree: newDegree });
+    // Remove one page now; the durable continuation cleans the remaining orphaned edges.
+    if (!(await clearDocumentGraphPage(ctx, ctx.tenantId, vaultDocId))) {
+      await ctx.scheduler.runAfter(0, internal.vault.clearDeletedDocGraph, {
+        tenantId: ctx.tenantId,
+        vaultDocId,
+      });
     }
 
     // The member's terminal event, taken here because the row that owed it is about to vanish.
@@ -428,6 +438,11 @@ export const deleteVaultDoc = tenantMutation({
     // a byte-less row undeletable.
     if (doc.storageId && (await ctx.db.system.get("_storage", doc.storageId)) !== null)
       await ctx.storage.delete(doc.storageId);
+    if (
+      doc.transcriptionStorageId &&
+      (await ctx.db.system.get("_storage", doc.transcriptionStorageId)) !== null
+    )
+      await ctx.storage.delete(doc.transcriptionStorageId);
     await ctx.db.delete(vaultDocId);
     return { ok: true };
   },
@@ -780,6 +795,7 @@ export const docEntities = tenantQuery({
     ctx,
     { vaultDocId },
   ): Promise<{
+    truncated?: boolean;
     nodes: { _id: Id<"graphNodes">; type: string; name: string }[];
     edges: {
       _id: Id<"graphEdges">;
@@ -791,12 +807,13 @@ export const docEntities = tenantQuery({
     const doc = await ctx.db.get(vaultDocId);
     if (!doc || doc.tenantId !== ctx.tenantId) return { nodes: [], edges: [] };
 
-    const edges = await ctx.db
+    const edgePage = await ctx.db
       .query("graphEdges")
       .withIndex("by_tenant_source", (q) =>
         q.eq("tenantId", ctx.tenantId).eq("sourceDocId", vaultDocId),
       )
-      .collect();
+      .take(257);
+    const edges = edgePage.slice(0, 256);
 
     const nodeIds = new Set<Id<"graphNodes">>();
     for (const e of edges) {
@@ -810,6 +827,7 @@ export const docEntities = tenantQuery({
     }
     return {
       nodes,
+      truncated: edgePage.length > 256,
       edges: edges.map((e) => ({
         _id: e._id,
         fromNodeId: e.fromNodeId,
@@ -845,7 +863,7 @@ export const vaultSearch = tenantAction({
         .split(",")
         .filter(Boolean) as Id<"vaultDocuments">[];
     } else {
-      const { entries } = await rag.search(ctx, {
+      const { entries } = await ragForEvaluation({ ctx, tenantId: ctx.tenantId }).search(ctx, {
         namespace: ctx.tenantId,
         query,
         limit: 8,
@@ -912,6 +930,30 @@ export const getDoc = internalQuery({
  * a cross-tenant / missing id silently drops out, mirroring how `namespace = tenantId` would never
  * surface another tenant's entry (VALT-03 isolation). Carries no raw text (§4).
  */
+// Reject obsolete embedding entries while a stable document id is being revised.
+export const currentGroundingDocs = internalQuery({
+  args: {
+    tenantId: v.string(),
+    candidates: v.array(
+      v.object({ docId: v.id("vaultDocuments"), entryId: v.optional(v.string()) }),
+    ),
+  },
+  handler: async (ctx, { tenantId, candidates }): Promise<string[]> => {
+    const accepted: string[] = [];
+    for (const candidate of candidates.slice(0, 128)) {
+      const doc = await ctx.db.get(candidate.docId);
+      if (
+        doc?.tenantId === tenantId &&
+        doc.status === "ready" &&
+        !doc.graphCleanupHash &&
+        (candidate.entryId === undefined || candidate.entryId === doc.ragEntryId)
+      )
+        accepted.push(candidate.entryId ?? doc._id);
+    }
+    return accepted;
+  },
+});
+
 export const ownedDocsMeta = internalQuery({
   args: { tenantId: v.string(), docIds: v.array(v.id("vaultDocuments")) },
   handler: async (
@@ -1051,10 +1093,15 @@ export const ownedSearchDocsMeta = internalQuery({
  * Pinned by "markReady does NOT clear a TRUE extractionTruncated" in vault.test.ts.
  */
 export const markReady = internalMutation({
-  args: { vaultDocId: v.id("vaultDocuments"), ragEntryId: v.string() },
-  handler: async (ctx, { vaultDocId, ragEntryId }) => {
+  args: {
+    vaultDocId: v.id("vaultDocuments"),
+    ragEntryId: v.string(),
+    expectedContentHash: v.optional(v.string()),
+  },
+  handler: async (ctx, { vaultDocId, ragEntryId, expectedContentHash }) => {
     const before = await ctx.db.get(vaultDocId);
     if (!before) return; // deleted mid-flight — `patch` on a missing id throws
+    if (expectedContentHash !== undefined && before.contentHash !== expectedContentHash) return;
     await ctx.db.patch(vaultDocId, { status: "ready", ragEntryId, failureReason: undefined });
     await countTerminal(ctx, before, false);
   },
@@ -1062,10 +1109,15 @@ export const markReady = internalMutation({
 
 /** Terminal failure: a governed stop or a step error marks the row failed with a refs-only reason. */
 export const markFailed = internalMutation({
-  args: { vaultDocId: v.id("vaultDocuments"), reason: v.string() },
-  handler: async (ctx, { vaultDocId, reason }) => {
+  args: {
+    vaultDocId: v.id("vaultDocuments"),
+    reason: v.string(),
+    expectedContentHash: v.optional(v.string()),
+  },
+  handler: async (ctx, { vaultDocId, reason, expectedContentHash }) => {
     const before = await ctx.db.get(vaultDocId);
     if (!before) return;
+    if (expectedContentHash !== undefined && before.contentHash !== expectedContentHash) return;
     await ctx.db.patch(vaultDocId, { status: "failed", failureReason: reason });
     await countTerminal(ctx, before, true);
   },
@@ -1097,10 +1149,15 @@ export const applyClassification = internalMutation({
     tenantId: v.string(),
     docType: vdFields.docType,
     identityLine: v.string(),
+    expectedContentHash: v.optional(v.string()),
   },
-  handler: async (ctx, { vaultDocId, tenantId, docType, identityLine }): Promise<null> => {
+  handler: async (
+    ctx,
+    { vaultDocId, tenantId, docType, identityLine, expectedContentHash },
+  ): Promise<null> => {
     const doc = await ctx.db.get(vaultDocId);
     if (!doc || doc.tenantId !== tenantId) return null; // deleted mid-flight / cross-tenant
+    if (expectedContentHash !== undefined && doc.contentHash !== expectedContentHash) return null;
     if (doc.identityUserSet === true) return null;
     await ctx.db.patch(vaultDocId, {
       docType: docType ?? doc.docType, // an explicit `undefined` in a patch DELETES the field
@@ -1662,6 +1719,7 @@ export const getDocForExtraction = internalQuery({
     { vaultDocId, tenantId },
   ): Promise<{
     storageId: Id<"_storage"> | undefined;
+    transcriptionStorageId: Id<"_storage"> | undefined;
     mimeType: string;
     title: string;
     status: string;
@@ -1670,9 +1728,20 @@ export const getDocForExtraction = internalQuery({
     if (!doc || doc.tenantId !== tenantId) throw new Error("vault: doc not found");
     return {
       storageId: doc.storageId,
+      transcriptionStorageId: doc.transcriptionStorageId,
       mimeType: doc.mimeType,
       title: doc.title,
       status: doc.status,
     };
+  },
+});
+
+/** Continues only a deleted document's cleanup; no recreated row can be affected. */
+export const clearDeletedDocGraph = internalMutation({
+  args: { tenantId: v.string(), vaultDocId: v.id("vaultDocuments") },
+  handler: async (ctx, args): Promise<void> => {
+    if (await ctx.db.get(args.vaultDocId)) return;
+    if (!(await clearDocumentGraphPage(ctx, args.tenantId, args.vaultDocId)))
+      await ctx.scheduler.runAfter(0, internal.vault.clearDeletedDocGraph, args);
   },
 });

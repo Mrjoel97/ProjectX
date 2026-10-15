@@ -27,12 +27,13 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { internalMutation } from "./_generated/server";
 import { rateLimiter } from "./guardrails";
 // 25.1-01 (D2): renderReel runs under the ActionRetrier — the `submitBatch` idiom
 // (cockpit.ts EXTERNAL_TARGETS) — so a throw after `markRendering` still terminalizes.
 import { retrier } from "./index";
 import { contentHash } from "./lib/hash";
+import { activeMediaJobs, readMediaBatch } from "./lib/mediaRead";
+import { internalMutation } from "./lib/tenantLifecycle";
 // The plain-function half of the ledger writer: the limiter movement and its row must commit
 // or fail together (FIN-01). A separate ctx.runMutation would be a second transaction.
 import { recordMovement } from "./spendLedger";
@@ -171,15 +172,20 @@ async function latestBatch(
   ctx: MutationCtx,
   a: { tenantId: string; planId: Id<"plans">; batchId: string },
 ): Promise<boolean> {
-  const rows = await ctx.db
+  const newest = await ctx.db
     .query("mediaJobs")
-    .withIndex("by_plan", (q) => q.eq("tenantId", a.tenantId).eq("planId", a.planId))
+    .withIndex("by_plan_created", (q) => q.eq("tenantId", a.tenantId).eq("planId", a.planId))
+    .order("desc")
+    .first();
+  if (!newest) return false;
+  const ties = await ctx.db
+    .query("mediaJobs")
+    .withIndex("by_plan_created", (q) =>
+      q.eq("tenantId", a.tenantId).eq("planId", a.planId).eq("createdAt", newest.createdAt),
+    )
     .take(101);
-  if (rows.length === 0 || rows.length > 100) return false;
-  const newest = Math.max(...rows.map((r) => r.createdAt));
-  // Same trusted creation clock as media.rearmAfterFix. Ambiguous ties across
-  // batches fail closed instead of choosing a historical batch arbitrarily.
-  return rows.filter((r) => r.createdAt === newest).every((r) => r.batchId === a.batchId);
+  // Only the latest timestamp can be ambiguous; older attempt count is irrelevant.
+  return ties.length <= 100 && ties.every((row) => row.batchId === a.batchId);
 }
 
 export async function evaluateRenderTrigger(
@@ -193,10 +199,7 @@ export async function evaluateRenderTrigger(
   if (plan?.renderStatus !== "pending" || plan.tenantId !== a.tenantId) return;
   if (options.terminalOnly && !(await latestBatch(ctx, a))) return;
 
-  const siblings = await ctx.db
-    .query("mediaJobs")
-    .withIndex("by_batch", (q) => q.eq("tenantId", a.tenantId).eq("batchId", a.batchId))
-    .collect();
+  const siblings = await readMediaBatch(ctx, a.tenantId, a.batchId);
   if (siblings.some((s) => s.planId !== a.planId)) return;
   const renderable = siblings.filter(
     (s) => s.kind === "video" || s.kind === "image" || s.kind === "tts",
@@ -271,10 +274,7 @@ export async function maybeStartCaptions(
   if (!plan || plan.captionStatus !== undefined) return; // already started, finished or failed
   if (options.terminalOnly && !(await latestBatch(ctx, row))) return;
 
-  const siblings = await ctx.db
-    .query("mediaJobs")
-    .withIndex("by_batch", (q) => q.eq("tenantId", row.tenantId).eq("batchId", row.batchId))
-    .collect();
+  const siblings = await readMediaBatch(ctx, row.tenantId, row.batchId);
   // No `stt` line means captions were never reserved for this deck (`reserveJobInner`'s
   // `withCaptions`). That is not a failure and must not be recorded as one — plan 20-16's
   // behaviour, including its retention rule, stands unchanged for such a deck.
@@ -315,12 +315,13 @@ export async function maybeBurnCaptions(ctx: MutationCtx, planId: Id<"plans">): 
   // finished (or failed) simply leaves this pending — the render terminal calls back in.
   if (plan.renderStatus !== "rendered" || !plan.renderStorageId) return;
 
-  const stt = (
-    await ctx.db
-      .query("mediaJobs")
-      .withIndex("by_plan", (q) => q.eq("tenantId", plan.tenantId).eq("planId", planId))
-      .collect()
-  ).find((r) => r.kind === "stt");
+  const stt = await ctx.db
+    .query("mediaJobs")
+    .withIndex("by_plan_slot_kind_created", (q) =>
+      q.eq("tenantId", plan.tenantId).eq("planId", planId).eq("blockIndex", -1).eq("kind", "stt"),
+    )
+    .order("desc")
+    .first();
   if (stt?.status !== "succeeded" || !stt.assetStorageId) return;
 
   await ctx.db.patch(planId, { captionStatus: "burning" });
@@ -458,7 +459,7 @@ export const landResult = internalMutation({
           jobId,
           batchId: row.batchId,
           planId: row.planId,
-          providerRequestId: row.providerRequestId ?? row.falRequestId,
+          providerRequestId: row.providerRequestId ?? row.falRequestId ?? null,
           kind: row.kind,
           model: row.model,
           promptHash: row.promptHash,
@@ -630,10 +631,7 @@ export const onSubmitComplete = internalMutation({
 
     // A CODE, never the retrier's error string — it can carry a URL or an env name (§4).
     const code = result.type === "canceled" ? "submit_canceled" : "submit_failed";
-    for (const row of await ctx.db
-      .query("mediaJobs")
-      .withIndex("by_plan", (q) => q.eq("tenantId", plan.tenantId).eq("planId", plan._id))
-      .collect()) {
+    for (const row of await activeMediaJobs(ctx, plan.tenantId, plan._id)) {
       if (row.status !== "queued") continue; // `submitted` reached fal; its webhook may still land
       await ctx.db.patch(row._id, {
         status: "failed",

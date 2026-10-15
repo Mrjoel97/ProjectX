@@ -119,10 +119,10 @@ function providersFrom(fs) {
 function markerFrom(fs, provider) {
   const src = fs.read(recordPath(provider));
   if (src === null) return { ok: false, why: `no record at ${recordPath(provider)}` };
-  const block = /<!-- phase28-provider-decision\n([\s\S]*?)\n-->/.exec(src);
+  const block = /<!-- phase28-provider-decision\r?\n([\s\S]*?)\r?\n-->/.exec(src);
   if (block === null) return { ok: false, why: "no phase28-provider-decision marker block" };
   const fields = {};
-  for (const line of block[1].split("\n")) {
+  for (const line of block[1].split(/\r?\n/)) {
     const kv = /^([a-z_]+):\s*(.+?)\s*$/.exec(line);
     if (kv !== null) fields[kv[1]] = kv[2];
   }
@@ -733,6 +733,18 @@ function selfTest() {
   if (cleanRed.length > 0) {
     failures += 1;
     for (const r of cleanRed) stdout.write(`       -> ${r.provider}/${r.id}: ${r.note}\n`);
+  }
+
+  // A checkout's line endings are not evidence. Exercise both explicitly so Linux CI
+  // protects Windows parsing as well as its own current checkout.
+  for (const newline of ["\n", "\r\n"]) {
+    const fixture = record.replace(/\r?\n/g, newline);
+    const parsed = markerFrom(mutatedFs({ [recordPath("hubspot")]: fixture }), "hubspot");
+    const ok = parsed.ok && parsed.fields.decision === "approved_production";
+    if (!ok) failures += 1;
+    stdout.write(
+      `  ${ok ? "OK  " : "FAIL"} marker parses ${newline === "\n" ? "LF" : "CRLF"} without changing the decision\n`,
+    );
   }
 
   // Every seal combination, including the one that matters: an ADMISSION never becomes a PASS.

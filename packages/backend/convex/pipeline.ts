@@ -24,8 +24,8 @@ import { classifyReviewDecision, notificationMessage } from "@pikar/core";
 import { priceUsage } from "@pikar/cost";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation } from "./_generated/server";
 import { workflow } from "./index";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { reviewEventValidator } from "./review";
 
 // The 13-member requests.status union (kept in sync with schema.ts).
@@ -199,7 +199,7 @@ export const pipelineWorkflow = workflow.define({
     // Consume a real model call's spend + emit the SC-4 cache-hit observable. Hits spent
     // nothing, so recordSpend (zero-skip) leaves the budget untouched.
     const recordLlm = async (
-      usage: { inputTokens?: number; outputTokens?: number } | undefined,
+      usage: { inputTokens?: number; outputTokens?: number; budgetSettled?: boolean } | undefined,
       cacheHit: boolean,
       stage: "route" | "draft",
     ) => {
@@ -213,7 +213,7 @@ export const pipelineWorkflow = workflow.define({
         internal.guardrails.recordSpend,
         {
           tenantId,
-          costUsd: u.costUsd,
+          costUsd: usage?.budgetSettled ? 0 : u.costUsd,
           correlationId: llmSpendCorrelation(requestId, stage, seq),
           model,
           kind: `pipeline.${stage}`, // code-owned token, refs only (§4)

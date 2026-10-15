@@ -825,8 +825,8 @@ test("every llm.ts spend correlation template is distinct and charset-legal", ()
     ...[...code.matchAll(/correlationId:\s*`([^`]+)`/g)].map((m) => m[1] ?? ""),
   ];
   // Anti-vacuity: a renamed helper would otherwise make an empty list pass for free.
-  // 8 → 10 in 43-02: `document:${runId}:a0` / `:a1`, the drafter's primary and CHEAP_MODEL fallback.
-  expect(templates.length).toBe(10);
+  // Production model calls now use one UUID per middleware admission; only fixture and search correlations remain.
+  expect(templates.length).toBe(2);
   expect(new Set(templates).size, `duplicate spend correlation: ${templates.join(", ")}`).toBe(
     templates.length,
   );

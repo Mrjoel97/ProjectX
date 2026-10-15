@@ -19,11 +19,20 @@ import {
 } from "@pikar/voice";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+const rateModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
+const makeTest = () => {
+  const t = convexTest(schema, modules);
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateModules);
+  return t;
+};
 
 const TENANT = "tenant_voice";
 // A DISTINCTIVE key so the no-leak assertion is unambiguous — a substring search for it in the
@@ -131,11 +140,11 @@ async function seedConfirmedBlueprint(t: ReturnType<typeof convexTest>): Promise
 // ── Task 1: mintClientSecret ──────────────────────────────────────────────────────────────────
 
 test("mintClientSecret POSTs the client_secrets endpoint with the Bearer key + the registry persona", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   await t.mutation(internal.skills.seedSkills, {}); // seeds voice-session as active v1
   stubFetch(() => Response.json({ value: "ek_ephemeral_abc", expires_at: 1234 }));
 
-  await asTenant(t).action(api.voiceToken.mintClientSecret, {});
+  await asTenant(t).action(internal.voiceToken.mintClientSecret, {});
 
   expect(captured, "mint must call fetch").toBeTruthy();
   expect(captured!.url).toBe(CLIENT_SECRETS_URL);
@@ -158,12 +167,12 @@ test("mintClientSecret POSTs the client_secrets endpoint with the Bearer key + t
 });
 
 test("an unscoped voice session receives the tenant's confirmed blueprint spine", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   await t.mutation(internal.skills.seedSkills, {});
   await seedConfirmedBlueprint(t);
   stubFetch(() => Response.json({ value: "ek_blueprint", expires_at: 1234 }));
 
-  await asTenant(t).action(api.voiceToken.mintClientSecret, {});
+  await asTenant(t).action(internal.voiceToken.mintClientSecret, {});
 
   const instructions = sessionOf(0).instructions as string;
   expect(instructions.startsWith(voiceSessionSkillBody)).toBe(true);
@@ -174,15 +183,20 @@ test("an unscoped voice session receives the tenant's confirmed blueprint spine"
 });
 
 test("mintClientSecret returns ONLY {clientSecret, expiresAt, toolsAtMint} and NEVER the API key", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   await t.mutation(internal.skills.seedSkills, {});
   stubFetch(() => Response.json({ value: "ek_ephemeral_xyz", expires_at: 9999 }));
 
-  const res = await asTenant(t).action(api.voiceToken.mintClientSecret, {});
+  const res = await asTenant(t).action(internal.voiceToken.mintClientSecret, {});
 
   // `toolsAtMint` (14-04) is the ONE deliberate extension to the Phase-6 contract — transport
   // control, not a secret. The key set is still asserted EXACTLY, so a third field cannot creep in.
-  expect(Object.keys(res).sort()).toEqual(["clientSecret", "expiresAt", "toolsAtMint"]);
+  expect(Object.keys(res).sort()).toEqual([
+    "clientSecret",
+    "expiresAt",
+    "reservationId",
+    "toolsAtMint",
+  ]);
   expect(res.clientSecret).toBe("ek_ephemeral_xyz");
   expect(res.expiresAt).toBe(9999);
   // Trivially true with no doc scope: nothing was declared, so the browser has nothing to re-declare.
@@ -192,22 +206,22 @@ test("mintClientSecret returns ONLY {clientSecret, expiresAt, toolsAtMint} and N
 });
 
 test("mintClientSecret fails closed when no active voice-session skill is seeded (NO_ACTIVE_SKILL)", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   // No seedSkills → no active persona. A registry-backed mint MUST throw (a hardcoded prompt
   // would never consult the registry and would silently proceed).
   stubFetch(() => Response.json({ value: "ek", expires_at: 1 }));
-  await expect(asTenant(t).action(api.voiceToken.mintClientSecret, {})).rejects.toThrow();
+  await expect(asTenant(t).action(internal.voiceToken.mintClientSecret, {})).rejects.toThrow();
 });
 
 // ── Plan 14-04: the DOC-SCOPED mint (DOCV-01 / SC1) ───────────────────────────────────────────
 
 test("a doc-scoped mint bakes the document-analyst persona + the fenced digest into instructions", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   await t.mutation(internal.skills.seedSkills, {});
   const docId = await seedDoc(t);
   stubFetch(() => Response.json({ value: "ek_doc", expires_at: 4242 }));
 
-  const res = await asTenant(t).action(api.voiceToken.mintClientSecret, { docId });
+  const res = await asTenant(t).action(internal.voiceToken.mintClientSecret, { docId });
 
   const session = sessionOf(0);
   const instructions = session.instructions as string;
@@ -226,17 +240,22 @@ test("a doc-scoped mint bakes the document-analyst persona + the fenced digest i
   // capped slice + a little chrome (title, disclosure, fence markers, safety line).
   expect(instructions.length).toBeLessThan(documentAnalystSkillBody.length + DIGEST_CHAR_CAP + 500);
   // Return contract, doc-scoped: still exactly three keys, still no key material.
-  expect(Object.keys(res).sort()).toEqual(["clientSecret", "expiresAt", "toolsAtMint"]);
+  expect(Object.keys(res).sort()).toEqual([
+    "clientSecret",
+    "expiresAt",
+    "reservationId",
+    "toolsAtMint",
+  ]);
   expect(JSON.stringify(res)).not.toContain(FAKE_KEY);
 });
 
 test("a doc-scoped mint declares exactly ONE tool, in the FLAT Realtime shape, with tool_choice auto", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   await t.mutation(internal.skills.seedSkills, {});
   const docId = await seedDoc(t);
   stubFetch(() => Response.json({ value: "ek_doc", expires_at: 1 }));
 
-  const res = await asTenant(t).action(api.voiceToken.mintClientSecret, { docId });
+  const res = await asTenant(t).action(internal.voiceToken.mintClientSecret, { docId });
 
   const session = sessionOf(0);
   const tools = session.tools as Record<string, unknown>[];
@@ -259,7 +278,7 @@ test("a doc-scoped mint declares exactly ONE tool, in the FLAT Realtime shape, w
 });
 
 test("a 400 on the tools-carrying mint re-POSTs WITHOUT tools and reports toolsAtMint false", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   await t.mutation(internal.skills.seedSkills, {});
   const docId = await seedDoc(t);
   // Open Question 3: if `client_secrets` refuses `tools` in the body, the session must still open.
@@ -270,7 +289,7 @@ test("a 400 on the tools-carrying mint re-POSTs WITHOUT tools and reports toolsA
       : Response.json({ value: "ek_no_tools", expires_at: 77 }),
   );
 
-  const res = await asTenant(t).action(api.voiceToken.mintClientSecret, { docId });
+  const res = await asTenant(t).action(internal.voiceToken.mintClientSecret, { docId });
 
   expect(calls).toHaveLength(2);
   // The FIRST attempt carried them…
@@ -285,17 +304,19 @@ test("a 400 on the tools-carrying mint re-POSTs WITHOUT tools and reports toolsA
 });
 
 test("a non-400 mint failure still throws (the fallback is a SHAPE retry, not a retry policy)", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   await t.mutation(internal.skills.seedSkills, {});
   const docId = await seedDoc(t);
   stubFetch(() => new Response("boom", { status: 500 }));
 
-  await expect(asTenant(t).action(api.voiceToken.mintClientSecret, { docId })).rejects.toThrow();
+  await expect(
+    asTenant(t).action(internal.voiceToken.mintClientSecret, { docId }),
+  ).rejects.toThrow();
   expect(calls).toHaveLength(1); // no second POST on a 500
 });
 
 test("a doc-scoped mint fails closed when document-analyst has no active row — while the unscoped mint still works", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   await t.mutation(internal.skills.seedSkills, {});
   // Remove ONLY the document-analyst rows. `voice-session` stays active, which is what makes this
   // assertion non-vacuous: the failure is the MISSING PERSONA, not a broken harness (mirrors the
@@ -308,15 +329,17 @@ test("a doc-scoped mint fails closed when document-analyst has no active row —
   const docId = await seedDoc(t);
   stubFetch(() => Response.json({ value: "ek", expires_at: 1 }));
 
-  await expect(asTenant(t).action(api.voiceToken.mintClientSecret, { docId })).rejects.toThrow();
+  await expect(
+    asTenant(t).action(internal.voiceToken.mintClientSecret, { docId }),
+  ).rejects.toThrow();
   // …and no request left Convex: a registry-backed mint consults the registry FIRST.
   expect(calls).toHaveLength(0);
   // Anti-vacuous: the same harness mints fine without a doc scope.
-  await expect(asTenant(t).action(api.voiceToken.mintClientSecret, {})).resolves.toBeTruthy();
+  await expect(asTenant(t).action(internal.voiceToken.mintClientSecret, {})).resolves.toBeTruthy();
 });
 
 test("the mint is a second trust boundary: a missing/cross-tenant doc and a non-ready doc are both refused", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   await t.mutation(internal.skills.seedSkills, {});
   const foreign = await seedDoc(t, { tenantId: "tenant_other" });
   const processing = await seedDoc(t, { status: "processing" });
@@ -324,21 +347,21 @@ test("the mint is a second trust boundary: a missing/cross-tenant doc and a non-
 
   // Cross-tenant reads as MISSING (fail-closed — the message never says "another tenant's").
   await expect(
-    asTenant(t).action(api.voiceToken.mintClientSecret, { docId: foreign }),
+    asTenant(t).action(internal.voiceToken.mintClientSecret, { docId: foreign }),
   ).rejects.toThrow(/document not found/);
   await expect(
-    asTenant(t).action(api.voiceToken.mintClientSecret, { docId: processing }),
+    asTenant(t).action(internal.voiceToken.mintClientSecret, { docId: processing }),
   ).rejects.toThrow(/document not ready/);
   expect(calls).toHaveLength(0); // refused before any request left Convex
 });
 
 test("a truncated extraction is disclosed inside the digest before the fence opens", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   await t.mutation(internal.skills.seedSkills, {});
   const docId = await seedDoc(t, { extractionTruncated: true });
   stubFetch(() => Response.json({ value: "ek", expires_at: 1 }));
 
-  await asTenant(t).action(api.voiceToken.mintClientSecret, { docId });
+  await asTenant(t).action(internal.voiceToken.mintClientSecret, { docId });
 
   const instructions = sessionOf(0).instructions as string;
   expect(instructions).toContain("Only the first portion of this document could be extracted.");
@@ -350,7 +373,7 @@ test("a truncated extraction is disclosed inside the digest before the fence ope
 // ── Task 2: hangupCall ──────────────────────────────────────────────────────────────────────
 
 test("hangupCall POSTs /v1/realtime/calls/{callId}/hangup with the Bearer key and resolves on 200", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   stubFetch(() => new Response(null, { status: 200 }));
 
   const res = await t.action(internal.voiceToken.hangupCall, { callId: "call_123" });
@@ -365,7 +388,7 @@ test("hangupCall POSTs /v1/realtime/calls/{callId}/hangup with the Bearer key an
 });
 
 test("hangupCall surfaces a non-200 as an error the caller can log refs-only", async () => {
-  const t = convexTest(schema, modules);
+  const t = makeTest();
   stubFetch(() => new Response("nope", { status: 404 }));
   await expect(t.action(internal.voiceToken.hangupCall, { callId: "call_gone" })).rejects.toThrow();
 });

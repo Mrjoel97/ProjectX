@@ -46,10 +46,10 @@ and re-running the full boot check + tests. API churn is expected.
 
 ## 7. Boot order
 
-`convex/_generated/` is git-ignored and produced by codegen. A fresh clone must run
-`pnpm install` -> `npx convex dev` (creates the deployment + codegen) -> `pnpm dev`.
-Typecheck fails before `_generated/` exists. See `README.md` for the verbatim steps and the
-secrets-plane rules.
+`convex/_generated/` is tracked codegen output. A fresh clone can run static checks after
+`pnpm install --frozen-lockfile`. Interactive development needs a configured Convex development
+deployment and skill seeding. Regenerate and review API changes when interfaces change; never
+use production for local codegen. See `docs/operations.md` for current setup and secrets-plane rules.
 
 ## 8. Ponytail discipline — the laziest solution that works (MANDATED)
 

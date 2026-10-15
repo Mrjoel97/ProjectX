@@ -1436,9 +1436,9 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
       join(dirname(fileURLToPath(import.meta.url)), "deliverApprovedPlan.ts"),
       "utf8",
     );
-    // Three, since 19-05: a suppression discovered at send time is a PERMANENT terminal, not the
+    // Four call sites: normal and receipt-recovered sent, failed, and suppressed. Suppression is a PERMANENT terminal, not the
     // resumable hold `awaiting_reauth` is — a bare `continue` would strand the row at `delivering`.
-    expect(src.match(/internal\.plans\.recordDeliveryTerminal/g)).toHaveLength(3);
+    expect(src.match(/internal\.plans\.recordDeliveryTerminal/g)).toHaveLength(4);
     expect(src).toContain('outcome: "sent"');
     expect(src).toContain('outcome: "failed"');
     expect(src).toContain('outcome: "suppressed"');
@@ -2309,4 +2309,20 @@ describe("startWorkflowPack candidate preview (27-09)", () => {
     // And it is spread away when absent, so every pre-27-09 caller is byte-identical.
     expect(args).toContain("previewVersion === undefined");
   });
+});
+
+test("approval refuses recipient overflow before creating requests", async () => {
+  const t = withDelivery();
+  await seedMailbox(t);
+  const planId = await seedPlan(t, "proposed");
+  await t.run((ctx) =>
+    ctx.db.patch(planId, {
+      recipients: Array.from({ length: 101 }, (_, i) => "person" + i + "@example.com"),
+    }),
+  );
+  expect(
+    await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+  ).toEqual({ ok: false, reason: "too_many_recipients" });
+  expect(await countRequests(t)).toHaveLength(0);
+  expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
 });

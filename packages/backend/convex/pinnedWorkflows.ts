@@ -100,6 +100,7 @@ import { internalQuery, type QueryCtx } from "./_generated/server";
 import { getGuardrailConfig } from "./guardrails";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { internalAction } from "./lib/tenantLifecycle";
 import { probeSourcesFor } from "./workflowPackDiscovery";
 
 /** A reason the run must NOT start. Blockers are refusals; notices are things the user should know
@@ -502,19 +503,39 @@ export const PIN_RUN_EVENT = "workflow_pin.run";
  * reads thousands of rows for a display number. Upgrade path if that ever happens: keep the count
  * in the aggregate `auditCounts` already registered for this table.
  */
-export const runCount = internalQuery({
-  args: { pinId: v.id("savedPrompts") },
-  handler: async (ctx, { pinId }): Promise<number> => {
+export const runCountPage = internalQuery({
+  args: { pinId: v.id("savedPrompts"), cursor: v.union(v.string(), v.null()) },
+  handler: async (ctx, { pinId, cursor }) => {
     const prefix = freshRunCorrelation(pinId, "");
-    const rows = await ctx.db
+    const page = await ctx.db
       .query("audit")
       .withIndex("by_correlation", (q) =>
-        // The upper bound is written as the ESCAPE `\uffff`, never the literal
-        // character: the literal is invisible in a diff and editors re-encode it.
-        q.gte("correlationId", prefix).lt("correlationId", `${prefix}\uffff`),
+        q.gte("correlationId", prefix).lt("correlationId", prefix + "\uffff"),
       )
-      .collect();
-    return rows.filter((r) => r.eventType === PIN_RUN_EVENT).length;
+      .paginate({ cursor, numItems: 200 });
+    return {
+      count: page.page.filter((r) => r.eventType === PIN_RUN_EVENT).length,
+      isDone: page.isDone,
+      cursor: page.continueCursor,
+    };
+  },
+});
+/** Read each bounded page in a separate transaction; no audit history accumulates in memory. */
+export const runCount = internalAction({
+  args: { pinId: v.id("savedPrompts") },
+  handler: async (ctx, { pinId }): Promise<number> => {
+    let count = 0,
+      cursor: string | null = null;
+    do {
+      const page: { count: number; isDone: boolean; cursor: string } = await ctx.runQuery(
+        internal.pinnedWorkflows.runCountPage,
+        { pinId, cursor },
+      );
+      count += page.count;
+      if (page.isDone) return count;
+      cursor = page.cursor;
+    } while (cursor !== null);
+    return count;
   },
 });
 
@@ -542,7 +563,7 @@ export const runAgain = tenantAction({
     // Fresh per press. Same `runId` twice is retry idempotence WITHIN one run and is unreachable
     // from here — nothing accepts a `runId` from a caller.
     const correlationId = freshRunCorrelation(id, crypto.randomUUID());
-    const ordinal = (await ctx.runQuery(internal.pinnedWorkflows.runCount, { pinId: id })) + 1;
+    const ordinal = (await ctx.runAction(internal.pinnedWorkflows.runCount, { pinId: id })) + 1;
 
     let threadId: string | null = null;
     let outcome: string | null = null;

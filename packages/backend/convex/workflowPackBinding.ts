@@ -45,8 +45,8 @@ import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
-import { internalAction } from "./_generated/server";
 import { traced } from "./lib/foglamp";
+import { internalAction } from "./lib/tenantLifecycle";
 import { runSpecialistTurn, saveMarkdownDocument } from "./llm";
 
 /** A governed stop RETURNS; only bugs throw. The `DispatchResult` posture, one lane over. */

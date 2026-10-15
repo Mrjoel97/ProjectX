@@ -1,3 +1,7 @@
+> Last verified: 2026-10-15 — Optimizer eligibility samples the newest1000 feedback rows and returns truncated. The token-authenticated trajectory export returns100-row cursor pages; scripts/skillopt-export.mjs follows cursors for the CI dataset and rejects repeated/invalid cursors. Registry maximum-version reads are indexed; operator inspect counts disclose their1000-row cap.
+
+> Last verified: 2026-10-15 — Added foundation-voice registry seed for progressive business interviewing, with draft-only tool authority and explicit human publication. Canonical body is packages/contracts/skills/foundation-voice.md; bundler artifact is foundationVoice.ts. Like existing voice-session it is seeded as an ungated conversation skill; runtime loads fail closed if absent. Feature activation separately requires FOUNDATION_ONBOARDING_ENABLED and live readiness evidence. Existing gated skill activation policy is unchanged.
+
 # Playbook: Skill Registry (versioned LLM prompts)
 
 > Last verified: 2026-09-14 — the deterministic research-PDF dependency and native vertical

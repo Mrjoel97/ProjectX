@@ -13,8 +13,9 @@ import type { AuditPayload } from "@pikar/contracts/audit";
 import { classifyPayload } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
+import { internalQuery, type MutationCtx } from "./_generated/server";
 import { auditCounts } from "./aggregates";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { migrations } from "./migrations";
 
 /** Reserved owner control plane, never an authenticated user's tenant or an eval purge prefix. */
@@ -33,6 +34,11 @@ export async function appendAudit(
     payload: AuditPayload;
   },
 ) {
+  // The existing survey classifier now also guards new writes. Error text deliberately
+  // contains no field values (or attacker-controlled keys). Historical rows are unchanged.
+  if (classifyPayload(args.payload).some((finding) => finding.verdict === "violation")) {
+    throw new Error("UNSAFE_AUDIT_PAYLOAD");
+  }
   const id = await ctx.db.insert("audit", { ...args, ts: Date.now(), exportVersion: 2 });
   await ctx.db.insert("auditExportQueue", { auditId: id });
   const doc = await ctx.db.get(id);
@@ -46,9 +52,27 @@ export const log = internalMutation({
     correlationId: v.string(),
     eventType: v.string(),
     actor: v.string(),
-    // v.any() at the Convex boundary; the redaction-safe shape is the AuditPayload
-    // contract (enforced upstream at redact-then-write time).
-    payload: v.any(),
+    payload: v.record(
+      v.string(),
+      v.union(
+        v.string(),
+        v.number(),
+        v.boolean(),
+        v.null(),
+        v.array(v.string()),
+        v.record(v.string(), v.number()),
+        v.array(
+          v.object({
+            ref: v.string(),
+            docId: v.string(),
+            hash: v.string(),
+            storageId: v.string(),
+            mimeType: v.string(),
+            size: v.number(),
+          }),
+        ),
+      ),
+    ),
   },
   handler: async (ctx, args) => {
     if (

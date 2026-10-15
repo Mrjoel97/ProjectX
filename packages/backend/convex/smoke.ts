@@ -23,18 +23,13 @@ import {
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import {
-  internalAction,
-  internalMutation,
-  internalQuery,
-  type MutationCtx,
-  type QueryCtx,
-} from "./_generated/server";
+import { internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { InspectOutcome } from "./calendar";
 import { writeFigureRow } from "./cash";
 import { DAILY_BUDGET_CENTS, rateLimiter } from "./guardrails";
 import { workflow } from "./index";
 import { contentHash } from "./lib/hash";
+import { internalAction, internalMutation } from "./lib/tenantLifecycle";
 import { reviewEventValidator } from "./review";
 
 // --- Pattern 1: dead-letter via onComplete ---------------------------------

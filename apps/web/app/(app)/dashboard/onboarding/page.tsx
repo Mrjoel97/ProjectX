@@ -15,7 +15,9 @@ import { ConvexError } from "convex/values";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BrainIcon, MicIcon, PaperclipIcon, SendIcon } from "../../../(auth)/icons";
+import { uploadTranscriptionAudio } from "../../../lib/uploadTranscriptionAudio";
 import { FolderIcon } from "../vault/icons";
+import FoundationOnboarding from "./FoundationOnboarding";
 import {
   buildOnboardingFolderIntake,
   isOnboardingTextFile,
@@ -212,6 +214,17 @@ const card: React.CSSProperties = {
 };
 
 export default function OnboardingPage() {
+  const enabled = useQuery(api.foundation.enabled, {});
+  const draft = useQuery(api.foundation.get, {});
+  if (enabled === undefined || draft === undefined) return <p>Loading your business setup…</p>;
+  return enabled || draft ? (
+    <FoundationOnboarding voiceEnabled={enabled} />
+  ) : (
+    <LegacyOnboardingPage />
+  );
+}
+
+function LegacyOnboardingPage() {
   const router = useRouter();
   const extract = useAction(api.onboarding.extractProfile);
   const converse = useAction(api.onboarding.converse);
@@ -397,6 +410,11 @@ export default function OnboardingPage() {
     } else if (blob.size > VAULT_FILE_CAP_BYTES) {
       throw new Error(`file exceeds ${capMB(VAULT_FILE_CAP_BYTES)}`);
     }
+    const transcriptionStorageId = await uploadTranscriptionAudio(
+      blob,
+      mimeType,
+      generateUploadUrl,
+    );
     const buf = await blob.arrayBuffer();
     const contentHash = await sha256(buf);
     const url = await generateUploadUrl();
@@ -409,6 +427,7 @@ export default function OnboardingPage() {
     const { storageId } = (await res.json()) as { storageId: StorageId };
     return await vaultUpload({
       storageId,
+      transcriptionStorageId,
       filename,
       mimeType,
       size: blob.size,

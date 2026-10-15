@@ -10,8 +10,8 @@ import { onCompleteValidator } from "@convex-dev/action-retrier";
 import { CALENDAR_FAILURE_CODES, type CalendarFailureCode, RECONNECT } from "@pikar/core";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
 import type { CreateEventResult, ManageEventResult } from "./calendar";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 function createEventResult(value: unknown): CreateEventResult | null {
   if (!value || typeof value !== "object") return null;

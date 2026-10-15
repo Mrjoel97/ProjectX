@@ -70,13 +70,14 @@ import {
   type ValidatedClaim,
   validateSynthesis,
 } from "@pikar/core";
-import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
+import { DEFAULT_MODEL } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import { generateObject, type JSONSchema7, jsonSchema } from "ai";
 import { type VLiteral, v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction } from "./_generated/server";
 import { fixtureSeamFor, resolveModel } from "./lib/models";
+import { paidBudgetModel } from "./lib/paidBudgetModel";
+import { internalAction } from "./lib/tenantLifecycle";
 
 const CALL_TIMEOUT_MS = 45_000;
 
@@ -346,24 +347,20 @@ export const planKnowledgeSearch = internalAction({
         if (fixture === "fail") throw new Error("knowledgeLlm: SMOKE planner failure");
         raw = fixture;
       } else {
-        const { object, usage } = await generateObject({
-          model: resolveModel(DEFAULT_MODEL),
+        const { object } = await generateObject({
+          model: paidBudgetModel({
+            ctx,
+            tenantId,
+            model: resolveModel(DEFAULT_MODEL),
+            modelId: DEFAULT_MODEL,
+          }),
           schema: knowledgePlanSchema,
           system: skill.body,
           prompt: safePrompt,
           abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
           maxRetries: 1,
         });
-        const priced = priceUsage(DEFAULT_MODEL, usage);
-        if (priced.ok) {
-          await ctx.runMutation(internal.guardrails.recordSpend, {
-            tenantId,
-            costUsd: priced.value,
-            correlationId: `knowledge:plan:${runId}`,
-            model: DEFAULT_MODEL,
-            kind: "knowledge.plan", // code-owned token, refs only (§4)
-          });
-        }
+
         raw = object.searches ?? [];
       }
       return settlePlan(raw, false, skill.version, runId);
@@ -678,10 +675,15 @@ export const synthesizeKnowledge = internalAction({
         }[];
         unanswered: string[];
       };
-      let usage: Parameters<typeof priceUsage>[1];
+
       try {
-        ({ object, usage } = await generateObject({
-          model: resolveModel(DEFAULT_MODEL),
+        ({ object } = await generateObject({
+          model: paidBudgetModel({
+            ctx,
+            tenantId,
+            model: resolveModel(DEFAULT_MODEL),
+            modelId: DEFAULT_MODEL,
+          }),
           schema: knowledgeSynthesisSchema,
           system: skill.body,
           prompt: safePrompt,
@@ -691,16 +693,7 @@ export const synthesizeKnowledge = internalAction({
       } catch {
         throw new Error("knowledgeLlm: synthesis call failed");
       }
-      const priced = priceUsage(DEFAULT_MODEL, usage);
-      if (priced.ok) {
-        await ctx.runMutation(internal.guardrails.recordSpend, {
-          tenantId,
-          costUsd: priced.value,
-          correlationId: `knowledge:synth:${runId}`,
-          model: DEFAULT_MODEL,
-          kind: "knowledge.synthesize", // code-owned token, refs only (§4)
-        });
-      }
+
       // Normalize the nullable-and-required STRICT-mode fields back off (03.7-05).
       raw = {
         summary: object.summary,

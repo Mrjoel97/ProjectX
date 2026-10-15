@@ -1,7 +1,8 @@
 // Internal WORM checkpoint adapters. Audit remains insert-only.
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
+import { internalMutation } from "./lib/tenantLifecycle";
 
 /** Shared with the owner-facing governance report. */
 export const CURSOR_NAME = "worm-audit";

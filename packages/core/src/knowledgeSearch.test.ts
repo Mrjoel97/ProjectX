@@ -485,7 +485,7 @@ describe("authority is a fixed mapping, never a model output", () => {
     // agent's own memo, brief and profile were each cited as the owner's own word. These are their
     // EXACT stored `kind` values; `knowledgeVaultDrive.test.ts` drives the same three through the
     // real adapter.
-    for (const docKind of ["next_step_memo", "brief", "business_profile"]) {
+    for (const docKind of ["next_step_memo", "brief"]) {
       expect(authorityFor("vault", { docKind }), docKind).not.toBe("tenant_owned");
     }
     // And a kind nobody has decided about — the case a denylist could never cover — fails WEAK
@@ -496,7 +496,17 @@ describe("authority is a fixed mapping, never a model output", () => {
     );
     expect(authorityFor("vault", {})).toBe("third_party_research");
     // The allowlist is CLOSED and its members are the ones that keep the strongest class.
-    expect([...TENANT_AUTHORED_DOC_KINDS]).toEqual(["upload", "brain_dump", "document"]);
+    expect([...TENANT_AUTHORED_DOC_KINDS]).toEqual([
+      "upload",
+      "brain_dump",
+      "document",
+      "business_profile",
+      "business_foundation_offers",
+      "business_foundation_operations",
+      "business_foundation_delivery",
+      "business_foundation_goals",
+      "business_foundation_constraints",
+    ]);
     for (const docKind of TENANT_AUTHORED_DOC_KINDS) {
       expect(authorityFor("vault", { docKind }), docKind).toBe("tenant_owned");
     }
@@ -1568,4 +1578,18 @@ describe("what these contracts must never contain", () => {
       expect(names, `knowledgeSearch exports ${banned}`).not.toContain(banned);
     }
   });
+});
+
+test("explicitly approved foundation sources are tenant authority, arbitrary agent origin stays downgraded", () => {
+  for (const docKind of [
+    "business_profile",
+    "business_foundation_offers",
+    "business_foundation_operations",
+    "business_foundation_delivery",
+    "business_foundation_goals",
+    "business_foundation_constraints",
+  ]) {
+    expect(authorityFor("vault", { docKind })).toBe("tenant_owned");
+    expect(authorityFor("vault", { docKind, origin: "agent" })).toBe("agent_authored");
+  }
 });

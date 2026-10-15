@@ -46,7 +46,7 @@ import {
 } from "@pikar/revenue";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
-import { type ActionCtx, internalAction } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
 import { hashExternalAccountId, requireCredentialKey } from "./connectorCredentials";
 import {
   type ConnectResult,
@@ -55,6 +55,7 @@ import {
   postTokenForm,
 } from "./connectorOAuth";
 import { tenantAction } from "./lib/functions";
+import { internalAction } from "./lib/tenantLifecycle";
 
 // ── Stripe's endpoints, pinned ────────────────────────────────────────────────────────────
 //

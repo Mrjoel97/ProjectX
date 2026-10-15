@@ -15,14 +15,10 @@
 // the TS circular-inference cliff (04-RESEARCH §6) — the model-resolution helper below is a
 // small local duplicate, not a shared import.
 import { ATTACHMENT_EXTRACTOR_SKILL } from "@pikar/contracts/skill";
-import {
-  DEFAULT_MODEL,
-  OR_INTAKE_TRANSCRIPTION_MODEL,
-  priceTranscription,
-  priceUsage,
-} from "@pikar/cost";
+import { DEFAULT_MODEL, OR_INTAKE_TRANSCRIPTION_MODEL, priceTranscription } from "@pikar/cost";
 import { classify, frameForConversation, type IntakeKind } from "@pikar/extraction";
 import { scanText } from "@pikar/pii";
+import { inspectPcmWav } from "@pikar/voice/pcm";
 import { generateText, experimental_transcribe as transcribe } from "ai";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
@@ -31,6 +27,7 @@ import type { DataModel, Id } from "./_generated/dataModel";
 import { fogIntegration } from "./lib/foglamp";
 import { tenantAction } from "./lib/functions";
 import { fixtureSeamFor, resolveModel, transcriptionModel, transcriptionUsage } from "./lib/models";
+import { paidBudgetModel } from "./lib/paidBudgetModel";
 
 // Per-call wall-clock ceiling (mirrors llm.ts's CALL_TIMEOUT_MS).
 const CALL_TIMEOUT_MS = 45_000;
@@ -74,33 +71,36 @@ async function transcribeAudio(
   if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX) && fixtureSeamFor(tenantId))
     return sniffed.slice(SMOKE_TRANSCRIBE_PREFIX.length);
 
+  // Complete canonical samples establish duration before admission or paid egress.
+  inspectPcmWav(bytes);
   // 33.2-05: through OpenRouter (lib/models.ts); the provider's own bill first — see vaultTranscribe.
+  const model = transcriptionModel(OR_INTAKE_TRANSCRIPTION_MODEL);
+  // Conservative provider allowance for at most ten minutes of verified PCM audio.
+  const reservationId = await ctx.runMutation(internal.guardrails.reservePaidCall, {
+    tenantId,
+    callId: crypto.randomUUID(),
+    model: OR_INTAKE_TRANSCRIPTION_MODEL,
+    ceilingCents: 100,
+  });
   const result = await transcribe({
-    model: transcriptionModel(OR_INTAKE_TRANSCRIPTION_MODEL),
+    model,
+    maxRetries: 0,
     audio: bytes,
     abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
   });
   const usage = transcriptionUsage(result);
+  const seconds = result.durationInSeconds ?? usage.seconds;
   const priced =
-    usage.costUsd === undefined
-      ? priceTranscription(result.durationInSeconds ?? usage.seconds ?? 0)
-      : { ok: true as const, value: usage.costUsd };
-  if (priced.ok) {
-    // FIN-01 correlation. `artifactId` is the discriminator: runIntake inserts a FRESH
-    // intakeArtifacts row per attempt (step 4, unconditional), so an action re-entry — which
-    // re-runs the transcription above for real money — mints a new id and therefore a new row,
-    // while a correlation derived from tenant/thread/storageId would collapse that second charge
-    // into the first and leave the ledger BELOW the limiter. The `transcribe` token separates this
-    // rail from extractVisual's: one artifact carrying both (a video's audio track plus its frames)
-    // would otherwise be two real charges under one correlation.
-    await ctx.runMutation(internal.guardrails.recordSpend, {
-      tenantId,
-      costUsd: priced.value,
-      correlationId: `intake:transcribe:${artifactId}`,
-      model: OR_INTAKE_TRANSCRIPTION_MODEL,
-      kind: "transcribe",
-    });
-  }
+    usage.costUsd === undefined && seconds !== undefined ? priceTranscription(seconds) : undefined;
+  const costUsd = usage.costUsd ?? (priced?.ok ? priced.value : undefined);
+  if (costUsd === undefined || !Number.isFinite(costUsd) || costUsd < 0)
+    throw new Error("PAID_TRANSCRIPTION_COST_UNKNOWN");
+  const settled = await ctx.runMutation(internal.guardrails.settlePaidCall, {
+    tenantId,
+    reservationId,
+    costUsd,
+  });
+  if (settled.breached) throw new Error("PAID_TRANSCRIPTION_EXCEEDED_ALLOWANCE");
   return result.text;
 }
 
@@ -124,27 +124,20 @@ async function extractVisual(
   const skill: { body: string } = await ctx.runQuery(internal.skills.getActiveSkill, {
     name: ATTACHMENT_EXTRACTOR_SKILL,
   });
-  const { text, usage } = await generateText({
+  const { text } = await generateText({
     telemetry: { integrations: [fogIntegration({ agentName: "attachment-extractor" })] },
-    model: resolveModel(DEFAULT_MODEL), // 33.2-06: through OpenRouter — see vaultExtract.extractHosted
+    model: paidBudgetModel({
+      ctx,
+      tenantId,
+      model: resolveModel(DEFAULT_MODEL),
+      modelId: DEFAULT_MODEL,
+    }), // 33.2-06: through OpenRouter — see vaultExtract.extractHosted
     system: skill.body,
     messages: [{ role: "user", content: [{ type: "file", data: bytes, mediaType: mimeType }] }],
     abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     maxRetries: 1,
   });
-  const priced = priceUsage(DEFAULT_MODEL, usage);
-  if (priced.ok) {
-    // FIN-01 correlation — same reasoning as transcribeAudio above: the per-attempt `artifactId`
-    // is what keeps a re-entered action's second (real) vision call on its own ledger row, and the
-    // `extract` token keeps it off the transcription rail's correlation.
-    await ctx.runMutation(internal.guardrails.recordSpend, {
-      tenantId,
-      costUsd: priced.value,
-      correlationId: `intake:extract:${artifactId}`,
-      model: DEFAULT_MODEL,
-      kind: "extract",
-    });
-  }
+
   return text;
 }
 
@@ -167,6 +160,7 @@ async function runIntake(
   ctx: GenericActionCtx<DataModel>,
   { tenantId, threadId, storageId, filename, mimeType, isDictation }: RunIntakeArgs,
 ): Promise<{ threadId: string }> {
+  await ctx.runMutation(internal.uploads.bindOwned, { tenantId, storageId });
   // A registered authoring probe admits text turns only. Extraction happens before cockpit
   // budget attachment, so refuse here before OCR, transcription, storage or embedding work.
   await ctx.runQuery(internal.authoringProbe.assertUnregisteredThread, { tenantId, threadId });

@@ -1,4 +1,15 @@
+> Last verified: 2026-10-15 — Tenant unresolved badge is a100-row lower bound shown as100+; tenant list shows the newest100 and states that resolving an item reveals older items. OAuth consent retires matching reconnect warnings in100-row durable pages with a consent-time cutoff, preventing an old continuation from clearing a newer warning.
+
+> Last verified: 2026-10-15 — owner audit projection includes foundation publication (revision, document count, Blueprint reference) and manual delivery reconciliation (request reference and outcome). Neither event projects transcript, document body, or delivery content. Evidence: reportsGovernance 18 tests and auditProjection 22 tests pass.
+
+> Last verified: 2026-10-15 — erasure now retains a durable opaque identity fence (ADR-055) and blocks public admission, application writes and tenant-bound component writes during and after deletion. Append-only audit/global metadata and cleanup deletes remain permitted. Reset-session fences expire after issued JWT lifetime; erasure fences persist to deny delayed workers. No business content or credentials are retained in the fence.
+
 # Playbook: Audit Log & Dead-Letter Pipeline
+
+Last verified: 2026-10-15 — notification reads are bounded: legacy list returns at most 100 unread plus 100 read rows; unreadWindow returns the newest 100 unread with a truncation flag. The UI labels partial results; dismissing a reviewed item reveals an older item reactively. The tenant/read/createdAt index preserves ordering without whole-tenant collection. Cross-tenant dismissal still rejects.
+
+Last verified: 2026-10-15 — audit.log now validates scalar metadata, string lists, numeric count maps and explicitly shaped source-reference lists instead of arbitrary values. appendAudit rejects known payload violations (email-shaped values, query-bearing URLs, long free text) before either audit or outbox inserts; rejection text contains no supplied values. Existing classifier suspects remain review findings, not a claim of complete PII detection. Historical rows and WORM arming state are unchanged. Local audit, export and deletion tests passed. New foundation interviews/transcripts/revisions are tenant-owned and use the same export/deletion table registry; seven-day transcript retention is owned by the onboarding subsystem.
+
 
 Last verified: 2026-09-12 — authoring probe control receipts use the reserved
 `control:authoring-probe:v1` namespace, `authoring_probe.` events and `authoring-probe:`
@@ -1316,3 +1327,7 @@ Independent review, 2026-09-10: synthetic eval teardown now deletes each unexpor
 - The actual batch ceiling is 1,000 rows and approximately 2 MB of audit bodies (the last document can cross the threshold); the action stops starting batches after eight minutes. An in-flight S3 request may extend beyond that budget; its pending batch survives a timeout. OFF deployments intentionally accumulate one small queue ref per new audit row.
 - `lastExportedTs` is compatibility metadata, not coverage. `lastExportedAt` records successful nonempty batch acknowledgement. The owner report reads queue refs plus unfinished legacy pages and marks bounded counts partial.
 - Verify with `node node_modules/vitest/vitest.mjs run convex/worm.test.ts convex/audit.test.ts convex/auditImmutability.test.ts convex/isolation.test.ts convex/reportsGovernance.test.ts convex/schema.test.ts` from `packages/backend`. S3 is mocked; live retention and refusal of deletion remain separate evidence.
+
+## Delivery receipt preservation — 2026-10-15
+
+Last verified: 2026-10-15 — workflow failure handling preserves confirmed delivery receipts and holds uncertain attempts instead of declaring them failed. Delivery reconciliation records user observation separately from provider receipt events and never reopens an attempt for sending.

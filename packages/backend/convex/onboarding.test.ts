@@ -15,7 +15,8 @@
 // vaultGroundHydrated's `SMOKE::<docId>` seam (reads the row text directly through the tenant-scoped
 // ownedDocsMeta — no embedding network, and a cross-tenant seed drops out exactly as namespace
 // scoping would exclude it). Durable ingest steps do NOT run synchronously in convex-test, so the
-// committed row sits at `status: "processing"` — the SMOKE retrieval seam reads its `text` regardless.
+// committed row sits at `status: "processing"`. Tests explicitly finish the indexed-content boundary
+// before grounding; processing and graph-cleanup revisions must not be retrieved.
 import type { ProfileInput, SlotName } from "@pikar/core";
 import { missingSlots, REQUIRED_SLOTS, serializeProfile } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
@@ -255,7 +256,24 @@ const PROFILE: ProfileInput = {
   knownConstraints: ["One roasting machine", "Two staff"],
 };
 
-/** Drive a committed profile → SMOKE retrieval, returning what vaultGroundHydrated hydrates. */
+/** Finish the free ingestion completion boundary, without running paid embedding in a unit test. */
+async function finishIndexing(t: TestConvex<typeof schema>, vaultDocId: Id<"vaultDocuments">) {
+  const doc = await t.run((ctx) => ctx.db.get(vaultDocId));
+  if (!doc) throw new Error("profile missing");
+  if (doc.graphCleanupHash)
+    await t.mutation(internal.vaultGraph.clearAndReingest, {
+      vaultDocId,
+      tenantId: doc.tenantId,
+      expectedContentHash: doc.contentHash,
+    });
+  await t.mutation(internal.vault.markReady, {
+    vaultDocId,
+    ragEntryId: "smoke::" + doc.contentHash,
+    expectedContentHash: doc.contentHash,
+  });
+}
+
+/** Drive an indexed profile → SMOKE retrieval, returning what vaultGroundHydrated hydrates. */
 const hydrate = (t: TestConvex<typeof schema>, tenantId: string, docId: Id<"vaultDocuments">) =>
   t.action(internal.vaultGround.vaultGroundHydrated, {
     tenantId,
@@ -281,7 +299,9 @@ test("commitProfile embeds a business_profile doc that is retrievable via the SM
   // The gate has flipped closed — a committed profile satisfies needsOnboarding.
   expect(await asTenant(t).query(api.onboarding.status, {})).toEqual({ needsOnboarding: false });
 
-  // SC#2: the offline SMOKE grounding seam returns the doc with its serialized content.
+  expect((await hydrate(t, TENANT, vaultDocId)).docIds).toEqual([]);
+  await finishIndexing(t, vaultDocId);
+  // SC#2: the indexed offline SMOKE grounding seam returns its serialized content.
   const { docIds, chunks } = await hydrate(t, TENANT, vaultDocId);
   expect(docIds).toContain(vaultDocId);
   const i = docIds.indexOf(vaultDocId);
@@ -295,6 +315,7 @@ test("cross-tenant: tenant B never retrieves tenant A's committed profile (SC#3)
     profile: PROFILE,
   });
 
+  await finishIndexing(t, vaultDocId);
   // Tenant B grounding over tenant A's doc id — an explicit foreign tenantId yields nothing.
   const out = await hydrate(t, "tenant_b", vaultDocId);
   // 26-11 added `origins` as a fifth parallel field. Kept EXHAUSTIVE on purpose: a foreign
@@ -341,7 +362,9 @@ test("updateProfile re-embeds IN PLACE: same doc id, new content retrievable, st
   expect(doc?.text).toContain("Cold-brew concentrate"); // new content
   expect(doc?.text).not.toContain("Single-origin roasted beans"); // stale content replaced
 
-  // Grounding returns the updated content (still exactly one profile doc for the tenant).
+  expect((await hydrate(t, TENANT, vaultDocId)).docIds).toEqual([]);
+  await finishIndexing(t, vaultDocId);
+  // Grounding returns the indexed updated content (still exactly one profile doc for the tenant).
   const { docIds, chunks } = await hydrate(t, TENANT, vaultDocId);
   const i = docIds.indexOf(vaultDocId);
   expect(chunks[i]).toContain("Cold-brew concentrate");

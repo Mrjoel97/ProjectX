@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 // Register the delivery components so the ingest mutations can reach workflow.start under convex-test.
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+import { seedOwnedUpload } from "../test/uploadFixtures";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { vaultIngestPool, workflow } from "./index";
@@ -261,7 +262,7 @@ describe("vaultIngestText (paste / brain-dump ingest)", () => {
 describe("vaultUpload (file ingest + accept-but-defer)", () => {
   test("oversize (> VAULT_FILE_CAP_BYTES) is rejected", async () => {
     const t = withIngest();
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["x"])));
+    const storageId = await t.run((ctx) => seedOwnedUpload(ctx, TENANT, new Blob(["x"])));
     await expect(
       asTenant(t).mutation(api.vault.vaultUpload, {
         storageId,
@@ -275,7 +276,7 @@ describe("vaultUpload (file ingest + accept-but-defer)", () => {
 
   test("a large document under the 100 MiB doc cap is accepted (was rejected at the old 8 MiB cap)", async () => {
     const t = withIngest();
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["%PDF"])));
+    const storageId = await t.run((ctx) => seedOwnedUpload(ctx, TENANT, new Blob(["%PDF"])));
     const { vaultDocId } = await asTenant(t).mutation(api.vault.vaultUpload, {
       storageId,
       filename: "big-report.pdf",
@@ -289,7 +290,7 @@ describe("vaultUpload (file ingest + accept-but-defer)", () => {
 
   test("video is capped at VAULT_VIDEO_CAP_BYTES (the transcription API limit), below the doc cap", async () => {
     const t = withIngest();
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["  ftyp"])));
+    const storageId = await t.run((ctx) => seedOwnedUpload(ctx, TENANT, new Blob(["  ftyp"])));
     // A size that a document would accept (< 100 MiB) but a video must reject (> 25 MB).
     await expect(
       asTenant(t).mutation(api.vault.vaultUpload, {
@@ -304,7 +305,7 @@ describe("vaultUpload (file ingest + accept-but-defer)", () => {
 
   test("a searchable MIME (MD) with text stores processing + starts the workflow", async () => {
     const t = withIngest();
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["# Notes"])));
+    const storageId = await t.run((ctx) => seedOwnedUpload(ctx, TENANT, new Blob(["# Notes"])));
     const { vaultDocId } = await asTenant(t).mutation(api.vault.vaultUpload, {
       storageId,
       filename: "notes.md",
@@ -320,7 +321,7 @@ describe("vaultUpload (file ingest + accept-but-defer)", () => {
 
   test("a non-searchable MIME (pdf) stores pending_extraction and starts NO workflow", async () => {
     const t = withIngest();
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["%PDF"])));
+    const storageId = await t.run((ctx) => seedOwnedUpload(ctx, TENANT, new Blob(["%PDF"])));
     const { vaultDocId } = await asTenant(t).mutation(api.vault.vaultUpload, {
       storageId,
       filename: "scan.pdf",
@@ -338,7 +339,7 @@ describe("vaultUpload (file ingest + accept-but-defer)", () => {
 describe("vaultUpload extraction scheduling (Phase 3.8 Wave 0 hook)", () => {
   test("a PDF (no text) stays pending_extraction AND schedules extractDoc with {vaultDocId, tenantId}", async () => {
     const t = withIngest();
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["%PDF"])));
+    const storageId = await t.run((ctx) => seedOwnedUpload(ctx, TENANT, new Blob(["%PDF"])));
     const { vaultDocId } = await asTenant(t).mutation(api.vault.vaultUpload, {
       storageId,
       filename: "scan.pdf",
@@ -357,7 +358,7 @@ describe("vaultUpload extraction scheduling (Phase 3.8 Wave 0 hook)", () => {
 
   test("an mp4 schedules transcribeDoc", async () => {
     const t = withIngest();
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["vid"])));
+    const storageId = await t.run((ctx) => seedOwnedUpload(ctx, TENANT, new Blob(["vid"])));
     const { vaultDocId } = await asTenant(t).mutation(api.vault.vaultUpload, {
       storageId,
       filename: "clip.mp4",
@@ -374,7 +375,7 @@ describe("vaultUpload extraction scheduling (Phase 3.8 Wave 0 hook)", () => {
 
   test("regression guard: a searchable TXT with text rides the workflow path — NOTHING scheduled", async () => {
     const t = withIngest();
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["hello"])));
+    const storageId = await t.run((ctx) => seedOwnedUpload(ctx, TENANT, new Blob(["hello"])));
     const { vaultDocId } = await asTenant(t).mutation(api.vault.vaultUpload, {
       storageId,
       filename: "notes.txt",
@@ -397,7 +398,7 @@ describe("vaultUpload extraction scheduling (Phase 3.8 Wave 0 hook)", () => {
   // (the action flips it) — that part of the original assertion is unchanged and still correct.
   test("an unrecognized binary (zip) is still SCHEDULED — the action decides, not the MIME type", async () => {
     const t = withIngest();
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["PK"])));
+    const storageId = await t.run((ctx) => seedOwnedUpload(ctx, TENANT, new Blob(["PK"])));
     const { vaultDocId } = await asTenant(t).mutation(api.vault.vaultUpload, {
       storageId,
       filename: "archive.zip",
@@ -534,7 +535,7 @@ describe("extraction lifecycle internals (Phase 3.8 Wave 0 seam)", () => {
 
   test("failed → retry → ready ends with NO failureReason (end-to-end staleness)", async () => {
     const t = withIngest();
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["%PDF"])));
+    const storageId = await t.run((ctx) => seedOwnedUpload(ctx, TENANT, new Blob(["%PDF"])));
     const docId = await seedDoc(t, {
       status: "failed",
       failureReason: "unsupported_format",
@@ -562,7 +563,7 @@ describe("extraction lifecycle internals (Phase 3.8 Wave 0 seam)", () => {
 
   test("getDocForExtraction returns the action's fields for the owner; cross-tenant throws", async () => {
     const t = withIngest();
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["%PDF"])));
+    const storageId = await t.run((ctx) => seedOwnedUpload(ctx, TENANT, new Blob(["%PDF"])));
     const docId = await seedDoc(t, {
       status: "pending_extraction",
       text: undefined,
@@ -599,7 +600,9 @@ describe("deleteVaultDoc (cascade + orphan GC + tenant guard)", () => {
   // MUTATION: drop the `ctx.storage.delete(doc.storageId)` line from `deleteVaultDoc` → red.
   test("deletes the stored bytes, not only the row that points at them", async () => {
     const t = withIngest();
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["the user's file"])));
+    const storageId = await t.run((ctx) =>
+      seedOwnedUpload(ctx, TENANT, new Blob(["the user's file"])),
+    );
     const doc = await seedDoc(t, { storageId, ragEntryId: "smoke::content-hash" });
 
     // NON-VACUITY: the blob is really there first, so a green result cannot mean "never stored".

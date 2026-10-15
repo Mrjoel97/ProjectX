@@ -51,7 +51,8 @@ describe("tenant table classification registry", () => {
     // schema.test.ts against the same source) are two readers of one file that now agree.
     // + funnels (31-01): tenant-owned fixed-source aggregate links = 61.
     // + researchControls (2026-09-12 request controls): tenant-owned bounded attempt state = 62.
-    expect(schemaTables).toHaveLength(62);
+    // + three foundation tables and expiring auth revocations = 67 with owned upload receipts.
+    expect(schemaTables).toHaveLength(67);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -175,6 +176,7 @@ describe("tenant table classification registry", () => {
     // tenant erasure must not discard pending export delivery state.
     expect(surviving("global")).toEqual([
       "auditExportQueue",
+      "authRevocations",
       "billingStripeEvents",
       "exportCursors",
       "guardrailConfig",

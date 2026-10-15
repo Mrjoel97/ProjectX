@@ -427,7 +427,12 @@ describe("providerGates — structural guarantees", () => {
     // looked for `mutation(` would either miss the ban or fire on the sanctioned builder. Listing
     // what is allowed also fails on a builder nobody thought to ban.
     const imported = [...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*"([^"]+)"/g)]
-      .filter(([, , from]) => from === "./_generated/server" || from === "./lib/functions")
+      .filter(
+        ([, , from]) =>
+          from === "./_generated/server" ||
+          from === "./lib/functions" ||
+          from === "./lib/tenantLifecycle",
+      )
       .flatMap(([, names]) => (names ?? "").split(","))
       .map(
         (n) =>

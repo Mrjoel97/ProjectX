@@ -137,6 +137,7 @@ export function refusalMessage(reason: string): string {
     // two CAN-SPAM refusals need an entry here too — the fallback below would print the raw enum.
     no_postal_address:
       "Add your postal address on your profile before sending — the law requires it in every email's footer. Nothing was sent.",
+    too_many_recipients: "Split this email into plans of at most 100 recipients.",
     all_recipients_suppressed:
       "Nobody on this list can be emailed: every recipient has unsubscribed. Nothing was sent.",
     daily_budget_exhausted: "Your daily budget is used up for today. Nothing was generated.",

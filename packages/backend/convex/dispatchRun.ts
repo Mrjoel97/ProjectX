@@ -36,7 +36,6 @@ import { resolveSpecialist } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
 import { workflow } from "./index";
 import {
   DISPATCH_ARGS,
@@ -45,6 +44,7 @@ import {
   failedMemoFor,
   narrowFanOut,
 } from "./lib/dispatchShared";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { assertResearchControlContext } from "./lib/toolContextArgs";
 
 /** Which action a run of each kind steps into. A record rather than a chain of `if`s so a fourth

@@ -55,7 +55,8 @@ describe("25.2 item 3 — the delivery report speaks, it does not print an enum"
   });
   test("an unknown status is still words, and the row renders the label", () => {
     expect(deliveryStatusLabel("some_new_state")).toBe("some new state");
-    expect(cards).toContain("{deliveryStatusLabel(r.status)}");
+    expect(cards).toContain("deliveryStatusLabel(r.status)");
+    expect(cards).toContain('"Delivery outcome unknown"');
     expect(cards).not.toMatch(/badge\(r\.status\)\}>\{r\.status\}/);
   });
 });

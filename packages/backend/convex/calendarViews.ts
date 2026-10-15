@@ -10,8 +10,8 @@
 // tenantQuery so the browser subscribes and the CALENDAR card fills live, guarded on ctx.tenantId.
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
+import { internalMutation } from "./lib/tenantLifecycle";
 import schema from "./schema";
 
 // DERIVED from schema.ts, for the reason briefings.ts learned the hard way: a hand-copied validator
