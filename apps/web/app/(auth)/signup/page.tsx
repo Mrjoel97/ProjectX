@@ -190,6 +190,13 @@ function SignUp() {
             : "That invite code isn't valid. It may have been used already, or mistyped."}
       </p>
 
+      {preflight?.valid === false && (
+        <p className="auth-switch">
+          If you already started signing up, <Link href="/signin">sign in</Link> with the same email
+          and password to continue. You may still need to verify your email.
+        </p>
+      )}
+
       <form onSubmit={onSubmit}>
         <TextField
           label="Full Name"

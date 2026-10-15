@@ -1,5 +1,9 @@
 # Playbook: Beta Admission (BETA-01)
 
+> Last verified: 2026-10-16 — signup recovery copy now places a sign-in link beside every invalid-invite result: if signup was already started, continue with the same email and password; email verification may still be required. Unknown, mistyped and spent codes receive identical guidance. Preflight validation, disabled signup controls and backend admission are unchanged. Local verification: web TypeScript, Biome and six existing OAuth-error source guards passed; this copy change has not yet received live browser acceptance.
+
+Password signup consumes its invite when the account is created, before the verification email is completed. A reload or failed email delivery can therefore leave an existing unverified account with a spent invite. Direct the user to the same deployment's /signin, using the original email and password, then Verify your email. Send a new code requests another verification email; a forgotten password uses Forgot your password? on /signin. The recipient enters their code privately. Do not reissue or delete the spent invite merely to recover verification, switch providers, or retrieve a connector-redacted code through another endpoint. Check the frontend's public Convex hostname against the intended deployment if the state appears inconsistent; never inspect tokens or cookies for this purpose.
+
 > Last verified: 2026-10-15 — local auth lifecycle integration tests cover always-required password email verification, 15-minute OTP expiry/replay, reset account non-enumeration, password rotation and old-session invalidation. The installed Convex Auth Password/Email implementations retain token and session ownership. Signup/signin now show an OTP screen; signin includes password recovery. Resend requires AUTH_RESEND_KEY and AUTH_EMAIL_FROM (a verified sender). Missing configuration fails password authentication closed before account creation; Google/Microsoft behavior is unchanged. Existing password users verify at their next sign-in. Sender provisioning and live browser/mail acceptance remain release blockers; no email was sent during implementation.
 
 Email delivery uses a hashed normalized address rate-limit key (5/hour, burst 3) and a deployment limit (100/hour, burst 20). Reset requests consume admission before account lookup and return the same response on missing accounts, throttling, and send failure. Provider bodies/errors and codes never enter application logs. This does not claim constant-time responses. A failed send can leave an admitted, unverified password account: retry signin or request a fresh verification code after restoring the sender; do not reissue its spent invite.
@@ -426,9 +430,7 @@ provider-shape guard existed it reddened **nothing**.
 - **Bootstrapping the first owner** is manual and unchanged:
   `npx convex run owner:bootstrapOwner '{"userId":"..."}'` from `packages/backend`. There is no
   self-service path to `owner: true`, deliberately.
-- **Supporting a stuck invitee.** Read `betaInvites` by email. If `redeemedAt` is set and they
-  cannot sign in, they are almost certainly using a *different provider* than the one that redeemed
-  it — check `redeemedSubject`'s prefix. That is invariant 5 working, not a fault.
+- **Supporting a stuck invitee.** A spent password invite can belong to an account still awaiting email verification; follow the sign-in recovery above. An authorized operator can check account existence, verification status and the redeemed provider using refs/booleans only. A different-provider sign-in remains refused under invariant 5; use the provider originally chosen at signup.
 - **Rollback / re-issue.** There is no "revoke" function. To re-issue, delete the `betaInvites` row
   and re-run `approve`. Deleting a *redeemed* row does not remove the account it created.
 - The invite code is shown to the owner by `approve` and is stored raw, so it can be re-read.
