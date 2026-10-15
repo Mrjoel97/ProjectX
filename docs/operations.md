@@ -1,7 +1,7 @@
 # Current operations guide
 
 Source inspection: 2026-10-15, starting revision `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
-Production runtime revision `054b49d914d2281b25452183c4a930d04375cc94` deployed on 2026-10-15 through [release run 38785069376](https://github.com/Mrjoel97/ProjectX/actions/runs/38785069376). Convex deployment, registry seed, staged probe, promotion and durable-origin verification passed. [Release readiness](release-readiness.md) records the evidence and live gates that remain open; deployment does not establish voice/onboarding activation or complete provider qualification.
+Production runtime revision `3ea7981c134b4820d95470e86554edd68286347c` deployed through [release run 38808615617](https://github.com/Mrjoel97/ProjectX/actions/runs/38808615617), verified on 2026-10-16 (Africa/Dar_es_Salaam). Convex deployment, registry seed, staged probe, promotion and durable-origin verification passed. [Release readiness](release-readiness.md) records the evidence and live gates that remain open; deployment does not establish voice/onboarding activation or complete provider qualification.
 This guide is the current entry point; dated playbook notes and ADRs explain historical decisions.
 
 ## Architecture and ownership
@@ -131,9 +131,9 @@ SkillOpt export is likewise paged. The CI script scripts/skillopt-export.mjs fol
 
 Historical mail configuration observation (superseded by the successful configuration and delivery checks above): the owner reports the Resend dashboard domain is Verified. A fresh names-only Convex check ([run 38749457677](https://github.com/Mrjoel97/ProjectX/actions/runs/38749457677)) still found AUTH_RESEND_KEY and AUTH_EMAIL_FROM absent. Domain verification alone does not complete application mail configuration or a successful verification/recovery delivery drill.
 
-## Current release qualification — 2026-10-15
+## Current release qualification — 2026-10-16
 
-Production runtime `054b49d914d2281b25452183c4a930d04375cc94` passed [PR41 CI](https://github.com/Mrjoel97/ProjectX/actions/runs/38783833128) (8,193 package/application tests passed, two skipped, plus 34 operator regressions), [main CI](https://github.com/Mrjoel97/ProjectX/actions/runs/38784521521), and the [production release workflow](https://github.com/Mrjoel97/ProjectX/actions/runs/38785069376). Foundation onboarding, controlled voice and billing remain off in production; this release changed none of their activation settings. No browser/microphone acceptance is claimed.
+Production runtime `3ea7981c134b4820d95470e86554edd68286347c` passed [PR42 CI](https://github.com/Mrjoel97/ProjectX/actions/runs/38807478554) (8,193 package/application tests passed, two skipped, plus 34 operator regressions), [main CI](https://github.com/Mrjoel97/ProjectX/actions/runs/38808093330), and the [production release workflow](https://github.com/Mrjoel97/ProjectX/actions/runs/38808615617). Foundation onboarding, controlled voice and billing remain off in production; this release changed none of their activation settings. No browser/microphone acceptance is claimed.
 
 [Staging run 38772482415](https://github.com/Mrjoel97/ProjectX/actions/runs/38772482415) confirmed OpenRouter configuration and measured hosted admin-fixture upload throughput: 1 MiB in 601 ms, 64 MiB in 1,334 ms and 200 MiB in 2,856 ms, all HTTP 200. These admin-fixture results do not qualify the authenticated browser upload relay. A separate local 200 MiB upload timed out after 125 seconds with approximately 86 MB tracked as partial data. The isolated account self-deletion succeeded; independent proof that its blobs are absent remains pending. Keep upload cancellation, partial cleanup and erasure verification open until that evidence is recorded.
 

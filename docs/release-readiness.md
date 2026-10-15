@@ -1,13 +1,13 @@
 # Release readiness and implementation checklist
 
-Last reviewed: 2026-10-15. Implementation starting baseline: `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
+Last reviewed: 2026-10-16. Implementation starting baseline: `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
 Release implementation and deployment evidence: Codex, acting on the repository owner's instructions. Ongoing operator and specialist review assignments remain open under the owner roles below; deployment does not close those operational ownership tasks.
-Current production runtime: `054b49d914d2281b25452183c4a930d04375cc94`, deployed 2026-10-15 in [run 38785069376](https://github.com/Mrjoel97/ProjectX/actions/runs/38785069376). Local implementation and tests never imply live provider verification. Production voice/foundation activation and the remaining drills below are still open; staging foundation is enabled for controlled acceptance.
+Current production runtime: `3ea7981c134b4820d95470e86554edd68286347c`, verified 2026-10-16 in [run 38808615617](https://github.com/Mrjoel97/ProjectX/actions/runs/38808615617). Local implementation and tests never imply live provider verification. Production voice/foundation activation and the remaining drills below are still open; staging foundation is enabled for controlled acceptance.
 
 | Gate | Owner role | Current state | Required closure evidence |
 |---|---|---|---|
 | Operations guide | Release engineer | Current/previous exact-revision local setup and restoration rehearsals passed; hosted recovery pending | Fresh setup, staging release and recovery using only the guide |
-| Release configuration | Release engineer | Exact-SHA CI, production configuration gate, Convex dry-run/generated-type check, deploy/seed, staged probe and promotion passed at 054b49d with step-scoped credentials; rollback drill pending | Exact SHA, configuration check, environment protections, successful staged promotion and rollback |
+| Release configuration | Release engineer | Exact-SHA CI, production configuration gate, Convex dry-run/generated-type check, deploy/seed, staged probe and promotion passed at 3ea7981 with step-scoped credentials; rollback drill pending | Exact SHA, configuration check, environment protections, successful staged promotion and rollback |
 | External delivery | Backend engineer | Implemented locally: durable claims/receipts and manual uncertainty review; live reconciliation pending | Durable attempt state, no blind resend, concurrent/crash/timeout tests and controlled provider reconciliation |
 | Cost admission | Backend engineer | Paid admission and strict voice bounds tested; live OpenRouter embedding usage/settlement exercised in isolated staging; voice/invoice reconciliation pending | Atomic reservations, all paid callers migrated, idempotent settlement, uncertain holds, provider reconciliation |
 | Identity | Security/backend engineer | Isolated native signup verification, replay rejection, recovery/reset and old/new JWT checks passed; expiry and browser acceptance remain open | Cross-tenant negative tests, password verification/recovery, privilege and callback checks |
@@ -24,7 +24,7 @@ Current production runtime: `054b49d914d2281b25452183c4a930d04375cc94`, deployed
 | Connectors | Provider operator | Per-provider gates remain binding | Current connection, scope/expiry/revoke/read evidence for each enabled provider |
 | Recurrence | Workflow operator | Existing gate remains binding | Required actual DST/OAuth/provider traces; do not enable on simulated evidence alone |
 | Skill activation | Model operator | Per-skill evidence required | Seed/version identity, evaluation, activation and rollback evidence |
-| CI portability/build | Release engineer | Local Windows checks and hosted Linux CI passed; release 054b49d passed PR41/main CI and production workflow; suite: 8,193 passed, two skipped, plus 34 operator regressions | Clean Windows/Linux checks and resolved or dispositioned build warnings |
+| CI portability/build | Release engineer | Local Windows checks and hosted Linux CI passed; release 3ea7981 passed PR42/main CI and production workflow; suite: 8,193 passed, two skipped, plus 34 operator regressions | Clean Windows/Linux checks and resolved or dispositioned build warnings |
 
 ## Delivery order
 
@@ -214,3 +214,10 @@ This uses privileged synthetic fixture identities and existing scoped cleanup he
 The new preview upload was initially blocked by automatic approval review; the owner subsequently authorized proceeding. On 2026-10-16, exact source `054b49d914d2281b25452183c4a930d04375cc94` built successfully as READY preview `dpl_CxsunYGJsBQuCPDbM7iPkwQU3Swv` at `https://pikar-ai-convex-j32zw3iij-joelferuzi-gmailcoms-projects.vercel.app`. All 2,780 tracked source blobs matched the archived revision. The served signin page and all 11 client assets were inspected: the compiled client contains the staging Convex hostname and no production hostname. Production, aliases, feature flags and staging `SITE_URL` were unchanged; the earlier staging origin remains the coordinated authentication origin. This preview build does not establish hosted rollback or browser acceptance.
 
 The current staging signup invitation was refused. Source inspection confirms password signup consumes an invite before email verification, so an existing unverified account must resume through sign-in and a new verification challenge instead of reusing signup. The actual account state and original-file absence checks await the approved private read-only diagnostic and exclusive Chrome access. The temporary earlier metadata-bearing branch was deleted, but historical public commits/logs are not erased by branch deletion.
+
+
+## Signup recovery release — 2026-10-16
+
+[PR42](https://github.com/Mrjoel97/ProjectX/pull/42) adds generic sign-in recovery guidance beside invalid invite results. It changes no admission, authentication handler, schema or activation setting. Exact head `596cb5c156e5ccccbdafd182d786050efe74de73` passed [CI 38807478554](https://github.com/Mrjoel97/ProjectX/actions/runs/38807478554); merged revision `3ea7981c134b4820d95470e86554edd68286347c` passed [main CI 38808093330](https://github.com/Mrjoel97/ProjectX/actions/runs/38808093330) and [production release 38808615617](https://github.com/Mrjoel97/ProjectX/actions/runs/38808615617). Independent production inspection resolved READY artifact `dpl_5Et4nRoYFubPZ8zSrJ9JWdbv4LVw`. Five public routes returned HTTP 200; all 12 signup assets returned HTTP 200, with the new recovery/verification copy and production Convex hostname present and the staging hostname absent. This proves shipped copy, not interactive recovery.
+
+The earlier staging signin page and all 11 app assets were also inspected through authenticated, read-only Vercel CLI. Its actual client contains `woozy-wren-368.convex.cloud`; the only other Convex hostname is an installed SDK example. A compiled backend mismatch is not supported by that evidence. The owner approved entering the scoped test identifiers into the private read-only dashboard diagnostic, including its possible private query history, but Chrome remained in use; no diagnostic was executed. Actual invitation/account state and original-blob absence remain open.
