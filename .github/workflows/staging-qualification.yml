@@ -6,7 +6,7 @@ permissions:
   contents: read
   actions: read
 jobs:
-  drain-preflight:
+  foundation-readiness:
     if: github.repository == 'Mrjoel97/ProjectX'
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -39,49 +39,38 @@ jobs:
           persist-credentials: false
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
-      - name: Inspect bounded staging workflow inventory and ingestion queues
+      - name: Validate staging prerequisites and enable typed foundation qualification
         working-directory: packages/backend
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
         run: |
           node <<'NODE'
           const {execFileSync}=require("node:child_process");
-          const run=args=>execFileSync(process.execPath,["node_modules/convex/bin/main.js",...args],{encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:30000,maxBuffer:4194304}).trim();
-          const decode=text=>text?JSON.parse(text):null;
-          const query=(source,component)=>decode(run(["run","--inline-query",source,"--component",component]));
-          (async()=>{try{
+          const run=args=>execFileSync(process.execPath,["node_modules/convex/bin/main.js",...args],{encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:30000,maxBuffer:1048576}).trim();
+          (async()=>{let phase="target";try{
             if(run(["dashboard","--no-open"]).match(/https:\/\/dashboard\.convex\.dev\/d\/([a-z0-9-]+)/)?.[1]!=="woozy-wren-368")throw Error();
-            const result={stagingTarget:true,inventoryComplete:false,workflowRecords:0,unfinishedWorkflows:0,unfinishedIngestion:0,unguardedIngestion:0,poolsQuietTwice:false};
-            let cursor=null;const cursors=new Set();
-            for(let page=0;page<20;page++){
-              const data=decode(run(["run","workflow:list",JSON.stringify({order:"asc",paginationOpts:{numItems:100,cursor}}),"--component","workflow"]));
-              if(!Array.isArray(data?.page)||data.page.length>100)throw Error();
-              for(const row of data.page){
-                result.workflowRecords++;
-                if(row.runResult===undefined){
-                  result.unfinishedWorkflows++;
-                  const args=row.args??{};
-                  if(String(row.name??"").includes("vaultIngest")||typeof args.vaultDocId==="string"){
-                    result.unfinishedIngestion++;
-                    if(typeof args.expectedContentHash!=="string"||!args.expectedContentHash||row.context?.expectedContentHash!==args.expectedContentHash)result.unguardedIngestion++;
-                  }
-                }
-              }
-              if(data.isDone===true){result.inventoryComplete=true;break;}
-              if(typeof data.continueCursor!=="string"||cursors.has(data.continueCursor))throw Error();
-              cursors.add(data.continueCursor);cursor=data.continueCursor;
-            }
-            if(!result.inventoryComplete)throw Error();
-            let quiet=true;
-            const source='const workEmpty=(await ctx.db.query("work").first())===null;const state=await ctx.db.query("internalState").first();return {workEmpty,runningEmpty:state===null?workEmpty:Array.isArray(state.running)&&state.running.length===0};';
-            for(let pass=0;pass<2;pass++){
-              for(const component of ["workflow/workpool","vaultIngestPool"]){
-                const state=query(source,component);quiet=quiet&&state.workEmpty===true&&state.runningEmpty===true;
-              }
-              if(pass===0)await new Promise(resolve=>setTimeout(resolve,2000));
-            }
-            result.poolsQuietTwice=quiet;
-            console.log(JSON.stringify(result));
-            if(!quiet||result.unfinishedIngestion||result.unguardedIngestion)process.exitCode=1;
-          }catch{console.error('{"stagingDrainInspectionCompleted":false}');process.exitCode=1;}})();
+            phase="configuration";
+            const names=new Set(run(["env","list","--names-only"]).split(/\r?\n/));
+            const required=["OPENAI_API_KEY","OPENROUTER_API_KEY","JWT_PRIVATE_KEY","JWKS","AUTH_RESEND_KEY","AUTH_EMAIL_FROM","SITE_URL"];
+            const missing=required.filter(name=>!names.has(name));
+            const {ENV_MANIFEST,missingEnv}=await import("./convex/lib/env.ts");
+            const fixtureValues=new Map();
+            for(const spec of ENV_MANIFEST.filter(spec=>spec.tier==="fixture"))if(names.has(spec.name))fixtureValues.set(spec.name,run(["env","get",spec.name]));
+            const active=missingEnv(name=>fixtureValues.get(name)).fixturesActive;
+            console.log(JSON.stringify({stagingTarget:true,missingConfigurationNames:missing,activeFixtureNames:active}));
+            if(missing.length||active.length)throw Error();
+            const origin="https://pikar-ai-convex-gpbrsadzc-joelferuzi-gmailcoms-projects.vercel.app";
+            if(new URL(run(["env","get","SITE_URL"])).origin!==origin)throw Error();
+            phase="skill-registry";
+            const requiredSkills=["foundation-voice","business-profile","onboarding-agent","voice-session","document-analyst","graph-extractor","document-classifier"];
+            const source='const names='+JSON.stringify(requiredSkills)+';return (await Promise.all(names.map(name=>ctx.db.query("skills").withIndex("by_name_status",q=>q.eq("name",name).eq("status","active")).unique()))).every(row=>row!==null);';
+            if(JSON.parse(run(["run","--inline-query",source]))!==true)throw Error();
+            phase="queue-recheck";
+            const query='const workEmpty=(await ctx.db.query("work").first())===null;const state=await ctx.db.query("internalState").first();return workEmpty&&(state===null||(Array.isArray(state.running)&&state.running.length===0));';
+            for(const component of ["workflow/workpool","vaultIngestPool"])if(JSON.parse(run(["run","--inline-query",query,"--component",component]))!==true)throw Error();
+            phase="enable-staging-foundation";
+            run(["env","set","FOUNDATION_ONBOARDING_ENABLED","1"]);
+            if(run(["env","get","FOUNDATION_ONBOARDING_ENABLED"])!=="1")throw Error();
+            console.log(JSON.stringify({stagingPrerequisitesVerified:true,requiredSkillsActive:true,ingestionPoolsQuiet:true,foundationEnabled:true,productionUntouched:true,voiceActivationChanged:false,billingActivationChanged:false}));
+          }catch{console.error("Staging prerequisite check stopped in phase: "+phase+"; private output suppressed.");process.exitCode=1;}})();
           NODE
