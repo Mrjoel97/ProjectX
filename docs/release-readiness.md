@@ -1,7 +1,7 @@
 # Release readiness and implementation checklist
 
 Last reviewed: 2026-10-15. Implementation starting baseline: `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
-Owner names are not yet assigned; role assignments below must be replaced before release.
+Release implementation and deployment evidence: Codex, acting on the repository owner's instructions. Ongoing operator and specialist review assignments remain open under the owner roles below; deployment does not close those operational ownership tasks.
 Current production runtime: `c2cf18c2cbcf4d16df4e3143271ac69471172f64`, deployed 2026-10-15 in [run 38760903041](https://github.com/Mrjoel97/ProjectX/actions/runs/38760903041). Local implementation and tests never imply live provider verification. Voice/foundation activation and the remaining drills below are still open.
 
 | Gate | Owner role | Current state | Required closure evidence |
@@ -69,7 +69,7 @@ implementation changes; old evidence is not current assurance.
 - [ ] Observe seven-day transcript expiry and bounded cleanup; verify discard, export and account erasure.
 - [ ] Obtain the remaining postal address and reviewed legal content. Keep billing disabled as explicitly instructed; do not activate it during this release. Resolve WORM retention, connector and recurrence provider evidence independently and preserve their gates.
 
-The unchecked tasks require additional implementation or operational evidence. This change set does not represent a production release or completion of every original gap.
+The unchecked tasks require additional implementation or operational evidence. The runtime release recorded above does not establish completion of every original gap.
 
 ## Implemented code checklist
 
@@ -154,3 +154,9 @@ The delivery change retires the prior evaluator identity. The replacement golden
 Postflight HTTP checks returned 200 HTML for `/`, `/signin`, `/signup`, `/privacy` and `/terms`; home and legal pages contain the approved support address. One public native password-recovery request for the authorized mailbox was accepted by the deployed app. It changed no password and did not log a code or token. The owner confirmed this mailbox uses Google sign-in only and received no recovery email, consistent with the non-enumerating response for an absent password account. A complete isolated password signup/recovery/session drill remains pending; this negative account case is not evidence of password-account delivery.
 
 The temporary production preflight branch was deleted after its controlled test; evidence runs remain available. The owner confirmed voice sessions ended and uploads completed for cutover, then supplied staging deployment `woozy-wren-368` in the same Convex project. Usable staging release access is being checked separately; production credentials must not be reused for it. Voice/foundation live acceptance, hosted upload throughput, erasure/provider reconciliation and rollback drills remain unqualified. The release does not enable foundation/new voice sessions or commercial billing. Follow-up evidence-only documentation changes do not change the deployed runtime revision above.
+
+## Staging qualification and voice admission follow-up — 2026-10-15
+
+The isolated staging preflight confirmed `woozy-wren-368` using its separate GitHub staging secret. Missing staging signing keys were generated as a fresh pair only when both names were absent; production keys were never copied. The staging frontend was built from verified runtime revision c2cf18c with `NEXT_PUBLIC_CONVEX_URL=https://woozy-wren-368.convex.cloud`; no production domain was promoted by that preview deployment. Staging provider configuration and live acceptance remain independent gates.
+
+Review found that the old first-response admission could never fit a fresh tenant's defaults: the100c initial reservation plus417c response reservation exceeded the500c daily allowance. The follow-up preserves the100c hold and500c allowance, requires acknowledged8192-token post-instruction truncation, and reserves84c per response using conservative full-context text, bounded audio-input and output prices. It rejects missing/mismatched provider controls and terminates on usage outside the contract. Known overages are charged in full; contract violations never release a conservative hold. Local voice suites passed36 backend tests and four shared contract tests, including a real initial reservation and overage accounting; mint13 tests were rerun after their contract assertion. Backend typechecking, scoped formatting, golden self-check and vertical corpus checks passed. These overlapping targeted checks are not a new full-suite total or live provider evidence. Production voice/foundation flags remain off until real acceptance passes.

@@ -17,7 +17,12 @@ import {
   TRANSCRIPTION_MODEL,
   TURN_DETECTION_TYPE,
 } from "@pikar/voice";
-import { assertMediaOnlyOffer, trustedCallId } from "@pikar/voice/serverControl";
+import {
+  assertMediaOnlyOffer,
+  trustedCallId,
+  VOICE_OUTPUT_TOKENS,
+  VOICE_TRUNCATION,
+} from "@pikar/voice/serverControl";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -155,7 +160,8 @@ export const mintClientSecret = internalAction({
         session: {
           type: "realtime",
           model: DEFAULT_REALTIME_MODEL,
-          max_output_tokens: 1024,
+          max_output_tokens: VOICE_OUTPUT_TOKENS,
+          truncation: VOICE_TRUNCATION,
           instructions, // registry persona + confirmed blueprint (+ digest when doc-scoped)
           // LIVE-VERIFIED 2026-07-20: turn_detection + transcription nest under `audio.input` — a
           // top-level `session.turn_detection` 400s ("unknown parameter"); the API key is `transcription`.

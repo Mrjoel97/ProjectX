@@ -156,6 +156,12 @@ test("mintClientSecret POSTs the client_secrets endpoint with the Bearer key + t
   // …LIVE-VERIFIED 2026-07-20: turn_detection + transcription nest under audio.input (a top-level
   // session.turn_detection 400s). A regression here is exactly what the mock could not catch.
   expect(body.session.audio.input.turn_detection.type).toBe(TURN_DETECTION_TYPE);
+  expect(body.session.max_output_tokens).toBe(1024);
+  expect(body.session.truncation).toEqual({
+    type: "retention_ratio",
+    retention_ratio: 0.8,
+    token_limits: { post_instructions: 8192 },
+  });
   expect(body.session.audio.input.transcription.model).toBe(TRANSCRIPTION_MODEL);
   // …and the live-session instructions are the REGISTRY skill body, not a hardcoded prompt (§5).
   expect(body.session.instructions).toBe(voiceSessionSkillBody);

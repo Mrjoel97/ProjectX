@@ -6,7 +6,12 @@ import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/comp
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
-const behavior = vi.hoisted(() => ({ missingUsage: false, sent: [] as string[] }));
+const behavior = vi.hoisted(() => ({
+  missingUsage: false,
+  badAck: false,
+  audioTokens: 1,
+  sent: [] as string[],
+}));
 vi.mock("ws", () => ({
   default: class extends EventEmitter {
     static OPEN = 1;
@@ -20,7 +25,17 @@ vi.mock("ws", () => ({
       const e = JSON.parse(raw);
       if (e.type === "session.update")
         queueMicrotask(() =>
-          this.emit("message", JSON.stringify({ type: "session.updated", session: e.session })),
+          this.emit(
+            "message",
+            JSON.stringify({
+              type: "session.updated",
+              session: {
+                ...e.session,
+                model: "gpt-realtime-2.1",
+                ...(behavior.badAck ? { truncation: undefined } : {}),
+              },
+            }),
+          ),
         );
       if (e.type === "response.create")
         queueMicrotask(() => {
@@ -39,9 +54,9 @@ vi.mock("ws", () => ({
                   ? {}
                   : {
                       usage: {
-                        input_tokens: 3,
+                        input_tokens: behavior.audioTokens + 2,
                         output_tokens: 7,
-                        input_token_details: { audio_tokens: 1, text_tokens: 2 },
+                        input_token_details: { audio_tokens: behavior.audioTokens, text_tokens: 2 },
                         output_token_details: { audio_tokens: 3, text_tokens: 4 },
                       },
                     }),
@@ -78,6 +93,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
   behavior.sent = [];
   behavior.missingUsage = false;
+  behavior.badAck = false;
+  behavior.audioTokens = 1;
 });
 
 test("public connection refuses before any provider request without verified transport evidence", async () => {
@@ -102,10 +119,17 @@ test.each([
     vi.fn(async () => new Response(null, { status: 200 })),
   );
   const t = setup();
+  const initialReservation = await t.mutation(internal.guardrails.reservePaidCall, {
+    tenantId: "voice_control",
+    model: "gpt-realtime-2.1",
+    callId: crypto.randomUUID(),
+    ceilingCents: 100,
+  });
   const id = await t.run((ctx) =>
     ctx.db.insert("voiceSessions", {
       tenantId: "voice_control",
       onboarding: true,
+      spendReservationId: initialReservation,
       controlled: true,
       status: "active",
       callId: "rtc_test",
@@ -121,7 +145,12 @@ test.each([
   await t.action(internal.voiceControl.run, { sessionId: id });
   const s = await t.run((ctx) => ctx.db.get(id));
   const ledger = await t.run((ctx) => ctx.db.query("spendEvents").collect());
-  expect(ledger.filter((e) => e.phase === "reserved")).toHaveLength(1);
+  expect(
+    ledger
+      .filter((e) => e.phase === "reserved")
+      .map((e) => e.amountCents)
+      .sort((a, b) => a - b),
+  ).toEqual([84, 100]);
   expect(ledger.filter((e) => e.phase === "actual")).toHaveLength(missing ? 0 : 1);
   expect(s?.hangupConfirmedAt).toBeDefined();
   expect(s?.status).toBe("ended_abnormal");
@@ -168,4 +197,52 @@ test("expired content clears and browser counters cannot alter controlled sessio
   expect(session?.controlCommands).toBeUndefined();
   expect(session?.controlExpiresAt).toBeUndefined();
   expect(session?.inAudioTok).toBe(0);
+});
+
+test.each([
+  "bad_ack",
+  "audio_bound",
+  "overage",
+])("provider contract failure terminates without continuation: %s", async (mode) => {
+  behavior.badAck = mode === "bad_ack";
+  behavior.audioTokens = mode === "overage" ? 30000 : 8193;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status: 200 })),
+  );
+  const t = setup();
+  await t.mutation(internal.guardrails.reservePaidCall, {
+    tenantId: "voice_control",
+    model: "gpt-realtime-2.1",
+    callId: crypto.randomUUID(),
+    ceilingCents: 100,
+  });
+  const id = await t.run((ctx) =>
+    ctx.db.insert("voiceSessions", {
+      tenantId: "voice_control",
+      controlled: true,
+      onboarding: true,
+      status: "active",
+      callId: "rtc_test",
+      startedAt: Date.now(),
+      endsAt: Date.now() + 5000,
+      createdAt: Date.now(),
+      inAudioTok: 0,
+      outAudioTok: 0,
+      textInTok: 0,
+      textOutTok: 0,
+    }),
+  );
+  await t.action(internal.voiceControl.run, { sessionId: id });
+  const ledger = await t.run((ctx) => ctx.db.query("spendEvents").collect());
+  const session = await t.run((ctx) => ctx.db.get(id));
+  expect(session?.hangupConfirmedAt).toBeDefined();
+  expect(
+    behavior.sent.map((s) => JSON.parse(s)).filter((e) => e.type === "response.create"),
+  ).toHaveLength(mode === "bad_ack" ? 0 : 1);
+  expect(ledger.filter((e) => e.phase === "refunded")).toHaveLength(0);
+  expect(ledger.filter((e) => e.phase === "actual").map((e) => e.amountCents)).toEqual(
+    mode === "overage" ? [97] : [],
+  );
+  expect(session?.inAudioTok).toBe(mode === "bad_ack" ? 0 : behavior.audioTokens);
 });
