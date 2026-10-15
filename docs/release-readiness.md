@@ -122,6 +122,8 @@ Evaluator fingerprints were regenerated after the second-round source freeze. Go
 
 ## Integrated local qualification and review branch
 
+Historical snapshot before PR39 merged and production deployment; the current release evidence below supersedes its branch/deployment status.
+
 Implementation commit `5e6ce5bb5cd74bf5009697363fd82a3ccefb03b6` is pushed in [draft PR39](https://github.com/Mrjoel97/ProjectX/pull/39); it is neither merged nor deployed. Final local web run:1,045passed/twoexisting skips across61files. Other nine packages:2,629passed. All12package typechecks, production compilation with a placeholder backend URL, error-level Biome,22offline free gates and playbook coverage passed. Logs in the parent workspace: `projectx-round2-web-final.log`, `projectx-round2-packages.log`, `projectx-round2-typecheck-final.log`, `projectx-round2-build-final.log`, `projectx-round2-lint-final.log`, `projectx-round2-free-gates.log`.
 
 The final backend run recorded4,505passed/onefailed across179files (`projectx-round2-backend-final.log`). The sole failure was the closed cron-count assertion still expecting nine rather than ten after adding bounded voice-control retention. That assertion was corrected and the complete24-test reliability sweep suite passed (`projectx-round2-cron-final.log`). No runtime behavior changed in this correction. Hosted CI on the corrected revision must still pass; these facts do not falsely describe the earlier full run as all-green.
@@ -129,6 +131,8 @@ The final backend run recorded4,505passed/onefailed across179files (`projectx-ro
 Release authentication preflight checks capture CLI output without printing credentials and reject empty/missing/multiline settings. Isolated child-process checks exercised missing settings, malformed sender and configured values, with no fake key echoed. A valid-looking key still requires real verification/recovery delivery. User-confirmed Resend domain verification does not replace this gate.
 
 ## Hosted qualification — 2026-10-15
+
+Historical snapshot before production mail configuration and release; the following sections supersede those statuses.
 
 [CI run38752712434](https://github.com/Mrjoel97/ProjectX/actions/runs/38752712434) passed every required step at implementation revision `fab5f33`:12package typechecks, error-level lint,22free gates, all11tested packages, operator regressions, planning evidence and production build. The full hosted backend suite passed4,506tests; web passed1,045with twoexisting skips; other packages passed2,629. Total:8,180passed/twoskipped. This supersedes the local cron-count failure for that code revision. The subsequent evidence-only documentation commit changes no runtime or test behavior.
 
