@@ -1,7 +1,7 @@
 # Current operations guide
 
 Source inspection: 2026-10-15, starting revision `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
-Production runtime revision `42c65d40a0a97dc8eac537e042d473a1b045782e` deployed through [release run 38813312965](https://github.com/Mrjoel97/ProjectX/actions/runs/38813312965), verified on 2026-10-16 (Africa/Dar_es_Salaam). Convex deployment, registry seed, staged probe, promotion and durable-origin verification passed. [Release readiness](release-readiness.md) records the evidence and live gates that remain open; deployment does not establish voice/onboarding activation or complete provider qualification.
+Production runtime revision `de18285d7466ea743d42199dc1d8de4a66dccbf9` deployed through [release run 38815539297](https://github.com/Mrjoel97/ProjectX/actions/runs/38815539297), verified on 2026-10-16 (Africa/Dar_es_Salaam). Convex deployment, registry seed, staged probe, promotion and durable-origin verification passed. [Release readiness](release-readiness.md) records the evidence and live gates that remain open; deployment does not establish voice/onboarding activation or complete provider qualification.
 This guide is the current entry point; dated playbook notes and ADRs explain historical decisions.
 
 ## Architecture and ownership
@@ -133,7 +133,7 @@ Historical mail configuration observation (superseded by the successful configur
 
 ## Current release qualification — 2026-10-16
 
-Production runtime `42c65d40a0a97dc8eac537e042d473a1b045782e` passed [PR43 CI](https://github.com/Mrjoel97/ProjectX/actions/runs/38812363971) (8,194 package/application tests passed, two skipped, plus 34 operator regressions), [main CI](https://github.com/Mrjoel97/ProjectX/actions/runs/38812953245), and the [production release workflow](https://github.com/Mrjoel97/ProjectX/actions/runs/38813312965). Foundation onboarding, controlled voice and billing remain off in production; this release changed none of their activation settings. No browser/microphone acceptance is claimed.
+Production runtime `de18285d7466ea743d42199dc1d8de4a66dccbf9` passed [PR44 CI](https://github.com/Mrjoel97/ProjectX/actions/runs/38814425138) (8,194 package/application tests passed, two skipped, plus 34 operator regressions), [main CI](https://github.com/Mrjoel97/ProjectX/actions/runs/38815049837), and the [production release workflow](https://github.com/Mrjoel97/ProjectX/actions/runs/38815539297). Foundation onboarding, controlled voice and billing remain off in production; this release changed none of their activation settings. No browser/microphone acceptance is claimed.
 
 [Staging run 38772482415](https://github.com/Mrjoel97/ProjectX/actions/runs/38772482415) confirmed OpenRouter configuration and measured hosted admin-fixture upload throughput: 1 MiB in 601 ms, 64 MiB in 1,334 ms and 200 MiB in 2,856 ms, all HTTP 200. These admin-fixture results do not qualify the authenticated browser upload relay. A separate local 200 MiB upload timed out after 125 seconds with approximately 86 MB tracked as partial data. The isolated account self-deletion succeeded. An independent private, read-only staging query on 2026-10-16 confirmed all five exact known blobs, the user row and tenant upload receipts absent, including the known partial upload. Browser cancellation, hosted in-flight cleanup and provider-side erasure evidence remain open.
 
