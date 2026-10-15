@@ -93,18 +93,20 @@ export function DataControls() {
       let limits: TenantDataExport["limits"] | undefined;
       const tables: Record<string, readonly unknown[]> = {};
       const omitted: Record<string, string> = {};
+      const files: TenantDataExport["files"][number][] = [];
 
       do {
         const page = await convex.query(exportTenantData, cursor ? { cursor } : {});
         header ??= page.header;
         tables[page.table.name] = [...(tables[page.table.name] ?? []), ...page.table.rows];
         Object.assign(omitted, page.omitted);
+        files.push(...page.files);
         limits = page.limits;
         cursor = page.nextCursor ?? undefined;
       } while (cursor);
 
       if (!header || !limits) throw new Error("The export returned no data envelope.");
-      const completedExport: TenantDataExport = { header, tables, omitted, limits };
+      const completedExport: TenantDataExport = { header, tables, files, omitted, limits };
       const blob = new Blob([JSON.stringify(completedExport, null, 2)], {
         type: "application/json",
       });
