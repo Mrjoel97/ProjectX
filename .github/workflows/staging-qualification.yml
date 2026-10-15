@@ -23,7 +23,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           node <<'NODE'
-          const sha="af8174f2777ce60309e9b1c66434a8a383d41323";
+          const sha="118b8e73a4e4e9dbb4164cdd57724e0ec799bec4";
           (async()=>{for(let attempt=0;attempt<60;attempt++){
             const response=await fetch("https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs?head_sha="+sha+"&per_page=20",{headers:{Authorization:"Bearer "+process.env.GITHUB_TOKEN,Accept:"application/vnd.github+json"},signal:AbortSignal.timeout(15000)});
             if(!response.ok)throw Error("CI status unavailable");
@@ -35,7 +35,7 @@ jobs:
           NODE
       - uses: actions/checkout@v4
         with:
-          ref: af8174f2777ce60309e9b1c66434a8a383d41323
+          ref: 118b8e73a4e4e9dbb4164cdd57724e0ec799bec4
           persist-credentials: false
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
