@@ -1,7 +1,7 @@
 # Current operations guide
 
 Source inspection: 2026-10-15, starting revision `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
-Deployment state must be verified separately. A names-only production preflight succeeded for the existing baseline 53d96a (GitHub run 38748292173); it does not qualify these unpromoted changes. [Release readiness](release-readiness.md) records gates.
+Production runtime revision `c2cf18c2cbcf4d16df4e3143271ac69471172f64` deployed on 2026-10-15 through [release run 38760903041](https://github.com/Mrjoel97/ProjectX/actions/runs/38760903041). Convex deployment, registry seed, staged probe, promotion and durable-origin verification passed. [Release readiness](release-readiness.md) records the evidence and live gates that remain open; deployment does not establish voice/onboarding activation or complete provider qualification.
 This guide is the current entry point; dated playbook notes and ADRs explain historical decisions.
 
 ## Architecture and ownership

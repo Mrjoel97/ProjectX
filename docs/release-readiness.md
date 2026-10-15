@@ -2,12 +2,12 @@
 
 Last reviewed: 2026-10-15. Implementation starting baseline: `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
 Owner names are not yet assigned; role assignments below must be replaced before release.
-Local implementation and tests never imply live deployment or provider verification.
+Current production runtime: `c2cf18c2cbcf4d16df4e3143271ac69471172f64`, deployed 2026-10-15 in [run 38760903041](https://github.com/Mrjoel97/ProjectX/actions/runs/38760903041). Local implementation and tests never imply live provider verification. Voice/foundation activation and the remaining drills below are still open.
 
 | Gate | Owner role | Current state | Required closure evidence |
 |---|---|---|---|
 | Operations guide | Release engineer | Drafted; operational drill pending | Fresh setup, staging release and recovery using only the guide |
-| Release configuration | Release engineer | Names-only production preflight succeeded against existing baseline 53d96a; new changes not qualified by it | Exact SHA, configuration check, environment protections, successful staged promotion and rollback |
+| Release configuration | Release engineer | Exact-SHA CI, production configuration gate, Convex dry-run/generated-type check, deploy/seed, staged probe and promotion passed at c2cf18c; rollback drill pending | Exact SHA, configuration check, environment protections, successful staged promotion and rollback |
 | External delivery | Backend engineer | Implemented locally: durable claims/receipts and manual uncertainty review; live reconciliation pending | Durable attempt state, no blind resend, concurrent/crash/timeout tests and controlled provider reconciliation |
 | Cost admission | Backend engineer | Implemented paid admission, server-owned voice control and strict PCM duration bounds locally; live provider evidence open | Atomic reservations, all paid callers migrated, idempotent settlement, uncertain holds, provider reconciliation |
 | Identity | Security/backend engineer | Password verification/recovery and stale-session rejection tested; production sender configured and controlled inbox delivery confirmed; native application drill pending | Cross-tenant negative tests, password verification/recovery, privilege and callback checks |
@@ -24,7 +24,7 @@ Local implementation and tests never imply live deployment or provider verificat
 | Connectors | Provider operator | Per-provider gates remain binding | Current connection, scope/expiry/revoke/read evidence for each enabled provider |
 | Recurrence | Workflow operator | Existing gate remains binding | Required actual DST/OAuth/provider traces; do not enable on simulated evidence alone |
 | Skill activation | Model operator | Per-skill evidence required | Seed/version identity, evaluation, activation and rollback evidence |
-| CI portability/build | Release engineer | LF policy, CRLF-tolerant gates and Next proxy migration implemented; local checks and hosted CI passed at fab5f33; live qualification pending | Clean Windows/Linux checks and resolved or dispositioned build warnings |
+| CI portability/build | Release engineer | Local Windows checks and hosted Linux CI passed; exact release c2cf18c passed typechecks, lint, free gates, tests and build; production workflow passed | Clean Windows/Linux checks and resolved or dispositioned build warnings |
 
 ## Delivery order
 
@@ -144,3 +144,13 @@ Final release review found that the foundation UI flag did not prevent direct RP
 The same review added a legacy delivery cutover guard. Only a fresh transition into delivery receives the new claim-protocol marker; an already-delivering legacy request without a receipt is quarantined as unknown before provider work, including direct claim callers. Its outcome requires the existing delayed mailbox reconciliation and never permits an automatic resend. Delivery/pipeline/Gmail/Graph regression suites passed 100 tests. The owner confirmed current voice sessions ended and uploads finished before cutover. A component inline read-only workflow inventory failed; no empty-workload claim is made from that failed inspection. Legacy ingestion drain remains required before enabling foundation publication.
 
 The delivery change retires the prior evaluator identity. The replacement golden revision is `2026-09-11.budgeted-evaluator.57fafc5af36add4953d274c529897853c331d7c9d8e13114c8125cc82fcb8ea7`; the 46-case corpus is unchanged. Its offline self-check and four identity tests passed. This refresh does not assert new live model evidence or activate candidates.
+
+## Production deployment and postflight — 2026-10-15
+
+[PR39](https://github.com/Mrjoel97/ProjectX/pull/39) merged as runtime revision `c2cf18c2cbcf4d16df4e3143271ac69471172f64`. [Exact-head CI](https://github.com/Mrjoel97/ProjectX/actions/runs/38759580384) and [main CI](https://github.com/Mrjoel97/ProjectX/actions/runs/38760253262) passed. The corrected full suites passed 4,511 backend tests, 1,046 web tests with two existing skips, and 2,629 tests in the other packages: 8,186 passed, two skipped. All 12 typechecks, lint, 22 offline gates, operator regressions, planning checks and production build passed. The earlier single vertical evaluator-pin failure was corrected by regenerating its identity; its four tests passed before the complete hosted rerun.
+
+[Release run 38760903041](https://github.com/Mrjoel97/ProjectX/actions/runs/38760903041) passed the authentication configuration gate, Vercel build/upload, Convex dry-run, committed-generated-types check, origin pinning, backend deployment to `opulent-octopus-494`, registry seed, staged probe, promotion and durable-origin check. Independent Vercel inspection confirmed READY production artifact `dpl_9N1jDxAZFDthA3M8gyTxhudC5DKy` serves `https://www.pikar-ai.com`. Previous frontend rollback reference: `dpl_HsdwHaM1iTUCpUv6fC52GEjgQh5J`; previous backend revision: `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`. These are references, not proof of a rehearsed rollback or a safe reversal of data writes.
+
+Postflight HTTP checks returned 200 HTML for `/`, `/signin`, `/signup`, `/privacy` and `/terms`; home and legal pages contain the approved support address. One public native password-recovery request for the authorized mailbox was accepted by the deployed app. It changed no password and did not log a code or token. The owner confirmed this mailbox uses Google sign-in only and received no recovery email, consistent with the non-enumerating response for an absent password account. A complete isolated password signup/recovery/session drill remains pending; this negative account case is not evidence of password-account delivery.
+
+The temporary production preflight branch was deleted after its controlled test; evidence runs remain available. The owner confirmed voice sessions ended and uploads completed for cutover, then supplied staging deployment `woozy-wren-368` in the same Convex project. Usable staging release access is being checked separately; production credentials must not be reused for it. Voice/foundation live acceptance, hosted upload throughput, erasure/provider reconciliation and rollback drills remain unqualified. The release does not enable foundation/new voice sessions or commercial billing. Follow-up evidence-only documentation changes do not change the deployed runtime revision above.
