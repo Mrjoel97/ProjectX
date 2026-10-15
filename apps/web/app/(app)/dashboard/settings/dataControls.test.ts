@@ -175,6 +175,9 @@ test("download retains files across same-table and later-table pages, including 
     expect(exported.omitted).toEqual({ authAccounts: "credentials omitted" });
     expect(exported.limits).toEqual({ pageSize: 100, totalRows: 3, truncated: true });
     expect(container.textContent).toContain("this file is partial");
+    expect(container.textContent).toContain("anyone with a file link can access it");
+    expect(container.textContent).toContain("Save your files before erasing your data");
+    expect(container.textContent).not.toMatch(/time-limited|links\s+expire/i);
     expect(click).toHaveBeenCalledOnce();
   } finally {
     await act(async () => root.unmount());

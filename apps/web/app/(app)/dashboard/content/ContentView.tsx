@@ -639,10 +639,9 @@ function ImageThumb({ vaultDocId, title }: { vaultDocId: string; title: string }
     );
   }
   return (
-    // A signed, short-lived storage URL is not a static asset: next/image would need the Convex
-    // host whitelisted in next.config and would then cache a URL that expires. The Vault's own
-    // PreviewModal renders stored images the same way, for the same reason.
-    // biome-ignore lint/performance/noImgElement: signed storage URL, not an optimisable asset
+    // Render the tenant-authorized Convex file URL directly, as Vault previews do, without
+    // routing this bearer capability through an image optimizer. It does not automatically expire.
+    // biome-ignore lint/performance/noImgElement: direct stored-file rendering without an optimizer
     <img
       src={url}
       alt={title}
