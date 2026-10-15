@@ -1,5 +1,7 @@
 # Playbook: Production Beta Readiness (25-10)
 
+Release credential isolation (2026-10-15): checkout disables persisted GitHub credentials. Convex and Vercel deployment tokens are scoped to the steps that use them; dependency/CLI installation receives neither. Vercel build still requires its token and pulled runtime settings remain sensitive. The exact-main-SHA CI gate, ordered backend deployment, staged probe and explicit promotion marker remain binding.
+
 Last verified: 2026-09-12 — the free-gate registry also runs the Phase 23 mutation harness's
 lightweight patch-engine/anchor self-check. Its isolated full mutation replay requires explicit
 `--run`; CI does not start that replay, models or operator actions through the free mode.

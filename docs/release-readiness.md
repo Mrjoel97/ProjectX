@@ -6,7 +6,7 @@ Current production runtime: `6da1bd0711870cb6eea46d87dac149414b304184`, deployed
 
 | Gate | Owner role | Current state | Required closure evidence |
 |---|---|---|---|
-| Operations guide | Release engineer | Drafted; operational drill pending | Fresh setup, staging release and recovery using only the guide |
+| Operations guide | Release engineer | Current/previous exact-revision local setup and restoration rehearsals passed; hosted recovery pending | Fresh setup, staging release and recovery using only the guide |
 | Release configuration | Release engineer | Exact-SHA CI, production configuration gate, Convex dry-run/generated-type check, deploy/seed, staged probe and promotion passed at 6da1bd0; rollback drill pending | Exact SHA, configuration check, environment protections, successful staged promotion and rollback |
 | External delivery | Backend engineer | Implemented locally: durable claims/receipts and manual uncertainty review; live reconciliation pending | Durable attempt state, no blind resend, concurrent/crash/timeout tests and controlled provider reconciliation |
 | Cost admission | Backend engineer | Implemented paid admission, server-owned voice control and strict PCM duration bounds locally; live provider evidence open | Atomic reservations, all paid callers migrated, idempotent settlement, uncertain holds, provider reconciliation |
@@ -181,3 +181,11 @@ Evidence owner: Codex acting on the repository owner's instructions. Production 
 | Isolated account self-deletion | Self-deletion succeeded | Independently verify storage blob absence and remaining RAG/provider cleanup before closing erasure |
 
 Native drill outcomes are operator-observed evidence; this document retains no test emails, account IDs, storage IDs, codes or tokens. Their independent cleanup proof remains pending. Production foundation onboarding and controlled voice remain off; billing remains off by owner instruction. No qualified browser/microphone session exists, and no live voice or six-document onboarding acceptance is claimed by these tests.
+
+## Continued qualification preparation — 2026-10-15
+
+Credential-free local rehearsals archived production `6da1bd0711870cb6eea46d87dac149414b304184` and previous runtime `c2cf18c2cbcf4d16df4e3143271ac69471172f64` into separate fresh directories. Both frozen offline installs and all twelve uncached package typechecks passed. Both retained lockfile SHA-256 `6ccff58bc35477306e76e41e0155fb92a5c6bbdd6dbffae7dee3dcb407121663`. Local artifacts: `.tmp/release-rehearsal-iRC4Nf/evidence.json` and `.tmp/release-rehearsal-HZnaTX/evidence.json`. No codegen, provider request or deployment ran; this is local restoration evidence, not a hosted rollback.
+
+Reusable native foundation and synthetic staging privacy runners now keep credentials and fixture metadata out of public workflow output. Foundation evidence assertions compare exact reviewed content/hash, provenance, stored revisions and Blueprint references. Nineteen Node regression tests passed. Three additional backend lifecycle tests passed for erasure racing a storage write, persisted session expiry and installed-provider email-code expiry. The expiry tests advance a local clock; they do not establish elapsed hosted retention. The privacy runner still requires an actual staging execution, and synthetic admin-context cleanup must not be reported as native account self-deletion.
+
+Graph maintenance limitation: `graphify update .` could not run because the executable is unavailable in this workstation. The existing Convex edge fixup completed without changing the graph; it is not a replacement for a full AST refresh.

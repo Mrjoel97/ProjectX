@@ -12,6 +12,7 @@
     "packages/backend/convex/foglamp.test.ts"
   ],
   "ci-gate.md": [
+    "scripts/rehearse-release-local.mjs",
     ".github/workflows/ci.yml",
     "package.json",
     "turbo.json",
@@ -36,6 +37,7 @@
     "apps/web/app/(auth)/PasswordChallenge.tsx"
   ],
   "authorization.md": [
+    "packages/backend/convex/privacyLifecycle.test.ts",
     "packages/backend/convex/lib/functions.ts",
     "packages/backend/convex/lib/tenantLifecycle.ts",
     "packages/backend/convex/uploads",
@@ -91,7 +93,10 @@
     "packages/backend/convex/goals.test.ts",
     "packages/core/src/foundation",
     "packages/backend/convex/foundation",
-    "packages/backend/convex/lib/foundationValidators"
+    "packages/backend/convex/lib/foundationValidators",
+    "packages/backend/scripts/foundationEvidence.mjs",
+    "packages/backend/scripts/foundationEvidence.test.mjs",
+    "packages/backend/scripts/run-foundation-qualification.mjs"
   ],
   "agent-runtime.md": [
     "packages/backend/convex/opsSignals.ts",
@@ -249,6 +254,8 @@
     "packages/backend/convex/retrievalBounds.test.ts"
   ],
   "audit-dead-letter.md": [
+    "packages/backend/scripts/run-privacy-staging.mjs",
+    "packages/backend/scripts/privacyStaging.test.mjs",
     "packages/backend/convex/researchControl",
     "packages/core/src/researchControl",
     "packages/core/src/tenantData.ts",

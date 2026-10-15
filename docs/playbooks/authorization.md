@@ -1,3 +1,5 @@
+> Verification 2026-10-15 — `privacyLifecycle.test.ts` passes three local regressions: an admitted storage operation crossing the erasure boundary compensates only its own blob; reset-session validation rejects at the persisted session expiration across query, mutation and action; the installed Password provider rejects an expired code after advancing the test clock without reading or editing verification-code rows. These are deterministic local interleavings and simulated-clock evidence, not hosted JWT expiry, live concurrency or seven-day elapsed retention proof. No production authorization bypass or new fixture endpoint was added.
+
 # Playbook: Authorization (tenancy + ownership)
 
 > Last verified: 2026-10-15 — existing tenant/owner boundary tests and account export/deletion tests were rerun. Password verification/reset now has real framework lifecycle tests (mocked sender); verification and recovery do not grant owner or change tenant identity.
