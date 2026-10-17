@@ -1,9 +1,7 @@
-name: observe-staging-retention
+name: observe-staging-retention-now
 "on":
-  workflow_dispatch:
-  schedule:
-    # One actual seven-day observation; code below excludes future annual executions.
-    - cron: "30 11 24 10 *"
+  push:
+    branches: [codex/staging-retention-observe-20261017]
 permissions:
   contents: read
   actions: read
@@ -17,14 +15,12 @@ jobs:
       group: staging-qualification
       cancel-in-progress: false
     steps:
-      - name: Bound scheduled observation to 2026
+      - name: Allow this isolated read-only observation
         id: window
         env:
           EVENT: ${{ github.event_name }}
         run: |
-          if [ "$EVENT" = "workflow_dispatch" ] || [ "$(date -u +%F)" = "2026-10-24" ]; then
-            echo 'allowed=true' >> "$GITHUB_OUTPUT"
-          fi
+          echo 'allowed=true' >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v4
         if: steps.window.outputs.allowed == 'true'
         with:
@@ -33,7 +29,7 @@ jobs:
         if: steps.window.outputs.allowed == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_SHA: 5643be381e3517db81b9167bd249c9afd76e1c0a
         run: |
           node <<'NODE'
           (async()=>{
@@ -47,7 +43,7 @@ jobs:
       - uses: actions/checkout@v4
         if: steps.window.outputs.allowed == 'true'
         with:
-          ref: ${{ github.sha }}
+          ref: 5643be381e3517db81b9167bd249c9afd76e1c0a
           persist-credentials: false
       - run: corepack enable
         if: steps.window.outputs.allowed == 'true'
