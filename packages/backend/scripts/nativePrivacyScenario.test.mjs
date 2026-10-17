@@ -1,9 +1,73 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { eraseNativeFixture, inspectNativeExport } from "./nativePrivacyScenario.mjs";
+import {
+  eraseNativeFixture,
+  inspectNativeExport,
+  uploadNativePrivacyFile,
+} from "./nativePrivacyScenario.mjs";
 
 const uid = "synthetic-user";
 const ref = (x) => x;
+test("native small file validates relay before owned ingestion and exports exact bytes", async () => {
+  const originalFetch = globalThis.fetch;
+  let bytes;
+  let uploaded;
+  let posts = 0;
+  const origin = "https://pikar-ai-convex-gpbrsadzc-joelferuzi-gmailcoms-projects.vercel.app";
+  globalThis.fetch = async (_url, options) => {
+    if (!options.method)
+      return new Response(bytes, { headers: { "content-length": String(bytes.length) } });
+    if (options.method === "OPTIONS")
+      return new Response(null, {
+        status: options.headers.Origin === origin ? 204 : 403,
+        headers: { "access-control-allow-origin": origin },
+      });
+    posts++;
+    bytes = options.body;
+    return posts === 1
+      ? new Response(JSON.stringify({ storageId: "blob-a" }), {
+          headers: { "access-control-allow-origin": origin },
+        })
+      : new Response(null, { status: 400 });
+  };
+  try {
+    const client = {
+      query: async (name) =>
+        name === "tenantExport:exportTenantData"
+          ? { header: { tenantId: uid } }
+          : { status: "ready", text: uploaded.text },
+      mutation: async (name, args) => {
+        if (name === "requests:generateUploadUrl")
+          return "https://woozy-wren-368.convex.site/uploads?ticket=synthetic";
+        assert.equal(posts, 2);
+        uploaded = args;
+        return { vaultDocId: "doc-a", deduped: false };
+      },
+    };
+    const result = await uploadNativePrivacyFile({
+      client,
+      ref,
+      expectedUserId: uid,
+      createdUserId: uid,
+      freshlyCreated: true,
+    });
+    assert.equal(result.evidence.nativeFileIndexed, true);
+    assert.equal(result.expectedFile.size, bytes.length);
+    const rows = pages();
+    rows[0].files[0].url = "https://woozy-wren-368.convex.cloud/api/storage/synthetic";
+    let n = 0;
+    const exported = await inspectNativeExport({
+      client: { query: async () => rows[n++] },
+      ref,
+      expectedUserId: uid,
+      expectedTables: ["vaultDocuments", "users"],
+      expectedFiles: [result.expectedFile],
+    });
+    assert.equal(exported.evidence.expectedFileBodiesVerified, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 function pages() {
   return [
     {

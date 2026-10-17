@@ -1,10 +1,100 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { exportableTables, storageIdsIn } from "../../core/src/tenantData.ts";
 
 const assert = (ok) => {
   if (!ok) throw Error("NATIVE_PRIVACY_ASSERTION_FAILED");
 };
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+/** Explicitly invoked only after reviewed staging/provider admission. Ingestion may embed. */
+export async function uploadNativePrivacyFile({
+  client,
+  ref,
+  expectedUserId,
+  createdUserId,
+  freshlyCreated,
+}) {
+  assert(freshlyCreated === true && expectedUserId === createdUserId);
+  const first = await client.query(ref("tenantExport:exportTenantData"), {});
+  assert(first.header?.tenantId === expectedUserId);
+  const origin = "https://pikar-ai-convex-gpbrsadzc-joelferuzi-gmailcoms-projects.vercel.app";
+  const url = await client.mutation(ref("requests:generateUploadUrl"), {});
+  const target = new URL(url);
+  assert(
+    target.origin === "https://woozy-wren-368.convex.site" &&
+      target.pathname === "/uploads" &&
+      target.searchParams.has("ticket"),
+  );
+  const preflight = await fetch(url, {
+    method: "OPTIONS",
+    headers: {
+      Origin: origin,
+      "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Headers": "content-type",
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+  assert(
+    preflight.status === 204 && preflight.headers.get("access-control-allow-origin") === origin,
+  );
+  const foreign = await fetch(url, {
+    method: "OPTIONS",
+    headers: { Origin: "https://foreign.invalid", "Access-Control-Request-Method": "POST" },
+    signal: AbortSignal.timeout(15000),
+  });
+  assert(foreign.status === 403);
+  const text = `Synthetic privacy qualification document ${randomUUID()}. This file contains no customer information. Its bytes must be exportable and erased with this disposable account.`;
+  const bytes = Buffer.from(text, "utf8");
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { Origin: origin, "Content-Type": "text/plain" },
+    body: bytes,
+    signal: AbortSignal.timeout(30000),
+  });
+  assert(response.ok && response.headers.get("access-control-allow-origin") === origin);
+  const receipt = await response.json();
+  assert(typeof receipt.storageId === "string");
+  const replay = await fetch(url, {
+    method: "POST",
+    headers: { Origin: origin, "Content-Type": "text/plain" },
+    body: bytes,
+    signal: AbortSignal.timeout(15000),
+  });
+  assert(replay.status === 400);
+  const document = await client.mutation(ref("vault:vaultUpload"), {
+    storageId: receipt.storageId,
+    filename: "Native privacy qualification.txt",
+    mimeType: "text/plain",
+    size: bytes.length,
+    contentHash: hash(bytes),
+    text,
+  });
+  assert(document?.vaultDocId && document.deduped === false);
+  let ready = false;
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const row = await client.query(ref("vault:vaultDocText"), { vaultDocId: document.vaultDocId });
+    assert(row && row.status !== "failed");
+    if (row.status === "ready") {
+      assert(row.text === text);
+      ready = true;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  assert(ready);
+  return {
+    expectedFile: { storageId: receipt.storageId, size: bytes.length, sha256: hash(bytes) },
+    vaultDocId: document.vaultDocId,
+    evidence: {
+      nativeSmallFileUploaded: true,
+      allowedOriginPreflightVerified: true,
+      foreignOriginRefused: true,
+      uploadTicketReplayRefused: true,
+      nativeFileIndexed: true,
+      browserTransportQualified: false,
+    },
+  };
+}
 
 // Same-process handoff only. Callers must never serialize this return value or errors.
 // No provider calls, admin identity, implicit account deletion, or credentials are created here.
