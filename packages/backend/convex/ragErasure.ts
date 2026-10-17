@@ -7,7 +7,11 @@ import { internalMutation } from "./lib/tenantLifecycle";
 const stepRef = makeFunctionReference<"mutation", { tenantId: string }, null>("ragErasure:step");
 
 /** Native erasure only: the fence and scheduling commit with the caller's page deletion. */
-export async function ensureRagErasure(ctx: MutationCtx, tenantId: string): Promise<boolean> {
+export async function ensureRagErasure(
+  ctx: MutationCtx,
+  tenantId: string,
+  resume = false,
+): Promise<boolean> {
   const fence = await ctx.db
     .query("authRevocations")
     .withIndex("by_userId", (q) => q.eq("userId", tenantId))
@@ -16,7 +20,7 @@ export async function ensureRagErasure(ctx: MutationCtx, tenantId: string): Prom
   if (!fence.ragCleanup) {
     await ctx.db.patch(fence._id, { ragCleanup: { state: "pending" } });
     await ctx.scheduler.runAfter(0, stepRef, { tenantId });
-  } else if (fence.ragCleanup.state === "stalled") {
+  } else if (resume && fence.ragCleanup.state === "stalled") {
     // Operator resume only observes the existing component operation; never resends it.
     await ctx.db.patch(fence._id, {
       ragCleanup: { ...fence.ragCleanup, state: "pending", polls: 0 },
@@ -30,7 +34,7 @@ export async function ensureRagErasure(ctx: MutationCtx, tenantId: string): Prom
 export const start = internalMutation({
   args: { tenantId: v.string() },
   handler: async (ctx, { tenantId }): Promise<null> => {
-    if (!(await ensureRagErasure(ctx, tenantId))) throw new Error("TENANT_ERASURE_REQUIRED");
+    if (!(await ensureRagErasure(ctx, tenantId, true))) throw new Error("TENANT_ERASURE_REQUIRED");
     return null;
   },
 });

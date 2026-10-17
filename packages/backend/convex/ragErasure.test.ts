@@ -236,6 +236,14 @@ test("stalled component work stops after sixty polls and resume only observes it
     pendingEntryId: fixture.entries[0],
     polls: 60,
   });
+  await t.mutation(internal.tenantDelete.deleteTenantDataPage, {
+    tenantId: user,
+    userId: user,
+    cursor: { tableIndex: deletableTables().indexOf("vaultDocuments") },
+  });
+  expect((await t.run((ctx) => ctx.db.query("authRevocations").first()))?.ragCleanup?.state).toBe(
+    "stalled",
+  );
   await t.finishAllScheduledFunctions(vi.runAllTimers);
   expect(await t.query(fixtureApi.inspect, { tenant: user })).toMatchObject({
     namespaces: 1,
