@@ -61,8 +61,9 @@ country alone does not settle them. Commercial billing remains disabled by owner
 
 ### Seven-day transcript retention observation
 
-Deployment and feature activation do not begin a retention observation. No actual checkpoint
-creation/expiry pair has yet been recorded for this gate. Use a dedicated staging interview and
+Deployment and feature activation do not begin a retention observation. The isolated synthetic
+staging observation started on 2026-10-17; its timestamp evidence and future cleanup window are
+recorded in the readiness matrix. Use a dedicated staging interview and
 non-sensitive synthetic final text; do not delete its account or discard that interview during the
 observation, because those cleanup paths would invalidate expiry evidence.
 
@@ -76,6 +77,14 @@ observation, because those cleanup paths would invalidate expiry evidence.
    status. Missing evidence or an absent row without the before-expiry observation is insufficient.
 4. Separately exercise discard, authenticated export and account erasure. These are independent
    cleanup scenarios and cannot replace seven elapsed days of retention evidence.
+
+The current synthetic fixture has no native user account. Its random tenant reference remains
+private in staging. For a future operator check, read at most 201 foundation interviews, require
+at most 200 total rows and exactly one `retention-qualification-` tenant prefix, then derive the
+tenant privately and use the transcript tenant index with a two-row bound. Refuse incomplete or
+ambiguous inventory; emit only counts/timestamps/booleans. Never recreate a missing checkpoint or
+retry its creation after expiry, which would invalidate the observation. Preserve the fixture
+until the expiry observations are complete, then clean up only that isolated synthetic draft.
 
 ### Configuration ownership
 

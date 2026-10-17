@@ -18,7 +18,7 @@ Current production runtime: `be63035592c7333d04322af40eeb4a3d380244ca`, verified
 | Voice onboarding | Product/frontend/backend | Production off; staging foundation enabled after config/skill/drain checks; live voice acceptance pending | Resumable interview, typed fallback, restricted tools, admission budget, real browser/provider evidence |
 | Foundation publication | Product/backend | Implemented with six stable document IDs and exact review hash; indexing regressions passed locally | Six documents, provenance, explicit revision approval, atomic publication, searchable approved content |
 | Blueprint consistency | Backend engineer | Atomic foundation/Blueprint publication implemented; no Blueprint embedding | Matching published revisions, bounded summary and references, no Blueprint embedding loop |
-| Transcript retention | Security/backend engineer | Seven-day purge and export/deletion coverage implemented; live purge drill pending | Seven-day checkpoint purge, no application-stored audio, discard/export/deletion coverage |
+| Transcript retention | Security/backend engineer | Synthetic staging clock started 2026-10-17; expires 2026-10-24 10:18:29.493 UTC; actual purge/native lifecycle evidence pending | Seven-day checkpoint purge, no application-stored audio, discard/export/deletion coverage |
 | Billing and legal | Business owner + reviewer | Billing deliberately disabled; pikar-ai/Tanzania/contact configured; postal address pending | Confirmed business inputs and reviewed public content before commercial activation |
 | Audit WORM | Service operator | WORM/AWS names absent in production preflight; export remains disabled | Configured retention, export/acknowledgement and recovery evidence; otherwise feature remains disabled |
 | Connectors | Provider operator | Per-provider gates remain binding | Current connection, scope/expiry/revoke/read evidence for each enabled provider |
@@ -79,8 +79,9 @@ refused its accessibility snapshot. The owner requested continued direct fixes. 
 read-only staging workflow subsequently obtained the account/invite state without publishing fixture
 identifiers; its results are recorded below. No account conclusion is inferred from the browser refusal.
 Source review found actionable voice lifecycle and foundation correction defects, recorded below.
-No seven-day checkpoint observation start has been recorded. Follow the private timestamp/evidence
-protocol and accountable-owner/legal records in [operations](operations.md#configuration-planes).
+The synthetic seven-day checkpoint observation has now started; actual expiry remains pending.
+Follow its timestamp/evidence protocol and accountable-owner/legal records in
+[operations](operations.md#configuration-planes).
 The original signup diagnosis, native acceptance and live operational gates remain unchecked.
 
 ## Onboarding reliability corrections — 2026-10-17
@@ -157,6 +158,30 @@ committed account creation; verification delivery is not the next branch to inve
 submitted email/code and the original admission failure remain unproven; do not claim signup fixed,
 redeem/reset the invite or alter mail configuration based on these booleans. No account,
 configuration or provider write was performed. The temporary diagnostic branch is retained.
+
+[Retention start run 39024375484](https://github.com/Mrjoel97/ProjectX/actions/runs/39024375484)
+used the same CI-pinned source and isolated final-step staging credential. Exact deployment,
+foundation-enabled/voice-disabled and absent fixture switches were checked. Before any write,
+bounded 201-row reads proved both relevant inventories complete within 200 rows and no earlier
+retention-prefix fixture. A new random administrator-impersonated synthetic tenant created only an
+unpublished interview and one fixed, non-sensitive transcript checkpoint through existing functions;
+it created no native account and invoked no model/provider/configuration/deployment operation.
+Indexed reads confirmed one checkpoint and an exact seven-day lifetime; repeating the same event
+preserved its count, creation time and expiry. Fixture identifiers/text remained private.
+
+| Retention observation | Actual UTC timestamp / state |
+|---|---|
+| Checkpoint created | 2026-10-17 10:18:29.493 UTC |
+| Stored expiry | 2026-10-24 10:18:29.493 UTC |
+| First eligible hourly cleanup tick | 2026-10-24 11:15 UTC (14:15 Africa/Dar_es_Salaam) |
+| Current result | Start and same-event replay verified; seven elapsed days and cleanup unverified |
+
+Keep this synthetic fixture intact. Observe presence before expiry and absence after the eligible
+scheduled sweep/continuations before closing retention. Use the bounded, uniqueness-checked private
+lookup in the operations guide; refuse ambiguity rather than inventing an absence result. No clock
+advance, shortened retention or simulated purge qualifies this elapsed-time gate. Native transcript
+export/discard/erasure and provider retention remain separate scenarios. The temporary start branch
+is retained and is not scheduled to rerun.
 
 ## Implemented code checklist
 
