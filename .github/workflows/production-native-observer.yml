@@ -46,7 +46,11 @@ jobs:
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
         working-directory: release
-      - name: Read only pagination capability diagnostic
+      - name: Capture exact fresh native fixture references privately
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-        run: node operator/.github/scripts/production-native-observer.mjs diagnose
+        run: node operator/.github/scripts/production-native-observer.mjs capture
+      - name: Wait for local native erasure and verify physical absence
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: node operator/.github/scripts/production-native-observer.mjs verify
