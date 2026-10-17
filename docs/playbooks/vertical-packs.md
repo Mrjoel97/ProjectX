@@ -1,4 +1,4 @@
-> Last verified: 2026-10-17 — regenerated the native evaluator fingerprint after reviewed audit/schema execution changes. The six-lane, 40-case corpus and source fixtures are unchanged. Offline fingerprint checks are not new live qualification.
+> Last verified: 2026-10-17 — regenerated the native evaluator fingerprint after generated-file lifecycle ownership changed. The six-lane, 40-case corpus and source fixtures are unchanged. Offline fingerprint checks are not new live qualification.
 
 # Optional vertical packs
 
