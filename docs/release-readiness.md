@@ -2,20 +2,20 @@
 
 Last reviewed: 2026-10-17. Implementation starting baseline: `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
 Release implementation and deployment evidence: Codex, acting on the repository owner's instructions. Ongoing operator and specialist review assignments remain open under the owner roles below; deployment does not close those operational ownership tasks.
-Current production runtime: `be63035592c7333d04322af40eeb4a3d380244ca`, verified 2026-10-17 in [run 39023562539](https://github.com/Mrjoel97/ProjectX/actions/runs/39023562539). Local implementation and tests never imply live provider verification. Production voice/foundation activation and the remaining drills below are still open; staging foundation is enabled for controlled acceptance.
+Current production runtime: `a129b884445482625b1e8f2a236744fb2a0f2515`, verified 2026-10-17 in [run 39026090675](https://github.com/Mrjoel97/ProjectX/actions/runs/39026090675). Local implementation and tests never imply live provider verification. Production voice/foundation activation and the remaining drills below are still open; staging foundation is enabled for controlled acceptance.
 
 | Gate | Owner role | Current state | Required closure evidence |
 |---|---|---|---|
 | Operations guide | Release engineer | Current/previous exact-revision local setup and restoration rehearsals passed; hosted recovery pending | Fresh setup, staging release and recovery using only the guide |
-| Release configuration | Release engineer | Exact-SHA CI, production configuration gate, Convex dry-run/generated-type check, deploy/seed, staged probe and promotion passed at be63035 with step-scoped credentials; rollback drill pending | Exact SHA, configuration check, environment protections, successful staged promotion and rollback |
+| Release configuration | Release engineer | Exact-SHA CI, production configuration gate, Convex dry-run/generated-type check, deploy/seed, staged probe and promotion passed at a129b88 with step-scoped credentials; rollback drill pending | Exact SHA, configuration check, environment protections, successful staged promotion and rollback |
 | External delivery | Backend engineer | Implemented locally: durable claims/receipts and manual uncertainty review; live reconciliation pending | Durable attempt state, no blind resend, concurrent/crash/timeout tests and controlled provider reconciliation |
-| Cost admission | Backend engineer | Paid admission and strict voice bounds tested; live OpenRouter embedding usage/settlement exercised in isolated staging; voice/invoice reconciliation pending | Atomic reservations, all paid callers migrated, idempotent settlement, uncertain holds, provider reconciliation |
+| Cost admission | Backend engineer | Live staging embedding settlement and one synthetic voice response ledger verified; retained initial voice hold, invoice and failure-mode reconciliation remain open | Atomic reservations, all paid callers migrated, idempotent settlement, uncertain holds, provider reconciliation |
 | Identity | Security/backend engineer | Isolated native signup verification, replay rejection, recovery/reset and old/new JWT checks passed; expiry and browser acceptance remain open | Cross-tenant negative tests, password verification/recovery, privilege and callback checks |
 | Privacy/export/deletion | Security/backend engineer | Synthetic content/file export and isolation passed; native self-deletion plus independent absence of its five known blobs/user/receipts verified; native export/in-flight/provider evidence open | Typed operational events, sensitive-data sink tests, all new content included in export/deletion |
 | Graph retrieval | Backend engineer | Bounded indexed traversal and stale-revision filtering tested locally | Adjacency-only reads, cycle/high-degree/isolation regression tests, read-budget evidence |
 | Other request scans | Backend engineer | Indexed selection, cursor pagination, bounded working queues and durable cleanup implemented; inventory complete locally | Each scan bounded, paginated or moved to checkpointed work |
 | Module boundaries | Backend engineer | Research tools, PDF renderer and current-media readers extracted in addition to traversal/foundation/stock domains; regressions passed | Incremental pure-domain extraction with behavioral regression coverage |
-| Voice onboarding | Product/frontend/backend | Production off; staging foundation enabled after config/skill/drain checks; live voice acceptance pending | Resumable interview, typed fallback, restricted tools, admission budget, real browser/provider evidence |
+| Voice onboarding | Product/frontend/backend | Production off; staging synthetic tool-free voice connected, received audio and terminated with trusted usage; native microphone/onboarding acceptance pending | Resumable interview, typed fallback, restricted tools, admission budget, real browser/provider evidence |
 | Foundation publication | Product/backend | Implemented with six stable document IDs and exact review hash; indexing regressions passed locally | Six documents, provenance, explicit revision approval, atomic publication, searchable approved content |
 | Blueprint consistency | Backend engineer | Atomic foundation/Blueprint publication implemented; no Blueprint embedding | Matching published revisions, bounded summary and references, no Blueprint embedding loop |
 | Transcript retention | Security/backend engineer | Synthetic staging clock started 2026-10-17; expires 2026-10-24 10:18:29.493 UTC; actual purge/native lifecycle evidence pending | Seven-day checkpoint purge, no application-stored audio, discard/export/deletion coverage |
@@ -24,7 +24,7 @@ Current production runtime: `be63035592c7333d04322af40eeb4a3d380244ca`, verified
 | Connectors | Provider operator | Per-provider gates remain binding | Current connection, scope/expiry/revoke/read evidence for each enabled provider |
 | Recurrence | Workflow operator | Existing gate remains binding | Required actual DST/OAuth/provider traces; do not enable on simulated evidence alone |
 | Skill activation | Model operator | Per-skill evidence required | Seed/version identity, evaluation, activation and rollback evidence |
-| CI portability/build | Release engineer | Release be63035 passed PR45/main CI and production workflow: 8,220 passed, two skipped, plus 34 operator regressions; later documentation CI exposed an intermittent workflow-test worker teardown error despite all assertions passing | Clean Windows/Linux checks, scheduled-test teardown ownership and resolved or dispositioned build warnings |
+| CI portability/build | Release engineer | Release a129b88 passed PR46/main CI and production workflow: 8,224 passed, two skipped, plus 34 operator regressions; both full CI runs had no worker error after dispatch scheduler ownership cleanup | Continue full-suite qualification; targeted cleanup does not prove every historical teardown cause resolved |
 
 ## Delivery order
 
@@ -93,6 +93,65 @@ The synthetic seven-day checkpoint observation has now started; actual expiry re
 Follow its timestamp/evidence protocol and accountable-owner/legal records in
 [operations](operations.md#configuration-planes).
 The original signup diagnosis, native acceptance and live operational gates remain unchecked.
+
+## Synthetic staging voice provider evidence — 2026-10-17
+
+[Voice run 39026259737](https://github.com/Mrjoel97/ProjectX/actions/runs/39026259737),
+job `117377727268`, succeeded using reviewed source
+`3d877c6e8dedc80ebb6bac552c024a5703a16101` and temporary workflow revision `6b40847`.
+The actual job output reported `toolFree`, `controlReady`, `trustedUsageObserved`,
+`connected` and `receivedAudio` as true. The synthetic session exercised the provider
+transport and server-controlled response path without business tools or a native microphone session.
+
+The ledger admitted 184 cents: the initial 100-cent hold plus one 84-cent response reservation.
+One trusted response reported one cent of actual cost; `ledgerComplete` and `ledgerVerified`
+were true. The initial 100-cent hold remained retained. These are the application's trusted-usage
+and reservation observations, not a reconciled provider invoice or proof that the entire session
+cost only one cent. Cleanup reported `providerTerminationConfirmed` and `originalFlagRestored`
+as true; `nativeAcceptance` was false. Production activation and billing were unchanged.
+
+This closes this isolated tool-free connection, audio receipt, acknowledged control, single-response
+settlement and successful termination scenario only. Native microphone quality, interruption,
+reconnect, business-tool exchange, six-document onboarding, maximum-duration watchdog behavior,
+termination failure/outage recovery, unknown-usage holds and provider invoice reconciliation remain
+open. The successful termination is not evidence of all failure modes or a hard outage ceiling.
+The bounded signup diagnostic still shows no matching user and an unredeemed invitation; source
+review did not reproduce its cause. Neither this provider drill nor the UI fixes establish that
+native signup is fixed or that missing verification mail was its cause.
+
+## PR46 correction navigation and scheduler ownership — 2026-10-17
+
+[PR46](https://github.com/Mrjoel97/ProjectX/pull/46) exact head
+`3d877c6e8dedc80ebb6bac552c024a5703a16101` passed
+[CI 39025462441](https://github.com/Mrjoel97/ProjectX/actions/runs/39025462441).
+Merged revision `a129b884445482625b1e8f2a236744fb2a0f2515` passed
+[main CI 39025828381](https://github.com/Mrjoel97/ProjectX/actions/runs/39025828381) and
+[production release 39026090675](https://github.com/Mrjoel97/ProjectX/actions/runs/39026090675).
+Both revisions share tree `3e2f602a2f5bad1ecc465082ffa5d41345eb32ba`. The full suite passed
+8,224 package/application tests with two existing skips, plus 34 operator regressions. Neither
+PR nor main CI reported the prior worker error. Dispatch now owns its real scheduler timers and
+harnesses; 130 dispatch tests, including real pending-cancellation and active-work barriers on
+success/error paths, passed locally. No timeout, pool or unhandled-error suppression was added.
+This is targeted cleanup and successful full-suite evidence, not proof that all historical
+worker-teardown causes are resolved. The earlier failed documentation CI remains recorded in the open cleanup task above.
+
+The UI follows the server's essential phase after a correction, allowing current facts to be
+reconfirmed before review. Its rendered regression covers the section selector. Backend runtime
+source is unchanged from PR45; the backend diff contains only the dispatch test.
+
+Independent postflight resolved READY production artifact `dpl_5oWEXKHhDdSAGbWpiiiMWgiR5GiH`
+at the merged SHA in the expected project. All four production aliases resolved to that artifact;
+home, signin, signup, privacy and terms returned HTTP 200 HTML. All 11 signin assets returned
+HTTP 200; inspection of the served bundle found the production Convex hostname and no staging hostname.
+
+A fresh staging-only preview of the exact PR head is READY at
+`https://pikar-ai-convex-hwvk2r03b-joelferuzi-gmailcoms-projects.vercel.app`, artifact
+`dpl_BYNCwSRefh5ZtRBrbDqk4NhyomaY`. All 2,784 archived blobs matched; all 11 served signin
+assets were inspected with the staging hostname present and production hostname absent. No staging
+backend redeployment was needed. No aliases, staging SITE_URL, feature flags or billing settings
+were changed by preview preparation. The earlier GP preview remains the coordinated signup origin.
+These checks do not establish native signup, microphone, authenticated export, six-document
+acceptance, elapsed retention, provider reconciliation or hosted rollback. Those gates remain open.
 
 ## Onboarding reliability corrections — 2026-10-17
 
