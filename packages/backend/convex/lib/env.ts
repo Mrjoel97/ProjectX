@@ -35,6 +35,12 @@ export type EnvSpec = {
 
 export const ENV_MANIFEST: readonly EnvSpec[] = [
   {
+    name: "NATIVE_ONBOARDING_PILOT",
+    tier: "feature",
+    whatBreaks:
+      "Optional operator-issued JSON grant for one native test tenant, valid for at most fifteen minutes; malformed or expired grants never open onboarding or live voice.",
+  },
+  {
     name: "VOICE_SERVER_CONTROL_VERIFIED",
     tier: "feature",
     whatBreaks:

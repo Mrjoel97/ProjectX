@@ -20,6 +20,7 @@ import {
   FOUNDATION_TRANSCRIPT_TTL,
   renderFoundation,
 } from "@pikar/core/foundation";
+import { foundationPilotExpiresAt } from "@pikar/core/foundationPilot";
 import { categoryFor } from "@pikar/vault";
 import { ConvexError, type Infer, v } from "convex/values";
 import { api, internal } from "./_generated/api";
@@ -39,8 +40,11 @@ import { currentProfileDoc, currentTierRow, validateAndWriteProfile } from "./on
 import { startIngest } from "./vaultIngest";
 import { rag } from "./vaultRag";
 
-const requireFoundationEnabled = () => {
-  if (process.env.FOUNDATION_ONBOARDING_ENABLED !== "1")
+const foundationEnabled = (tenantId: string) =>
+  process.env.FOUNDATION_ONBOARDING_ENABLED === "1" ||
+  foundationPilotExpiresAt(process.env.NATIVE_ONBOARDING_PILOT, tenantId) !== undefined;
+const requireFoundationEnabled = (tenantId: string) => {
+  if (!foundationEnabled(tenantId))
     throw new ConvexError({ code: "FOUNDATION_ONBOARDING_DISABLED" });
 };
 
@@ -55,7 +59,7 @@ const checkRevision = (row: Doc<"foundationInterviews"> | null, revision: number
 };
 export const enabled = tenantQuery({
   args: {},
-  handler: async (): Promise<boolean> => process.env.FOUNDATION_ONBOARDING_ENABLED === "1",
+  handler: async (ctx): Promise<boolean> => foundationEnabled(ctx.tenantId),
 });
 export const get = tenantQuery({
   args: {},
@@ -64,7 +68,7 @@ export const get = tenantQuery({
 export const begin = tenantMutation({
   args: {},
   handler: async (ctx): Promise<Id<"foundationInterviews">> => {
-    requireFoundationEnabled();
+    requireFoundationEnabled(ctx.tenantId);
     const existing = await read(ctx, ctx.tenantId);
     if (existing) return existing._id;
     const profile = await ctx.runQuery(api.onboarding.getProfile, {});
@@ -107,7 +111,7 @@ export const saveTurn = internalMutation({
     reply: v.string(),
   },
   handler: async (ctx, a): Promise<number> => {
-    requireFoundationEnabled();
+    requireFoundationEnabled(a.tenantId);
     const existing = await read(ctx, a.tenantId);
     if (existing?.answers.some((x) => x.eventId === a.answer.eventId)) return existing.revision;
     const row = checkRevision(existing, a.revision);
@@ -142,7 +146,7 @@ const answerForTenant = async (
     intent: "current" | "planned";
   },
 ): Promise<{ revision: number; reply: string; complete: boolean }> => {
-  requireFoundationEnabled();
+  requireFoundationEnabled(ctx.tenantId);
   if (
     !a.answer.trim() ||
     a.answer.length > FOUNDATION_MAX_TEXT ||
@@ -172,11 +176,14 @@ const answerForTenant = async (
   let slots = row.slots;
   let reply = "Saved as a draft. You can review your foundation or continue with another section.";
   if (a.section === "essentials" && a.intent === "current") {
-    if (!profile.oneLineDescription)
+    if (!profile.oneLineDescription) {
+      requireFoundationEnabled(ctx.tenantId);
       profile = await ctx.runAction(internal.onboarding.extractProfileInternal, {
         tenantId: ctx.tenantId,
         intakeText: a.answer,
       });
+    }
+    requireFoundationEnabled(ctx.tenantId);
     const turn = await ctx.runAction(internal.onboarding.converseInternal, {
       tenantId: ctx.tenantId,
       slots: { ...slots, oneLineDescription: profile.oneLineDescription },
@@ -221,7 +228,7 @@ export const answer = tenantAction({
 export const edit = tenantMutation({
   args: { revision: v.number(), profile: foundationProfile, answers: v.array(foundationAnswer) },
   handler: async (ctx, a): Promise<number> => {
-    requireFoundationEnabled();
+    requireFoundationEnabled(ctx.tenantId);
     const row = checkRevision(await read(ctx, ctx.tenantId), a.revision);
     if (
       a.answers.length > FOUNDATION_MAX_ANSWERS ||
@@ -283,7 +290,7 @@ export const checkpoint = tenantMutation({
     speaker: v.union(v.literal("user"), v.literal("agent")),
   },
   handler: async (ctx, a): Promise<null> => {
-    requireFoundationEnabled();
+    requireFoundationEnabled(ctx.tenantId);
     if (!/^[a-zA-Z0-9_-]{1,120}$/.test(a.eventId) || a.text.length > FOUNDATION_MAX_TEXT)
       throw new ConvexError({ code: "INVALID_CHECKPOINT" });
     if (!(await read(ctx, ctx.tenantId))) throw new ConvexError({ code: "NO_INTERVIEW" });
@@ -399,7 +406,7 @@ export const review = tenantQuery({
 export const publish = tenantMutation({
   args: { revision: v.number(), reviewHash: v.string() },
   handler: async (ctx, { revision, reviewHash }): Promise<{ docIds: Id<"vaultDocuments">[] }> => {
-    requireFoundationEnabled();
+    requireFoundationEnabled(ctx.tenantId);
     const row = checkRevision(await read(ctx, ctx.tenantId), revision);
     if (row.publishedRevision === revision && row.docIds) return { docIds: row.docIds };
     if (missingSlots(row.slots).length || !validateProfile(row.profile).ok)
@@ -626,10 +633,10 @@ export const answerFromVoice = internalAction({
     intent: v.union(v.literal("current"), v.literal("planned")),
   },
   handler: async (ctx, a): Promise<{ revision: number; reply: string; complete: boolean }> => {
-    requireFoundationEnabled();
     const session = await ctx.runQuery(internal.voice.getSession, { sessionId: a.sessionId });
     if (!session?.onboarding || session.status !== "active" || session.endsAt <= Date.now())
       throw new Error("VOICE_SESSION_INACTIVE");
+    requireFoundationEnabled(session.tenantId);
     const row = await ctx.runQuery(internal.foundation.getInternal, { tenantId: session.tenantId });
     if (!row) throw new Error("VOICE_INTERVIEW_MISSING");
     return answerForTenant(

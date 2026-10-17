@@ -1,10 +1,12 @@
 import { EventEmitter } from "node:events";
+import { getFunctionName } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
+import { run as runVoiceControl } from "./voiceControl";
 
 const behavior = vi.hoisted(() => ({
   missingUsage: false,
@@ -139,6 +141,63 @@ test("typed input received during a response gets an admitted follow-up after se
   const ledger = await t.run((ctx) => ctx.db.query("spendEvents").collect());
   expect(ledger.filter((e) => e.phase === "reserved").map((e) => e.amountCents)).toEqual([84, 84]);
   expect(ledger.filter((e) => e.phase === "actual")).toHaveLength(2);
+  expect((await t.run((ctx) => ctx.db.get(id)))?.hangupConfirmedAt).toBeDefined();
+});
+
+test("a reservation completing at the deadline never sends a new provider response", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status: 200 })),
+  );
+  const t = setup();
+  const now = Date.now();
+  const endsAt = now + 5000;
+  const id = await t.run((ctx) =>
+    ctx.db.insert("voiceSessions", {
+      tenantId: "voice_late_reservation",
+      onboarding: true,
+      controlled: true,
+      status: "active",
+      callId: "rtc_late_reservation",
+      startedAt: now,
+      endsAt,
+      createdAt: now,
+      inAudioTok: 0,
+      outAudioTok: 0,
+      textInTok: 0,
+      textOutTok: 0,
+    }),
+  );
+  const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+  let reservations = 0;
+  try {
+    await t.action(async (ctx) => {
+      const runMutation: typeof ctx.runMutation = async (ref, ...args) => {
+        const result = await ctx.runMutation(ref, ...args);
+        if (getFunctionName(ref) === "guardrails:reservePaidCall") {
+          reservations++;
+          // The real reservation commits before the action resumes at its deadline.
+          clock.mockReturnValue(endsAt);
+        }
+        return result;
+      };
+      // Convex's installed registered function exposes this handler at runtime;
+      // our lifecycle builder intentionally narrows its public TypeScript surface.
+      const worker = runVoiceControl as unknown as {
+        _handler(context: typeof ctx, args: { sessionId: typeof id }): Promise<void>;
+      };
+      await worker._handler({ ...ctx, runMutation }, { sessionId: id });
+    });
+  } finally {
+    clock.mockRestore();
+  }
+  expect(reservations).toBe(1);
+  expect(
+    behavior.sent.map((raw) => JSON.parse(raw)).filter((e) => e.type === "response.create"),
+  ).toEqual([]);
+  const ledger = await t.run((ctx) => ctx.db.query("spendEvents").collect());
+  expect(ledger.filter((e) => e.phase === "reserved").map((e) => e.amountCents)).toEqual([84]);
+  expect(ledger.filter((e) => e.phase === "actual" || e.phase === "refunded")).toEqual([]);
   expect((await t.run((ctx) => ctx.db.get(id)))?.hangupConfirmedAt).toBeDefined();
 });
 
@@ -290,4 +349,37 @@ test.each([
     mode === "overage" ? [97] : [],
   );
   expect(session?.inAudioTok).toBe(mode === "bad_ack" ? 0 : behavior.audioTokens);
+});
+
+test("pilot voice admits only onboarding for its tenant and refuses expiry before provider calls", async () => {
+  const t = setup(),
+    tenantId = "j57aaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const issuedAt = Date.now(),
+    expiresAt = issuedAt + 900000;
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  vi.stubEnv("VOICE_SERVER_CONTROL_VERIFIED", "0");
+  vi.stubEnv("FOUNDATION_ONBOARDING_ENABLED", "0");
+  vi.stubEnv("NATIVE_ONBOARDING_PILOT", JSON.stringify({ tenantId, issuedAt, expiresAt }));
+  const owner = t.withIdentity({ subject: tenantId });
+  await expect(owner.action(api.voiceToken.connect, { offerSdp: "invalid" })).rejects.toThrow(
+    "VOICE_CONTROL_NOT_VERIFIED",
+  );
+  await expect(
+    t
+      .withIdentity({ subject: "j57bbbbbbbbbbbbbbbbbbbbbbbbbbbbb" })
+      .action(api.voiceToken.connect, { offerSdp: "invalid", onboarding: true }),
+  ).rejects.toThrow("VOICE_CONTROL_NOT_VERIFIED");
+  // Correct tenant reaches SDP validation, still no provider work for invalid media.
+  await expect(
+    owner.action(api.voiceToken.connect, { offerSdp: "invalid", onboarding: true }),
+  ).rejects.toThrow("VOICE_AUDIO_ONLY_REQUIRED");
+  vi.stubEnv(
+    "NATIVE_ONBOARDING_PILOT",
+    JSON.stringify({ tenantId, issuedAt: issuedAt - 900000, expiresAt: issuedAt }),
+  );
+  await expect(
+    owner.action(api.voiceToken.connect, { offerSdp: "invalid", onboarding: true }),
+  ).rejects.toThrow("VOICE_CONTROL_NOT_VERIFIED");
+  expect(fetcher).not.toHaveBeenCalled();
 });

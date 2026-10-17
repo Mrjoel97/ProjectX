@@ -6,6 +6,7 @@
 import { documentAnalystSkillBody } from "@pikar/contracts/skills/documentAnalyst";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
 import {
+  CALLS_URL,
   CLIENT_SECRETS_URL,
   DEFAULT_REALTIME_MODEL,
   DIGEST_CHAR_CAP,
@@ -391,6 +392,47 @@ test("hangupCall POSTs /v1/realtime/calls/{callId}/hangup with the Bearer key an
   expect(headers.Authorization).toBe(`Bearer ${FAKE_KEY}`);
   // Refs-only: the callId targets the URL; the key never rides into the result.
   expect(JSON.stringify(res)).not.toContain(FAKE_KEY);
+});
+
+test("connect hangs up the allocated provider call when reading its SDP body rejects", async () => {
+  const t = makeTest();
+  await t.mutation(internal.skills.seedSkills, {});
+  vi.stubEnv("VOICE_SERVER_CONTROL_VERIFIED", "1");
+  const offerSdp = [
+    "v=0",
+    "m=audio 9 UDP/TLS/RTP/SAVPF 111",
+    "a=rtpmap:111 opus/48000/2",
+    "a=sendrecv",
+    "a=rtcp-mux",
+    "a=mid:0",
+    `a=fingerprint:sha-256 ${Array(32).fill("AA").join(":")}`,
+  ].join("\r\n");
+  const providerResponse = new Response(null, {
+    status: 201,
+    headers: { Location: "/v1/realtime/calls/rtc_body_failure" },
+  });
+  const readBody = vi
+    .spyOn(providerResponse, "text")
+    .mockRejectedValue(new Error("private body failure"));
+  stubFetch((url) => {
+    if (url === CLIENT_SECRETS_URL)
+      return Response.json({ value: "ek_body_failure", expires_at: 1234 });
+    if (url === CALLS_URL) return providerResponse;
+    if (url === hangupUrl("rtc_body_failure")) return new Response(null, { status: 200 });
+    throw new Error("Unexpected provider request");
+  });
+
+  await expect(asTenant(t).action(api.voiceToken.connect, { offerSdp })).rejects.toThrow(
+    "VOICE_CONTROL_UNAVAILABLE",
+  );
+  expect(readBody).toHaveBeenCalledOnce();
+  expect(calls.map((call) => call.url)).toEqual([
+    CLIENT_SECRETS_URL,
+    CALLS_URL,
+    hangupUrl("rtc_body_failure"),
+  ]);
+  expect(calls[2]?.init.method).toBe("POST");
+  expect(await t.run((ctx) => ctx.db.query("voiceSessions").collect())).toEqual([]);
 });
 
 test("hangupCall surfaces a non-200 as an error the caller can log refs-only", async () => {
