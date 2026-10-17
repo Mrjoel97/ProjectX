@@ -6,7 +6,7 @@ const state=resolve(process.env.RUNNER_TEMP,'production-native-observer.private.
 const backend=resolve('release/packages/backend');
 const check=x=>{if(!x)throw Error('OBSERVER_GUARD_FAILED');};
 const cli=args=>{try{return execFileSync(process.execPath,['node_modules/convex/bin/main.js',...args],{cwd:backend,encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:30000,maxBuffer:2*1024*1024}).trim();}catch(error){const message=String(error.stderr??'').toLowerCase();failureCode=error.code==='ETIMEDOUT'?'CLI_TIMEOUT':message.includes('pagination')||message.includes('paginate')?'CLI_PAGINATION':message.includes('syntaxerror')?'CLI_SYNTAX':message.includes('not a function')?'CLI_METHOD_UNAVAILABLE':message.includes('read limit')||message.includes('too many bytes')?'CLI_READ_LIMIT':message.includes('index')&&message.includes('not found')?'CLI_INDEX_MISSING':'CLI_OTHER';throw Error('PRIVATE_CLI_FAILED');}};
-const failureCodes=['AMBIGUOUS','OWNER','FRESHNESS','ACCOUNT_VERIFICATION','USER_VERIFICATION_METADATA','ADMISSION','BOUND','BLOB_MISSING','INDEXING','NAMESPACE_MISSING','ENTRY_SCOPE','GLOBAL_CHUNK_BOUND','CHUNKS','DIMENSION','GLOBAL_VECTOR_BOUND','SCAN_DEADLINE','SCAN_PAGE_BOUND','SCAN_CURSOR','OWN_REFERENCE_BOUND'];
+const failureCodes=['AMBIGUOUS','OWNER','FRESHNESS','ACCOUNT_VERIFICATION','USER_VERIFICATION_METADATA','ADMISSION','BOUND','BLOB_MISSING','INDEXING','NAMESPACE_MISSING','ENTRY_SCOPE','GLOBAL_CHUNK_BOUND','CHUNKS','DIMENSION','GLOBAL_VECTOR_BOUND','SCAN_DEADLINE','SCAN_PAGE_BOUND','SCAN_CURSOR','OWN_REFERENCE_BOUND','SCAN_TIMESTAMP_TIE_BOUND'];
 let failureCode='UNCLASSIFIED';
 const query=(source,component)=>{const result=JSON.parse(cli(['run','--inline-query',source,...(component?['--component',component]:[])]));if(result?.failure){failureCode=failureCodes.includes(result.failure)?result.failure:'UNCLASSIFIED';throw Error('OBSERVER_GUARD_FAILED');}return result;};
 const literal=JSON.stringify;
@@ -18,7 +18,7 @@ function scanOwnRagRows(namespaces,dimensions,deadline){
   for(let page=0;page<200;page++){
    if(Date.now()>deadline){failureCode='SCAN_DEADLINE';check(false);}
    phase=table==='chunks'?'rag-chunk-page':'rag-vector-page';
-   const result=query(`const p=await ctx.db.query(${literal(table)}).paginate({cursor:${literal(cursor)},numItems:100});if(p.page.length>100)return {failure:"SCAN_PAGE_BOUND"};const rows=p.page.filter(r=>${literal(namespaces)}.includes(r.namespaceId));if(${literal(table)}==="chunks"&&rows.some(r=>r.state.kind!=="ready"))return {failure:"CHUNKS"};return {ownCount:rows.length,refs:rows.flatMap(r=>${literal(table)}==="chunks"?[r._id,r.contentId,r.state.embeddingId]:[r._id]),isDone:p.isDone,cursor:p.continueCursor};`,'rag');
+   const result=query(`const cursor=${literal(cursor)};const rows=await ctx.db.query(${literal(table)}).withIndex("by_creation_time",q=>cursor===null?q:q.gte("_creationTime",cursor)).order("asc").take(101);const isDone=rows.length<=100;const boundary=isDone?null:rows.at(-1)._creationTime;const page=isDone?rows:rows.filter(r=>r._creationTime<boundary);if(!isDone&&page.length===0)return {failure:"SCAN_TIMESTAMP_TIE_BOUND"};const own=page.filter(r=>${literal(namespaces)}.includes(r.namespaceId));if(${literal(table)}==="chunks"&&own.some(r=>r.state.kind!=="ready"))return {failure:"CHUNKS"};return {ownCount:own.length,refs:own.flatMap(r=>${literal(table)}==="chunks"?[r._id,r.contentId,r.state.embeddingId]:[r._id]),isDone,cursor:boundary};`,'rag');
    refs.push(...result.refs);counts[table==='chunks'?'chunks':'vectors']+=result.ownCount;
    if(refs.length>3000){failureCode='OWN_REFERENCE_BOUND';check(false);}
    if(result.isDone){done=true;break;}
@@ -33,7 +33,7 @@ try{
  check(['capture','verify','diagnose'].includes(process.argv[2]));
  check(cli(['dashboard','--no-open']).match(/https:\/\/dashboard\.convex\.dev\/d\/([a-z0-9-]+)/)?.[1]==='opulent-octopus-494');
  if(process.argv[2]==='diagnose'){
- phase='pagination-capability';const capability=query('const p=await ctx.db.query("chunks").paginate({cursor:null,numItems:100});return {paginationSupported:true,pageCount:p.page.length,complete:p.isDone,cursorString:typeof p.continueCursor==="string"};','rag');console.log(JSON.stringify(capability));
+ phase='keyset-capability';const capability=query('const rows=await ctx.db.query("chunks").withIndex("by_creation_time").order("asc").take(101);return {keysetSupported:true,probeBoundRespected:rows.length<=101,timestampsFinite:rows.every(r=>Number.isFinite(r._creationTime))};','rag');console.log(JSON.stringify(capability));
  }else if(process.argv[2]==='capture'){
   phase='unique-native-fixture';
   const fixture=query(`const email=${literal("joel.feruzi+pikar-production-"+createHash("sha256").update("39050363444").digest("hex").slice(0,24)+"@gmail.com")};const own=await ctx.db.query("users").withIndex("email",q=>q.eq("email",email)).take(2);if(own.length!==1||Date.now()-own[0]._creationTime>7200000||own[0]._creationTime>Date.now())return {failure:"FRESHNESS"};const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(JSON.stringify([own[0]._id,own[0].email,own[0]._creationTime])));const hash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");if(hash!=="2d22a9ce4fac7c4aec251681f5fe74c3a4a6bb4dcb9d8a37253b3e6efcb76c5c")return {failure:"OWNER"};
