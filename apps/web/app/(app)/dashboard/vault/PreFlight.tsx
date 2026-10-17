@@ -129,10 +129,9 @@ export function PreFlight({
   const uploadFolderFile = useAction(api.vault.vaultUploadFolderFile);
 
   const [outcomes, setOutcomes] = useState<FileOutcome[]>([]);
-  // A REF, not state: the loop reads it BETWEEN files and a state value would be stale inside the
-  // loop's closure. ponytail: abort at a file boundary — the in-flight POST still finishes. Upgrade
-  // path: an AbortController on the fetch.
+  // Refs let cancellation interrupt the current transfer and stop the loop without stale state.
   const cancelRequested = useRef(false);
+  const uploadAbort = useRef<AbortController | null>(null);
   // The MIRROR of the ref, purely so the control can say what it is doing. Setting a ref triggers
   // no re-render, so Cancel used to sit there looking inert for as long as the current file takes
   // to finish — well over a minute for a large member — and a user who sees nothing presses again.
@@ -173,6 +172,8 @@ export function PreFlight({
   }
 
   async function start() {
+    const controller = new AbortController();
+    uploadAbort.current = controller;
     cancelRequested.current = false;
     setCancelling(false);
     setOutcomes([]);
@@ -191,19 +192,25 @@ export function PreFlight({
       const entry = picked.manifest[i];
       if (!file || !entry) continue;
       try {
+        controller.signal.throwIfAborted();
         const transcriptionStorageId = await uploadTranscriptionAudio(
           file,
           entry.mimeType,
           generateUploadUrl,
+          controller.signal,
         );
+        controller.signal.throwIfAborted();
         const url = await generateUploadUrl();
+        controller.signal.throwIfAborted();
         const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": entry.mimeType },
           body: file,
+          signal: controller.signal,
         });
         if (!res.ok) throw new Error("upload failed");
         const { storageId } = (await res.json()) as { storageId: StorageId };
+        controller.signal.throwIfAborted();
         await uploadFolderFile({
           folderId,
           storageId,
@@ -468,6 +475,7 @@ export function PreFlight({
               onClick={() => {
                 if (uploading) {
                   cancelRequested.current = true;
+                  uploadAbort.current?.abort();
                   setCancelling(true); // the ref alone re-renders nothing; see its declaration
                 } else onClear();
               }}
