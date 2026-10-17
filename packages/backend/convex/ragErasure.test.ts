@@ -188,6 +188,16 @@ test("large component chunk deletion continues durably and repeated polls never 
     (await t.run((ctx) => ctx.db.query("authRevocations").first()))?.ragCleanup?.pendingEntryId,
   ).toBe(fixture.entries[0]);
   await t.finishAllScheduledFunctions(vi.runAllTimers);
+  // Fake timers can exhaust observation polls before the component finishes.
+  // Its business content must still be removed before explicit resumption.
+  expect(await t.query(fixtureApi.inspect, { tenant: user })).toMatchObject({
+    entries: 0,
+    chunks: 0,
+    vectors: 0,
+    totalContent: 0,
+  });
+  await t.mutation(start, { tenantId: user });
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
   expect(await t.query(fixtureApi.inspect, { tenant: user })).toEqual({
     namespaces: 0,
     entries: 0,
