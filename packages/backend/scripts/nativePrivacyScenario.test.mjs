@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import {
   eraseNativeFixture,
@@ -8,6 +9,47 @@ import {
 
 const uid = "synthetic-user";
 const ref = (x) => x;
+test("file export verifies decoded bytes with absent or compressed wire length", async () => {
+  const originalFetch = globalThis.fetch;
+  const bytes = Buffer.from("synthetic bytes");
+  const expected = {
+    storageId: "blob-a",
+    size: bytes.length,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+  };
+  async function verify(body, headers = {}) {
+    globalThis.fetch = async () => new Response(body, { headers });
+    const rows = pages();
+    rows[0].files[0].url = "https://woozy-wren-368.convex.cloud/api/storage/synthetic";
+    let n = 0;
+    return inspectNativeExport({
+      client: { query: async () => rows[n++] },
+      ref,
+      expectedUserId: uid,
+      expectedTables: ["vaultDocuments", "users"],
+      expectedFiles: [expected],
+    });
+  }
+  try {
+    assert.equal((await verify(bytes)).evidence.expectedFileBodiesVerified, true);
+    assert.equal(
+      (await verify(bytes, { "content-encoding": "gzip" })).evidence.expectedFileBodiesVerified,
+      true,
+    );
+    assert.equal(
+      (await verify(bytes, { "content-encoding": "gzip", "content-length": "3" })).evidence
+        .expectedFileBodiesVerified,
+      true,
+    );
+    await assert.rejects(verify(Buffer.from("different bytes")));
+    await assert.rejects(verify(Buffer.from("synthetic byteX")));
+    await assert.rejects(verify(bytes.subarray(0, 3)));
+    await assert.rejects(verify(bytes, { "content-length": "3" }));
+    await assert.rejects(verify(bytes, { "content-length": "-1" }));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 test("native small file validates relay before owned ingestion and exports exact bytes", async () => {
   const originalFetch = globalThis.fetch;
   let bytes;

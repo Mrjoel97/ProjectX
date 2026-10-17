@@ -161,6 +161,9 @@ export async function inspectNativeExport({
           ),
         );
   for (const expected of expectedFiles) {
+    assert(
+      Number.isSafeInteger(expected.size) && expected.size >= 0 && expected.size <= 1024 * 1024,
+    );
     const file = files.find((file) => file.storageId === expected.storageId);
     assert(file && typeof file.url === "string");
     const url = new URL(file.url);
@@ -169,11 +172,19 @@ export async function inspectNativeExport({
         ["woozy-wren-368.convex.cloud", "woozy-wren-368.convex.site"].includes(url.hostname),
     );
     const response = await fetch(url, { signal: AbortSignal.timeout(15000), redirect: "error" });
-    assert(
-      response.ok &&
-        Number(response.headers.get("content-length")) === expected.size &&
-        expected.size <= 1024 * 1024,
-    );
+    assert(response.ok && response.body);
+    // Fetch exposes decoded bytes; compressed wire length is not their length.
+    // Chunked responses legitimately omit Content-Length. The bounded stream and
+    // exact digest below remain authoritative regardless of transport encoding.
+    const length = response.headers.get("content-length");
+    const encoding = response.headers.get("content-encoding")?.trim().toLowerCase();
+    if (length !== null && (!encoding || encoding === "identity")) {
+      assert(
+        /^\d+$/.test(length) &&
+          Number.isSafeInteger(Number(length)) &&
+          Number(length) === expected.size,
+      );
+    }
     const reader = response.body.getReader();
     const chunks = [];
     let size = 0;
