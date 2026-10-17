@@ -75,12 +75,13 @@ implementation changes; old evidence is not current assurance.
 The unchecked tasks require additional implementation or operational evidence. The runtime release recorded above does not establish completion of every original gap.
 
 - [ ] Isolate and drain the workflow-test work that intermittently outlives Vitest teardown. Documentation
-  [CI 39024491759](https://github.com/Mrjoel97/ProjectX/actions/runs/39024491759), first attempt, passed
+  [CI 39024491759, first attempt](https://github.com/Mrjoel97/ProjectX/actions/runs/39024491759/attempts/1), passed
   all 8,220 assertions but failed on unhandled `process is not defined` in the Vitest fork worker.
   The installed workflow environment temporarily removes `global.process`; existing investigation
   in the Vault playbook documents scheduled work surviving teardown. This Linux occurrence
   supersedes its earlier Windows-only characterization. The exact offending suite is unproven.
-  An unchanged rerun is diagnostic evidence, not a fix. Preserve the failed attempt; do not suppress
+  The unchanged second attempt passed the complete gate; that is diagnostic evidence, not a fix.
+  Preserve the failed attempt; do not suppress
   worker errors, shim globals or increase timeouts to report a green gate.
 
 On 2026-10-17, Chrome inventory reported an unrelated private site and automatic approval review
