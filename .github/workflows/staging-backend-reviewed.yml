@@ -27,7 +27,7 @@ jobs:
             const response=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs/39022997943',{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
             if(!response.ok)throw Error();
             const run=await response.json();
-            if(run.head_sha!=='29785234c2a00ed7eb3c7816bd24e59a313327dd'||run.name!=='ci'||run.repository.full_name!=='Mrjoel97/ProjectX')throw Error();
+            if(run.head_sha!=='29785234c2a00ed7eb3c7816bd24e59a313327dd'||run.name!=='ci'||run.workflow_id!==325088000||run.event!=='pull_request'||run.head_repository.full_name!=='Mrjoel97/ProjectX'||run.repository.full_name!=='Mrjoel97/ProjectX')throw Error();
             if(run.status==='completed'){if(run.conclusion!=='success')throw Error();console.log('Pinned source CI passed.');return;}
             await new Promise(resolve=>setTimeout(resolve,15000));
           }throw Error();})().catch(()=>{console.error('Pinned source CI gate failed.');process.exitCode=1;});
@@ -58,7 +58,7 @@ jobs:
             const watched=[...new Set(['SITE_URL','FOUNDATION_ONBOARDING_ENABLED','VOICE_SERVER_CONTROL_VERIFIED',...ENV_MANIFEST.filter(s=>s.tier==='fixture').map(s=>s.name)])].sort();
             const snapshot=()=>{const names=new Set(run(['env','list','--names-only']).split(/\r?\n/));return new Map(watched.map(name=>[name,names.has(name)?run(['env','get',name]):null]));};
             const before=snapshot();
-            if(new URL(before.get('SITE_URL')).protocol!=='https:')throw Error();
+            if(new URL(before.get('SITE_URL')).origin!=='https://pikar-ai-convex-gpbrsadzc-joelferuzi-gmailcoms-projects.vercel.app')throw Error();
             if(missingEnv(name=>before.get(name)??undefined).fixturesActive.length)throw Error();
             if(before.get('VOICE_SERVER_CONTROL_VERIFIED')==='1')throw Error();
             if(!/COMMERCIAL_BILLING_ENABLED:\s*boolean\s*=\s*false/.test(readFileSync('../billing/src/config.ts','utf8')))throw Error();
@@ -68,7 +68,7 @@ jobs:
             phase='generated-types';capture('git',['diff','--exit-code','--','convex/_generated']);
             phase='deploy';run(['deploy','--typecheck','disable','--message','Reviewed staging 29785234c2a00ed7eb3c7816bd24e59a313327dd']);
             console.log(JSON.stringify({backendDeployed:true}));
-            phase='seed';capture(process.execPath,['scripts/run-seed.mjs']);
+            phase='seed';run(['run','skills:seedSkills']);
             phase='post-guard';if(!target())throw Error();
             if(JSON.stringify([...snapshot()])!==JSON.stringify([...before]))throw Error();
             console.log(JSON.stringify({skillsSeeded:true,configurationUnchanged:true,productionUntouched:true,providerActionsInvoked:false}));
