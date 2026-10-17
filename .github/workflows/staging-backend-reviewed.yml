@@ -1,0 +1,76 @@
+name: staging-backend-reviewed
+"on":
+  push:
+    branches: [codex/staging-backend-20261017]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  release:
+    if: github.repository == 'Mrjoel97/ProjectX'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    concurrency:
+      group: staging-qualification
+      cancel-in-progress: false
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Require exact reviewed CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node <<'NODE'
+          (async()=>{for(let attempt=0;attempt<40;attempt++){
+            const response=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs/39022997943',{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
+            if(!response.ok)throw Error();
+            const run=await response.json();
+            if(run.head_sha!=='29785234c2a00ed7eb3c7816bd24e59a313327dd'||run.name!=='ci'||run.repository.full_name!=='Mrjoel97/ProjectX')throw Error();
+            if(run.status==='completed'){if(run.conclusion!=='success')throw Error();console.log('Pinned source CI passed.');return;}
+            await new Promise(resolve=>setTimeout(resolve,15000));
+          }throw Error();})().catch(()=>{console.error('Pinned source CI gate failed.');process.exitCode=1;});
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          ref: 29785234c2a00ed7eb3c7816bd24e59a313327dd
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "29785234c2a00ed7eb3c7816bd24e59a313327dd"
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: Guard deploy and seed staging only
+        working-directory: packages/backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
+        run: |
+          node <<'NODE'
+          const {execFileSync}=require('node:child_process');
+          const {readFileSync}=require('node:fs');
+          const capture=(file,args)=>execFileSync(file,args,{encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:600000,maxBuffer:8388608}).trim();
+          const run=args=>capture(process.execPath,['node_modules/convex/bin/main.js',...args]);
+          (async()=>{let phase='target';try{
+            if(!process.env.CONVEX_DEPLOY_KEY)throw Error();
+            const target=()=>run(['dashboard','--no-open']).match(/https:\/\/dashboard\.convex\.dev\/d\/([a-z0-9-]+)/)?.[1]==='woozy-wren-368';
+            if(!target())throw Error();
+            phase='configuration';
+            const {ENV_MANIFEST,missingEnv}=await import('./convex/lib/env.ts');
+            const watched=[...new Set(['SITE_URL','FOUNDATION_ONBOARDING_ENABLED','VOICE_SERVER_CONTROL_VERIFIED',...ENV_MANIFEST.filter(s=>s.tier==='fixture').map(s=>s.name)])].sort();
+            const snapshot=()=>{const names=new Set(run(['env','list','--names-only']).split(/\r?\n/));return new Map(watched.map(name=>[name,names.has(name)?run(['env','get',name]):null]));};
+            const before=snapshot();
+            if(new URL(before.get('SITE_URL')).protocol!=='https:')throw Error();
+            if(missingEnv(name=>before.get(name)??undefined).fixturesActive.length)throw Error();
+            if(before.get('VOICE_SERVER_CONTROL_VERIFIED')==='1')throw Error();
+            if(!/COMMERCIAL_BILLING_ENABLED:\s*boolean\s*=\s*false/.test(readFileSync('../billing/src/config.ts','utf8')))throw Error();
+            capture(process.execPath,['../../scripts/check-release-auth.mjs']);
+            console.log(JSON.stringify({stagingTarget:true,configurationGuardPassed:true}));
+            phase='dry-run';run(['deploy','--dry-run','--typecheck','disable']);
+            phase='generated-types';capture('git',['diff','--exit-code','--','convex/_generated']);
+            phase='deploy';run(['deploy','--typecheck','disable','--message','Reviewed staging 29785234c2a00ed7eb3c7816bd24e59a313327dd']);
+            console.log(JSON.stringify({backendDeployed:true}));
+            phase='seed';capture(process.execPath,['scripts/run-seed.mjs']);
+            phase='post-guard';if(!target())throw Error();
+            if(JSON.stringify([...snapshot()])!==JSON.stringify([...before]))throw Error();
+            console.log(JSON.stringify({skillsSeeded:true,configurationUnchanged:true,productionUntouched:true,providerActionsInvoked:false}));
+          }catch{console.error('Staging release stopped in phase: '+phase+'; private output suppressed.');process.exitCode=1;}})();
+          NODE
