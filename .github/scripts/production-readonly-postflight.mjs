@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-const expectedSha = 'fc491ec801654fc0dd36a7baa7ca5f6403b265ff';
+const expectedSha = 'aa4b5fb82a88907f42d1a71721a1e72db073e116';
 const root = resolve('release');
 const backend = resolve(root, 'packages/backend');
 const capture = (file, args, cwd = backend) => execFileSync(file, args, {

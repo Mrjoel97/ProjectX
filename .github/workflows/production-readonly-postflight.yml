@@ -1,7 +1,7 @@
 name: production-readonly-postflight
 on:
   push:
-    branches: [codex/production-readonly-postflight-20261017]
+    branches: [codex/production-readonly-postflight-pr51]
 permissions:
   contents: read
   actions: read
@@ -34,15 +34,15 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           node <<'NODE'
-          (async()=>{const r=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs/39041061917',{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error();const x=await r.json();if(x.head_sha!=='fc491ec801654fc0dd36a7baa7ca5f6403b265ff'||x.workflow_id!==325088000||x.name!=='ci'||x.path!=='.github/workflows/ci.yml'||x.status!=='completed'||x.event!=='push'||x.head_branch!=='main'||x.head_repository.full_name!=='Mrjoel97/ProjectX'||x.repository.full_name!=='Mrjoel97/ProjectX'||x.conclusion!=='success')throw Error();const latestResponse=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/workflows/325088000/runs?head_sha=fc491ec801654fc0dd36a7baa7ca5f6403b265ff&per_page=10',{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});if(!latestResponse.ok)throw Error();const latest=(await latestResponse.json()).workflow_runs.filter(r=>r.head_sha==='fc491ec801654fc0dd36a7baa7ca5f6403b265ff'&&r.event==='push'&&r.head_branch==='main').sort((a,b)=>b.id-a.id)[0];if(!latest||latest.id!==x.id||latest.status!=='completed'||latest.conclusion!=='success')throw Error();console.log(JSON.stringify({exactBackendCiPassed:true,latestExactHeadCiPassed:true}));})().catch(()=>{console.error('CI_GATE_FAILED');process.exitCode=1;});
+          (async()=>{const r=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs/39045558383',{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error();const x=await r.json();if(x.head_sha!=='aa4b5fb82a88907f42d1a71721a1e72db073e116'||x.workflow_id!==325088000||x.name!=='ci'||x.path!=='.github/workflows/ci.yml'||x.status!=='completed'||x.event!=='push'||x.head_branch!=='main'||x.head_repository.full_name!=='Mrjoel97/ProjectX'||x.repository.full_name!=='Mrjoel97/ProjectX'||x.conclusion!=='success')throw Error();const latestResponse=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/workflows/325088000/runs?head_sha=aa4b5fb82a88907f42d1a71721a1e72db073e116&per_page=10',{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});if(!latestResponse.ok)throw Error();const latest=(await latestResponse.json()).workflow_runs.filter(r=>r.head_sha==='aa4b5fb82a88907f42d1a71721a1e72db073e116'&&r.event==='push'&&r.head_branch==='main').sort((a,b)=>b.id-a.id)[0];if(!latest||latest.id!==x.id||latest.status!=='completed'||latest.conclusion!=='success')throw Error();console.log(JSON.stringify({exactBackendCiPassed:true,latestExactHeadCiPassed:true}));})().catch(()=>{console.error('CI_GATE_FAILED');process.exitCode=1;});
           NODE
       - uses: actions/checkout@v4
         with:
-          ref: fc491ec801654fc0dd36a7baa7ca5f6403b265ff
+          ref: aa4b5fb82a88907f42d1a71721a1e72db073e116
           path: release
           persist-credentials: false
       - name: Verify release source
-        run: test "$(git -C release rev-parse HEAD)" = "fc491ec801654fc0dd36a7baa7ca5f6403b265ff"
+        run: test "$(git -C release rev-parse HEAD)" = "aa4b5fb82a88907f42d1a71721a1e72db073e116"
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
         working-directory: release
