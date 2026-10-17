@@ -1,0 +1,63 @@
+name: staging-signup-readonly
+"on":
+  push:
+    branches: [codex/staging-signup-diagnostic-20261017]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  diagnose:
+    if: github.repository == 'Mrjoel97/ProjectX'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    concurrency:
+      group: staging-qualification
+      cancel-in-progress: false
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Require exact reviewed main CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node <<'NODE'
+          (async()=>{
+            const response=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs/39023291826',{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
+            if(!response.ok)throw Error();
+            const run=await response.json();
+            if(run.head_sha!=='be63035592c7333d04322af40eeb4a3d380244ca'||run.workflow_id!==325088000||run.event!=='push'||run.head_branch!=='main'||run.head_repository.full_name!=='Mrjoel97/ProjectX'||run.status!=='completed'||run.conclusion!=='success')throw Error();
+            console.log(JSON.stringify({reviewedCiPassed:true}));
+          })().catch(()=>{console.log(JSON.stringify({reviewedCiPassed:false}));process.exitCode=1;});
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          ref: be63035592c7333d04322af40eeb4a3d380244ca
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "be63035592c7333d04322af40eeb4a3d380244ca"
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: Read bounded fixture account state
+        working-directory: packages/backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
+        run: |
+          node <<'NODE'
+          const {execFileSync}=require('node:child_process');
+          const run=args=>execFileSync(process.execPath,['node_modules/convex/bin/main.js',...args],{encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:60000,maxBuffer:1048576}).trim();
+          try{
+            if(!process.env.CONVEX_DEPLOY_KEY)throw Error();
+            if(run(['dashboard','--no-open']).match(/https:\/\/dashboard\.convex\.dev\/d\/([a-z0-9-]+)/)?.[1]!=='woozy-wren-368')throw Error();
+            const query=`const candidates=(await ctx.db.query("betaInvites").order("desc").take(100)).filter(row=>typeof row.email==="string"&&row.email.includes("+pikar-foundation-"));
+            if(candidates.length!==1)return {fixtureMatchUnique:false};
+            const invite=candidates[0];
+            const users=await ctx.db.query("users").withIndex("email",q=>q.eq("email",invite.email)).take(2);
+            if(users.length>1)return {fixtureMatchUnique:false};
+            return {fixtureMatchUnique:true,userExists:users.length===1,emailVerified:users[0]?.emailVerificationTime!==undefined,inviteExists:true,inviteRedeemed:invite.redeemedAt!==undefined};`;
+            const result=JSON.parse(run(['run','--inline-query',query]));
+            const keys=result.fixtureMatchUnique===true?['fixtureMatchUnique','userExists','emailVerified','inviteExists','inviteRedeemed']:['fixtureMatchUnique'];
+            if(Object.keys(result).length!==keys.length||keys.some(key=>typeof result[key]!=='boolean'))throw Error();
+            console.log(JSON.stringify(Object.fromEntries(keys.map(key=>[key,result[key]]))));
+          }catch{console.log(JSON.stringify({diagnosticCompleted:false}));process.exitCode=1;}
+          NODE
