@@ -1,8 +1,20 @@
 # Current operations guide
 
 Source inspection: 2026-10-15, starting revision `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
-Production runtime revision `be63035592c7333d04322af40eeb4a3d380244ca` deployed through [release run 39023562539](https://github.com/Mrjoel97/ProjectX/actions/runs/39023562539), verified on 2026-10-17 (Africa/Dar_es_Salaam). Convex deployment, registry seed, staged probe, promotion and durable-origin verification passed. [Release readiness](release-readiness.md) records the evidence and live gates that remain open; deployment does not establish voice/onboarding activation or complete provider qualification.
+Production runtime revision `a129b884445482625b1e8f2a236744fb2a0f2515` deployed through [release run 39026090675](https://github.com/Mrjoel97/ProjectX/actions/runs/39026090675), verified on 2026-10-17 (Africa/Dar_es_Salaam). Convex deployment, registry seed, staged probe, promotion and durable-origin verification passed. [Release readiness](release-readiness.md) records the evidence and live gates that remain open; deployment does not establish voice/onboarding activation or complete provider qualification.
 This guide is the current entry point; dated playbook notes and ADRs explain historical decisions.
+
+## Latest scoped provider qualification — 2026-10-17
+
+[Staging voice run 39026259737](https://github.com/Mrjoel97/ProjectX/actions/runs/39026259737)
+succeeded at reviewed source `3d877c6e8dedc80ebb6bac552c024a5703a16101`: a synthetic tool-free
+session connected, received audio, acknowledged server controls and recorded one trusted response.
+The ledger verified 184 cents admitted (100-cent initial hold plus 84-cent response reservation),
+one cent of reported response cost, and the retained initial hold. Cleanup confirmed provider
+termination and restoration of the original staging flag. This is neither an invoice reconciliation
+nor native microphone/onboarding acceptance; maximum-duration and termination-failure scenarios
+remain open. Production voice/foundation activation and billing remain off. See the readiness
+record for the exact workflow/job and remaining gates.
 
 ## Architecture and ownership
 
