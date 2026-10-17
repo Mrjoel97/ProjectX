@@ -236,6 +236,29 @@ test("editing enrichment preserves unchanged essential facts", async () => {
   expect(await a.query(api.foundation.review, {})).not.toBeNull();
 });
 
+test("typed enrichment preserves the user's draft and responds with a section-aware next step", async () => {
+  const t = setup();
+  const a = await complete(t);
+  vi.stubEnv("OPENROUTER_API_KEY", "");
+  vi.stubEnv("OPENAI_API_KEY", "");
+  const result = await a.action(api.foundation.answer, {
+    revision: 1,
+    eventId: "rough_offer",
+    section: "offers",
+    intent: "planned",
+    answer: "I might offer mobile hair and nail services to busy parents.",
+  });
+  expect(result.reply).toContain("future plan");
+  expect(result.reply).toContain("Offers and customers");
+  const saved = await a.query(api.foundation.get, {});
+  expect(saved?.answers.at(-1)).toMatchObject({
+    text: "I might offer mobile hair and nail services to busy parents.",
+    intent: "planned",
+    section: "offers",
+  });
+  expect(saved?.profile.targetCustomer).toBe("");
+});
+
 test.each([
   false,
   true,
