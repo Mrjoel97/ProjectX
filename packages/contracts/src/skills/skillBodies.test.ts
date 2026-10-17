@@ -18,6 +18,7 @@ import { cockpitAgentSkillBody } from "./cockpitAgent";
 import { documentAnalystSkillBody } from "./documentAnalyst";
 import { documentClassifierSkillBody } from "./documentClassifier";
 import { folderDigestSkillBody } from "./folderDigest";
+import { foundationVoiceSkillBody } from "./foundationVoice";
 import { growthOsDiagnosticSkillBody } from "./growthOsDiagnostic";
 import { knowledgeQueryPlannerSkillBody } from "./knowledgeQueryPlanner";
 import { knowledgeSynthesizerSkillBody } from "./knowledgeSynthesizer";
@@ -269,6 +270,7 @@ const bodies: [string, string][] = [
   // the drift row matters most here, because `converse` fails CLOSED on an unseeded row: a stale
   // derived constant seeds a stale prompt rather than a loud error.
   ["onboarding-agent", onboardingAgentSkillBody],
+  ["foundation-voice", foundationVoiceSkillBody],
   // Phase 14 (DOCV-01) — the voice-doc persona rides the same drift guard.
   ["document-analyst", documentAnalystSkillBody],
   // Phase 17.1 (BLPR-01): the UNGATED corpus-synthesis prompt. Same mirror — and the drift row

@@ -353,10 +353,12 @@ export default function FoundationOnboarding({
     >
       <header>
         <p style={{ color: "var(--teal-600)" }}>YOUR BUSINESS FOUNDATION</p>
-        <h1>Build your business reference with Pikar</h1>
+        <h1>Build your business with Pikar</h1>
         <p>
-          Let the live voice agent lead the conversation, or answer by typing. Review six reference
-          documents before publishing them to your Knowledge Vault and Business Blueprint.
+          Start with a rough idea, a business in progress, or an established operation. Pikar will
+          help you shape the next steps, keep suggestions separate from confirmed facts, and build
+          six reference documents for review before publishing them to your Knowledge Vault and
+          Business Blueprint.
         </p>
       </header>
       {error && <p role="alert">{error}</p>}
@@ -364,9 +366,13 @@ export default function FoundationOnboarding({
         <p>Loading your interview…</p>
       ) : !draft ? (
         <section style={card}>
-          <p>Start with the essentials. You can pause and return on another device.</p>
+          <p>
+            Tell Pikar what you are thinking of building, or how your business works today. A rough
+            idea is enough; Pikar will help make it clearer. You can pause and return on another
+            device.
+          </p>
           <button type="button" style={button} disabled={busy} onClick={() => void initialize()}>
-            Begin business setup
+            Explore my idea or business
           </button>
         </section>
       ) : (
@@ -374,8 +380,8 @@ export default function FoundationOnboarding({
           <section style={card} aria-label="Business interview">
             <p>
               {draft.phase === "essential"
-                ? "Essential business facts"
-                : "Enrich your operating reference"}{" "}
+                ? "Shape your idea and essentials"
+                : "Develop your business foundation"}{" "}
               · Saved revision {draft.revision}
             </p>
             <p>
@@ -421,7 +427,7 @@ export default function FoundationOnboarding({
                 : voiceActive
                   ? `Voice ${voice.status}`
                   : draft.reply ||
-                    "Tell me what your business does, or what you are planning to build."}
+                    "Tell me what you are thinking of building, or how your business works today. A rough idea is enough."}
             </p>
             {voice.transcript.length > 0 && (
               <details>
@@ -470,7 +476,7 @@ export default function FoundationOnboarding({
                 maxLength={8000}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="Describe your business in your own words. Unknowns are welcome."
+                placeholder="Share a rough idea, a business in progress, or an established operation. Unknowns are welcome."
               />
             </label>
             <label>
@@ -502,8 +508,9 @@ export default function FoundationOnboarding({
           <section style={card}>
             <h2>Review your foundation</h2>
             <p>
-              You can publish an initial foundation once the essential facts are complete, then add
-              operating details later.
+              Your draft can start with a rough idea and clearly marked unknowns. Once the essential
+              facts are confirmed, review all six documents; you can keep developing the operating
+              details afterward. Pikar's suggestions stay separate until you confirm them.
             </p>
             <button
               type="button"

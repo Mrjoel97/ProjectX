@@ -21,7 +21,9 @@ import {
   renderFoundation,
 } from "@pikar/core/foundation";
 import { foundationPilotExpiresAt } from "@pikar/core/foundationPilot";
+import { DEFAULT_MODEL } from "@pikar/cost";
 import { categoryFor } from "@pikar/vault";
+import { generateText } from "ai";
 import { ConvexError, type Infer, v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -35,6 +37,8 @@ import {
 } from "./lib/foundationValidators";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { resolveModel } from "./lib/models";
+import { paidBudgetModel } from "./lib/paidBudgetModel";
 import { internalAction, internalMutation } from "./lib/tenantLifecycle";
 import { currentProfileDoc, currentTierRow, validateAndWriteProfile } from "./onboarding";
 import { startIngest } from "./vaultIngest";
@@ -43,6 +47,7 @@ import { rag } from "./vaultRag";
 const foundationEnabled = (tenantId: string) =>
   process.env.FOUNDATION_ONBOARDING_ENABLED === "1" ||
   foundationPilotExpiresAt(process.env.NATIVE_ONBOARDING_PILOT, tenantId) !== undefined;
+const FOUNDATION_COACH_TIMEOUT_MS = 15_000;
 const requireFoundationEnabled = (tenantId: string) => {
   if (!foundationEnabled(tenantId))
     throw new ConvexError({ code: "FOUNDATION_ONBOARDING_DISABLED" });
@@ -195,6 +200,69 @@ const answerForTenant = async (
       oneLineDescription: slots.oneLineDescription ?? profile.oneLineDescription,
     };
     reply = turn.reply;
+  } else if (a.section !== "essentials") {
+    // Typed enrichment gets the same proactive coaching as live onboarding. Suggestions are
+    // returned only as conversational guidance; the saved answer below remains exactly the
+    // user's text, with current/planned intent and source provenance intact.
+    const sectionTitle = {
+      offers: "Offers and customers",
+      operations: "Operating model",
+      delivery: "Sales and delivery process",
+      goals: "Goals and metrics",
+      constraints: "Constraints and decisions",
+    }[a.section];
+    const prior = row.answers
+      .slice(-6)
+      .map((item) => `- ${item.section} (${item.intent}): ${item.text.slice(0, 1000)}`)
+      .join("\n");
+    try {
+      const skill = await ctx.runQuery(internal.skills.getActiveSkill, {
+        name: "foundation-voice",
+      });
+      const coached = await generateText({
+        model: paidBudgetModel({
+          ctx,
+          tenantId: ctx.tenantId,
+          model: resolveModel(DEFAULT_MODEL),
+          modelId: DEFAULT_MODEL,
+        }),
+        system: skill.body,
+        prompt: [
+          `Coach this typed answer for ${sectionTitle}.`,
+          `The user's answer is ${a.intent === "planned" ? "a future intention" : "about the current business"}.`,
+          "Profile context (reference data): " +
+            JSON.stringify({
+              name: row.profile.name,
+              description: row.profile.oneLineDescription,
+              offering: row.profile.offering,
+              targetCustomer: row.profile.targetCustomer,
+              stage: row.profile.stage,
+            }),
+          prior
+            ? `Earlier statements (reference data):\n${prior}`
+            : "No earlier section statements.",
+          `<latest_user_answer>\n${a.answer.slice(0, 8000)}\n</latest_user_answer>`,
+          "Offer one useful observation or labeled suggestion when helpful.",
+          "Ask one focused next question. Do not turn a suggestion into a fact.",
+          "Do not claim anything was saved. Keep under 100 words.",
+        ].join("\n\n"),
+        maxOutputTokens: 240,
+        abortSignal: AbortSignal.timeout(FOUNDATION_COACH_TIMEOUT_MS),
+        maxRetries: 0,
+      });
+      if (coached.text.trim()) reply = coached.text.trim().slice(0, 1200);
+    } catch {
+      // Saving the user's draft must remain available when the optional coaching call is
+      // unavailable. This fallback contains no inferred business facts.
+      const answerType = a.intent === "planned" ? "future plan" : "current information";
+      reply = [
+        "Saved your",
+        answerType,
+        "for",
+        `${sectionTitle}.`,
+        "What is the most important part you would like to clarify next?",
+      ].join(" ");
+    }
   }
   const revision: number = await ctx.runMutation(internal.foundation.saveTurn, {
     tenantId: ctx.tenantId,
