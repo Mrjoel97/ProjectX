@@ -1,7 +1,7 @@
-name: staging-native-signup-probe
+name: staging-native-regression-signup
 on:
   push:
-    branches: [codex/staging-native-signup-probe-20261017]
+    branches: [codex/staging-native-regression-signup-20261017]
 permissions:
   contents: read
   actions: read
@@ -15,7 +15,7 @@ jobs:
       group: staging-qualification
       cancel-in-progress: false
     env:
-      SOURCE_SHA: 5643be381e3517db81b9167bd249c9afd76e1c0a
+      SOURCE_SHA: b2dfecaa512b5b2bdf34189dcc3a09b9ff4cc41c
     steps:
       - uses: actions/setup-node@v4
         with:
@@ -47,18 +47,18 @@ jobs:
           CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
           NATIVE_SIGNUP_TRANSPORT_PUBLIC_KEY: |
             -----BEGIN PUBLIC KEY-----
-            MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAoFnXj3vIkbkdJAMO588v
-            HkYO+OaexHe3CPmtKZV7KL6xnD/ZKtIWLVNbMZeTdH4519ggiQWEzJYRxW3PYgMk
-            wI36CtdFFH1t5vpdh52o1NtDsrk6Cmb0bza2kncUvwKSSG6VtN+8ZNxemOl80MID
-            QWYiuMqYxpxxHKYqotZAMU/EjehYE2HElCmGBuqjUxKumAbWM1rCqw/jKrIaqt4J
-            wk4KRmyiogM6E4pkJRqU3ur+uOUoIRHHE0oJOHR6oGLSFIkmQAYmem1bb1hmC495
-            4yOOBDndcNVDB13WgV6qsBKUkdQKXkI3E7dYy+PT8G7QIVrCXhl+QL4nUiFI9u7s
-            qtFnLQz8fWVQACgjZcyE2RqMa5zUyWKzzqKCZoGOzIImViOYA07XZpHR+lWvCgP0
-            QbxnVvNGs1sVT0N5HUESaUeXGdDQl27xUI27nalfnAKhsNHLCR80ztvDf2yWnblF
-            i7el8C4wBi0MG4+kIsbawCNdGJs6h1UHzIMPDH4h+41v+e2QioQdr7sLbH1C4sl/
-            svWiv0iqt1Y9xzNAJ0fkjyBArFIYGajZehC3LIZZ6kgzwxu+WJNSi6p72dG/OFyW
-            MMN2TfzmLS5PPJDCK5WW1lDu4rfYrvgTraG6q6IiZZFsUz15hCe/fBLZFpL450Ck
-            G+KLB78Bk9/4pda93RLLPSMCAwEAAQ==
+            MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAwuFJG+9R/9HG0NvOPNqA
+            yy3uKbryu1usgiTmo1MxYI1h+/F5EP2l6uZCyhpi/D5k29gae74cthDOodp1mh4S
+            o14KfcB4IbN9r/polzymnfR64Mgsm/2H0nXWkW5aylgmfAng6mHNBco6byDQb3Lq
+            rbhjfKSosJXzFrnhPXACEr/ES1vKKxjF2raJZTB7aeOVJ1qrGZFTe4F0HiqbWir6
+            ockdxqFH/N11ndO0/72DAKBndm88YuX6y+eVd5BLziIo98jS0/EwyaR8kvAIZSCT
+            rjnD/V10CoC6BeGYcrIiR3cz0XbupQI2hugn89lojABOcojMRZCJqaHxCLJ0BQJI
+            Zj3GerhFDofd8yiWwCGP8g0/RQrU93xq0OyHLJ0fsLn9WcEfUGzjA/rtClyumFZa
+            yZyc7AbxFpaVJd+zu5btiOe9zIBRhO07r3Y/EkH4tC7gpsSClGYAJU/BWBwX+PB5
+            ScIt4kvFW9zK0ecID8lUr23cdU4DZ32n5aAPKqeRXjUnx1XAJplAIBPyCgbMOSJH
+            FzBy9nZiTB/5YOd1r4i6+Kfn1F8MB3VGCR/aYsCOC1JUQqglybPfn9+aavvw6ODF
+            VJuDYcEkR4OY3eKJbMspF/nhX7ihULuyLbJDxccKeWXQ+c/oKCllDCrAqxeBYS4k
+            C6Icq8BMrJF3tX/VwdgOsw8CAwEAAQ==
             -----END PUBLIC KEY-----
         run: |
           node --input-type=module <<'NODE'
@@ -82,4 +82,27 @@ jobs:
             console.error('STAGING_NATIVE_PROBE_PREFLIGHT_REFUSED');process.exitCode=1;
           }
           NODE
-          node packages/backend/scripts/nativeSignupProbe.mjs
+          node --input-type=module <<'NODE'
+          import {execFileSync} from 'node:child_process';
+          import {resolve} from 'node:path';
+          import {createRequire} from 'node:module';
+          import {probeSignup} from './packages/backend/scripts/nativeSignupProbe.mjs';
+          const require=createRequire(resolve('packages/backend/package.json'));
+          const {ConvexHttpClient}=require('convex/browser');
+          const {makeFunctionReference}=require('convex/server');
+          const origin='https://pikar-ai-convex-gpbrsadzc-joelferuzi-gmailcoms-projects.vercel.app';
+          const client=new ConvexHttpClient('https://woozy-wren-368.convex.cloud',{logger:false});
+          const backend=resolve('packages/backend');
+          const cli=args=>execFileSync(process.execPath,[resolve(backend,'node_modules/convex/bin/main.js'),...args],{cwd:backend,encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:60000,maxBuffer:1048576});
+          const result=await probeSignup({cli,publicKey:process.env.NATIVE_SIGNUP_TRANSPORT_PUBLIC_KEY,client:{
+            query:(name,args)=>client.query(makeFunctionReference(name),args),
+            action:async(name,args)=>{
+              if(name!=='auth:signIn')throw Error('UNEXPECTED_ACTION');
+              const response=await fetch(origin+'/api/auth',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({action:name,args}),redirect:'error',signal:AbortSignal.timeout(60000)});
+              if(response.status!==200)throw Error('WEB_AUTH_REFUSED');
+              return response.json();
+            }
+          }});
+          console.log(JSON.stringify({...result,webAuthProxySignup:result.success===true,browserAcceptance:false}));
+          if(!result.success)process.exitCode=1;
+          NODE
