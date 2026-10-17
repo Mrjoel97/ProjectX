@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 15
     environment: production
     concurrency:
-      group: production-native-qualification
+      group: production-native-readonly-observer
       cancel-in-progress: false
     steps:
       - uses: actions/setup-node@v4
