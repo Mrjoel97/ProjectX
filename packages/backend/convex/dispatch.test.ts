@@ -22,8 +22,9 @@ import {
   RESEARCH_MODEL,
 } from "@pikar/cost";
 import { APICallError } from "ai";
+import { internalActionGeneric, makeFunctionReference } from "convex/server";
 import { convexTest, type TestConvex } from "convex-test";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 // The dispatcher's lineage audits hit the auditCounts aggregate and its envelope reads/spends hit
 // the rate-limiter's daily-spend window. Register both (relative imports — the packages block the
 // deep specifier) so the REAL paths run under convex-test instead of throwing "component not
@@ -73,6 +74,153 @@ vi.setConfig({ testTimeout: 30_000 });
 // research run. Stub it off for this file rather than relying on the box being unconfigured.
 vi.stubEnv("OPENAI_API_KEY", "");
 
+// Own real scheduler timers without changing the clock used by dispatch assertions.
+const harnesses = new Set<T>();
+const ownedTimers = new Set<ReturnType<typeof setTimeout>>();
+const originalSetTimeout = globalThis.setTimeout;
+const originalClearTimeout = globalThis.clearTimeout;
+const workerProcess = process;
+function trackedConvex(testModules = modules) {
+  const t = convexTest(schema, testModules);
+  harnesses.add(t);
+  return t;
+}
+beforeEach(() => {
+  vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+    callback: (...args: unknown[]) => void,
+    delay?: number,
+    ...args: unknown[]
+  ) => {
+    const handle = originalSetTimeout(function (this: ReturnType<typeof setTimeout>) {
+      ownedTimers.delete(handle);
+      callback.apply(this, args);
+    }, delay);
+    ownedTimers.add(handle);
+    return handle;
+  }) as typeof setTimeout);
+});
+async function quiesceDispatchHarnesses() {
+  // Cancel pending root work; never advance timers to start queued provider tasks.
+  const errors: unknown[] = [];
+  for (const t of harnesses) {
+    await t
+      .run(async (ctx) => {
+        for (const job of await ctx.db.system.query("_scheduled_functions").collect()) {
+          if (job.state.kind === "pending") await ctx.scheduler.cancel(job._id);
+        }
+      })
+      .catch((error: unknown) => {
+        errors.push(error);
+      });
+  }
+  const settled = await Promise.allSettled(
+    [...harnesses].map(async (t) => t.finishInProgressScheduledFunctions()),
+  );
+  for (const result of settled) if (result.status === "rejected") errors.push(result.reason);
+  // Component callbacks share these timer handles. Their pending work belongs to discarded
+  // harnesses; never advance it just to drain it. Active callbacks were awaited above.
+  for (const timer of ownedTimers) originalClearTimeout(timer);
+  ownedTimers.clear();
+  for (const t of harnesses) {
+    await t
+      .run(async (ctx) => {
+        for (const job of await ctx.db.system.query("_scheduled_functions").collect()) {
+          if (job.state.kind === "pending") await ctx.scheduler.cancel(job._id);
+          expect(job.state.kind).not.toBe("inProgress");
+        }
+      })
+      .catch((error: unknown) => {
+        errors.push(error);
+      });
+  }
+  if (errors.length) throw new AggregateError(errors, "Dispatch scheduler cleanup failed");
+  expect(globalThis.process).toBe(workerProcess);
+}
+afterEach(async () => {
+  try {
+    await quiesceDispatchHarnesses();
+  } finally {
+    for (const timer of ownedTimers) originalClearTimeout(timer);
+    ownedTimers.clear();
+    harnesses.clear();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});
+
+test.each([
+  false,
+  true,
+])("scheduler teardown joins active work even after a cancellation error (%s)", async (cancelFails) => {
+  let signalStarted!: () => void;
+  let release!: () => void;
+  const started = new Promise<void>((resolve) => {
+    signalStarted = resolve;
+  });
+  const barrier = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let completed = false;
+  let lateId: Id<"_scheduled_functions"> | undefined;
+  const active = trackedConvex({
+    ...modules,
+    "./__schedulerProof.ts": async () => ({
+      complete: internalActionGeneric({
+        args: {},
+        handler: async (ctx) => {
+          signalStarted();
+          await barrier;
+          lateId = await ctx.scheduler.runAfter(60_000, internal.skills.seedSkills, {});
+          completed = true;
+        },
+      }),
+    }),
+  });
+  const pending = trackedConvex();
+  const pendingId = await pending.run((ctx) =>
+    ctx.scheduler.runAfter(60_000, internal.skills.seedSkills, {}),
+  );
+  const activeId = await active.run((ctx) =>
+    ctx.scheduler.runAfter(0, makeFunctionReference<"action">("__schedulerProof:complete"), {}),
+  );
+  await started;
+  if (cancelFails)
+    vi.spyOn(pending, "run").mockRejectedValueOnce(new Error("simulated cancellation failure"));
+  const cleanup = quiesceDispatchHarnesses();
+  let cleanupFinished = false;
+  const outcome = cleanup.then(
+    () => {
+      cleanupFinished = true;
+      return null;
+    },
+    (error: unknown) => {
+      cleanupFinished = true;
+      return error;
+    },
+  );
+  try {
+    // Let teardown reach its in-flight join while the action remains explicitly blocked.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(cleanupFinished).toBe(false);
+    expect(completed).toBe(false);
+  } finally {
+    release();
+  }
+  const error = await outcome;
+  if (cancelFails) {
+    expect(error).toBeInstanceOf(AggregateError);
+    expect((error as AggregateError).errors).toHaveLength(1);
+  } else expect(error).toBeNull();
+  expect(completed).toBe(true);
+  expect((await active.run((ctx) => ctx.db.system.get(activeId)))?.state.kind).toBe("success");
+  if (!lateId) throw new Error("Active action did not schedule follow-up");
+  const followUp = lateId;
+  expect((await active.run((ctx) => ctx.db.system.get(followUp)))?.state.kind).toBe("canceled");
+  expect((await pending.run((ctx) => ctx.db.system.get(pendingId)))?.state.kind).toBe("canceled");
+  expect(await pending.run((ctx) => ctx.db.query("skills").collect())).toEqual([]);
+  expect(ownedTimers.size).toBe(0);
+});
+
 // ── Wave 0 (15-01): the anti-silent-failure guard ─────────────────────────────────────────────
 //
 // WHY this one assertion earns its place: the `agentSteps.tool` union is CLOSED, and the step row
@@ -88,7 +236,7 @@ const DISPATCH_STEP_TOOLS = [
 ] as const;
 
 test.each(DISPATCH_STEP_TOOLS)("agentSteps accepts the %s literal", async (tool) => {
-  const t = convexTest(schema, modules);
+  const t = trackedConvex();
   const id = await t.run(async (ctx) =>
     ctx.db.insert("agentSteps", {
       tenantId: "tenant_a",
@@ -120,7 +268,7 @@ const ROOT = "root-req-1";
 const REPLY = "Ziggurat pricing ladder: bundle onboarding with the quarterly retainer.";
 
 async function setup(): Promise<{ t: T; planId: Id<"plans"> }> {
-  const t = convexTest(schema, modules);
+  const t = trackedConvex();
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   await t.mutation(internal.skills.seedSkills, {}); // the 3 specialist rubrics seed v1 ACTIVE
@@ -184,12 +332,11 @@ const searchedSteps = (text: string, urls: readonly string[]) => {
   ];
 };
 
-// The Tavily edge, stubbed. Anything that is not Tavily falls through to the real fetch so no other
-// outbound path is silently changed by this file.
-const realFetch = globalThis.fetch;
+// Only the scripted Tavily edge is allowed. Late scheduled work must never reach a paid provider.
+
 beforeEach(() => {
   vi.stubEnv("TAVILY_API_KEY", "test-key");
-  vi.stubGlobal("fetch", async (input: unknown, init?: unknown) => {
+  vi.stubGlobal("fetch", async (input: unknown) => {
     if (String(input).includes("api.tavily.com")) {
       return new Response(
         JSON.stringify({
@@ -202,7 +349,7 @@ beforeEach(() => {
         { status: 200, headers: { "content-type": "application/json" } },
       );
     }
-    return (realFetch as (a: unknown, b?: unknown) => Promise<Response>)(input, init);
+    throw new Error("Unexpected outbound request in dispatch unit test");
   });
 });
 const textToolStep = (text: string, toolName: string, input: unknown, callId: string) => ({
@@ -1880,7 +2027,7 @@ describe("stageResearchPlan — the collecting interlock (16-06 Task 2)", () => 
     });
 
   test("no plan row: one is inserted, memo-shaped, parked at `collecting` with no body", async () => {
-    const t = convexTest(schema, modules);
+    const t = trackedConvex();
     const res = await stage(t as T);
 
     expect(res.ok).toBe(true);
@@ -3704,7 +3851,7 @@ describe("media retry — the specialist is told what the last storyboard was re
     );
 
   test("appends the refusal, in the canvas's own words, when the plan row carries one", async () => {
-    const t = convexTest(schema, modules);
+    const t = trackedConvex();
     await t.run((ctx) =>
       ctx.db.insert("plans", {
         tenantId: TENANT,
@@ -3725,14 +3872,14 @@ describe("media retry — the specialist is told what the last storyboard was re
   });
 
   test("says nothing about a refusal on a first attempt — no row, no line", async () => {
-    const t = convexTest(schema, modules);
+    const t = trackedConvex();
     const prompt = await promptFor(t);
     expect(prompt).toContain("Write the storyboard now");
     expect(prompt).not.toContain("previous storyboard");
   });
 
   test("is tenant-scoped — another tenant's refusal on the same thread id is invisible", async () => {
-    const t = convexTest(schema, modules);
+    const t = trackedConvex();
     await t.run((ctx) =>
       ctx.db.insert("plans", {
         tenantId: TENANT_B,

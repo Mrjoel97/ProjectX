@@ -24,7 +24,7 @@ Current production runtime: `be63035592c7333d04322af40eeb4a3d380244ca`, verified
 | Connectors | Provider operator | Per-provider gates remain binding | Current connection, scope/expiry/revoke/read evidence for each enabled provider |
 | Recurrence | Workflow operator | Existing gate remains binding | Required actual DST/OAuth/provider traces; do not enable on simulated evidence alone |
 | Skill activation | Model operator | Per-skill evidence required | Seed/version identity, evaluation, activation and rollback evidence |
-| CI portability/build | Release engineer | Local Windows checks and hosted Linux CI passed; release be63035 passed PR45/main CI and production workflow; suite: 8,220 passed, two skipped, plus 34 operator regressions | Clean Windows/Linux checks and resolved or dispositioned build warnings |
+| CI portability/build | Release engineer | Release be63035 passed PR45/main CI and production workflow: 8,220 passed, two skipped, plus 34 operator regressions; later documentation CI exposed an intermittent workflow-test worker teardown error despite all assertions passing | Clean Windows/Linux checks, scheduled-test teardown ownership and resolved or dispositioned build warnings |
 
 ## Delivery order
 
@@ -73,6 +73,16 @@ implementation changes; old evidence is not current assurance.
 - [ ] Obtain the remaining postal address and reviewed legal content. Keep billing disabled as explicitly instructed; do not activate it during this release. Resolve WORM retention, connector and recurrence provider evidence independently and preserve their gates.
 
 The unchecked tasks require additional implementation or operational evidence. The runtime release recorded above does not establish completion of every original gap.
+
+- [ ] Isolate and drain the workflow-test work that intermittently outlives Vitest teardown. Documentation
+  [CI 39024491759, first attempt](https://github.com/Mrjoel97/ProjectX/actions/runs/39024491759/attempts/1), passed
+  all 8,220 assertions but failed on unhandled `process is not defined` in the Vitest fork worker.
+  The installed workflow environment temporarily removes `global.process`; existing investigation
+  in the Vault playbook documents scheduled work surviving teardown. This Linux occurrence
+  supersedes its earlier Windows-only characterization. The exact offending suite is unproven.
+  The unchanged second attempt passed the complete gate; that is diagnostic evidence, not a fix.
+  Preserve the failed attempt; do not suppress
+  worker errors, shim globals or increase timeouts to report a green gate.
 
 On 2026-10-17, Chrome inventory reported an unrelated private site and automatic approval review
 refused its accessibility snapshot. The owner requested continued direct fixes. A separate pinned,

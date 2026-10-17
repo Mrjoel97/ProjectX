@@ -83,6 +83,11 @@ export default function FoundationOnboarding({
   useEffect(() => {
     if (draft) revisionRef.current = Math.max(revisionRef.current, draft.revision);
   }, [draft]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Each saved incomplete revision must return to essentials even when phase is unchanged.
+  useEffect(() => {
+    // Reconfirm facts only when the saved server revision requires them.
+    if (draft?.phase === "essential") setSection("essentials");
+  }, [draft?.phase, draft?.revision]);
   const pending = useRef(false);
   const voice = useVoiceSession(undefined, {
     onboarding: true,
@@ -244,11 +249,6 @@ export default function FoundationOnboarding({
     setError(null);
     try {
       revisionRef.current = await edit(editing);
-      if (
-        editing.answers.some((a) => a.section === "essentials") ||
-        draft?.answers.some((a) => a.section === "essentials")
-      )
-        setSection("essentials");
       setEditing(null);
       setPreview(null);
     } catch {

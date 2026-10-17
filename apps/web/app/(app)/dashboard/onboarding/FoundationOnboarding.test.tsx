@@ -8,6 +8,9 @@ import FoundationOnboarding from "./FoundationOnboarding";
 
 const state = vi.hoisted(() => ({
   revision: 1,
+  phase: "enrichment",
+  answers: [] as { eventId: string; section: string; text: string; intent: string }[],
+  edit: vi.fn().mockResolvedValue(2),
   start: vi.fn(),
   sendText: vi.fn().mockResolvedValue(true),
   publish: vi.fn().mockResolvedValue({ docIds: [] }),
@@ -32,13 +35,15 @@ vi.mock("convex/react", () => ({
       ? state.publish
       : getFunctionName(fn as Parameters<typeof getFunctionName>[0]) === "foundation:discard"
         ? state.discard
-        : vi.fn(),
+        : getFunctionName(fn as Parameters<typeof getFunctionName>[0]) === "foundation:edit"
+          ? state.edit
+          : vi.fn(),
   useQuery: (fn: unknown) => {
     switch (getFunctionName(fn as Parameters<typeof getFunctionName>[0])) {
       case "foundation:get":
         return {
           revision: state.revision,
-          phase: "enrichment",
+          phase: state.phase,
           profile: {
             name: "Test",
             oneLineDescription: "Repair bikes",
@@ -48,7 +53,7 @@ vi.mock("convex/react", () => ({
             primaryGoals: [],
             knownConstraints: [],
           },
-          answers: [],
+          answers: state.answers,
           reply: "Ready for review",
         };
       case "foundation:review":
@@ -83,6 +88,8 @@ function button(host: HTMLElement, text: string) {
 }
 afterEach(() => {
   state.revision = 1;
+  state.phase = "enrichment";
+  state.answers = [];
   state.status = "idle";
   state.voiceError = null;
   vi.clearAllMocks();
@@ -203,6 +210,52 @@ test("failed voice commands retain the editable answer for retry", async () => {
     expect(host.textContent).toContain("Your answer was not sent");
     await act(async () => button(host, "Send typed answer").click());
     expect(textarea.value).toBe("");
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
+test.each([
+  false,
+  true,
+])("saved server phase controls whether correction returns to essentials (invalidated=%s)", async (invalidated) => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  state.answers = [
+    {
+      eventId: "essential",
+      section: "essentials",
+      text: "One founder, no staff",
+      intent: "current",
+    },
+    { eventId: "offer", section: "offers", text: "Price is 12", intent: "planned" },
+  ];
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  try {
+    await act(async () => root.render(<FoundationOnboarding />));
+    const selector = host.querySelector("select");
+    if (!selector) throw new Error("Section selector missing");
+    await act(async () => {
+      selector.value = "offers";
+      selector.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => button(host, "Edit profile and saved statements").click());
+    const statement = [...host.querySelectorAll("textarea")].find(
+      (x) => x.value === (invalidated ? "One founder, no staff" : "Price is 12"),
+    );
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    if (!statement || !setter) throw new Error("Saved statement editor missing");
+    await act(async () => {
+      setter.call(statement, invalidated ? "Five staff" : "Price is 15");
+      statement.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button(host, "Save edits").click());
+    expect(state.edit).toHaveBeenCalledOnce();
+    expect(selector.value).toBe("offers");
+    state.revision = 2;
+    state.phase = invalidated ? "essential" : "enrichment";
+    await act(async () => root.render(<FoundationOnboarding />));
+    expect(selector.value).toBe(invalidated ? "essentials" : "offers");
   } finally {
     await act(async () => root.unmount());
   }

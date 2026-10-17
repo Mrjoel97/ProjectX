@@ -23,6 +23,8 @@
 
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-10-17 — correction navigation follows the saved server phase/revision. Offer-only edits preserve the selected reference section; an essential revision returns to essentials only when the server requires reconfirmation. Two rendered correction scenarios pass, including an essentials answer already present during an offer edit.
+
 > Last verified: 2026-10-17 — correcting or removing an essentials statement invalidates inferred tier facts and returns the interview to essentials until current facts are reconfirmed. Planned essentials remain draft statements and cannot set current team/revenue/funding/age facts. Review and publication refuse incomplete essentials. Typed voice input is cleared only after server acceptance, and connecting offers pause/save with sending disabled. Focused local regressions cover these behaviors; native voice and six-document acceptance remain open.
 
 > Last verified: 2026-09-30 — Connections warning correction, local only. Revoked rows retain
