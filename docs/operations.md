@@ -157,6 +157,26 @@ rollback or a diagnosis of the earlier failure. Local redacted artifact:
 `../staging-backend-recovery-20261017-evidence.json`. Preserve both runs and do not rerun the
 previous-code drill without a new reviewed recovery design and exclusive staging window.
 
+### Subsequent isolated backend rollback and native privacy evidence
+
+[Isolated rollback 39031979534](https://github.com/Mrjoel97/ProjectX/actions/runs/39031979534)
+subsequently passed current `a129b884445482625b1e8f2a236744fb2a0f2515` → previous
+`de18285d7466ea743d42199dc1d8de4a66dccbf9` → current in the exclusive staging window.
+Configuration, registry and original retention fixture were preserved. This evidence applies to the
+schema in that window, not database restoration or the unknown cause of the earlier failed attempt.
+After deploying the additive `authRevocations.ragCleanup` checkpoint, use a CI-qualified forward
+rollback retaining that field, the cleanup worker and tenant-erasure security fence. Do not redeploy
+the older schema over checkpoint-bearing rows or disable durable work required to finish erasure.
+
+Native API signup, six-document foundation publication, complete export and actual self-deletion
+passed separately; see the readiness evidence for runs `39030504811` and `39031820186`.
+Export verified the six reviewed documents plus Blueprint and one exact 192-byte decoded file.
+Stale JWTs were denied across public function kinds. Independent physical reads proved storage,
+user, receipts and all RAG business content absent, but retained empty namespace metadata prevented
+full privacy qualification. The namespace repair, second native phase, hosted in-flight/provider
+cleanup and browser/microphone acceptance require separate observed results. The original retention
+clock remains pending until 2026-10-24; never reset or delete it to accelerate qualification.
+
 The deploy workflow accepts a successful CI push on main in this repository and checks out its exact
 SHA. Promotion currently requires a commit subject beginning `[deploy]`. Verify actual branch and
 environment protection settings; the marker alone is not an enforced reviewer approval.
