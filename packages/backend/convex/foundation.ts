@@ -445,6 +445,17 @@ export const publish = tenantMutation({
       let id: Id<"vaultDocuments">;
       if (previous?.tenantId === ctx.tenantId && previous.kind === doc.kind) {
         id = previous._id;
+        if (
+          previous.status === "ready" &&
+          previous.ragEntryId &&
+          !previous.graphCleanupHash &&
+          previous.title === doc.title &&
+          previous.text === doc.text &&
+          previous.contentHash === hash
+        ) {
+          docIds.push(id);
+          continue;
+        }
         if (previous.ragEntryId && !previous.ragEntryId.startsWith("smoke::"))
           await rag.deleteAsync(ctx, { entryId: previous.ragEntryId as EntryId });
         await ctx.db.patch(id, {

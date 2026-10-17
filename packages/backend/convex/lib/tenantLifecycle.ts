@@ -1,4 +1,4 @@
-import { TENANT_TABLE_CLASSIFICATION } from "@pikar/core/tenantData";
+import { storageIdsIn, TENANT_TABLE_CLASSIFICATION } from "@pikar/core/tenantData";
 import {
   createFunctionHandle,
   type FunctionHandle,
@@ -7,6 +7,7 @@ import {
 } from "convex/server";
 import { v } from "convex/values";
 import { customAction, customCtx, customMutation } from "convex-helpers/server/customFunctions";
+import type { Id } from "../_generated/dataModel";
 import {
   type ActionCtx,
   type MutationCtx,
@@ -30,6 +31,19 @@ export async function assertTenantWritable(
 
 export function lifecycleDatabase(ctx: MutationCtx): MutationCtx["db"] {
   const db = ctx.db;
+  const attachGeneratedStorage = async (table: string, row: Record<string, unknown>) => {
+    if (table === "uploadReceipts" || typeof row.tenantId !== "string") return;
+    for (const storageId of storageIdsIn(table, row)) {
+      const receipt = await db
+        .query("uploadReceipts")
+        .withIndex("by_storage", (q) => q.eq("storageId", storageId as Id<"_storage">))
+        .unique();
+      if (receipt?.ticketHash.startsWith("generated:")) {
+        if (receipt.tenantId !== row.tenantId) throw new Error("UPLOAD_NOT_OWNED");
+        await db.patch(receipt._id, { expiresAt: Number.MAX_SAFE_INTEGER });
+      }
+    }
+  };
   const check = async (table: string, value: Record<string, unknown>) => {
     const category = TENANT_TABLE_CLASSIFICATION[table as keyof typeof TENANT_TABLE_CLASSIFICATION];
     if (category !== "tenant_owned" && category !== "tenant_credential") return;
@@ -42,6 +56,7 @@ export function lifecycleDatabase(ctx: MutationCtx): MutationCtx["db"] {
       if (key === "insert")
         return async (table: string, value: Record<string, unknown>) => {
           await check(table, value);
+          await attachGeneratedStorage(table, value);
           return target.insert(table as never, value as never);
         };
       if (key === "patch" || key === "replace")
@@ -55,7 +70,7 @@ export function lifecycleDatabase(ctx: MutationCtx): MutationCtx["db"] {
           if (typeof second === "string" && !target.normalizeId(first as never, id))
             throw new Error("INVALID_DOCUMENT_ID");
           const old = await target.get(id as never);
-          const protectedTable = Object.entries(TENANT_TABLE_CLASSIFICATION).some(
+          const protectedTable = Object.entries(TENANT_TABLE_CLASSIFICATION).find(
             ([table, category]) =>
               (category === "tenant_owned" || category === "tenant_credential") &&
               target.normalizeId(table as never, id),
@@ -79,6 +94,10 @@ export function lifecycleDatabase(ctx: MutationCtx): MutationCtx["db"] {
             if (typeof tenantId === "string")
               await assertTenantWritable(ctx, tenantId, terminationReceipt);
             if (typeof value.tenantId === "string") await assertTenantWritable(ctx, value.tenantId);
+            await attachGeneratedStorage(
+              protectedTable[0],
+              key === "patch" ? { ...old, ...value } : value,
+            );
           }
           return key === "patch"
             ? target.patch(id as never, value as never)
@@ -114,6 +133,31 @@ const erasureRef = makeFunctionReference<"query", { userId: string }, boolean>(
   "authRevocations:erasureInProgress",
 );
 
+/** Register generated blobs before returning them to an action's later attachment step. */
+export const ownGeneratedStorage = internalMutation({
+  args: { tenantId: v.string(), storageId: v.id("_storage") },
+  handler: async (ctx, { tenantId, storageId }) => {
+    await assertTenantWritable(ctx, tenantId);
+    const metadata = await ctx.db.system.get(storageId);
+    if (!metadata) throw new Error("GENERATED_STORAGE_MISSING");
+    await ctx.db.insert("uploadReceipts", {
+      tenantId,
+      ticketHash: `generated:${storageId}`,
+      state: "complete",
+      storageId,
+      size: metadata.size,
+      mimeType: metadata.contentType,
+      // Attachment through lifecycleDatabase promotes this receipt atomically.
+      // Unattached generated assets keep the existing one-day cleanup allowance.
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+    });
+  },
+});
+const ownStorageRef = makeFunctionReference<
+  "mutation",
+  { tenantId: string; storageId: Id<"_storage"> }
+>("lib/tenantLifecycle:ownGeneratedStorage");
+
 /** Component writes join the transaction containing the lifecycle read. */
 export function lifecycleActionContext(
   ctx: ActionCtx,
@@ -142,7 +186,7 @@ export function lifecycleActionContext(
           await assertActive();
           const id = await target.store(blob);
           try {
-            await assertActive();
+            await ctx.runMutation(ownStorageRef, { tenantId, storageId: id });
           } catch (error) {
             await target.delete(id);
             throw error;

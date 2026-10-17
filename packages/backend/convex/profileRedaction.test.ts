@@ -10,10 +10,11 @@
 import type { ProfileInput } from "@pikar/core";
 import { serializeProfile } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+import { schedulingTest as it } from "../test/pausedScheduler";
 import { api } from "./_generated/api";
 import schema from "./schema";
 
@@ -132,7 +133,7 @@ async function payloadNumbers(t: TestConvex<typeof schema>): Promise<number[]> {
   return out;
 }
 
-test("no onboarding audit/telemetry/DLQ row carries profile prose or a field value (SC#4, §4)", async () => {
+it("no onboarding audit/telemetry/DLQ row carries profile prose or a field value (SC#4, §4)", async () => {
   const t = setup();
   await seedFacts(t);
   const asT = asTenant(t);
@@ -143,6 +144,7 @@ test("no onboarding audit/telemetry/DLQ row carries profile prose or a field val
     profile: { ...PROFILE, offering: "EDITED_OFFERING_SENTINEL" },
   });
 
+  expect(vi.getTimerCount()).toBeGreaterThan(0); // Profile writes enqueue real ingest/cleanup.
   const logs = await logPlaneJson(t);
 
   // The commit audit DID land (proving we are scanning a populated log plane, not an empty one).
@@ -168,7 +170,7 @@ test("no onboarding audit/telemetry/DLQ row carries profile prose or a field val
   }
 });
 
-test("the profile CONTENT does live on the vault row (the content plane is not over-redacted)", async () => {
+it("the profile CONTENT does live on the vault row (the content plane is not over-redacted)", async () => {
   const t = setup();
   await seedFacts(t);
   const { vaultDocId } = await asTenant(t).mutation(api.onboarding.commitProfile, {
@@ -178,4 +180,6 @@ test("the profile CONTENT does live on the vault row (the content plane is not o
   // survive verbatim on the vaultDocuments row (else grounding would have nothing to retrieve).
   const doc = await t.run((ctx) => ctx.db.get(vaultDocId));
   expect(doc?.text).toContain("OFFERING_SENTINEL");
+  expect(doc?.status).toBe("processing");
+  expect(vi.getTimerCount()).toBeGreaterThan(0);
 });

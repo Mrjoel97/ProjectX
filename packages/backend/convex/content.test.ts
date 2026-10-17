@@ -12,12 +12,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 // Registered only by `withIngest()` below, for the one test that crosses into the real promotion
 // mutation — `promoteToReference` calls `startIngest`, which reaches `workflow.start`. Same shape
 // as vault.test.ts, which is where that pattern is documented.
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+import { schedulingTest as it } from "../test/pausedScheduler";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
@@ -499,7 +500,7 @@ describe("Content shelf — provenance, reuse and reel proof", () => {
 });
 
 describe("Content shelf — promotion is OFFERED here and GUARDED in exactly one place", () => {
-  test("the offered state tracks what api.vault.promoteToReference actually does", async () => {
+  it("the offered state tracks what api.vault.promoteToReference actually does", async () => {
     const t = withIngest();
     const eligible = await seedDoc(t, {
       kind: "created_document",
@@ -547,6 +548,7 @@ describe("Content shelf — promotion is OFFERED here and GUARDED in exactly one
     const after = await asTenant(t).query(api.content.artifactById, { vaultDocId: eligible });
     expect(after?.promotion).toEqual({ state: "promoted" });
     expect(after?.status).toBe("processing");
+    expect(vi.getTimerCount()).toBeGreaterThan(0); // Real workflow is queued, not executed.
   });
 
   test("artifactById returns the same card the list returns", async () => {

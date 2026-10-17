@@ -1,10 +1,11 @@
 import { generateKeyPairSync } from "node:crypto";
+import { deletableTables } from "@pikar/core/tenantData";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { lifecycleActionContext } from "./lib/tenantLifecycle";
+import { lifecycleActionContext, lifecycleDatabase } from "./lib/tenantLifecycle";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -48,6 +49,75 @@ test("an admitted storage operation crossing erasure compensates its own blob wi
   const createdBlob = racedBlob;
   expect(await t.run((ctx) => ctx.db.system.get(createdBlob))).toBeNull();
   expect(await t.run((ctx) => ctx.db.system.get(otherBlob))).not.toBeNull();
+});
+
+test("a completed generated blob stays owned when erasure starts before its later attachment", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await t.run((ctx) => ctx.db.insert("users", {}));
+  const foreignBlob = await t.action((ctx) => ctx.storage.store(new Blob(["foreign fixture"])));
+  const generated = await t.action(async (ctx) => {
+    const guarded = lifecycleActionContext(ctx, String(userId));
+    return guarded.storage.store(new Blob(["generated fixture waiting for attachment"]));
+  });
+  // Storage has returned, but the caller's later attachment has not committed.
+  await t.mutation(internal.authRevocations.beginErasure, { userId });
+  const receipts = await t.run((ctx) =>
+    ctx.db
+      .query("uploadReceipts")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", String(userId)))
+      .collect(),
+  );
+  expect(receipts.map((row) => row.storageId)).toEqual([generated]);
+  await t.mutation(internal.tenantDelete.deleteTenantDataPage, {
+    tenantId: String(userId),
+    userId,
+    cursor: { tableIndex: deletableTables().indexOf("uploadReceipts") },
+  });
+  expect(await t.run((ctx) => ctx.db.system.get(generated))).toBeNull();
+  expect(await t.run((ctx) => ctx.db.system.get(foreignBlob))).not.toBeNull();
+});
+
+test("generated attachment promotion preserves owned files while abandoned blobs expire", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const t = convexTest(schema, modules);
+  const userId = await t.run((ctx) => ctx.db.insert("users", {}));
+  const other = await t.run((ctx) => ctx.db.insert("users", {}));
+  const store = () =>
+    t.action((ctx) =>
+      lifecycleActionContext(ctx, String(userId)).storage.store(new Blob(["fixture"])),
+    );
+  const attached = await store();
+  const abandoned = await store();
+  const fields = {
+    tenantId: String(userId),
+    title: "fixture",
+    kind: "generated",
+    category: "general",
+    source: "generated",
+    mimeType: "text/plain",
+    size: 7,
+    contentHash: "fixture",
+    createdAt: Date.now(),
+    status: "ready" as const,
+  };
+  await expect(
+    t.run((ctx) =>
+      lifecycleDatabase(ctx).insert("vaultDocuments", {
+        ...fields,
+        tenantId: String(other),
+        storageId: attached,
+      }),
+    ),
+  ).rejects.toThrow("UPLOAD_NOT_OWNED");
+  const doc = await t.run((ctx) => lifecycleDatabase(ctx).insert("vaultDocuments", fields));
+  await t.run((ctx) => lifecycleDatabase(ctx).patch(doc, { storageId: attached }));
+  vi.setSystemTime(Date.now() + 24 * 60 * 60 * 1000 + 1);
+  await t.mutation(internal.uploads.purgeExpired, {});
+  expect(await t.run((ctx) => ctx.db.system.get(attached))).not.toBeNull();
+  expect(await t.run((ctx) => ctx.db.system.get(abandoned))).toBeNull();
+  expect(await t.run((ctx) => ctx.db.query("uploadReceipts").collect())).toMatchObject([
+    { storageId: attached, expiresAt: Number.MAX_SAFE_INTEGER },
+  ]);
 });
 
 test("reset session validation rejects exactly at persisted session expiry across all tenant wrappers", async () => {

@@ -7,7 +7,9 @@ export async function uploadTranscriptionAudio(
   original: Blob,
   mimeType: string,
   uploadUrl: () => Promise<string>,
+  signal?: AbortSignal,
 ): Promise<FunctionArgs<typeof api.vault.vaultUpload>["transcriptionStorageId"]> {
+  signal?.throwIfAborted();
   if (!mimeType.startsWith("audio/") && !mimeType.startsWith("video/")) return undefined;
   let audio: Blob;
   try {
@@ -17,10 +19,14 @@ export async function uploadTranscriptionAudio(
       "We could not read this audio track. Use a supported recording of up to 10 minutes, or upload its transcript.",
     );
   }
-  const response = await fetch(await uploadUrl(), {
+  signal?.throwIfAborted();
+  const url = await uploadUrl();
+  signal?.throwIfAborted();
+  const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "audio/wav" },
     body: audio,
+    signal,
   });
   if (!response.ok) throw new Error("Audio preparation upload failed. Please retry.");
   const result = await response.json();
