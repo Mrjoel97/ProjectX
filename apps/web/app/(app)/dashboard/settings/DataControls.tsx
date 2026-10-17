@@ -143,9 +143,9 @@ export function DataControls() {
       setDeleteState("done");
       setPhrase("");
       setDeleteMessage(
-        `Erased — ${rows.toLocaleString()} ${rows === 1 ? "row" : "rows"} across ${
+        `Account closed — removed ${rows.toLocaleString()} ${rows === 1 ? "row" : "rows"} across ${
           Object.keys(result.deletedByTable).length
-        } tables. Your account data and content are gone.`,
+        } tables. Background removal of search copies may still be in progress. Contact support for confirmation.`,
       );
     } catch (error) {
       setDeleteState("error");
@@ -236,6 +236,10 @@ export function DataControls() {
           <p style={body}>
             The audit archive is retained. It holds {AUDIT_ARCHIVE_STATEMENT} What stays is the
             record that actions happened — never what they contained.
+          </p>
+          <p style={body}>
+            Account access ends during deletion. Background removal of search copies can finish
+            later; contact support to confirm completion.
           </p>
         </div>
 
