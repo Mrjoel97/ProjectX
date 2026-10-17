@@ -1,0 +1,69 @@
+name: production-native-pilot
+on:
+  push:
+    branches: [codex/production-native-pilot-operator-20261017]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  deploy:
+    if: github.repository == 'Mrjoel97/ProjectX'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    concurrency:
+      group: production-native-qualification
+      cancel-in-progress: false
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: operator
+          persist-credentials: false
+      - name: Check operator without deployment credentials
+        run: node --check operator/.github/scripts/production-native-pilot.mjs
+      - name: Require exact reviewed source CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_SHA: 4e83cd4f77d1978b2d5caec0fed90b514597f820
+          EXPECTED_CI_RUN_ID: 39051099421
+          EXPECTED_RELEASE_RUN_ID: 39051400877
+        run: |
+          node <<'NODE'
+          (async()=>{
+            if(!/^[a-f0-9]{40}$/.test(process.env.SOURCE_SHA)||!/^\d+$/.test(process.env.EXPECTED_CI_RUN_ID))throw Error();
+            const r=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs?head_sha='+process.env.SOURCE_SHA+'&per_page=100',{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
+            if(!r.ok)throw Error();const {workflow_runs:runs,total_count}=await r.json();if(!Array.isArray(runs)||total_count>100)throw Error();
+            const x=runs.filter(x=>x.head_sha===process.env.SOURCE_SHA&&x.workflow_id===325088000&&x.path==='.github/workflows/ci.yml'&&['pull_request','push'].includes(x.event)).sort((a,b)=>b.id-a.id||b.run_attempt-a.run_attempt)[0];
+            if(!x||x.event!=='push'||x.head_branch!=='main'||String(x.id)!==process.env.EXPECTED_CI_RUN_ID||x.name!=='ci'||x.repository.full_name!=='Mrjoel97/ProjectX'||x.head_repository.full_name!=='Mrjoel97/ProjectX'||x.status!=='completed'||x.conclusion!=='success')throw Error();
+            if(!/^\d+$/.test(process.env.EXPECTED_RELEASE_RUN_ID))throw Error();
+            const releaseResponse=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs/'+process.env.EXPECTED_RELEASE_RUN_ID,{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
+            if(!releaseResponse.ok)throw Error();const release=await releaseResponse.json();
+            if(release.head_sha!==process.env.SOURCE_SHA||release.path!=='.github/workflows/deploy-production.yml'||release.name!=='deploy-production'||release.repository.full_name!=='Mrjoel97/ProjectX'||release.head_repository.full_name!=='Mrjoel97/ProjectX'||release.status!=='completed'||release.conclusion!=='success')throw Error();
+            console.log(JSON.stringify({exactSourceCiPassed:true,exactProductionReleasePassed:true}));
+          })().catch(()=>{console.error('CI_GATE_FAILED');process.exitCode=1;});
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          ref: 4e83cd4f77d1978b2d5caec0fed90b514597f820
+          path: current
+          persist-credentials: false
+      - run: corepack enable
+      - name: Install exact source without deployment credentials
+        working-directory: current
+        run: pnpm install --frozen-lockfile
+      - name: Reviewed production pilot operation only
+        timeout-minutes: 20
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          REVIEWED_MODE: window
+          PILOT_GO: '1'
+        run: node operator/.github/scripts/production-native-pilot.mjs "$REVIEWED_MODE"
+      - name: Always restore only the dedicated pilot grant
+        if: always()
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: node operator/.github/scripts/production-native-pilot.mjs restore
