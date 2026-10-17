@@ -28,9 +28,9 @@ jobs:
       - name: Require exact reviewed source CI
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_SHA: 4e83cd4f77d1978b2d5caec0fed90b514597f820
-          EXPECTED_CI_RUN_ID: 39051099421
-          EXPECTED_RELEASE_RUN_ID: 39051400877
+          SOURCE_SHA: d95168841ec5e698cd1b6f5b690c76532471aa27
+          EXPECTED_CI_RUN_ID: 39056721598
+          EXPECTED_RELEASE_RUN_ID: 39057023401
         run: |
           node <<'NODE'
           (async()=>{
@@ -48,7 +48,7 @@ jobs:
           NODE
       - uses: actions/checkout@v4
         with:
-          ref: 4e83cd4f77d1978b2d5caec0fed90b514597f820
+          ref: d95168841ec5e698cd1b6f5b690c76532471aa27
           path: current
           persist-credentials: false
       - run: corepack enable
