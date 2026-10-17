@@ -59,9 +59,9 @@ jobs:
         timeout-minutes: 20
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-          REVIEWED_MODE: reconcile
-          PILOT_GO: '0'
-          OWNER_READY: '0'
+          REVIEWED_MODE: window
+          PILOT_GO: '1'
+          OWNER_READY: '1'
         run: node operator/.github/scripts/production-owner-pilot.mjs "$REVIEWED_MODE"
       - name: Always restore only the dedicated pilot grant
         if: always()
