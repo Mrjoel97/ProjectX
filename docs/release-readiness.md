@@ -1,6 +1,6 @@
 # Release readiness and implementation checklist
 
-Last reviewed: 2026-10-16. Implementation starting baseline: `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
+Last reviewed: 2026-10-17. Implementation starting baseline: `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
 Release implementation and deployment evidence: Codex, acting on the repository owner's instructions. Ongoing operator and specialist review assignments remain open under the owner roles below; deployment does not close those operational ownership tasks.
 Current production runtime: `de18285d7466ea743d42199dc1d8de4a66dccbf9`, verified 2026-10-16 in [run 38815539297](https://github.com/Mrjoel97/ProjectX/actions/runs/38815539297). Local implementation and tests never imply live provider verification. Production voice/foundation activation and the remaining drills below are still open; staging foundation is enabled for controlled acceptance.
 
@@ -73,6 +73,40 @@ implementation changes; old evidence is not current assurance.
 - [ ] Obtain the remaining postal address and reviewed legal content. Keep billing disabled as explicitly instructed; do not activate it during this release. Resolve WORM retention, connector and recurrence provider evidence independently and preserve their gates.
 
 The unchecked tasks require additional implementation or operational evidence. The runtime release recorded above does not establish completion of every original gap.
+
+As of 2026-10-17, the latest recognised staging invitation still has no inspected post-attempt
+account state. The requested four-boolean diagnostic remains open. Chrome inventory reported an
+unrelated private site and automatic approval review refused its accessibility snapshot; no account
+or delivery conclusion is inferred from that refusal. The owner requested continued direct fixes.
+Source review found actionable voice lifecycle and foundation correction defects, recorded below.
+No seven-day checkpoint observation start has been recorded. Follow the private timestamp/evidence
+protocol and accountable-owner/legal records in [operations](operations.md#configuration-planes).
+The original signup diagnosis, native acceptance and live operational gates remain unchecked.
+
+## Onboarding reliability corrections — 2026-10-17
+
+This correction round prevents late microphone/signaling/reconnect completion from resurrecting an
+ended voice session, retains typed text until server acceptance, and disables sending during
+connection. It removes a discarded browser wrap-up command; countdown presentation and server-owned
+response admission remain. The server now remembers input arriving during another response and
+creates a separately admitted follow-up only after trusted settlement. A regression fails when that
+follow-up is removed, then passes with the fix.
+
+Editing or removing a current essentials statement invalidates extracted tier facts and requires
+reconfirmation before review/publication. Duplicate statement event IDs are rejected without writes.
+Planned essentials retain provenance without extraction or changing confirmed current facts; editing
+planned-only statements preserves those facts. Signup guidance now distinguishes code recognition
+from email matching and acknowledges generic transport/service failure without disclosing account
+existence. This is accurate guidance, not a proven resolution of the live signup failure.
+
+Local validation: 59 backend voice/foundation tests, 16 web voice/onboarding tests and nine signup/auth
+guards passed; backend and web typechecks, repository Biome and playbook checks passed. The voice UI
+also blocks duplicate pending submissions and best-effort aborts known active sessions on navigation;
+the durable provider watchdog remains authoritative. Golden/vertical offline checks and four evaluator
+identity regressions passed with no fingerprint changes required. Graphify was unavailable; the
+Convex-edge fixup ran but does not establish a complete graph refresh. Exact-head hosted CI/release
+evidence must be attached before treating these corrections as deployed. Production
+foundation/controlled voice and commercial billing remain off.
 
 ## Implemented code checklist
 

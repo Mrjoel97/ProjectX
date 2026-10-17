@@ -170,7 +170,7 @@ const answerForTenant = async (
   let profile: ProfileInput = row.profile;
   let slots = row.slots;
   let reply = "Saved as a draft. You can review your foundation or continue with another section.";
-  if (a.section === "essentials") {
+  if (a.section === "essentials" && a.intent === "current") {
     if (!profile.oneLineDescription)
       profile = await ctx.runAction(internal.onboarding.extractProfileInternal, {
         tenantId: ctx.tenantId,
@@ -224,6 +224,7 @@ export const edit = tenantMutation({
     const row = checkRevision(await read(ctx, ctx.tenantId), a.revision);
     if (
       a.answers.length > FOUNDATION_MAX_ANSWERS ||
+      new Set(a.answers.map((answer) => answer.eventId)).size !== a.answers.length ||
       a.answers.reduce((sum, x) => sum + x.text.length, 0) > FOUNDATION_MAX_TOTAL_TEXT ||
       a.answers.some((x) => !x.text.trim() || x.text.length > FOUNDATION_MAX_TEXT) ||
       JSON.stringify(a.profile).length > 24000
@@ -242,10 +243,30 @@ export const edit = tenantMutation({
       )
     )
       throw new ConvexError({ code: "INVALID_SOURCE" });
+    // Extraction has no per-slot provenance. A changed or removed essential statement
+    // invalidates every inferred tier fact; require explicit reconfirmation, not guesses.
+    const essentialsChanged = row.answers.some((old) => {
+      if (old.section !== "essentials") return false;
+      const answer = a.answers.find((candidate) => candidate.eventId === old.eventId);
+      return old.intent === "current"
+        ? !answer || answer.text !== old.text || answer.intent !== "current"
+        : answer?.intent === "current";
+    });
+    const slots = {
+      ...(essentialsChanged ? {} : row.slots),
+      oneLineDescription: a.profile.oneLineDescription,
+    };
     await ctx.db.patch(row._id, {
       profile: a.profile,
       answers: a.answers,
-      slots: { ...row.slots, oneLineDescription: a.profile.oneLineDescription },
+      slots,
+      phase: missingSlots(slots).length ? "essential" : "enrichment",
+      ...(essentialsChanged
+        ? {
+            reply:
+              "Your business essentials changed. Please confirm your current headcount, paid staff, revenue stage, funding, and years operating before reviewing again.",
+          }
+        : {}),
       state: "active",
       revision: row.revision + 1,
       updatedAt: Date.now(),

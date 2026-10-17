@@ -126,7 +126,9 @@ function SignUp() {
     } catch {
       // Deliberately one message for every refusal. Distinguishing "not invited" from "already
       // registered" would turn this form into a directory of who is on the list.
-      setError("We couldn't create that account. Check the invite code and email address.");
+      setError(
+        "We couldn't complete signup. Check that you used the exact invited email and code. A connection or service problem can also cause this. If you already started signup, sign in to continue.",
+      );
       setBusy(false);
     }
   }
@@ -186,7 +188,7 @@ function SignUp() {
         {preflight === undefined
           ? "Checking your invite…"
           : codeAccepted
-            ? `Invite recognised for ${preflight.invitedEmailMasked}. Sign up with that address.`
+            ? `Invite code recognised for ${preflight.invitedEmailMasked}. Your email has not been checked yet.`
             : "That invite code isn't valid. It may have been used already, or mistyped."}
       </p>
 
@@ -196,6 +198,11 @@ function SignUp() {
           and password to continue. You may still need to verify your email.
         </p>
       )}
+
+      <p className="auth-tagline">
+        Enter the exact email address that received your invitation, including any +suffix.
+        Recognising the code does not confirm that the email you enter matches it.
+      </p>
 
       <form onSubmit={onSubmit}>
         <TextField

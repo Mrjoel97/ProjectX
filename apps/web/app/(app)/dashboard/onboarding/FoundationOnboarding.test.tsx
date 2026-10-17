@@ -9,6 +9,7 @@ import FoundationOnboarding from "./FoundationOnboarding";
 const state = vi.hoisted(() => ({
   revision: 1,
   start: vi.fn(),
+  sendText: vi.fn().mockResolvedValue(true),
   publish: vi.fn().mockResolvedValue({ docIds: [] }),
   discard: vi.fn().mockResolvedValue(null),
   status: "idle",
@@ -21,7 +22,7 @@ vi.mock("../voice/useVoiceSession", () => ({
     error: state.voiceError,
     start: state.start,
     end: vi.fn(),
-    sendText: vi.fn(),
+    sendText: state.sendText,
   }),
 }));
 vi.mock("convex/react", () => ({
@@ -156,6 +157,52 @@ test("foundation disabled retains draft reading and discard without write contro
     expect(state.start).not.toHaveBeenCalled();
     await act(async () => button(host, "Discard unpublished progress").click());
     expect(state.discard).toHaveBeenCalledExactlyOnceWith({ revision: 1 });
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
+async function typeAnswer(host: HTMLElement, value: string) {
+  const textarea = host.querySelector("textarea");
+  const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+  if (!textarea || !setValue) throw new Error("Answer input missing");
+  await act(async () => {
+    setValue.call(textarea, value);
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  return textarea;
+}
+test("connecting retains typed input until a session can acknowledge it", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  state.status = "connecting";
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  try {
+    await act(async () => root.render(<FoundationOnboarding />));
+    const textarea = await typeAnswer(host, "My draft answer");
+    expect(button(host, "Send typed answer").disabled).toBe(true);
+    await act(async () => button(host, "Send typed answer").click());
+    expect(state.sendText).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("My draft answer");
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+test("failed voice commands retain the editable answer for retry", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  state.status = "live";
+  state.sendText.mockResolvedValueOnce(false);
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  try {
+    await act(async () => root.render(<FoundationOnboarding />));
+    const textarea = await typeAnswer(host, "Retain this answer");
+    await act(async () => button(host, "Send typed answer").click());
+    expect(state.sendText).toHaveBeenCalledWith("Retain this answer");
+    expect(textarea.value).toBe("Retain this answer");
+    expect(host.textContent).toContain("Your answer was not sent");
+    await act(async () => button(host, "Send typed answer").click());
+    expect(textarea.value).toBe("");
   } finally {
     await act(async () => root.unmount());
   }

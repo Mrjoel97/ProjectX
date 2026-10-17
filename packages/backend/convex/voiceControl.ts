@@ -48,6 +48,7 @@ export const run = internalAction({
     let ready = false;
     let responses = 0;
     let pending: Id<"spendEvents"> | undefined;
+    let responseRequested = false;
     let responseId: string | undefined;
     let queue: Promise<void> = Promise.resolve();
     const send = (event: object) => {
@@ -57,7 +58,13 @@ export const run = internalAction({
     const respond = async () => {
       if (!ready) throw new Error("VOICE_CONTROL_UNCONFIRMED");
       if (failed || Date.now() >= initial.endsAt) throw new Error("VOICE_SESSION_INACTIVE");
-      if (pending) return;
+      // A typed turn or committed audio arriving during a response still needs a
+      // response after that response settles. Coalesce requests, never admission.
+      if (pending) {
+        responseRequested = true;
+        return;
+      }
+      responseRequested = false;
       if (++responses > 20) throw new Error("VOICE_RESPONSE_LIMIT");
       // Provider-acknowledged conversation truncation bounds audio input; full text
       // prefix plus conversation is conservatively double-counted in the shared ceiling.
@@ -146,7 +153,7 @@ export const run = internalAction({
             },
           });
         }
-        if (tools.length) await respond();
+        if (tools.length || responseRequested) await respond();
       } else if (type === "error") {
         throw new Error("VOICE_PROVIDER_ERROR");
       }

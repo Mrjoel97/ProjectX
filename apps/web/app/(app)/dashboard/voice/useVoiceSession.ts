@@ -2,7 +2,7 @@
 
 import { api } from "@pikar/backend/api";
 import type { FoundationSection } from "@pikar/core/foundation";
-import { graceExpired, REALTIME_CLIENT_EVENTS, REALTIME_EVENTS } from "@pikar/voice";
+import { graceExpired, REALTIME_EVENTS } from "@pikar/voice";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -31,9 +31,9 @@ export type VoiceSession = {
   status: VoiceStatus;
   transcript: Turn[];
   speaking: Speaker | null;
-  /** Wall-clock ms left against the 15-min cap; null before start. Keeps counting during a pause. */
+  /** Wall-clock ms left against the server cap; null before start. Counts during a pause. */
   remainingMs: number | null;
-  /** True once the countdown crosses T-2min (drives the countdown emphasis + wrap-up). */
+  /** True once the countdown crosses T-2min (drives countdown emphasis only). */
   nearingCap: boolean;
   error: string | null;
   sessionId: SessionId | null;
@@ -43,7 +43,7 @@ export type VoiceSession = {
   /** Retry getUserMedia after a mic loss (Task 4). */
   reconnect: () => Promise<void>;
   /** Accessibility: type a turn; the agent still replies by voice + transcript. */
-  sendText: (text: string) => void;
+  sendText: (text: string) => Promise<boolean>;
 };
 
 type ServerEvent = {
@@ -96,32 +96,16 @@ export function useVoiceSession(docId?: string, options?: OnboardingVoiceOptions
   const eventCursorRef = useRef(0);
   const trustedState = useQuery(api.voice.controlState, sessionId ? { sessionId } : "skip");
   const agentTurnRef = useRef<string | null>(null);
-  const wrapSentRef = useRef(false);
-  // True while an agent response is in flight (first delta / audio start → response.done). The
-  // wrap-up nudge is a `response.create`; sent mid-response it silently 400s ("conversation already
-  // has an active response"), and that error lands in onEvent's dropped default case — the wrap-up
-  // never speaks. So we DEFER it until this clears (the next tick fires it in the gap).
-  const responseActiveRef = useRef(false);
   const pausedSinceRef = useRef<number | null>(null);
   const lastActivityRef = useRef<number>(0);
   const endedRef = useRef(false);
-
-  const send = useCallback(
-    (event: Record<string, unknown>) => {
-      const id = sessionIdRef.current;
-      const item = event.item as { content?: { type?: string; text?: string }[] } | undefined;
-      const text = item?.content?.find((p) => p.type === "input_text")?.text;
-      if (id && event.type === REALTIME_CLIENT_EVENTS.createItem && text)
-        void postText({ sessionId: id, text }).catch(() =>
-          setError("Could not send text. Please retry."),
-        );
-    },
-    [postText],
-  );
+  const generationRef = useRef(0);
+  const reconnectingRef = useRef(false);
 
   // Tear down every media/timer handle exactly once. Safe to call from end(), an error, unmount, or
   // the abnormal fall-through — endedRef guards a double teardown.
   const teardown = useCallback(() => {
+    generationRef.current += 1;
     endedRef.current = true;
     for (const t of micStreamRef.current?.getTracks() ?? []) t.stop();
     micStreamRef.current = null;
@@ -156,11 +140,9 @@ export function useVoiceSession(docId?: string, options?: OnboardingVoiceOptions
         break;
       case REALTIME_EVENTS.assistantAudioStarted:
         lastActivityRef.current = Date.now();
-        responseActiveRef.current = true;
         setSpeaking("agent");
         break;
       case REALTIME_EVENTS.assistantAudioStopped:
-        responseActiveRef.current = false;
         setSpeaking((s) => (s === "agent" ? null : s));
         break;
       case REALTIME_EVENTS.inputTranscriptDone: {
@@ -180,7 +162,6 @@ export function useVoiceSession(docId?: string, options?: OnboardingVoiceOptions
         const delta = ev.delta ?? "";
         if (!delta) break;
         lastActivityRef.current = Date.now();
-        responseActiveRef.current = true; // a text-only response has no audio-start to flag it
         setTranscript((t) => {
           const id = agentTurnRef.current;
           const prev = id ? t.find((x) => x.id === id) : undefined;
@@ -232,7 +213,7 @@ export function useVoiceSession(docId?: string, options?: OnboardingVoiceOptions
   }, []);
 
   // Mic loss mid-call (hardware unplug / OS revoke → track "ended", or a failed re-acquire): drop the
-  // dead track but keep the peer connection + data channel alive so reconnect() can re-add cleanly.
+  // dead track but keep the audio peer connection alive so reconnect() can replace it cleanly.
   // The auto-expiry timer + silence fall-through arm on top of this in Task 4.
   const onMicLost = useCallback(() => {
     if (endedRef.current || pausedSinceRef.current !== null) return;
@@ -244,53 +225,70 @@ export function useVoiceSession(docId?: string, options?: OnboardingVoiceOptions
   }, []);
 
   // ── Connect: mint → mic → handshake → relay callId → startSession ────────────
-  const connect = useCallback(async () => {
-    // `?doc=` is an unbranded route string; both server calls below re-validate it (ownership +
-    // `status: "ready"`), so the cast asserts shape for TypeScript, never trust.
-    const micStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    });
-    micStreamRef.current = micStream;
+  const connect = useCallback(
+    async (generation: number) => {
+      const current = () => generationRef.current === generation && !endedRef.current;
+      // `?doc=` is an unbranded route string; both server calls below re-validate it (ownership +
+      // `status: "ready"`), so the cast asserts shape for TypeScript, never trust.
+      const micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      if (!current()) {
+        for (const track of micStream.getTracks()) track.stop();
+        return;
+      }
+      micStreamRef.current = micStream;
 
-    const pc = new RTCPeerConnection();
-    pcRef.current = pc;
-    // Remote agent audio → a detached <audio> element (autoplay). Discarded on teardown; never stored.
-    const audioEl = new Audio();
-    audioEl.autoplay = true;
-    audioElRef.current = audioEl;
-    pc.ontrack = (e) => {
-      audioEl.srcObject = e.streams[0] ?? null;
-      void audioEl.play().catch(() => {});
-    };
+      const pc = new RTCPeerConnection();
+      pcRef.current = pc;
+      // Remote agent audio → a detached <audio> element (autoplay). Discarded on teardown; never stored.
+      const audioEl = new Audio();
+      audioEl.autoplay = true;
+      audioElRef.current = audioEl;
+      pc.ontrack = (e) => {
+        audioEl.srcObject = e.streams[0] ?? null;
+        void audioEl.play().catch(() => {});
+      };
 
-    const track = micStream.getAudioTracks()[0];
-    if (!track) throw new Error("no microphone track");
-    senderRef.current = pc.addTrack(track, micStream);
-    const opus =
-      RTCRtpSender.getCapabilities("audio")?.codecs.filter(
-        (codec) => codec.mimeType.toLowerCase() === "audio/opus",
-      ) ?? [];
-    if (opus.length !== 1) throw new Error("Audio codec unavailable");
-    pc.getTransceivers()[0]?.setCodecPreferences(opus);
-    // Mic hardware yanked mid-call (unplug / OS revoke) fires "ended" — the Task-4 pause hook.
-    track.addEventListener("ended", () => onMicLost());
+      const track = micStream.getAudioTracks()[0];
+      if (!track) throw new Error("no microphone track");
+      senderRef.current = pc.addTrack(track, micStream);
+      const opus =
+        RTCRtpSender.getCapabilities("audio")?.codecs.filter(
+          (codec) => codec.mimeType.toLowerCase() === "audio/opus",
+        ) ?? [];
+      if (opus.length !== 1) throw new Error("Audio codec unavailable");
+      pc.getTransceivers()[0]?.setCodecPreferences(opus);
+      // Mic hardware yanked mid-call (unplug / OS revoke) fires "ended" — the Task-4 pause hook.
+      track.addEventListener("ended", () => {
+        if (current()) onMicLost();
+      });
 
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+      const offer = await pc.createOffer();
+      if (!current()) return;
+      await pc.setLocalDescription(offer);
+      if (!current()) return;
 
-    const connected = await connectProvider({
-      offerSdp: offer.sdp ?? "",
-      ...(docId ? { docId: docId as DocRef } : {}),
-      ...(onboarding ? { onboarding: true } : {}),
-    });
-    sessionIdRef.current = connected.sessionId;
-    setSessionId(connected.sessionId);
-    endsAtRef.current = connected.endsAt;
-    eventCursorRef.current = 0;
-    await pc.setRemoteDescription({ type: "answer", sdp: connected.answerSdp });
-    startedAtRef.current = Date.now();
-    lastActivityRef.current = Date.now();
-  }, [connectProvider, onMicLost, docId, onboarding]);
+      const connected = await connectProvider({
+        offerSdp: offer.sdp ?? "",
+        ...(docId ? { docId: docId as DocRef } : {}),
+        ...(onboarding ? { onboarding: true } : {}),
+      });
+      if (!current()) {
+        void abortSession({ sessionId: connected.sessionId }).catch(() => {});
+        return;
+      }
+      sessionIdRef.current = connected.sessionId;
+      setSessionId(connected.sessionId);
+      endsAtRef.current = connected.endsAt;
+      eventCursorRef.current = 0;
+      await pc.setRemoteDescription({ type: "answer", sdp: connected.answerSdp });
+      if (!current()) return;
+      startedAtRef.current = Date.now();
+      lastActivityRef.current = Date.now();
+    },
+    [connectProvider, onMicLost, docId, onboarding, abortSession],
+  );
 
   useEffect(() => {
     if (!trustedState) return;
@@ -309,14 +307,28 @@ export function useVoiceSession(docId?: string, options?: OnboardingVoiceOptions
   }, [trustedState, onEvent, teardown]);
 
   const start = useCallback(async () => {
-    if (status === "connecting" || status === "live") return;
+    if (status === "connecting" || status === "live" || status === "paused") return;
+    const generation = ++generationRef.current;
     setStatus("connecting");
     setError(null);
     endedRef.current = false;
+    sessionIdRef.current = null;
+    setSessionId(null);
+    pausedSinceRef.current = null;
+    reconnectingRef.current = false;
+    agentTurnRef.current = null;
+    startedAtRef.current = null;
+    endsAtRef.current = null;
+    setRemainingMs(null);
+    setNearingCap(false);
+    setSpeaking(null);
+    setTranscript([]);
     try {
-      await connect();
+      await connect(generation);
+      if (generationRef.current !== generation || endedRef.current) return;
       setStatus("live");
     } catch (e) {
+      if (generationRef.current !== generation || endedRef.current) return;
       if (sessionIdRef.current)
         void abortSession({ sessionId: sessionIdRef.current }).catch(() => {});
       teardown();
@@ -353,45 +365,69 @@ export function useVoiceSession(docId?: string, options?: OnboardingVoiceOptions
   // Retry getUserMedia after a mic loss and swap the live track back into the existing sender — no
   // re-handshake, the cap is untouched (the pause consumed wall-clock time).
   const reconnect = useCallback(async () => {
-    if (endedRef.current || pausedSinceRef.current === null) return;
+    if (endedRef.current || pausedSinceRef.current === null || reconnectingRef.current) return;
+    const generation = generationRef.current;
+    reconnectingRef.current = true;
+    let micStream: MediaStream | undefined;
     try {
-      const micStream = await navigator.mediaDevices.getUserMedia({
+      micStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
+      if (endedRef.current || generationRef.current !== generation) {
+        for (const track of micStream.getTracks()) track.stop();
+        return;
+      }
       micStreamRef.current = micStream;
       const track = micStream.getAudioTracks()[0];
       if (!track) throw new Error("no microphone track");
       // Swap the live track back into the existing sender — no re-handshake, cap untouched.
-      await senderRef.current?.replaceTrack(track);
-      track.addEventListener("ended", () => onMicLost());
+      const sender = senderRef.current;
+      if (!sender) throw new Error("voice session ended");
+      await sender.replaceTrack(track);
+      if (endedRef.current || generationRef.current !== generation) {
+        for (const track of micStream.getTracks()) track.stop();
+        return;
+      }
+      track.addEventListener("ended", () => {
+        if (generationRef.current === generation && !endedRef.current) onMicLost();
+      });
       pausedSinceRef.current = null;
       lastActivityRef.current = Date.now();
       setStatus("live");
     } catch {
+      for (const track of micStream?.getTracks() ?? []) track.stop();
       // Still no mic — stay paused; the grace-window timer decides when to fall through.
+    } finally {
+      if (generationRef.current === generation) reconnectingRef.current = false;
     }
   }, [onMicLost]);
 
   const sendText = useCallback(
-    (text: string) => {
+    async (text: string): Promise<boolean> => {
       const t = text.trim();
-      if (!t || endedRef.current) return;
+      const id = sessionIdRef.current;
+      if (!t || endedRef.current || !id || (status !== "live" && status !== "paused")) return false;
+      const generation = generationRef.current;
+      try {
+        await postText({ sessionId: id, text: t });
+      } catch {
+        if (generationRef.current === generation) setError("Could not send text. Please retry.");
+        return false;
+      }
+      if (generationRef.current !== generation) return true;
       lastActivityRef.current = Date.now();
-      // Show the typed turn immediately, then ask the agent to respond (voice + transcript).
+      setError(null);
+      // Only acknowledged commands enter the transcript; responses remain server-admitted.
       setTranscript((prev) => [
         ...prev,
         { id: `u-${Date.now()}-${prev.length}`, speaker: "user", text: t, final: true },
       ]);
-      send({
-        type: REALTIME_CLIENT_EVENTS.createItem,
-        item: { type: "message", role: "user", content: [{ type: "input_text", text: t }] },
-      });
-      send({ type: REALTIME_CLIENT_EVENTS.createResponse });
+      return true;
     },
-    [send],
+    [postText, status],
   );
 
-  // ── Countdown + wrap-up + grace/silence watchdogs (client-side, 1s tick) ─────
+  // ── Countdown + grace/silence watchdogs (client-side, 1s tick) ───────────────
   useEffect(() => {
     if (status !== "live" && status !== "paused") return;
     const tick = () => {
@@ -402,26 +438,7 @@ export function useVoiceSession(docId?: string, options?: OnboardingVoiceOptions
       setRemainingMs(left);
       setNearingCap(left <= WRAP_UP_MS);
 
-      // T-2min: emphasize (state above) + nudge the agent to close, once. AGENT INSTRUCTION only —
-      // the session stays "active"; the server watchdog keeps its wall-clock count (Pattern 3).
-      // Deferred while a response is in flight — sent mid-response the createResponse silently 400s,
-      // so wrapSentRef stays false and the next tick (1s later) retries it in the gap.
-      if (
-        left <= WRAP_UP_MS &&
-        !wrapSentRef.current &&
-        !responseActiveRef.current &&
-        status === "live"
-      ) {
-        wrapSentRef.current = true;
-        send({
-          type: REALTIME_CLIENT_EVENTS.createResponse,
-          response: {
-            instructions:
-              "We are nearing the end of our time. Briefly summarize the key decisions and " +
-              "action items, then ask if there is anything final to add.",
-          },
-        });
-      }
+      // Countdown is presentation only. Provider response creation stays server-owned.
 
       // Silence fall-through: dead air past SILENCE_MS ends the session (protects capped time from a
       // conversation that has gone quiet). graceExpired fail-safes on a bad clock read (never ends).
@@ -445,10 +462,17 @@ export function useVoiceSession(docId?: string, options?: OnboardingVoiceOptions
     tick();
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
-  }, [status, send, end, fallThroughAbnormal]);
+  }, [status, end, fallThroughAbnormal]);
 
   // Best-effort cleanup on unmount / tab close (the server watchdog is the authoritative backstop).
-  useEffect(() => teardown, [teardown]);
+  useEffect(
+    () => () => {
+      const id = endedRef.current ? null : sessionIdRef.current;
+      teardown();
+      if (id) void abortSession({ sessionId: id }).catch(() => {});
+    },
+    [teardown, abortSession],
+  );
 
   return {
     status,

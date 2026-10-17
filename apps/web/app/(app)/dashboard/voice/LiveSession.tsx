@@ -6,7 +6,7 @@ import { DocStrip } from "./DocStrip";
 import type { Speaker, VoiceSession } from "./useVoiceSession";
 
 // VOIC-01/02 live surface (CONTEXT "Live session UI"): a scrolling two-sided transcript (the
-// ChatPane bubble idiom), a small speaking orb showing who's talking, an ALWAYS-visible 15-min
+// ChatPane bubble idiom), a small speaking orb showing who's talking, an ALWAYS-visible server-cap
 // countdown (understated early, emphasized near the cap), a prominent End button behind a lightweight
 // confirm (a mis-tap must not lose a long conversation), and a text-input fallback so the session is
 // usable without a working mic. Screen-reader announcements for every state change; full keyboard
@@ -44,6 +44,8 @@ export function LiveSession({ session, docId }: { session: VoiceSession; docId?:
     session;
   const [confirming, setConfirming] = useState(false);
   const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [announce, setAnnounce] = useState("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -79,7 +81,7 @@ export function LiveSession({ session, docId }: { session: VoiceSession; docId?:
   useEffect(() => {
     if (nearingCap && !warnedRef.current) {
       warnedRef.current = true;
-      setAnnounce("Two minutes remaining. The assistant will begin wrapping up.");
+      setAnnounce("Two minutes remaining in this voice session.");
     }
   }, [nearingCap]);
 
@@ -270,12 +272,18 @@ export function LiveSession({ session, docId }: { session: VoiceSession; docId?:
 
       {/* Text-input fallback (accessibility): type a turn; the agent still replies by voice. */}
       <form
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
           const t = draft.trim();
-          if (!t) return;
-          sendText(t);
-          setDraft("");
+          if (!t || sendingRef.current || (status !== "live" && status !== "paused")) return;
+          sendingRef.current = true;
+          setSending(true);
+          try {
+            if (await sendText(t)) setDraft((current) => (current.trim() === t ? "" : current));
+          } finally {
+            sendingRef.current = false;
+            setSending(false);
+          }
         }}
         style={{
           display: "flex",
@@ -307,7 +315,7 @@ export function LiveSession({ session, docId }: { session: VoiceSession; docId?:
         <button
           type="submit"
           aria-label="Send message"
-          disabled={draft.trim() === "" || status === "ended"}
+          disabled={sending || draft.trim() === "" || (status !== "live" && status !== "paused")}
           style={{
             width: "2.25rem",
             height: "2.25rem",
