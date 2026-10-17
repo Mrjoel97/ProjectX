@@ -54,7 +54,7 @@ jobs:
         timeout-minutes: 12
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
-          REVIEWED_MODE: configure
+          REVIEWED_MODE: preflight
           MANUAL_OWNER_READY: '0'
         run: node operator/.github/scripts/manual-voice-window.mjs "$REVIEWED_MODE"
       - name: Always close any opened voice admission

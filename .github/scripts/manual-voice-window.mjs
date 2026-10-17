@@ -91,10 +91,12 @@ async function configure() {
 }
 
 async function preflight() {
-  source(); target(); const config = await configuration();
+  phase = 'preflight-source'; source(); phase = 'preflight-target'; target();
+  phase = 'preflight-configuration'; const config = await configuration();
   check([null, '0', 'false'].includes(config.VOICE_SERVER_CONTROL_VERIFIED));
-  const before = inventory();
+  phase = 'preflight-owner'; const before = inventory();
   check(before.sessions.every(s => s.status !== 'active' && (!s.hasCall || s.hangupConfirmed)));
+  phase = 'preflight-budget';
   const remaining = JSON.parse(cli(['run', 'guardrails:remainingDailyCents', JSON.stringify({ tenantId: before.tenantId })]));
   check(Number.isFinite(remaining) && remaining >= 184 && remaining <= 500);
   emit({ preflightPassed: true, googleAccountPresent: before.googleAccountPresent, activeAuthSessionPresent: before.activeAuthSessionPresent, accountEmailVerified: before.accountEmailVerified, userVerificationMetadata: before.userVerificationMetadata, remainingBudgetSufficient: true, activationAttempted: false });
