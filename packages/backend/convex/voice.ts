@@ -146,7 +146,7 @@ export const startSession = internalMutation({
     )
       throw new Error("VOICE_PILOT_EXPIRED");
     const endsAt = controlled
-      ? Math.min(startedAt + 300_000, pilotEndsAt ?? Infinity)
+      ? Math.min(capEndsAt(startedAt), pilotEndsAt ?? Infinity)
       : capEndsAt(startedAt);
     const sessionId = await ctx.db.insert("voiceSessions", {
       tenantId: tenantId,

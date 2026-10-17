@@ -150,6 +150,22 @@ test("startSession persists the callId, marks active, and arms ONE watchdog at s
   }
 });
 
+test("server-controlled general voice keeps the existing fifteen-minute session cap", async () => {
+  vi.useFakeTimers();
+  try {
+    const t = setup();
+    const startedAt = Date.now();
+    const { sessionId } = await asTenant(t).mutation(internal.voice.startSession, {
+      reservationId: await seedReservation(t, TENANT),
+      controlled: true,
+      callId: "call_controlled_cap",
+    });
+    expect((await get(t, sessionId))?.endsAt).toBe(startedAt + CAP_MS);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test("parallel guard: a second startSession force-ends the prior active session, leaving one active", async () => {
   vi.useFakeTimers();
   try {

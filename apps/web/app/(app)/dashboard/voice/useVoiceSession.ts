@@ -2,7 +2,7 @@
 
 import { api } from "@pikar/backend/api";
 import type { FoundationSection } from "@pikar/core/foundation";
-import { graceExpired, REALTIME_EVENTS } from "@pikar/voice";
+import { CAP_MS, graceExpired, REALTIME_EVENTS } from "@pikar/voice";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -434,7 +434,7 @@ export function useVoiceSession(docId?: string, options?: OnboardingVoiceOptions
       const startedAt = startedAtRef.current;
       if (startedAt === null) return;
       const now = Date.now();
-      const left = Math.max(0, (endsAtRef.current ?? startedAt + 300_000) - now);
+      const left = Math.max(0, (endsAtRef.current ?? startedAt + CAP_MS) - now);
       setRemainingMs(left);
       setNearingCap(left <= WRAP_UP_MS);
 

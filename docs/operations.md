@@ -30,7 +30,7 @@ record for the exact workflow/job and remaining gates.
 
 The Next.js web app uses authenticated Convex queries, mutations and actions. Convex owns durable
 workflows, scheduling, database state, storage and component integrations. Pure TypeScript packages
-own domain policies. Runtime prompts come from the versioned skill registry. Voice uses a server-owned provider call and WebSocket control channel; the browser carries microphone/playback audio and receives no provider capability. The server admits each response, caps sessions at five minutes and 20 responses, and requests termination on failures or disconnects. Permanent provider keys remain server-side. VOICE_SERVER_CONTROL_VERIFIED must stay off until real provider/browser tests verify these controls; an old short-lived-token deployment does not provide them.
+own domain policies. Runtime prompts come from the versioned skill registry. Voice uses a server-owned provider call and WebSocket control channel; the browser carries microphone/playback audio and receives no provider capability. The server admits each response, caps sessions at 15 minutes and 20 responses, and requests termination on failures or disconnects. Permanent provider keys remain server-side. VOICE_SERVER_CONTROL_VERIFIED must stay off until real provider/browser tests verify these controls; an old short-lived-token deployment does not provide them.
 The current tenant is the authenticated user ID: this is single-user business isolation, not organizations.
 
 The Vault stores user content and retrieval derivatives. The confirmed Blueprint is standing agent
