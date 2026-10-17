@@ -12,6 +12,8 @@
     "packages/backend/convex/foglamp.test.ts"
   ],
   "ci-gate.md": [
+    "scripts/observe-staging-retention",
+    ".github/workflows/observe-staging-retention.yml",
     "scripts/rehearse-release-local.mjs",
     ".github/workflows/ci.yml",
     "package.json",
@@ -24,6 +26,7 @@
     ".gitattributes"
   ],
   "beta-admission.md": [
+    "packages/backend/scripts/nativeSignupProbe",
     "packages/backend/convex/invites.ts",
     "packages/backend/convex/invites.test.ts",
     "packages/backend/convex/auth.ts",
@@ -96,7 +99,8 @@
     "packages/backend/convex/lib/foundationValidators",
     "packages/backend/scripts/foundationEvidence.mjs",
     "packages/backend/scripts/foundationEvidence.test.mjs",
-    "packages/backend/scripts/run-foundation-qualification.mjs"
+    "packages/backend/scripts/run-foundation-qualification.mjs",
+    "packages/backend/scripts/foundationApiScenario"
   ],
   "agent-runtime.md": [
     "packages/backend/convex/opsSignals.ts",

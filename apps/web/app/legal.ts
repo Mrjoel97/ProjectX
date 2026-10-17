@@ -8,9 +8,11 @@ export const EFFECTIVE = "10 July 2026";
 // particulars still require confirmation; identity alone does not complete review.
 export const ENTITY = "pikar-ai";
 export const OPERATING_COUNTRY = "Tanzania";
-export const ENTITY_ADDRESS = "[REGISTERED ADDRESS — TBD]";
-export const GOVERNING_LAW = "[GOVERNING LAW — TBD]";
-export const VENUE = "[COURTS / VENUE — TBD]";
+// Postal address supplied by Joel on 2026-10-17; no street/building was supplied.
+export const ENTITY_ADDRESS = "Dar es Salaam 17107, Tanzania";
+// Draft choices confirmed by Joel on 2026-10-17; qualified review remains deferred.
+export const GOVERNING_LAW = "the laws of Tanzania";
+export const VENUE = "the courts in Dar es Salaam, Tanzania";
 export const LEAD_AUTHORITY = "[LEAD EU SUPERVISORY AUTHORITY — TBD]";
 
 const PLACEHOLDERS = [ENTITY, ENTITY_ADDRESS, GOVERNING_LAW, VENUE, LEAD_AUTHORITY];

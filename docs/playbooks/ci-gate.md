@@ -1,5 +1,14 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
+> Last verified: 2026-10-17 — the read-only staging retention observer refuses ambiguous or
+> incomplete fixture inventories, changed timestamps, premature disappearance and a checkpoint
+> remaining after the first eligible purge sweep. Five offline boundary tests run in CI. The
+> manual/2026-10-24 11:30 UTC workflow requires successful CI for its exact immutable checkout;
+> the staging key is present only in the final read step. It never resets, deletes or recreates
+> the fixture. The original interview identity is pinned by SHA-256. Post-expiry absence is reported
+> separately from attribution to a cron execution; neither scheduling nor simulated-clock tests
+> prove elapsed expiry. Native lifecycle checks remain separate.
+
 > 2026-10-15: `scripts/rehearse-release-local.mjs` restores an exact committed snapshot into an ignored temporary directory, strips provider/deployment environment variables, validates pinned pnpm, installs frozen/offline with lifecycle scripts disabled, and forces package typechecks with concurrency one. Its JSON manifest and step logs establish local source-restoration evidence only; hosted rollback, schema compatibility and provider qualification remain separate drills. See `docs/operations.md` for invocation and limitations.
 
 > Last verified: 2026-10-15 — default checkout text endings are now LF through .gitattributes (including Windows); existing working trees need a clean checkout to apply attributes. Next.js uses the proxy.ts entrypoint with unchanged default-deny routing; source scanners reference the new name. The local media adapter is dynamically imported only outside production builds, so production tracing cannot follow local temporary filesystem paths. Local production-mode rendering is intentionally unavailable; use development mode for MEDIA_RENDER_LOCAL. These changes still require clean Windows/Linux CI and production-build qualification before portability/build warnings are marked closed.

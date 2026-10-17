@@ -1,0 +1,64 @@
+name: observe-staging-retention
+"on":
+  workflow_dispatch:
+  schedule:
+    # One actual seven-day observation; code below excludes future annual executions.
+    - cron: "30 11 24 10 *"
+permissions:
+  contents: read
+  actions: read
+jobs:
+  observe:
+    if: github.repository == 'Mrjoel97/ProjectX'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    concurrency:
+      group: staging-qualification
+      cancel-in-progress: false
+    steps:
+      - name: Bound scheduled observation to 2026
+        id: window
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ] || [ "$(date -u +%F)" = "2026-10-24" ]; then
+            echo 'allowed=true' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.window.outputs.allowed == 'true'
+        with:
+          node-version: "24"
+      - name: Require successful CI of exact source
+        if: steps.window.outputs.allowed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          node <<'NODE'
+          (async()=>{
+            const r=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs?head_sha='+process.env.SOURCE_SHA+'&per_page=100',{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
+            if(!r.ok)throw Error();
+            const {workflow_runs:runs}=await r.json();
+            if(!runs.some(run=>run.head_sha===process.env.SOURCE_SHA&&run.workflow_id===325088000&&run.head_repository.full_name==='Mrjoel97/ProjectX'&&run.status==='completed'&&run.conclusion==='success'))throw Error();
+            console.log(JSON.stringify({exactSourceCiPassed:true}));
+          })().catch(()=>{console.log(JSON.stringify({exactSourceCiPassed:false}));process.exitCode=1;});
+          NODE
+      - uses: actions/checkout@v4
+        if: steps.window.outputs.allowed == 'true'
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - run: corepack enable
+        if: steps.window.outputs.allowed == 'true'
+      - run: pnpm install --frozen-lockfile
+        if: steps.window.outputs.allowed == 'true'
+      - run: node --test scripts/observe-staging-retention.test.mjs
+        if: steps.window.outputs.allowed == 'true'
+      - name: Read staging checkpoint without mutation
+        if: steps.window.outputs.allowed == 'true'
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
+          # Original identity tuple observed before expiry in rollback preflight 39030025328.
+          RETENTION_FIXTURE_FINGERPRINT: b389a2014e514c7a35e08480dcef446aeb46b360861e2b8b72f9e67fc61f412e
+        run: node scripts/observe-staging-retention.mjs

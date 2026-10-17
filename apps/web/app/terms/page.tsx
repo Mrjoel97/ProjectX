@@ -26,9 +26,8 @@ export default function Terms() {
       {HAS_PLACEHOLDERS && (
         <p className="notice">
           <strong>Draft — not yet in force.</strong> This document has not been reviewed by a
-          qualified lawyer. The registered address and other bracketed legal details below remain
-          unconfirmed. Publication under the existing review deferral does not complete legal
-          review.
+          qualified lawyer. The bracketed legal details below remain unconfirmed. Publication under
+          the existing review deferral does not complete legal review.
         </p>
       )}
 
