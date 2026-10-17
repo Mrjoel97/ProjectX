@@ -203,10 +203,16 @@ export default function FoundationOnboarding({
     }
   }
   async function send() {
-    if (!draft || busy || !text.trim()) return;
+    if (!draft || busy || !text.trim() || voice.status === "connecting") return;
     if (voiceActive) {
-      voice.sendText(text);
-      setText("");
+      setBusy(true);
+      const submitted = text;
+      const sent = await voice.sendText(text);
+      if (sent) {
+        setText((current) => (current === submitted ? "" : current));
+        setError(null);
+      } else setError("Your answer was not sent. It remains below so you can retry.");
+      setBusy(false);
       return;
     }
     setBusy(true);
@@ -238,6 +244,11 @@ export default function FoundationOnboarding({
     setError(null);
     try {
       revisionRef.current = await edit(editing);
+      if (
+        editing.answers.some((a) => a.section === "essentials") ||
+        draft?.answers.some((a) => a.section === "essentials")
+      )
+        setSection("essentials");
       setEditing(null);
       setPreview(null);
     } catch {
@@ -478,7 +489,7 @@ export default function FoundationOnboarding({
             <button
               type="button"
               style={button}
-              disabled={busy || !text.trim() || !!editing}
+              disabled={busy || !text.trim() || !!editing || voice.status === "connecting"}
               onClick={() => void send()}
             >
               {voiceActive ? "Send typed answer to voice agent" : "Save answer and continue"}

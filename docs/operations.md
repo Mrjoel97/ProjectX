@@ -47,6 +47,38 @@ The previous release `c2cf18c2cbcf4d16df4e3143271ac69471172f64` was separately r
 
 ## Configuration planes
 
+### Remaining accountable-owner and legal records
+
+Role names in this guide are responsibilities, not accepted assignments. Before operational
+qualification closes, record a named primary, backup, acceptance date and incident contact in the
+private operator register for release/rollback, backend/delivery/cost, security/privacy, product
+acceptance, service/provider/workflow/model operations, and business/legal review. Keep personal
+contact details out of public release evidence. A single person can accept several roles explicitly.
+
+The confirmed business inputs are pikar-ai, Tanzania and the configured support contact. Registered
+address, governing law, venue and supervisory authority still need applicable inputs and review;
+country alone does not settle them. Commercial billing remains disabled by owner instruction.
+
+### Seven-day transcript retention observation
+
+Deployment and feature activation do not begin a retention observation. No actual checkpoint
+creation/expiry pair has yet been recorded for this gate. Use a dedicated staging interview and
+non-sensitive synthetic final text; do not delete its account or discard that interview during the
+observation, because those cleanup paths would invalidate expiry evidence.
+
+1. Privately record the exact deployment/runtime, checkpoint reference, first insertion time and
+   stored expiry. Confirm expiry is insertion plus seven days. Public evidence contains only dates,
+   counts and results, never transcript text or fixture identifiers.
+2. Retry the same event ID and confirm it creates no duplicate and does not extend expiry. Confirm
+   the checkpoint remains present before expiry without changing the clock or shortening retention.
+3. Observe the first scheduled hourly sweep at UTC minute 15 after expiry. Check deletion and any
+   scheduled 100-row continuation work to completion; record actual observation timestamps and
+   status. Missing evidence or an absent row without the before-expiry observation is insufficient.
+4. Separately exercise discard, authenticated export and account erasure. These are independent
+   cleanup scenarios and cannot replace seven elapsed days of retention evidence.
+
+### Configuration ownership
+
 | Plane | Configuration and responsible role |
 |---|---|
 | GitHub production environment | Release operator: `CONVEX_DEPLOY_KEY`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`; variable `PRODUCTION_URL` |

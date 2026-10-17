@@ -158,6 +158,176 @@ test("editing invalidates approval and incomplete essentials cannot publish", as
   expect(await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).toHaveLength(0);
 });
 
+test.each([
+  "correct",
+  "remove",
+  "planned",
+] as const)("%s essentials clears extracted facts and blocks stale publication until reconfirmed", async (change) => {
+  const t = setup();
+  const a = await complete(t);
+  const before = await a.query(api.foundation.get, {});
+  const approval = await a.query(api.foundation.review, {});
+  const answers = (before?.answers ?? []).map((answer) => ({
+    ...answer,
+    ...(change === "correct" ? { text: "We now have five people and three paid staff." } : {}),
+    ...(change === "planned" ? { intent: "planned" as const } : {}),
+  }));
+  await a.mutation(api.foundation.edit, {
+    revision: 1,
+    profile,
+    answers: change === "remove" ? [] : answers,
+  });
+  const edited = await a.query(api.foundation.get, {});
+  expect(edited?.slots).toEqual({ oneLineDescription: profile.oneLineDescription });
+  expect(edited?.phase).toBe("essential");
+  expect(await a.query(api.foundation.review, {})).toBeNull();
+  await expect(
+    a.mutation(api.foundation.publish, { revision: 1, reviewHash: approval?.reviewHash ?? "" }),
+  ).rejects.toThrow("STALE_INTERVIEW");
+  await expect(
+    a.mutation(api.foundation.publish, { revision: 2, reviewHash: approval?.reviewHash ?? "" }),
+  ).rejects.toThrow("INCOMPLETE_ONBOARDING");
+  expect(await t.run((ctx) => ctx.db.query("tenantProfiles").collect())).toEqual([]);
+  expect(await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).toEqual([]);
+  await t.mutation(internal.foundation.saveTurn, {
+    tenantId: TENANT,
+    revision: 2,
+    profile,
+    slots: { ...slots, headcount: 5, paidStaff: 3 },
+    answer: {
+      section: "essentials",
+      text: "Five people, three paid staff, pre-revenue, bootstrapped, zero years.",
+      intent: "current",
+      eventId: "reconfirmed",
+    },
+    reply: "Review the corrected facts.",
+  });
+  const review = await a.query(api.foundation.review, {});
+  expect(review?.revision).toBe(3);
+  expect((await a.query(api.foundation.get, {}))?.slots.headcount).toBe(5);
+  await a.mutation(api.foundation.publish, { revision: 3, reviewHash: review?.reviewHash ?? "" });
+  expect((await t.run((ctx) => ctx.db.query("tenantProfiles").first()))?.headcount).toBe(5);
+});
+
+test("editing enrichment preserves unchanged essential facts", async () => {
+  const t = setup();
+  const a = await complete(t);
+  await t.mutation(internal.foundation.saveTurn, {
+    tenantId: TENANT,
+    revision: 1,
+    profile,
+    slots,
+    answer: { section: "goals", text: "Sell locally", intent: "planned", eventId: "goal" },
+    reply: "Saved",
+  });
+  const row = await a.query(api.foundation.get, {});
+  await a.mutation(api.foundation.edit, {
+    revision: 2,
+    profile: { ...profile, name: "Corrected name" },
+    answers: (row?.answers ?? []).map((answer) =>
+      answer.section === "goals" ? { ...answer, text: "Sell nationally" } : answer,
+    ),
+  });
+  expect((await a.query(api.foundation.get, {}))?.slots).toEqual(slots);
+  expect((await a.query(api.foundation.get, {}))?.phase).toBe("enrichment");
+  expect(await a.query(api.foundation.review, {})).not.toBeNull();
+});
+
+test.each([
+  false,
+  true,
+])("planned essentials preserve current facts (complete: %s)", async (ready) => {
+  const t = setup();
+  const a = ready ? await complete(t) : t.withIdentity({ subject: TENANT });
+  if (!ready) await a.mutation(api.foundation.begin, {});
+  const before = await a.query(api.foundation.get, {});
+  // No model configuration or fixture seam: planned statements must never invoke extraction.
+  vi.stubEnv("OPENROUTER_API_KEY", "");
+  vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "");
+  vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "");
+  const result = await a.action(api.foundation.answer, {
+    revision: before?.revision ?? 0,
+    eventId: "future_team",
+    section: "essentials",
+    intent: "planned",
+    answer: "Next year we plan to have 100 staff and external funding.",
+  });
+  const after = await a.query(api.foundation.get, {});
+  expect(after?.slots).toEqual(before?.slots);
+  expect(after?.profile).toEqual(before?.profile);
+  expect(after?.answers.at(-1)).toMatchObject({ eventId: "future_team", intent: "planned" });
+  expect(result.complete).toBe(ready);
+  expect(await t.run((ctx) => ctx.db.query("spendEvents").collect())).toEqual([]);
+  const review = await a.query(api.foundation.review, {});
+  if (ready) {
+    expect(review?.documents[0]?.text).toContain("Intended future practice [source: future_team]");
+    await a.mutation(api.foundation.publish, {
+      revision: result.revision,
+      reviewHash: review?.reviewHash ?? "",
+    });
+    expect((await t.run((ctx) => ctx.db.query("tenantProfiles").first()))?.headcount).toBe(1);
+  } else {
+    expect(review).toBeNull();
+    await expect(
+      a.mutation(api.foundation.publish, { revision: result.revision, reviewHash: "" }),
+    ).rejects.toThrow("INCOMPLETE_ONBOARDING");
+  }
+});
+
+test("duplicate edited statement IDs cannot hide corrected essentials behind an unchanged copy", async () => {
+  const t = setup();
+  const a = await complete(t);
+  const before = await a.query(api.foundation.get, {});
+  const original = before?.answers[0];
+  if (!original) throw new Error("Missing test statement");
+  await expect(
+    a.mutation(api.foundation.edit, {
+      revision: 1,
+      profile,
+      answers: [original, { ...original, text: "Actually we have 100 paid staff." }],
+    }),
+  ).rejects.toThrow("INVALID_DRAFT");
+  expect(await a.query(api.foundation.get, {})).toEqual(before);
+  expect(await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).toEqual([]);
+});
+
+test.each([
+  "edit",
+  "remove",
+  "current",
+] as const)("planned essentials %s only invalidate facts when promoted to current", async (change) => {
+  const t = setup();
+  const a = await complete(t);
+  await a.action(api.foundation.answer, {
+    revision: 1,
+    eventId: "future",
+    section: "essentials",
+    intent: "planned",
+    answer: "We plan to hire 100 people.",
+  });
+  const before = await a.query(api.foundation.get, {});
+  const answers = (before?.answers ?? []).flatMap((answer) => {
+    if (answer.eventId !== "future") return [answer];
+    if (change === "remove") return [];
+    return [
+      {
+        ...answer,
+        text: "We plan to hire 50 people.",
+        intent: change === "current" ? ("current" as const) : ("planned" as const),
+      },
+    ];
+  });
+  await a.mutation(api.foundation.edit, { revision: 2, profile, answers });
+  const after = await a.query(api.foundation.get, {});
+  expect(after?.slots).toEqual(
+    change === "current" ? { oneLineDescription: profile.oneLineDescription } : slots,
+  );
+  expect(after?.phase).toBe(change === "current" ? "essential" : "enrichment");
+  const review = await a.query(api.foundation.review, {});
+  if (change === "current") expect(review).toBeNull();
+  else expect(review).not.toBeNull();
+});
+
 test("transcript retry cannot extend retention and expiry preserves accepted draft answers", async () => {
   const t = setup();
   const a = await complete(t);

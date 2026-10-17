@@ -10,12 +10,14 @@ const behavior = vi.hoisted(() => ({
   missingUsage: false,
   badAck: false,
   audioTokens: 1,
+  deferFirstResponse: false,
   sent: [] as string[],
 }));
 vi.mock("ws", () => ({
   default: class extends EventEmitter {
     static OPEN = 1;
     readyState = 1;
+    responses = 0;
     constructor() {
       super();
       queueMicrotask(() => this.emit("open"));
@@ -37,18 +39,22 @@ vi.mock("ws", () => ({
             }),
           ),
         );
-      if (e.type === "response.create")
+      if (e.type === "response.create") {
+        const responseNumber = ++this.responses;
+        const responseId = `resp_test_${responseNumber}`;
         queueMicrotask(() => {
           this.emit(
             "message",
-            JSON.stringify({ type: "response.created", response: { id: "resp_test" } }),
+            JSON.stringify({ type: "response.created", response: { id: responseId } }),
           );
+        });
+        const complete = () => {
           this.emit(
             "message",
             JSON.stringify({
               type: "response.done",
               response: {
-                id: "resp_test",
+                id: responseId,
                 output: [],
                 ...(behavior.missingUsage
                   ? {}
@@ -63,8 +69,12 @@ vi.mock("ws", () => ({
               },
             }),
           );
-          setTimeout(() => this.emit("close"), 30);
-        });
+          if (!behavior.deferFirstResponse || responseNumber > 1)
+            setTimeout(() => this.emit("close"), 30);
+        };
+        if (behavior.deferFirstResponse && responseNumber === 1) setTimeout(complete, 800);
+        else queueMicrotask(complete);
+      }
     }
     close() {
       this.readyState = 3;
@@ -95,6 +105,41 @@ afterEach(() => {
   behavior.missingUsage = false;
   behavior.badAck = false;
   behavior.audioTokens = 1;
+  behavior.deferFirstResponse = false;
+});
+
+test("typed input received during a response gets an admitted follow-up after settlement", async () => {
+  behavior.deferFirstResponse = true;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status: 200 })),
+  );
+  const t = setup();
+  const id = await t.run((ctx) =>
+    ctx.db.insert("voiceSessions", {
+      tenantId: "voice_deferred",
+      onboarding: true,
+      controlled: true,
+      status: "active",
+      callId: "rtc_deferred",
+      startedAt: Date.now(),
+      endsAt: Date.now() + 4000,
+      createdAt: Date.now(),
+      controlCommands: [{ seq: 1, text: "Please correct my planned price." }],
+      inAudioTok: 0,
+      outAudioTok: 0,
+      textInTok: 0,
+      textOutTok: 0,
+    }),
+  );
+  await t.action(internal.voiceControl.run, { sessionId: id });
+  const events = behavior.sent.map((raw) => JSON.parse(raw));
+  expect(events.filter((e) => e.type === "response.create")).toHaveLength(2);
+  expect(events.filter((e) => e.type === "conversation.item.create")).toHaveLength(1);
+  const ledger = await t.run((ctx) => ctx.db.query("spendEvents").collect());
+  expect(ledger.filter((e) => e.phase === "reserved").map((e) => e.amountCents)).toEqual([84, 84]);
+  expect(ledger.filter((e) => e.phase === "actual")).toHaveLength(2);
+  expect((await t.run((ctx) => ctx.db.get(id)))?.hangupConfirmedAt).toBeDefined();
 });
 
 test("public connection refuses before any provider request without verified transport evidence", async () => {
