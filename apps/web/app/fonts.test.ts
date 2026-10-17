@@ -32,7 +32,7 @@ test("vendored font bytes match the official provenance and every CSS asset reso
 });
 
 test("brand weights, multilingual subsets, fallback metrics and latin preloads survive without Google loaders", () => {
-  const faces = [...css.matchAll(/@font-face\s*\{([^}]+)\}/g)].map((x) => x[1]);
+  const faces = [...css.matchAll(/@font-face\s*\{([^}]+)\}/g)].map((x) => x[1] ?? "");
   for (const [family, weights, subsets] of [
     ["Bricolage Grotesque", [600, 700, 800], 3],
     ["Public Sans", [400, 500, 600], 3],
