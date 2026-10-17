@@ -305,8 +305,11 @@ export const connect = tenantAction({
       docId,
       onboarding,
     });
+    // A tenant pilot remains an onboarding-only wall-clock boundary even after general voice is
+    // enabled; it must still be present and unchanged when the provider call is admitted.
     if (
-      pilotOnly &&
+      onboarding &&
+      pilotEndsAt !== undefined &&
       foundationPilotExpiresAt(process.env.NATIVE_ONBOARDING_PILOT, ctx.tenantId) !== pilotEndsAt
     )
       throw new Error("VOICE_CONTROL_NOT_VERIFIED");
@@ -328,7 +331,7 @@ export const connect = tenantAction({
         tenantId: ctx.tenantId,
         callId,
         controlled: true,
-        ...(pilotOnly ? { pilotEndsAt } : {}),
+        ...(pilotEndsAt !== undefined ? { pilotEndsAt } : {}),
         reservationId: mint.reservationId,
         onboarding,
         docRef: docId,
