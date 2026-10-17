@@ -1,0 +1,56 @@
+name: production-native-readonly-observer
+on:
+  push:
+    branches: [codex/production-native-observer-20261017]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  observe:
+    if: github.repository == 'Mrjoel97/ProjectX'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    concurrency:
+      group: production-native-qualification
+      cancel-in-progress: false
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: operator
+          persist-credentials: false
+      - name: Verify observer source
+        env:
+          OPERATOR_SHA: ${{ github.sha }}
+        run: |
+          test "$(git -C operator rev-parse HEAD)" = "$OPERATOR_SHA"
+          node --check operator/.github/scripts/production-native-observer.mjs
+      - name: Require exact backend CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node <<'NODE'
+          (async()=>{const r=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs/39051099421',{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error();const x=await r.json();if(x.head_sha!=='4e83cd4f77d1978b2d5caec0fed90b514597f820'||x.workflow_id!==325088000||x.name!=='ci'||x.path!=='.github/workflows/ci.yml'||x.status!=='completed'||x.event!=='push'||x.head_branch!=='main'||x.head_repository.full_name!=='Mrjoel97/ProjectX'||x.repository.full_name!=='Mrjoel97/ProjectX'||x.conclusion!=='success')throw Error();const latestResponse=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/workflows/325088000/runs?head_sha=4e83cd4f77d1978b2d5caec0fed90b514597f820&per_page=10',{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});if(!latestResponse.ok)throw Error();const latest=(await latestResponse.json()).workflow_runs.filter(r=>r.head_sha==='4e83cd4f77d1978b2d5caec0fed90b514597f820'&&r.event==='push'&&r.head_branch==='main').sort((a,b)=>b.id-a.id)[0];if(!latest||latest.id!==x.id||latest.status!=='completed'||latest.conclusion!=='success')throw Error();console.log(JSON.stringify({exactBackendCiPassed:true,latestExactHeadCiPassed:true}));})().catch(()=>{console.error('CI_GATE_FAILED');process.exitCode=1;});
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          ref: 4e83cd4f77d1978b2d5caec0fed90b514597f820
+          path: release
+          persist-credentials: false
+      - name: Verify release source
+        run: test "$(git -C release rev-parse HEAD)" = "4e83cd4f77d1978b2d5caec0fed90b514597f820"
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+        working-directory: release
+      - name: Capture exact fresh native fixture references privately
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: node operator/.github/scripts/production-native-observer.mjs capture
+      - name: Wait for local native erasure and verify physical absence
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: node operator/.github/scripts/production-native-observer.mjs verify
