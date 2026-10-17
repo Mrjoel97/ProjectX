@@ -1,5 +1,11 @@
 # Playbook: Production Beta Readiness (25-10)
 
+Last verified: 2026-10-17 — Convex production dry-run and deployment explicitly require
+`--typecheck enable`. The backend now declares TypeScript directly, so an unavailable compiler
+must stop the release. Exact-SHA CI, generated API diff checks and staged promotion remain
+required. The equivalent backend passed strict staging deployment in run `39034220060`;
+record production qualification only after the production release job succeeds.
+
 Release credential isolation (2026-10-15): checkout disables persisted GitHub credentials. Convex and Vercel deployment tokens are scoped to the steps that use them; dependency/CLI installation receives neither. Vercel build still requires its token and pulled runtime settings remain sensitive. The exact-main-SHA CI gate, ordered backend deployment, staged probe and explicit promotion marker remain binding.
 
 Last verified: 2026-09-12 — the free-gate registry also runs the Phase 23 mutation harness's

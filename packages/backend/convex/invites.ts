@@ -361,8 +361,23 @@ export async function admitIdentity(
      * inserted below (`createOrUpdateAccount` patches `userId` whenever it differs), so the orphan
      * self-heals instead of bricking the identity forever.
      */
-    if (await db.get(userId)) {
-      await db.patch(userId, userFields(args.profile));
+    const user = await db.get(userId);
+    if (user) {
+      // Convex Auth calls this only after consuming a valid verification code. Its custom
+      // callback replaces the default timestamp mapper; credentials profile claims do not
+      // establish verification, nor does a verified claim for another address.
+      const verifiedEmail = normalizeEmail(args.profile.email);
+      const verifiedCurrentEmail =
+        args.type === "verification" &&
+        args.profile.emailVerified === true &&
+        verifiedEmail !== null &&
+        verifiedEmail === normalizeEmail(user.email);
+      await db.patch(userId, {
+        ...userFields(args.profile),
+        ...(verifiedCurrentEmail && user.emailVerificationTime === undefined
+          ? { emailVerificationTime: Date.now() }
+          : {}),
+      });
       return userId;
     }
   }

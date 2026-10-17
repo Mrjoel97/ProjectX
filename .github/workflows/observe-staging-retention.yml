@@ -40,7 +40,8 @@ jobs:
             const r=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs?head_sha='+process.env.SOURCE_SHA+'&per_page=100',{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
             if(!r.ok)throw Error();
             const {workflow_runs:runs}=await r.json();
-            if(!runs.some(run=>run.head_sha===process.env.SOURCE_SHA&&run.workflow_id===325088000&&run.head_repository.full_name==='Mrjoel97/ProjectX'&&run.status==='completed'&&run.conclusion==='success'))throw Error();
+            const matches=runs.filter(run=>run.head_sha===process.env.SOURCE_SHA&&run.path==='.github/workflows/ci.yml'&&run.workflow_id===325088000&&run.repository.full_name==='Mrjoel97/ProjectX'&&run.head_repository?.full_name==='Mrjoel97/ProjectX').sort((a,b)=>b.id-a.id);
+            if(matches[0]?.status!=='completed'||matches[0]?.conclusion!=='success')throw Error();
             console.log(JSON.stringify({exactSourceCiPassed:true}));
           })().catch(()=>{console.log(JSON.stringify({exactSourceCiPassed:false}));process.exitCode=1;});
           NODE

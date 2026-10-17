@@ -202,6 +202,7 @@ const CONVEX_MODULES = [
   "providerGates.ts",
   "quickbooks.ts",
   "quickbooksAuth.ts",
+  "ragErasure.ts",
   "reliabilitySweep.ts",
   "render/assembleScript.ts",
   "render/burnCapsScript.ts",
@@ -298,6 +299,8 @@ const SCHEDULER_CALL_SITES = [
   "notifications.ts",
   "onboarding.ts",
   "proactiveReview.ts",
+  // Native erasure continuation only; stalled component observation stops after 60 polls.
+  "ragErasure.ts",
   // One driver-owned expiry deletion per admitted research request. It never re-arms.
   "researchControl.ts",
   "review.ts",

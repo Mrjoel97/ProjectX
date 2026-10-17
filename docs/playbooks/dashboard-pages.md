@@ -1,7 +1,20 @@
+> Last verified: 2026-10-17 — Settings deletion now distinguishes account closure and removed rows from asynchronous removal of search copies, both before confirmation and in the result. It no longer claims that all content is already gone when the deletion action returns. Actual cleanup completion requires independent worker/physical evidence.
+>
+> The audit viewer coverage guard explicitly distinguishes reserved retention control accounting from tenant activity. Runtime tests pin its control namespace and generic-writer refusal; no retention receipt is projected into a user's audit view.
+> 2026-10-17 typography remains Bricolage Grotesque 600/700/800, Public Sans 400/500/600 and JetBrains Mono 400/500. app/fonts.css preserves the existing multilingual subset rules and metric-adjusted Arial fallbacks; public/fonts contains the exact previously compiled WOFF2 bytes plus official licenses and a provenance manifest. Root layout preloads the same three latin faces. No typography redesign or package upgrade is included.
+
 > Last verified: 2026-10-17 — Joel supplied the postal address Dar es Salaam 17107, Tanzania.
 > Public legal pages use that exact locality/postcode without inventing a street address. Draft
-> notices no longer say that address is unconfirmed. Governing law, venue and supervisory-authority
-> review remain open; legal review deferral and disabled billing remain in force.
+> notices no longer say that address is unconfirmed. The owner selected Tanzanian law and Dar es
+> Salaam courts for the draft; supervisory-authority and qualified legal review remain open.
+> Legal draft status and disabled billing remain in force.
+
+> Last verified: 2026-10-17 — the draft privacy provider list includes the implemented OpenRouter
+> model route and Resend authentication sender. Removed the unsupported assertion that ordinary
+> OpenAI API terms forbid retention. Official [data controls](https://developers.openai.com/api/docs/guides/your-data)
+> distinguish default no-training treatment from retention and approval-dependent controls.
+> No account-level Zero Data Retention configuration or restricted-data provider approval is
+> established by this copy change. Provider/legal qualification remains a separate release gate.
 
 > Last verified: 2026-10-16 — the Content image-thumbnail comment now accurately describes direct rendering of a Convex bearer file URL without an image optimizer; it no longer claims the URL expires. The Vault uses the same getUrl-backed download query. No thumbnail rendering behavior changed.
 

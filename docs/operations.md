@@ -1,7 +1,7 @@
 # Current operations guide
 
 Source inspection: 2026-10-15, starting revision `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
-Production runtime revision `a129b884445482625b1e8f2a236744fb2a0f2515` deployed through [release run 39026090675](https://github.com/Mrjoel97/ProjectX/actions/runs/39026090675), verified on 2026-10-17 (Africa/Dar_es_Salaam). Convex deployment, registry seed, staged probe, promotion and durable-origin verification passed. [Release readiness](release-readiness.md) records the evidence and live gates that remain open; deployment does not establish voice/onboarding activation or complete provider qualification.
+Production runtime revision `e92bd5e51cc60368dd94095483bdb7b62f8f1690` deployed through [release run 39030778689](https://github.com/Mrjoel97/ProjectX/actions/runs/39030778689), following [main CI 39030531634](https://github.com/Mrjoel97/ProjectX/actions/runs/39030531634), verified on 2026-10-17 (Africa/Dar_es_Salaam). The release coordinator verified READY frontend artifact `dpl_A8FbQAGNYVWazneuxqyYWNuMkSCs`, production routes and aliases, and the owner-confirmed legal draft. CI passed 8,224 package/app tests plus 50 operator checks. [Release readiness](release-readiness.md) records the evidence and live gates that remain open; deployment does not establish voice/onboarding activation, counsel review or complete provider qualification.
 This guide is the current entry point; dated playbook notes and ADRs explain historical decisions.
 
 ## Latest scoped provider qualification — 2026-10-17
@@ -61,15 +61,17 @@ The previous release `c2cf18c2cbcf4d16df4e3143271ac69471172f64` was separately r
 
 ### Remaining accountable-owner and legal records
 
-Role names in this guide are responsibilities, not accepted assignments. Before operational
-qualification closes, record a named primary, backup, acceptance date and incident contact in the
-private operator register for release/rollback, backend/delivery/cost, security/privacy, product
-acceptance, service/provider/workflow/model operations, and business/legal review. Keep personal
-contact details out of public release evidence. A single person can accept several roles explicitly.
+On 2026-10-17 the owner explicitly assigned Joel (`joel@pikar-ai.com`) as the accountable primary
+for release approval, incident response, privacy requests, and provider/billing reconciliation.
+These assignments do not establish completed runbook exercises or specialist legal review.
+Record backup coverage and escalation procedures in the private operator register; specialist
+product, model, connector and legal qualifications retain their separate evidence gates.
 
-The confirmed business inputs are pikar-ai, Tanzania and the configured support contact. Registered
-address, governing law, venue and supervisory authority still need applicable inputs and review;
-country alone does not settle them. Commercial billing remains disabled by owner instruction.
+The confirmed business inputs are pikar-ai, Tanzania, the configured support contact, and the
+owner-provided postal address `Dar es Salaam 17107, Tanzania`. The owner selected Tanzania law
+and Dar es Salaam courts as draft terms; counsel review remains open. The postal input does not
+prove registered-office status, and no supervisory authority is inferred. Commercial billing
+remains disabled by owner instruction.
 
 ### Seven-day transcript retention observation
 
@@ -116,6 +118,64 @@ missing configuration names, fixture state, origins and unseeded skills; never r
 Readiness here is configuration readiness, not proof of live functionality.
 
 ## Production release and rollback
+
+### Scoped frontend rollback evidence — 2026-10-17
+
+The dedicated staging-only alias `pikar-staging-rollback-20261017.vercel.app` was assigned
+to current frontend source `3d877c6e8dedc80ebb6bac552c024a5703a16101`, previous source
+`29785234c2a00ed7eb3c7816bd24e59a313327dd`, then current again. At each transition,
+the deployment mapping and all 11 served JavaScript asset paths and SHA-256 bodies matched
+the corresponding immutable preview. The compiled backend was `woozy-wren-368`; no production
+backend reference was present. Only the exact installed Convex SDK invalid-URL example literal
+was excluded from the hostname scan. All 43 pre-existing alias mappings remained unchanged.
+The new alias remains on current. No backend deployment, environment change, account operation,
+production alias change or auth-origin change occurred.
+
+Local evidence: `../staging-rollback-drill-evidence.json`; reproducible operator script:
+`../staging-rollback-drill.mjs`. This closes the scoped hosted frontend artifact rollback drill,
+not native sign-in/read/write acceptance, backend rollback, or database restoration. A first
+baseline attempt stopped before any assignment on the SDK example hostname; the reviewed exact
+literal exclusion preceded the successful three-assignment run.
+
+### Staging backend recovery evidence — 2026-10-17
+
+[Rollback attempt 39030025328](https://github.com/Mrjoel97/ProjectX/actions/runs/39030025328)
+passed the current `a129b88` deployment baseline and bounded quiet/configuration/data guards,
+then failed during the previous-code phase and its automatic restoration. Completion of the
+previous deployment is unknown; suppressed CLI diagnostics do not establish its failure cause.
+Staging foundation admission remained paused until the separately reviewed
+[current-only recovery 39030285762](https://github.com/Mrjoel97/ProjectX/actions/runs/39030285762)
+deployed exact `a129b884445482625b1e8f2a236744fb2a0f2515` from a fresh checkout with dry-run
+and TypeScript checks enabled. Recovery restored the proven prior foundation value `1`, verified
+other watched configuration unchanged, and preserved bounded skills-registry and retention-fixture
+fingerprints. Production was untouched. The original retention interview identity fingerprint is
+`b389a2014e514c7a35e08480dcef446aeb46b360861e2b8b72f9e67fc61f412e`; its checkpoint creation
+and expiry matched the original published dates before that fingerprint was recorded.
+
+This is successful current-code recovery after a failed rollback drill, not successful backend
+rollback or a diagnosis of the earlier failure. Local redacted artifact:
+`../staging-backend-recovery-20261017-evidence.json`. Preserve both runs and do not rerun the
+previous-code drill without a new reviewed recovery design and exclusive staging window.
+
+### Subsequent isolated backend rollback and native privacy evidence
+
+[Isolated rollback 39031979534](https://github.com/Mrjoel97/ProjectX/actions/runs/39031979534)
+subsequently passed current `a129b884445482625b1e8f2a236744fb2a0f2515` → previous
+`de18285d7466ea743d42199dc1d8de4a66dccbf9` → current in the exclusive staging window.
+Configuration, registry and original retention fixture were preserved. This evidence applies to the
+schema in that window, not database restoration or the unknown cause of the earlier failed attempt.
+After deploying the additive `authRevocations.ragCleanup` checkpoint, use a CI-qualified forward
+rollback retaining that field, the cleanup worker and tenant-erasure security fence. Do not redeploy
+the older schema over checkpoint-bearing rows or disable durable work required to finish erasure.
+
+Native API signup, six-document foundation publication, complete export and actual self-deletion
+passed separately; see the readiness evidence for runs `39030504811` and `39031820186`.
+Export verified the six reviewed documents plus Blueprint and one exact 192-byte decoded file.
+Stale JWTs were denied across public function kinds. Independent physical reads proved storage,
+user, receipts and all RAG business content absent, but retained empty namespace metadata prevented
+full privacy qualification. The namespace repair, second native phase, hosted in-flight/provider
+cleanup and browser/microphone acceptance require separate observed results. The original retention
+clock remains pending until 2026-10-24; never reset or delete it to accelerate qualification.
 
 The deploy workflow accepts a successful CI push on main in this repository and checks out its exact
 SHA. Promotion currently requires a commit subject beginning `[deploy]`. Verify actual branch and

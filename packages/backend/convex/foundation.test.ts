@@ -10,6 +10,7 @@ import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/comp
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
+import { contentHash } from "./lib/hash";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -508,4 +509,91 @@ test.each([
   } finally {
     fetchSpy.mockRestore();
   }
+});
+
+test("purge receipts commit only for eligible rows and continue after the 100-row boundary", async () => {
+  const t = setup();
+  const now = Date.now();
+  const ids = await t.run(async (ctx) => {
+    const ids = [];
+    for (let i = 0; i < 101; i++)
+      ids.push(
+        await ctx.db.insert("foundationTranscripts", {
+          tenantId: TENANT,
+          eventId: `expired_${i}`,
+          text: "private checkpoint text",
+          speaker: "user",
+          expiresAt: now,
+        }),
+      );
+    ids.push(
+      await ctx.db.insert("foundationTranscripts", {
+        tenantId: TENANT,
+        eventId: "future",
+        text: "future private",
+        speaker: "user",
+        expiresAt: now + 10000,
+      }),
+    );
+    return ids;
+  });
+  const firstId = ids[0];
+  if (!firstId) throw new Error("MISSING_FIXTURE");
+  const original = await t.run((ctx) => ctx.db.get(firstId));
+  if (!original) throw new Error("MISSING_FIXTURE");
+  const expectedHash = await contentHash(
+    JSON.stringify([
+      original.tenantId,
+      original.eventId,
+      new Date(original._creationTime).toISOString(),
+      new Date(original.expiresAt).toISOString(),
+    ]),
+  );
+  expect(await t.mutation(internal.foundation.purgeTranscripts, {})).toBe(100);
+  expect(await t.run((ctx) => ctx.db.query("foundationTranscripts").collect())).toHaveLength(2);
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+  const remaining = await t.run((ctx) => ctx.db.query("foundationTranscripts").collect());
+  expect(remaining.map((row) => row._id)).toEqual([ids[101]]);
+  const receipts = await t.run((ctx) => ctx.db.query("audit").collect());
+  expect(receipts).toHaveLength(101);
+  expect(receipts.filter((row) => row.payload.hash === expectedHash)).toHaveLength(1);
+  expect(await t.run((ctx) => ctx.db.query("auditExportQueue").collect())).toHaveLength(101);
+  for (const row of receipts) {
+    expect(row).toMatchObject({
+      tenantId: "control:foundation-retention:v1",
+      eventType: "foundation_retention.purged",
+      actor: "system:retention",
+      exportVersion: 2,
+    });
+    expect(row.payload).toMatchObject({ count: 1, expiresAt: now, purgedAt: now });
+    expect(Object.keys(row.payload).sort()).toEqual([
+      "count",
+      "createdAt",
+      "expiresAt",
+      "hash",
+      "purgedAt",
+    ]);
+    expect(row.correlationId).toBe(`foundation-retention:${row.payload.hash}`);
+    expect(row.payload.hash).toMatch(/^[a-f0-9]{64}$/);
+  }
+  expect(JSON.stringify(receipts)).not.toContain(TENANT);
+  expect(JSON.stringify(receipts)).not.toContain("private checkpoint text");
+  expect(JSON.stringify(receipts)).not.toContain("expired_");
+  expect(await t.mutation(internal.foundation.purgeTranscripts, {})).toBe(0);
+});
+test("purge and receipt/outbox roll back atomically on audit failure", async () => {
+  const t = convexTest(schema, modules); // Missing aggregate fails after audit+outbox inserts.
+  const id = await t.run((ctx) =>
+    ctx.db.insert("foundationTranscripts", {
+      tenantId: TENANT,
+      eventId: "atomic",
+      text: "private",
+      speaker: "user",
+      expiresAt: Date.now(),
+    }),
+  );
+  await expect(t.mutation(internal.foundation.purgeTranscripts, {})).rejects.toThrow();
+  expect(await t.run((ctx) => ctx.db.get(id))).not.toBeNull();
+  expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+  expect(await t.run((ctx) => ctx.db.query("auditExportQueue").collect())).toHaveLength(0);
 });

@@ -1,3 +1,5 @@
+> Last verified: 2026-10-17 — the closed module and scheduler inventories now explicitly include ragErasure.ts. Its internal native-erasure continuation observes existing deletion work, stops at 60 pending polls, and adds no user routine or recurring business action.
+
 > Last verified: 2026-10-15 — Pinned workflow run ordinals now count audit history through200-row query pages in an internal action, preserving the exact event filter while bounding each database transaction. New runs retain the existing governed action and audit behavior. Local53 pinned workflow tests pass.
 
 > Last verified: 2026-10-15 — Explicitly approved business_profile plus five deterministic business_foundation_* reference kinds are tenant-authored sources. Their production writers require user confirmation; direct statements and planned practices retain source markers. Arbitrary agent-origin documents still downgrade to agent_authored and unknown kinds remain third_party_research. Added regression covering all six approved kinds and the origin override.

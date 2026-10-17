@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api, internal } from "./_generated/api";
+import { admitIdentity } from "./invites";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -62,6 +63,11 @@ test("signup creates no session until matching email OTP; replay fails", async (
   const t = harness();
   await signup(t);
   expect(sent).toHaveLength(1);
+  expect(
+    await t.run(
+      async (ctx) => (await ctx.db.query("users").unique())?.emailVerificationTime === undefined,
+    ),
+  ).toBe(true);
   expect(await t.run((ctx) => ctx.db.query("authSessions").collect())).toHaveLength(0);
   const code = lastCode();
   await expect(
@@ -83,6 +89,9 @@ test("signup creates no session until matching email OTP; replay fails", async (
     },
   });
   expect(result.tokens).toBeTruthy();
+  expect(
+    await t.run(async (ctx) => (await ctx.db.query("users").unique())?.emailVerificationTime),
+  ).toEqual(expect.any(Number));
   await expect(
     t.action(api.auth.signIn, {
       provider: "password",
@@ -217,4 +226,37 @@ test("expired codes cannot sign in and email requests are bounded", async () => 
       },
     });
   expect(sent.length).toBeLessThanOrEqual(3);
+});
+
+test("only trusted matching verification updates metadata, preserving privileges and prior time", async () => {
+  const t = harness();
+  for (const scenario of [
+    { type: "credentials" as const, email: "owner@example.com", verified: true, expected: false },
+    { type: "verification" as const, email: "owner@example.com", verified: false, expected: false },
+    { type: "verification" as const, email: "other@example.com", verified: true, expected: false },
+    { type: "verification" as const, email: " OWNER@EXAMPLE.COM ", verified: true, expected: true },
+  ]) {
+    await t.run(async (ctx) => {
+      const id = await ctx.db.insert("users", { email: "owner@example.com", owner: false });
+      await admitIdentity(ctx, {
+        existingUserId: id,
+        type: scenario.type,
+        provider: { id: "password", type: "credentials" },
+        profile: { email: scenario.email, emailVerified: scenario.verified, owner: true },
+      });
+      const user = await ctx.db.get(id);
+      expect(user?.owner).toBe(false);
+      if (scenario.expected) {
+        expect(user?.emailVerificationTime).toEqual(expect.any(Number));
+        await ctx.db.patch(id, { emailVerificationTime: 123 });
+        await admitIdentity(ctx, {
+          existingUserId: id,
+          type: "verification",
+          provider: { id: "password", type: "credentials" },
+          profile: { email: scenario.email, emailVerified: true, owner: true },
+        });
+        expect((await ctx.db.get(id))?.emailVerificationTime).toBe(123);
+      } else expect(user?.emailVerificationTime).toBeUndefined();
+    });
+  }
 });

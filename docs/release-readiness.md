@@ -1,30 +1,30 @@
 # Release readiness and implementation checklist
 
 Last reviewed: 2026-10-17. Implementation starting baseline: `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
-Release implementation and deployment evidence: Codex, acting on the repository owner's instructions. Ongoing operator and specialist review assignments remain open under the owner roles below; deployment does not close those operational ownership tasks.
-Current production runtime: `a129b884445482625b1e8f2a236744fb2a0f2515`, verified 2026-10-17 in [run 39026090675](https://github.com/Mrjoel97/ProjectX/actions/runs/39026090675). Local implementation and tests never imply live provider verification. Production voice/foundation activation and the remaining drills below are still open; staging foundation is enabled for controlled acceptance.
+Release implementation and deployment evidence: Codex, acting on the repository owner's instructions. On 2026-10-17 the owner assigned Joel (`joel@pikar-ai.com`) responsibility for release approval, incident response, privacy requests, and provider/billing reconciliation. Runbook exercises, backup coverage and specialist review remain separate open requirements.
+Current production runtime: `e92bd5e51cc60368dd94095483bdb7b62f8f1690`, verified 2026-10-17 in [release run 39030778689](https://github.com/Mrjoel97/ProjectX/actions/runs/39030778689), after [main CI 39030531634](https://github.com/Mrjoel97/ProjectX/actions/runs/39030531634). READY frontend artifact `dpl_A8FbQAGNYVWazneuxqyYWNuMkSCs`, routes/aliases and legal draft were verified by the release coordinator. Local implementation and tests never imply live provider verification. Production voice/foundation activation and the remaining drills below are still open; staging foundation is enabled for controlled acceptance.
 
 | Gate | Owner role | Current state | Required closure evidence |
 |---|---|---|---|
-| Operations guide | Release engineer | Current/previous exact-revision local setup and restoration rehearsals passed; hosted recovery pending | Fresh setup, staging release and recovery using only the guide |
-| Release configuration | Release engineer | Exact-SHA CI, production configuration gate, Convex dry-run/generated-type check, deploy/seed, staged probe and promotion passed at a129b88 with step-scoped credentials; rollback drill pending | Exact SHA, configuration check, environment protections, successful staged promotion and rollback |
+| Operations guide | Release engineer | Local setup/restoration and scoped hosted frontend/backend rollback passed; broader recovery/runbook exercises pending | Fresh setup, staging release and recovery using only the guide |
+| Release configuration | Release engineer | Production e92bd5e qualified with step-scoped credentials; isolated staging a129b88 → de18285 → a129b88 rollback passed for the pre-checkpoint schema | Exact SHA, configuration check, environment protections, successful staged promotion and rollback |
 | External delivery | Backend engineer | Implemented locally: durable claims/receipts and manual uncertainty review; live reconciliation pending | Durable attempt state, no blind resend, concurrent/crash/timeout tests and controlled provider reconciliation |
 | Cost admission | Backend engineer | Live staging embedding settlement and one synthetic voice response ledger verified; retained initial voice hold, invoice and failure-mode reconciliation remain open | Atomic reservations, all paid callers migrated, idempotent settlement, uncertain holds, provider reconciliation |
 | Identity | Security/backend engineer | Isolated native signup verification, replay rejection, recovery/reset and old/new JWT checks passed; expiry and browser acceptance remain open | Cross-tenant negative tests, password verification/recovery, privilege and callback checks |
-| Privacy/export/deletion | Security/backend engineer | Synthetic content/file export and isolation passed; native self-deletion plus independent absence of its five known blobs/user/receipts verified; native export/in-flight/provider evidence open | Typed operational events, sensitive-data sink tests, all new content included in export/deletion |
+| Privacy/export/deletion | Security/backend engineer | Native complete export, decoded file SHA, self-deletion and stale-JWT denial passed; independent storage/user/receipt/RAG content absence passed, but empty namespace remains; in-flight/provider proof open | Typed operational events, sensitive-data sink tests, all new content included in export/deletion |
 | Graph retrieval | Backend engineer | Bounded indexed traversal and stale-revision filtering tested locally | Adjacency-only reads, cycle/high-degree/isolation regression tests, read-budget evidence |
 | Other request scans | Backend engineer | Indexed selection, cursor pagination, bounded working queues and durable cleanup implemented; inventory complete locally | Each scan bounded, paginated or moved to checkpointed work |
 | Module boundaries | Backend engineer | Research tools, PDF renderer and current-media readers extracted in addition to traversal/foundation/stock domains; regressions passed | Incremental pure-domain extraction with behavioral regression coverage |
 | Voice onboarding | Product/frontend/backend | Production off; staging synthetic tool-free voice connected, received audio and terminated with trusted usage; native microphone/onboarding acceptance pending | Resumable interview, typed fallback, restricted tools, admission budget, real browser/provider evidence |
-| Foundation publication | Product/backend | Implemented with six stable document IDs and exact review hash; indexing regressions passed locally | Six documents, provenance, explicit revision approval, atomic publication, searchable approved content |
-| Blueprint consistency | Backend engineer | Atomic foundation/Blueprint publication implemented; no Blueprint embedding | Matching published revisions, bounded summary and references, no Blueprint embedding loop |
+| Foundation publication | Product/backend | Native API six-document review/correction/reconfirmation/republication and indexing passed; browser/microphone and human business approval remain open | Six documents, provenance, explicit revision approval, atomic publication, searchable approved content |
+| Blueprint consistency | Backend engineer | Native API export matched six reviewed foundation documents and Blueprint; no Blueprint embedding | Matching published revisions, bounded summary and references, no Blueprint embedding loop |
 | Transcript retention | Security/backend engineer | Synthetic staging clock started 2026-10-17; expires 2026-10-24 10:18:29.493 UTC; actual purge/native lifecycle evidence pending | Seven-day checkpoint purge, no application-stored audio, discard/export/deletion coverage |
-| Billing and legal | Business owner + reviewer | Billing deliberately disabled; pikar-ai/Tanzania/contact configured; postal address pending | Confirmed business inputs and reviewed public content before commercial activation |
+| Billing and legal | Joel + legal reviewer | Billing deliberately disabled; owner confirmed pikar-ai/Tanzania/contact and Dar es Salaam 17107, Tanzania postal address; Tanzania law/Dar es Salaam courts remain draft pending legal review | Confirmed business inputs and reviewed public content before commercial activation |
 | Audit WORM | Service operator | WORM/AWS names absent in production preflight; export remains disabled | Configured retention, export/acknowledgement and recovery evidence; otherwise feature remains disabled |
 | Connectors | Provider operator | Per-provider gates remain binding | Current connection, scope/expiry/revoke/read evidence for each enabled provider |
 | Recurrence | Workflow operator | Existing gate remains binding | Required actual DST/OAuth/provider traces; do not enable on simulated evidence alone |
 | Skill activation | Model operator | Per-skill evidence required | Seed/version identity, evaluation, activation and rollback evidence |
-| CI portability/build | Release engineer | Release a129b88 passed PR46/main CI and production workflow: 8,224 passed, two skipped, plus 34 operator regressions; both full CI runs had no worker error after dispatch scheduler ownership cleanup | Continue full-suite qualification; targeted cleanup does not prove every historical teardown cause resolved |
+| CI portability/build | Release engineer | Release e92bd5e passed PR48/main CI and production workflow: 8,224 passed, two skipped, plus 50 operator checks | Continue full-suite qualification; targeted cleanup does not prove every historical teardown cause resolved |
 
 ## Delivery order
 
@@ -54,9 +54,23 @@ implementation changes; old evidence is not current assurance.
 
 ## Remaining closure tasks
 
+- [x] Rehearse isolated hosted frontend artifact rollback: current `3d877c6` → previous
+  `2978523` → current on a new staging-only alias, with deployment and 11 asset hashes verified
+  at each stage and all 43 existing alias mappings unchanged. See the operations guide evidence.
+  Backend rollback is separately recorded below; database recovery and browser acceptance remain open.
+
+- [x] Recover current staging backend from a fresh pinned checkout after the failed backend
+  rollback attempt: run `39030285762` restored `a129b88`, original foundation admission and
+  unchanged watched configuration, skills registry and retention fixture. The failed attempt
+  `39030025328` remains preserved with its cause unproven. A subsequent isolated rollback
+  `39031979534` passed current `a129b88` → previous `de18285` → current, with configuration,
+  registry and original retention fixture preserved. This qualifies that schema window only;
+  rollback after RAG checkpoint deployment must retain its additive schema, worker and erasure fence.
+
 - [ ] Qualify the tenant-bound upload relay on hosted Convex: production-origin CORS/preflight, a 200 MiB raw streaming upload within the storage upload timeout, single-use receipt binding, original plus normalized audio sidecar, cancellation and deletion races. Hosted admin-fixture throughput passed through 200 MiB, but the separate local 200 MiB path timed out with partial data; browser relay, cancellation and cleanup qualification remain open.
 
-- [ ] Assign named owners and run fresh setup, staging promotion and rollback drills; attach exact revision and environment evidence.
+- [x] Assign release approval, incident response, privacy requests and provider/billing reconciliation to Joel; owner accepted all four roles on 2026-10-17.
+- [ ] Complete remaining runbook, backup and broader recovery drills; attach exact revision and environment evidence and record backup coverage.
 - [ ] Exercise controlled Gmail/Microsoft acceptance, response loss and mailbox reconciliation. Confirm one provider send per request and no blind retries.
 - [ ] Establish trusted voice session ownership, hard termination and provider usage reconciliation. Browser telemetry must never release a hold. Verify transcription duration ceilings against trusted metadata, and provider pricing against the configured model.
 - [x] Route the operator-only `probeGemini` diagnostic through paid admission. Folder and per-call reservations remain conservatively overlapping; reconcile actual provider invoices before tuning allowances.
@@ -68,9 +82,10 @@ implementation changes; old evidence is not current assurance.
 - [x] Inventory request-time `.collect()` paths; replace unbounded histories with exact indexes, pagination or bounded cleanup; extract research/PDF/media read modules. See [retrieval inventory](governance/retrieval-boundaries-2026-10-15.md). Production index rollout and load evidence remain release checks.
 - [ ] Run real microphone/browser onboarding: interruption, reconnect, resume, typed/upload fallback, correction, six-document review, explicit approval and repeat publication. Confirm only current approved documents ground answers.
 - [x] Inspect the complete pre-upgrade workflow inventory and confirm both ingestion pools quiet before enabling foundation onboarding in staging. Required skill versions/configuration were verified; staging activation succeeded in run 38785222601.
-- [ ] Complete live skill/voice evaluation and native six-document acceptance before production foundation or controlled voice activation. Staging configuration and registry presence alone do not qualify these capabilities.
+- [x] Complete isolated native API six-document acceptance, exact reviewed-content/Blueprint export, small-file decoded-byte verification and post-erasure JWT refusal. This does not qualify browser/microphone acceptance or real business approval.
+- [ ] Complete live skill/voice evaluation and browser onboarding acceptance before production foundation or controlled voice activation.
 - [ ] Observe seven-day transcript expiry and bounded cleanup; verify discard, export and account erasure.
-- [ ] Obtain the remaining postal address and reviewed legal content. Keep billing disabled as explicitly instructed; do not activate it during this release. Resolve WORM retention, connector and recurrence provider evidence independently and preserve their gates.
+- [ ] Review legal content using the owner-confirmed postal address. Keep billing disabled as explicitly instructed; do not activate it during this release. Resolve WORM retention, connector and recurrence provider evidence independently and preserve their gates.
 
 The unchecked tasks require additional implementation or operational evidence. The runtime release recorded above does not establish completion of every original gap.
 
@@ -92,7 +107,33 @@ Source review found actionable voice lifecycle and foundation correction defects
 The synthetic seven-day checkpoint observation has now started; actual expiry remains pending.
 Follow its timestamp/evidence protocol and accountable-owner/legal records in
 [operations](operations.md#configuration-planes).
-The original signup diagnosis, native acceptance and live operational gates remain unchecked.
+The original browser signup failure cause remains unproven. Native API acceptance is recorded below; browser/microphone and remaining live operational gates stay open.
+
+## Native API foundation, export and erasure evidence — 2026-10-17
+
+The isolated account created in [signup run 39030504811](https://github.com/Mrjoel97/ProjectX/actions/runs/39030504811)
+completed recipient-private verification and rejected OTP replay against staging runtime `a129b88`.
+Authenticated API acceptance passed typed resume, essential correction/reconfirmation, exact review,
+six-document publication, stable repeat publication, real index pointers and current hydrated references.
+The complete 51-table export retained all page file links, matched all six reviewed document snapshots
+and Blueprint, and verified the uploaded file's exact 192 decoded bytes and SHA-256. Its valid gzip,
+chunked response had no Content-Length; bounded decoded-stream length and hash were authoritative.
+Small-file relay checks passed allowed-origin preflight, foreign-origin refusal and ticket replay refusal.
+
+Native self-deletion succeeded. The old JWT was specifically refused as UNAUTHENTICATED by query,
+mutation, ordinary action and erasure action. Independent read-only
+[observer 39031820186](https://github.com/Mrjoel97/ProjectX/actions/runs/39031820186) verified the user,
+documents, receipts, known storage blobs and all captured namespace entries/chunks/vectors absent.
+It deliberately failed full qualification because empty namespace metadata remained. The bounded
+namespace worker is a corrective implementation awaiting its own release/repair evidence; do not
+report full privacy closure from business-content removal alone. Audit/billing/security retention
+exceptions remain explicit; hosted in-flight work and provider-side cleanup are unverified.
+
+Local redacted artifact: `../native-foundation-privacy-proof.json`. A second native phase remains
+pending and must be recorded separately when observed. These API results do not establish matched
+retrieval chunks, browser transport, microphone acceptance, human approval of real business content,
+or the cause of the earlier browser signup failure. Seven-day expiry/purge remains pending on
+2026-10-24; neither native deletion nor a local clock-advance test substitutes for that observation.
 
 ## Synthetic staging voice provider evidence — 2026-10-17
 

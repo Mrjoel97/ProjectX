@@ -1,3 +1,7 @@
+> Last verified: 2026-10-17 — Transcript expiry now appends a code-only retention receipt in the same mutation as deletion, its audit outbox and aggregate. Batches remain bounded to 100 with durable continuation. Generic audit.log rejects the reserved control:foundation-retention:v1 namespace, foundation_retention. event family and foundation-retention: correlation prefix. Receipts retain only a checkpoint SHA-256, count and creation/expiry/purge timestamps; no original tenant, event ID or transcript text. This follows ADR-044's narrow archive disclosure; it does not arm WORM or claim anonymity.
+>
+> The read-only staging observer pins the original interview and checkpoint event/times, derives the exact receipt correlation, and after the eligible sweep requires both checkpoint absence and the matching atomic purge receipt. receiptVerified proves the purge function transaction, not which scheduler/operator invoked it; cronAttributionVerified remains false. The original seven-day fixture is untouched, and elapsed retention remains pending until 2026-10-24. Do not recreate it, shorten its TTL or run a manual purge to manufacture elapsed evidence.
+
 > Last verified: 2026-10-17 — `foundationApiScenario.mjs` accepts an already verified disposable
 > native JWT, refuses admin/deploy credentials, and targets explicitly named staging. It exercises
 > typed answers and fresh-client resume, actual essential-fact correction/invalidation/reconfirmation,

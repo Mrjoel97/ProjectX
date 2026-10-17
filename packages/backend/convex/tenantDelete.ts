@@ -18,6 +18,7 @@ import { revokeErasedIdentity } from "./authRevocations";
 import { tenantErasureAction } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { internalMutation } from "./lib/tenantLifecycle";
+import { ensureRagErasure } from "./ragErasure";
 import { rag } from "./vaultRag";
 import { CURSOR_NAME } from "./wormCursor";
 
@@ -280,6 +281,10 @@ export const deleteTenantDataPage = internalMutation({
     const tables = deletableTables();
     const table = tables[tableIndex];
     if (!table) throw new Error("INVALID_DELETE_CURSOR");
+    const namespaceErasure =
+      table === "vaultDocuments" && String(args.userId) === args.tenantId
+        ? await ensureRagErasure(ctx, args.tenantId)
+        : false;
 
     if (tenantTableScope(table) === "identity") {
       const user = await ctx.db.get(args.userId);
@@ -430,7 +435,7 @@ export const deleteTenantDataPage = internalMutation({
       // cascade rather than inventing a second one, and the SMOKE sentinel case it guards against
       // is the same: an offline embed never creates a component entry, so passing that sentinel
       // to `deleteAsync` would violate the component's contract.
-      if (table === "vaultDocuments") {
+      if (table === "vaultDocuments" && !namespaceErasure) {
         const ragEntryId = (row as { ragEntryId?: string }).ragEntryId;
         if (
           typeof ragEntryId === "string" &&
