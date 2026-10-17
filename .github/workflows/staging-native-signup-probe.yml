@@ -1,0 +1,85 @@
+name: staging-native-signup-probe
+on:
+  push:
+    branches: [codex/staging-native-signup-probe-20261017]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  probe:
+    if: github.repository == 'Mrjoel97/ProjectX'
+    environment: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: staging-qualification
+      cancel-in-progress: false
+    env:
+      SOURCE_SHA: 5643be381e3517db81b9167bd249c9afd76e1c0a
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Require exact successful source CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node <<'NODE'
+          (async()=>{
+            const sha=process.env.SOURCE_SHA;
+            if(!/^[a-f0-9]{40}$/.test(sha))throw Error();
+            const r=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs?head_sha='+sha+'&per_page=30',{headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
+            if(!r.ok)throw Error();
+            const runs=(await r.json()).workflow_runs.filter(x=>x.head_sha===sha&&x.path==='.github/workflows/ci.yml'&&x.workflow_id===325088000&&x.repository.full_name==='Mrjoel97/ProjectX'&&x.head_repository?.full_name==='Mrjoel97/ProjectX').sort((a,b)=>b.id-a.id);
+            if(runs[0]?.status!=='completed'||runs[0]?.conclusion!=='success')throw Error();
+            console.log('Exact source CI verified');
+          })().catch(()=>{console.error('SOURCE_CI_NOT_VERIFIED');process.exitCode=1;});
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: node --test packages/backend/scripts/nativeSignupProbe.test.mjs
+      - name: Isolated native staging signup probe
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
+          NATIVE_SIGNUP_TRANSPORT_PUBLIC_KEY: |
+            -----BEGIN PUBLIC KEY-----
+            MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAoFnXj3vIkbkdJAMO588v
+            HkYO+OaexHe3CPmtKZV7KL6xnD/ZKtIWLVNbMZeTdH4519ggiQWEzJYRxW3PYgMk
+            wI36CtdFFH1t5vpdh52o1NtDsrk6Cmb0bza2kncUvwKSSG6VtN+8ZNxemOl80MID
+            QWYiuMqYxpxxHKYqotZAMU/EjehYE2HElCmGBuqjUxKumAbWM1rCqw/jKrIaqt4J
+            wk4KRmyiogM6E4pkJRqU3ur+uOUoIRHHE0oJOHR6oGLSFIkmQAYmem1bb1hmC495
+            4yOOBDndcNVDB13WgV6qsBKUkdQKXkI3E7dYy+PT8G7QIVrCXhl+QL4nUiFI9u7s
+            qtFnLQz8fWVQACgjZcyE2RqMa5zUyWKzzqKCZoGOzIImViOYA07XZpHR+lWvCgP0
+            QbxnVvNGs1sVT0N5HUESaUeXGdDQl27xUI27nalfnAKhsNHLCR80ztvDf2yWnblF
+            i7el8C4wBi0MG4+kIsbawCNdGJs6h1UHzIMPDH4h+41v+e2QioQdr7sLbH1C4sl/
+            svWiv0iqt1Y9xzNAJ0fkjyBArFIYGajZehC3LIZZ6kgzwxu+WJNSi6p72dG/OFyW
+            MMN2TfzmLS5PPJDCK5WW1lDu4rfYrvgTraG6q6IiZZFsUz15hCe/fBLZFpL450Ck
+            G+KLB78Bk9/4pda93RLLPSMCAwEAAQ==
+            -----END PUBLIC KEY-----
+        run: |
+          node --input-type=module <<'NODE'
+          import {execFileSync} from 'node:child_process';
+          import {resolve} from 'node:path';
+          import {ENV_MANIFEST,missingEnv} from './packages/backend/convex/lib/env.ts';
+          try {
+            const backend=resolve('packages/backend');
+            const cli=(args)=>execFileSync(process.execPath,[resolve(backend,'node_modules/convex/bin/main.js'),...args],{cwd:backend,encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:60000,maxBuffer:1048576}).trim();
+            if(cli(['dashboard','--no-open'])!=='https://dashboard.convex.dev/d/woozy-wren-368')throw Error();
+            const names=new Set(cli(['env','list','--names-only']).split(/\r?\n/));
+            const read=(name)=>names.has(name)?cli(['env','get',name]):undefined;
+            const fixtures=new Map(ENV_MANIFEST.filter(x=>x.tier==='fixture').map(x=>[x.name,read(x.name)]));
+            if(missingEnv(name=>fixtures.get(name)).fixturesActive.length)throw Error();
+            if(!process.env.NATIVE_SIGNUP_TRANSPORT_PUBLIC_KEY?.trim())throw Error();
+            if(read('VOICE_SERVER_CONTROL_VERIFIED')==='1')throw Error();
+            if(read('SITE_URL')!=='https://pikar-ai-convex-gpbrsadzc-joelferuzi-gmailcoms-projects.vercel.app')throw Error();
+            if(!names.has('FOUNDATION_ONBOARDING_ENABLED')||cli(['env','get','FOUNDATION_ONBOARDING_ENABLED'])!=='1')throw Error();
+            console.log(JSON.stringify({stagingVerified:true,fixtureFlagsDisabled:true,foundationRestored:true,voiceDisabled:true,authOriginUnchanged:true,publicKeyPresent:true}));
+          } catch {
+            console.error('STAGING_NATIVE_PROBE_PREFLIGHT_REFUSED');process.exitCode=1;
+          }
+          NODE
+          node packages/backend/scripts/nativeSignupProbe.mjs
