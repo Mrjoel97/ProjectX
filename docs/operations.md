@@ -61,15 +61,17 @@ The previous release `c2cf18c2cbcf4d16df4e3143271ac69471172f64` was separately r
 
 ### Remaining accountable-owner and legal records
 
-Role names in this guide are responsibilities, not accepted assignments. Before operational
-qualification closes, record a named primary, backup, acceptance date and incident contact in the
-private operator register for release/rollback, backend/delivery/cost, security/privacy, product
-acceptance, service/provider/workflow/model operations, and business/legal review. Keep personal
-contact details out of public release evidence. A single person can accept several roles explicitly.
+On 2026-10-17 the owner explicitly assigned Joel (`joel@pikar-ai.com`) as the accountable primary
+for release approval, incident response, privacy requests, and provider/billing reconciliation.
+These assignments do not establish completed runbook exercises or specialist legal review.
+Record backup coverage and escalation procedures in the private operator register; specialist
+product, model, connector and legal qualifications retain their separate evidence gates.
 
-The confirmed business inputs are pikar-ai, Tanzania and the configured support contact. Registered
-address, governing law, venue and supervisory authority still need applicable inputs and review;
-country alone does not settle them. Commercial billing remains disabled by owner instruction.
+The confirmed business inputs are pikar-ai, Tanzania, the configured support contact, and the
+owner-provided postal address `Dar es Salaam 17107, Tanzania`. The owner selected Tanzania law
+and Dar es Salaam courts as draft terms; counsel review remains open. The postal input does not
+prove registered-office status, and no supervisory authority is inferred. Commercial billing
+remains disabled by owner instruction.
 
 ### Seven-day transcript retention observation
 
@@ -116,6 +118,44 @@ missing configuration names, fixture state, origins and unseeded skills; never r
 Readiness here is configuration readiness, not proof of live functionality.
 
 ## Production release and rollback
+
+### Scoped frontend rollback evidence — 2026-10-17
+
+The dedicated staging-only alias `pikar-staging-rollback-20261017.vercel.app` was assigned
+to current frontend source `3d877c6e8dedc80ebb6bac552c024a5703a16101`, previous source
+`29785234c2a00ed7eb3c7816bd24e59a313327dd`, then current again. At each transition,
+the deployment mapping and all 11 served JavaScript asset paths and SHA-256 bodies matched
+the corresponding immutable preview. The compiled backend was `woozy-wren-368`; no production
+backend reference was present. Only the exact installed Convex SDK invalid-URL example literal
+was excluded from the hostname scan. All 43 pre-existing alias mappings remained unchanged.
+The new alias remains on current. No backend deployment, environment change, account operation,
+production alias change or auth-origin change occurred.
+
+Local evidence: `../staging-rollback-drill-evidence.json`; reproducible operator script:
+`../staging-rollback-drill.mjs`. This closes the scoped hosted frontend artifact rollback drill,
+not native sign-in/read/write acceptance, backend rollback, or database restoration. A first
+baseline attempt stopped before any assignment on the SDK example hostname; the reviewed exact
+literal exclusion preceded the successful three-assignment run.
+
+### Staging backend recovery evidence — 2026-10-17
+
+[Rollback attempt 39030025328](https://github.com/Mrjoel97/ProjectX/actions/runs/39030025328)
+passed the current `a129b88` deployment baseline and bounded quiet/configuration/data guards,
+then failed during the previous-code phase and its automatic restoration. Completion of the
+previous deployment is unknown; suppressed CLI diagnostics do not establish its failure cause.
+Staging foundation admission remained paused until the separately reviewed
+[current-only recovery 39030285762](https://github.com/Mrjoel97/ProjectX/actions/runs/39030285762)
+deployed exact `a129b884445482625b1e8f2a236744fb2a0f2515` from a fresh checkout with dry-run
+and TypeScript checks enabled. Recovery restored the proven prior foundation value `1`, verified
+other watched configuration unchanged, and preserved bounded skills-registry and retention-fixture
+fingerprints. Production was untouched. The original retention interview identity fingerprint is
+`b389a2014e514c7a35e08480dcef446aeb46b360861e2b8b72f9e67fc61f412e`; its checkpoint creation
+and expiry matched the original published dates before that fingerprint was recorded.
+
+This is successful current-code recovery after a failed rollback drill, not successful backend
+rollback or a diagnosis of the earlier failure. Local redacted artifact:
+`../staging-backend-recovery-20261017-evidence.json`. Preserve both runs and do not rerun the
+previous-code drill without a new reviewed recovery design and exclusive staging window.
 
 The deploy workflow accepts a successful CI push on main in this repository and checks out its exact
 SHA. Promotion currently requires a commit subject beginning `[deploy]`. Verify actual branch and

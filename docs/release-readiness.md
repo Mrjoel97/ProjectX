@@ -1,7 +1,7 @@
 # Release readiness and implementation checklist
 
 Last reviewed: 2026-10-17. Implementation starting baseline: `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
-Release implementation and deployment evidence: Codex, acting on the repository owner's instructions. Ongoing operator and specialist review assignments remain open under the owner roles below; deployment does not close those operational ownership tasks.
+Release implementation and deployment evidence: Codex, acting on the repository owner's instructions. On 2026-10-17 the owner assigned Joel (`joel@pikar-ai.com`) responsibility for release approval, incident response, privacy requests, and provider/billing reconciliation. Runbook exercises, backup coverage and specialist review remain separate open requirements.
 Current production runtime: `a129b884445482625b1e8f2a236744fb2a0f2515`, verified 2026-10-17 in [run 39026090675](https://github.com/Mrjoel97/ProjectX/actions/runs/39026090675). Local implementation and tests never imply live provider verification. Production voice/foundation activation and the remaining drills below are still open; staging foundation is enabled for controlled acceptance.
 
 | Gate | Owner role | Current state | Required closure evidence |
@@ -19,7 +19,7 @@ Current production runtime: `a129b884445482625b1e8f2a236744fb2a0f2515`, verified
 | Foundation publication | Product/backend | Implemented with six stable document IDs and exact review hash; indexing regressions passed locally | Six documents, provenance, explicit revision approval, atomic publication, searchable approved content |
 | Blueprint consistency | Backend engineer | Atomic foundation/Blueprint publication implemented; no Blueprint embedding | Matching published revisions, bounded summary and references, no Blueprint embedding loop |
 | Transcript retention | Security/backend engineer | Synthetic staging clock started 2026-10-17; expires 2026-10-24 10:18:29.493 UTC; actual purge/native lifecycle evidence pending | Seven-day checkpoint purge, no application-stored audio, discard/export/deletion coverage |
-| Billing and legal | Business owner + reviewer | Billing deliberately disabled; pikar-ai/Tanzania/contact configured; postal address pending | Confirmed business inputs and reviewed public content before commercial activation |
+| Billing and legal | Joel + legal reviewer | Billing deliberately disabled; owner confirmed pikar-ai/Tanzania/contact and Dar es Salaam 17107, Tanzania postal address; Tanzania law/Dar es Salaam courts remain draft pending legal review | Confirmed business inputs and reviewed public content before commercial activation |
 | Audit WORM | Service operator | WORM/AWS names absent in production preflight; export remains disabled | Configured retention, export/acknowledgement and recovery evidence; otherwise feature remains disabled |
 | Connectors | Provider operator | Per-provider gates remain binding | Current connection, scope/expiry/revoke/read evidence for each enabled provider |
 | Recurrence | Workflow operator | Existing gate remains binding | Required actual DST/OAuth/provider traces; do not enable on simulated evidence alone |
@@ -54,9 +54,21 @@ implementation changes; old evidence is not current assurance.
 
 ## Remaining closure tasks
 
+- [x] Rehearse isolated hosted frontend artifact rollback: current `3d877c6` → previous
+  `2978523` → current on a new staging-only alias, with deployment and 11 asset hashes verified
+  at each stage and all 43 existing alias mappings unchanged. See the operations guide evidence.
+  Backend rollback, database recovery and native acceptance remain separate open gates.
+
+- [x] Recover current staging backend from a fresh pinned checkout after the failed backend
+  rollback attempt: run `39030285762` restored `a129b88`, original foundation admission and
+  unchanged watched configuration, skills registry and retention fixture. Backend rollback itself
+  remains unqualified: run `39030025328` failed during previous-code deployment and automatic
+  restoration; its exact cause is unproven. See the operations guide for both run links.
+
 - [ ] Qualify the tenant-bound upload relay on hosted Convex: production-origin CORS/preflight, a 200 MiB raw streaming upload within the storage upload timeout, single-use receipt binding, original plus normalized audio sidecar, cancellation and deletion races. Hosted admin-fixture throughput passed through 200 MiB, but the separate local 200 MiB path timed out with partial data; browser relay, cancellation and cleanup qualification remain open.
 
-- [ ] Assign named owners and run fresh setup, staging promotion and rollback drills; attach exact revision and environment evidence.
+- [x] Assign release approval, incident response, privacy requests and provider/billing reconciliation to Joel; owner accepted all four roles on 2026-10-17.
+- [ ] Complete remaining runbook, staging backend rollback and recovery drills; attach exact revision and environment evidence and record backup coverage.
 - [ ] Exercise controlled Gmail/Microsoft acceptance, response loss and mailbox reconciliation. Confirm one provider send per request and no blind retries.
 - [ ] Establish trusted voice session ownership, hard termination and provider usage reconciliation. Browser telemetry must never release a hold. Verify transcription duration ceilings against trusted metadata, and provider pricing against the configured model.
 - [x] Route the operator-only `probeGemini` diagnostic through paid admission. Folder and per-call reservations remain conservatively overlapping; reconcile actual provider invoices before tuning allowances.
@@ -70,7 +82,7 @@ implementation changes; old evidence is not current assurance.
 - [x] Inspect the complete pre-upgrade workflow inventory and confirm both ingestion pools quiet before enabling foundation onboarding in staging. Required skill versions/configuration were verified; staging activation succeeded in run 38785222601.
 - [ ] Complete live skill/voice evaluation and native six-document acceptance before production foundation or controlled voice activation. Staging configuration and registry presence alone do not qualify these capabilities.
 - [ ] Observe seven-day transcript expiry and bounded cleanup; verify discard, export and account erasure.
-- [ ] Obtain the remaining postal address and reviewed legal content. Keep billing disabled as explicitly instructed; do not activate it during this release. Resolve WORM retention, connector and recurrence provider evidence independently and preserve their gates.
+- [ ] Review legal content using the owner-confirmed postal address. Keep billing disabled as explicitly instructed; do not activate it during this release. Resolve WORM retention, connector and recurrence provider evidence independently and preserve their gates.
 
 The unchecked tasks require additional implementation or operational evidence. The runtime release recorded above does not establish completion of every original gap.
 
