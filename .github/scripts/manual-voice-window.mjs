@@ -90,6 +90,29 @@ async function configure() {
   }
 }
 
+
+async function diagnostic() {
+  phase='diagnostic-source'; source(); phase='diagnostic-target'; target();
+  phase='diagnostic-configuration'; const config=await configuration();
+  check([null,'0','false'].includes(config.VOICE_SERVER_CONTROL_VERIFIED));
+  phase='diagnostic-owner';
+  const result=query(`let stage="users";const out={diagnosticCompleted:true,ownerPreflightPassed:false};try{
+    const users=await ctx.db.query("users").take(201);out.userCount=users.length;out.usersWithinBound=users.length<=200;if(!out.usersWithinBound)return {...out,stage};
+    stage="digest";const matches=[];for(const user of users){const email=user.email?.trim().toLowerCase();if(!email)continue;const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(email));if(Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("")===${JSON.stringify(OWNER_HASH)})matches.push(user);}out.ownerMatchCount=matches.length;out.uniqueOwner=matches.length===1;if(!out.uniqueOwner)return {...out,stage};const user=matches[0];
+    stage="google-account";const accounts=await ctx.db.query("authAccounts").withIndex("userIdAndProvider",q=>q.eq("userId",user._id).eq("provider","google")).take(2);out.googleAccountCount=accounts.length;out.googleAccountPresent=accounts.length===1;if(!out.googleAccountPresent)return {...out,stage};
+    stage="auth-session";const sessions=await ctx.db.query("authSessions").withIndex("userId",q=>q.eq("userId",user._id)).take(101);out.authSessionCount=sessions.length;out.authSessionsWithinBound=sessions.length<=100;out.activeAuthSessionPresent=sessions.some(s=>s.expirationTime>Date.now());
+    out.accountEmailVerified=accounts[0].emailVerified?.trim().toLowerCase()===user.email.trim().toLowerCase();out.userVerificationMetadata=typeof user.emailVerificationTime==="number";
+    stage="erasure-fence";const fence=await ctx.db.query("authRevocations").withIndex("by_userId",q=>q.eq("userId",String(user._id))).unique();out.erasureFenceAbsent=!fence?.state;
+    stage="voice-inventory";const voice=await ctx.db.query("voiceSessions").take(201);out.voiceCount=voice.length;out.voiceWithinBound=voice.length<=200;out.voiceIdle=voice.every(s=>s.status!=="active"&&(!s.callId||(Number.isFinite(s.hangupConfirmedAt)&&s.hangupUnresolved!==true)));
+    stage="kill-switch";const config=await ctx.db.query("guardrailConfig").first();out.killSwitchOff=!config?.killSwitch;
+    stage="foundation-skill";const skills=await ctx.db.query("skills").withIndex("by_name_status",q=>q.eq("name","foundation-voice").eq("status","active")).take(2);out.activeFoundationSkillCount=skills.length;out.foundationSkillPresent=skills.length===1;
+    out.ownerPreflightPassed=out.authSessionsWithinBound&&out.activeAuthSessionPresent&&out.erasureFenceAbsent&&out.voiceWithinBound&&out.voiceIdle&&out.killSwitchOff&&out.foundationSkillPresent;
+    return {...out,stage:"complete",queryFailed:false};
+  }catch{return {...out,stage,queryFailed:true};}`);
+  check(Object.entries(result).every(([key,value])=>key==='stage'?['users','digest','google-account','auth-session','erasure-fence','voice-inventory','kill-switch','foundation-skill','complete'].includes(value):typeof value==='boolean'||typeof value==='number'));
+  emit({...result,activationAttempted:false});
+}
+
 async function preflight() {
   phase = 'preflight-source'; source(); phase = 'preflight-target'; target();
   phase = 'preflight-configuration'; const config = await configuration();
@@ -141,6 +164,7 @@ async function window() {
 }
 try {
   if (process.argv[2] === 'preflight') await preflight();
+  else if (process.argv[2] === 'diagnostic') await diagnostic();
   else if (process.argv[2] === 'configure') await configure();
   else if (process.argv[2] === 'window') await window();
   else if (process.argv[2] === 'restore') await restore();
