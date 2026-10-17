@@ -196,6 +196,14 @@ export default defineSchema({
     expiresAt: v.number(),
     state: v.optional(v.union(v.literal("deleting"), v.literal("deleted"))),
     requireLiveSession: v.optional(v.boolean()),
+    // Durable bounded component erasure; survives user/content removal with the fence.
+    ragCleanup: v.optional(
+      v.object({
+        state: v.union(v.literal("pending"), v.literal("complete"), v.literal("stalled")),
+        pendingEntryId: v.optional(v.string()),
+        polls: v.optional(v.number()),
+      }),
+    ),
   })
     .index("by_userId", ["userId"])
     .index("by_expiry", ["expiresAt"]),

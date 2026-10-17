@@ -259,6 +259,7 @@
     "packages/backend/convex/retrievalBounds.test.ts"
   ],
   "audit-dead-letter.md": [
+    "packages/backend/convex/ragErasure",
     "packages/backend/scripts/run-privacy-staging.mjs",
     "packages/backend/scripts/privacyStaging.test.mjs",
     "packages/backend/convex/researchControl",

@@ -1,3 +1,4 @@
+import workpoolTest from "@convex-dev/workpool/test";
 import { emptyFoundationProfile } from "@pikar/core/foundation";
 import { deletableTables, type TenantDeletionCursor } from "@pikar/core/tenantData";
 import { makeFunctionReference } from "convex/server";
@@ -5,11 +6,15 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import ragSchema from "../node_modules/@convex-dev/rag/dist/component/schema.js";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.*s");
+const ragModules = import.meta.glob(
+  "../node_modules/@convex-dev/rag/src/component/**/!(*.test).ts",
+);
 const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
 );
@@ -41,7 +46,23 @@ const deleteTenantData = makeFunctionReference<
   { deletedByTable: Record<string, number>; providers: ProviderResult[] }
 >("tenantDelete:deleteTenantData");
 
-afterEach(() => vi.unstubAllGlobals());
+const deletionHarnesses: ReturnType<typeof convexTest>[] = [];
+function deletionTest() {
+  const t = convexTest(schema, modules);
+  t.registerComponent("rag", ragSchema, ragModules);
+  workpoolTest.register(t, "rag/workpool");
+  deletionHarnesses.push(t);
+  return t;
+}
+afterEach(async () => {
+  for (const t of deletionHarnesses.splice(0)) {
+    if (!vi.isFakeTimers()) await new Promise((resolve) => setTimeout(resolve, 0));
+    await t.finishAllScheduledFunctions(() => {
+      if (vi.isFakeTimers()) vi.runAllTimers();
+    });
+  }
+  vi.unstubAllGlobals();
+});
 
 async function deleteAll(
   t: ReturnType<typeof convexTest>,
@@ -64,7 +85,7 @@ async function deleteAll(
 }
 
 async function seedTwoTenants() {
-  const t = convexTest(schema, modules);
+  const t = deletionTest();
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   t.registerComponent("agent", agentSchema, agentModules);
   const seeded = await t.run(async (ctx) => {
@@ -166,7 +187,7 @@ describe("tenant data deletion pages", () => {
   });
 
   test("succeeds quietly for a tenant with no owned rows beyond its user", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     const userId = await t.run((ctx) =>
       ctx.db.insert("users", { email: "empty-delete@example.test", owner: true }),
     );
@@ -322,7 +343,7 @@ describe("tenant deletion provider truth", () => {
 // like — that omission is the whole point of the fixture and must not be "tidied up".
 describe("tenant deletion is the tenant's own right, not an owner privilege", () => {
   test("a NON-owner tenant erases its own data and still cannot reach another tenant's", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
     t.registerComponent("agent", agentSchema, agentModules);
     const { tenantA, tenantB } = await t.run(async (ctx) => {
@@ -368,7 +389,7 @@ describe("erasure removes the sign-in binding, not just the data", () => {
    * matched the same orphan. The erased person must not be left holding a credential binding.
    */
   test("deletes the erased user's auth account/session/token rows and leaves other users' alone", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
     t.registerComponent("agent", agentSchema, agentModules);
 
@@ -845,7 +866,7 @@ describe("the connector arm revokes what it can and refuses to overstate the res
 // guard in `packages/core/src/tenantData.test.ts`, which parses the schema.
 describe("erasure deletes stored files (2026-09-08)", () => {
   test("the walk deletes a row's blobs — nested ones too — and spares another tenant's", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
     t.registerComponent("agent", agentSchema, agentModules);
 
@@ -917,7 +938,7 @@ describe("erasure deletes stored files (2026-09-08)", () => {
 // safety argument, so it is the thing these tests are really about.
 describe("purgeEvalTenant only ever touches synthetic tenants", () => {
   test("exact case cleanup preserves a sibling tenant sharing its prefix", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     const rows = await t.run(async (ctx) => {
       const rows = [];
       for (const tenantId of ["packeval-aabbccdd-case", "packeval-aabbccdd-case-extra"]) {
@@ -949,7 +970,7 @@ describe("purgeEvalTenant only ever touches synthetic tenants", () => {
     expect(await t.run((ctx) => ctx.db.get(rows[1]!.auditId))).not.toBeNull();
   });
   test("paged exact cleanup retains its receipt through an interrupted audit drain", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     const tenantId = "packeval-aabbccdd-receipt";
     const receiptId = await t.run(async (ctx) => {
       const receipt = await ctx.db.insert("audit", {
@@ -1003,7 +1024,7 @@ describe("purgeEvalTenant only ever touches synthetic tenants", () => {
     expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
   });
   test("teardown removes only its own queue references so later export remains readable", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     const ids = await t.run(async (ctx) => {
       const ids = [];
       for (const tenantId of ["eval-aabbccdd", "real-tenant"]) {
@@ -1042,7 +1063,7 @@ describe("purgeEvalTenant only ever touches synthetic tenants", () => {
     false,
     true,
   ])("frozen legacy=%s audit refuses teardown atomically until acknowledgement", async (legacy) => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     const ids = await t.run(async (ctx) => {
       const planId = await ctx.db.insert("plans", {
         tenantId: "eval-aabbccdd",
@@ -1092,7 +1113,7 @@ describe("purgeEvalTenant only ever touches synthetic tenants", () => {
   });
 
   test("it REFUSES a tenant id that is not an eval tenant, before reading anything", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     const seeded = await t.run(async (ctx) => {
       const tenantId = "qd7realtenantid00000000000000";
       const plan = await ctx.db.insert("plans", {
@@ -1115,7 +1136,7 @@ describe("purgeEvalTenant only ever touches synthetic tenants", () => {
   });
 
   test("it deletes an eval tenant's rows, its AUDIT rows and its blobs, and spares a real neighbour", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     const seeded = await t.run(async (ctx) => {
       const evalTenant = "eval-8df2792b";
       const realTenant = "qd7realtenantid00000000000000";
@@ -1181,7 +1202,7 @@ describe("purgeEvalTenant only ever touches synthetic tenants", () => {
   // leave extra tenants behind. An exact-match purge would clear the parent and strand the
   // children — a partial cleanup wearing a fix's clothes, which is how the mess arose.
   test("it also purges the DERIVED authoring tenants of the same run", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     const seeded = await t.run(async (ctx) => {
       const run = "eval-8df2792b";
       const child = await ctx.db.insert("plans", {
@@ -1233,7 +1254,7 @@ const ageBlobsBy = async (ms: number, run: () => Promise<unknown>) => {
 
 describe("reapOrphanedBlobs deletes only unreferenced, settled bytes", () => {
   test("a REFERENCED blob survives, an old ORPHAN is reaped", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     const seeded = await t.run(async (ctx) => {
       const kept = await ctx.storage.store(new Blob(["kept"], { type: "application/pdf" }));
       const orphan = await ctx.storage.store(new Blob(["orphan"], { type: "application/pdf" }));
@@ -1260,7 +1281,7 @@ describe("reapOrphanedBlobs deletes only unreferenced, settled bytes", () => {
   // THE ONE THAT MATTERS. `generateUploadUrl` hands out a URL, the client PUTs the bytes, and only
   // then is the row written. Between those two steps the blob is unreferenced and is NOT garbage.
   test("a FRESH orphan is left alone — it may be an upload in flight", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     const inFlight = await t.run((ctx) =>
       ctx.storage.store(new Blob(["just uploaded"], { type: "application/pdf" })),
     );
@@ -1274,7 +1295,7 @@ describe("reapOrphanedBlobs deletes only unreferenced, settled bytes", () => {
   });
 
   test("the age floor cannot be argued below its minimum, and dryRun touches nothing", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     const fresh = await t.run((ctx) =>
       ctx.storage.store(new Blob(["fresh"], { type: "application/pdf" })),
     );
@@ -1303,7 +1324,7 @@ describe("reapOrphanedBlobs deletes only unreferenced, settled bytes", () => {
 // falsifier of the "no personal data" claim on three user-facing surfaces (ADR-044 C2).
 describe("erasure severs the admission bridge (ADR-044 D3a)", () => {
   test("the invite is CLEARED but stays spent, and another person's invite is untouched", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
     t.registerComponent("agent", agentSchema, agentModules);
 
@@ -1350,7 +1371,7 @@ describe("erasure severs the admission bridge (ADR-044 D3a)", () => {
   // D4: the forward-only gap. D3(a) does nothing for people erased BEFORE it shipped, and that is
   // exactly the population Art. 17 protects.
   test("the sweep clears a DANGLING redemption and spares a live one", async () => {
-    const t = convexTest(schema, modules);
+    const t = deletionTest();
     const seeded = await t.run(async (ctx) => {
       const live = await ctx.db.insert("users", { email: "live@example.test", owner: true });
       const ghostUser = await ctx.db.insert("users", { email: "ghost@example.test", owner: true });

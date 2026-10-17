@@ -112,6 +112,7 @@ import type * as proposals from "../proposals.js";
 import type * as providerGates from "../providerGates.js";
 import type * as quickbooks from "../quickbooks.js";
 import type * as quickbooksAuth from "../quickbooksAuth.js";
+import type * as ragErasure from "../ragErasure.js";
 import type * as reliabilitySweep from "../reliabilitySweep.js";
 import type * as render_assembleScript from "../render/assembleScript.js";
 import type * as render_burnCapsScript from "../render/burnCapsScript.js";
@@ -285,6 +286,7 @@ declare const fullApi: ApiFromModules<{
   "providerGates": typeof providerGates;
   "quickbooks": typeof quickbooks;
   "quickbooksAuth": typeof quickbooksAuth;
+  "ragErasure": typeof ragErasure;
   "reliabilitySweep": typeof reliabilitySweep;
   "render/assembleScript": typeof render_assembleScript;
   "render/burnCapsScript": typeof render_burnCapsScript;
