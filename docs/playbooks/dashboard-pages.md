@@ -3,6 +3,13 @@
 > notices no longer say that address is unconfirmed. Governing law, venue and supervisory-authority
 > review remain open; legal review deferral and disabled billing remain in force.
 
+> Last verified: 2026-10-17 — the draft privacy provider list includes the implemented OpenRouter
+> model route and Resend authentication sender. Removed the unsupported assertion that ordinary
+> OpenAI API terms forbid retention. Official [data controls](https://developers.openai.com/api/docs/guides/your-data)
+> distinguish default no-training treatment from retention and approval-dependent controls.
+> No account-level Zero Data Retention configuration or restricted-data provider approval is
+> established by this copy change. Provider/legal qualification remains a separate release gate.
+
 > Last verified: 2026-10-16 — the Content image-thumbnail comment now accurately describes direct rendering of a Convex bearer file URL without an image optimizer; it no longer claims the URL expires. The Vault uses the same getUrl-backed download query. No thumbnail rendering behavior changed.
 
 > Last verified: 2026-10-16 — export wording now describes reusable stored-file links, asks users to keep the export private because anyone with a link can access its file, and advises saving files before erasure. No automatic URL expiry is promised or implemented. [Convex serving-files documentation](https://docs.convex.dev/file-storage/serve-files) states that direct file URLs can be reused/shared and revocation requires deleting the stored file. The existing Settings download DOM test checks this disclosure alongside the downloaded export; no storage behavior changed.

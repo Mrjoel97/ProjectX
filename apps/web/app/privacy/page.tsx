@@ -286,8 +286,23 @@ export default function Privacy() {
         <li>
           <strong>OpenAI</strong> — generation of plans, summaries, and drafts, and embeddings for
           vault search. OpenAI receives the content of messages and documents our agents read in
-          order to produce them. We use it only under API terms that forbid retention and forbid
-          training on your data, as Google&rsquo;s restricted-scope policy requires.
+          order to produce them. API data is not used for training by default. Retention depends on
+          the endpoint and approved account controls; API access alone does not establish Zero Data
+          Retention. See OpenAI&rsquo;s{" "}
+          <a href="https://developers.openai.com/api/docs/guides/your-data">
+            data controls documentation
+          </a>
+          . Our provider qualification must verify the applicable controls before treating a route
+          as approved for restricted connected-account data.
+        </li>
+        <li>
+          <strong>OpenRouter</strong> — routing model and embedding requests to selected providers.
+          It receives the prompts and content needed for those requests. Its terms and the selected
+          upstream provider&rsquo;s controls require separate review.
+        </li>
+        <li>
+          <strong>Resend</strong> — delivering account verification and password recovery emails,
+          including the destination email address and one-time code.
         </li>
         <li>
           <strong>fal.ai</strong> — image, video, and speech generation. It receives the prompts and
