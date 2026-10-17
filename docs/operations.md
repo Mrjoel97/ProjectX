@@ -163,7 +163,9 @@ SkillOpt export is likewise paged. The CI script scripts/skillopt-export.mjs fol
 
 Historical mail configuration observation (superseded by the successful configuration and delivery checks above): the owner reports the Resend dashboard domain is Verified. A fresh names-only Convex check ([run 38749457677](https://github.com/Mrjoel97/ProjectX/actions/runs/38749457677)) still found AUTH_RESEND_KEY and AUTH_EMAIL_FROM absent. Domain verification alone does not complete application mail configuration or a successful verification/recovery delivery drill.
 
-## Current release qualification — 2026-10-16
+## Historical release qualification — 2026-10-16
+
+The production header and readiness matrix above supersede this earlier release record.
 
 Production runtime `de18285d7466ea743d42199dc1d8de4a66dccbf9` passed [PR44 CI](https://github.com/Mrjoel97/ProjectX/actions/runs/38814425138) (8,194 package/application tests passed, two skipped, plus 34 operator regressions), [main CI](https://github.com/Mrjoel97/ProjectX/actions/runs/38815049837), and the [production release workflow](https://github.com/Mrjoel97/ProjectX/actions/runs/38815539297). Foundation onboarding, controlled voice and billing remain off in production; this release changed none of their activation settings. No browser/microphone acceptance is claimed.
 

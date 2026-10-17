@@ -104,9 +104,9 @@ guards passed; backend and web typechecks, repository Biome and playbook checks 
 also blocks duplicate pending submissions and best-effort aborts known active sessions on navigation;
 the durable provider watchdog remains authoritative. Golden/vertical offline checks and four evaluator
 identity regressions passed with no fingerprint changes required. Graphify was unavailable; the
-Convex-edge fixup ran but does not establish a complete graph refresh. Exact-head hosted CI/release
-evidence must be attached before treating these corrections as deployed. Production
-foundation/controlled voice and commercial billing remain off.
+Convex-edge fixup ran but does not establish a complete graph refresh. Hosted CI/release evidence,
+required before deployment could be claimed, is attached below. Production foundation/controlled
+voice and commercial billing activation settings were not changed.
 
 [PR45](https://github.com/Mrjoel97/ProjectX/pull/45) exact head
 `29785234c2a00ed7eb3c7816bd24e59a313327dd` passed
@@ -172,6 +172,10 @@ configuration or provider write was performed. The temporary diagnostic branch i
 - [x] Seven-day transcript cleanup and foundation export/deletion coverage.
 
 ## First implementation-round validation (2026-10-15; superseded for changed source)
+
+The dated entries below preserve the state at each earlier phase. Their pending diagnostic and
+release references are historical; the current header and 2026-10-17 correction/diagnostic records
+above supersede them. In particular, signup state was subsequently inspected in run 39023822180.
 
 The following was captured before the second implementation round (trusted voice, upload ownership, broader retrieval and lifecycle changes). It is historical local evidence, not current release assurance.
 
