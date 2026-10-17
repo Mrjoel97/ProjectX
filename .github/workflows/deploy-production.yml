@@ -207,9 +207,9 @@ jobs:
         working-directory: packages/backend
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-        # The repository-wide CI typecheck has already qualified this exact SHA. Convex's CLI
-        # cannot discover the workspace-hoisted tsc binary under pnpm from this package directory.
-        run: node node_modules/convex/bin/main.js deploy --dry-run --typecheck disable
+        # The backend declares its own compiler. Require the CLI check as well as exact-SHA CI;
+        # a missing compiler must fail the release rather than silently skip validation.
+        run: node node_modules/convex/bin/main.js deploy --dry-run --typecheck enable
 
       - name: Require committed Convex generated types
         run: git diff --exit-code -- packages/backend/convex/_generated
@@ -248,7 +248,7 @@ jobs:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
         run: >-
           node node_modules/convex/bin/main.js deploy
-          --typecheck disable
+          --typecheck enable
           --message "GitHub Actions ${DEPLOY_SHA}"
 
       # A fresh deployment without active skills dead-letters every governed request. The seed
