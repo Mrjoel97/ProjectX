@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-10-17. Implementation starting baseline: `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
 Release implementation and deployment evidence: Codex, acting on the repository owner's instructions. On 2026-10-17 the owner assigned Joel (`joel@pikar-ai.com`) responsibility for release approval, incident response, privacy requests, and provider/billing reconciliation. Runbook exercises, backup coverage and specialist review remain separate open requirements.
-Current production runtime: `a129b884445482625b1e8f2a236744fb2a0f2515`, verified 2026-10-17 in [run 39026090675](https://github.com/Mrjoel97/ProjectX/actions/runs/39026090675). Local implementation and tests never imply live provider verification. Production voice/foundation activation and the remaining drills below are still open; staging foundation is enabled for controlled acceptance.
+Current production runtime: `e92bd5e51cc60368dd94095483bdb7b62f8f1690`, verified 2026-10-17 in [release run 39030778689](https://github.com/Mrjoel97/ProjectX/actions/runs/39030778689), after [main CI 39030531634](https://github.com/Mrjoel97/ProjectX/actions/runs/39030531634). READY frontend artifact `dpl_A8FbQAGNYVWazneuxqyYWNuMkSCs`, routes/aliases and legal draft were verified by the release coordinator. Local implementation and tests never imply live provider verification. Production voice/foundation activation and the remaining drills below are still open; staging foundation is enabled for controlled acceptance.
 
 | Gate | Owner role | Current state | Required closure evidence |
 |---|---|---|---|
@@ -24,7 +24,7 @@ Current production runtime: `a129b884445482625b1e8f2a236744fb2a0f2515`, verified
 | Connectors | Provider operator | Per-provider gates remain binding | Current connection, scope/expiry/revoke/read evidence for each enabled provider |
 | Recurrence | Workflow operator | Existing gate remains binding | Required actual DST/OAuth/provider traces; do not enable on simulated evidence alone |
 | Skill activation | Model operator | Per-skill evidence required | Seed/version identity, evaluation, activation and rollback evidence |
-| CI portability/build | Release engineer | Release a129b88 passed PR46/main CI and production workflow: 8,224 passed, two skipped, plus 34 operator regressions; both full CI runs had no worker error after dispatch scheduler ownership cleanup | Continue full-suite qualification; targeted cleanup does not prove every historical teardown cause resolved |
+| CI portability/build | Release engineer | Release e92bd5e passed PR48/main CI and production workflow: 8,224 passed, two skipped, plus 50 operator checks | Continue full-suite qualification; targeted cleanup does not prove every historical teardown cause resolved |
 
 ## Delivery order
 

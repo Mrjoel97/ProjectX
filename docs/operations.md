@@ -1,7 +1,7 @@
 # Current operations guide
 
 Source inspection: 2026-10-15, starting revision `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
-Production runtime revision `a129b884445482625b1e8f2a236744fb2a0f2515` deployed through [release run 39026090675](https://github.com/Mrjoel97/ProjectX/actions/runs/39026090675), verified on 2026-10-17 (Africa/Dar_es_Salaam). Convex deployment, registry seed, staged probe, promotion and durable-origin verification passed. [Release readiness](release-readiness.md) records the evidence and live gates that remain open; deployment does not establish voice/onboarding activation or complete provider qualification.
+Production runtime revision `e92bd5e51cc60368dd94095483bdb7b62f8f1690` deployed through [release run 39030778689](https://github.com/Mrjoel97/ProjectX/actions/runs/39030778689), following [main CI 39030531634](https://github.com/Mrjoel97/ProjectX/actions/runs/39030531634), verified on 2026-10-17 (Africa/Dar_es_Salaam). The release coordinator verified READY frontend artifact `dpl_A8FbQAGNYVWazneuxqyYWNuMkSCs`, production routes and aliases, and the owner-confirmed legal draft. CI passed 8,224 package/app tests plus 50 operator checks. [Release readiness](release-readiness.md) records the evidence and live gates that remain open; deployment does not establish voice/onboarding activation, counsel review or complete provider qualification.
 This guide is the current entry point; dated playbook notes and ADRs explain historical decisions.
 
 ## Latest scoped provider qualification — 2026-10-17
