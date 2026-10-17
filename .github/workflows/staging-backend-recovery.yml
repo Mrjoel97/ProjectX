@@ -1,0 +1,60 @@
+name: staging-backend-current-only-recovery
+on:
+  push:
+    branches: [codex/staging-backend-recovery-20261017]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: staging
+    concurrency:
+      group: staging-qualification
+      cancel-in-progress: false
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Require current source CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node <<'NODE'
+          (async()=>{const r=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs/39025828381',{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error();const x=await r.json();if(x.head_sha!=='a129b884445482625b1e8f2a236744fb2a0f2515'||x.workflow_id!==325088000||x.name!=='ci'||x.event!=='push'||x.repository.full_name!=='Mrjoel97/ProjectX'||x.head_repository.full_name!=='Mrjoel97/ProjectX'||x.conclusion!=='success')throw Error();console.log(JSON.stringify({exactCurrentCiPassed:true}));})().catch(()=>{console.error('CI_GATE_FAILED');process.exitCode=1;});
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          ref: a129b884445482625b1e8f2a236744fb2a0f2515
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "a129b884445482625b1e8f2a236744fb2a0f2515"
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: Restore reviewed current and proven prior foundation admission
+        working-directory: packages/backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
+        run: |
+          node <<'NODE'
+          const {execFileSync}=require('node:child_process');const {createHash}=require('node:crypto');const {readFileSync}=require('node:fs');
+          let phase='target';let category='assertion';let exitCode=null;
+          const capture=(file,args)=>{try{return execFileSync(file,args,{encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:600000,maxBuffer:8388608}).trim();}catch(e){exitCode=typeof e.status==='number'?e.status:null;const t=String(e.stderr??'')+String(e.stdout??'');category=/would be overwritten|local changes/.test(t)?'git_checkout_dirty':/TypeScript|typecheck|error TS\d+/.test(t)?'typecheck':/bundl|esbuild/.test(t)?'bundle':/ETIMEDOUT/.test(String(e.code))?'timeout':file==='git'?'git_command':'cli_failure';throw Error();}};
+          const run=args=>capture(process.execPath,['node_modules/convex/bin/main.js',...args]);const query=s=>JSON.parse(run(['run','--inline-query',s]));const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
+          const target=()=>{if(run(['dashboard','--no-open']).match(/https:\/\/dashboard\.convex\.dev\/d\/([a-z0-9-]+)/)?.[1]!=='woozy-wren-368')throw Error();};
+          (async()=>{try{
+            target();phase='configuration';const {ENV_MANIFEST,missingEnv}=await import('./convex/lib/env.ts');const watched=[...new Set(['SITE_URL','FOUNDATION_ONBOARDING_ENABLED','VOICE_SERVER_CONTROL_VERIFIED',...ENV_MANIFEST.filter(x=>x.tier==='fixture').map(x=>x.name)])].sort();const snapshot=()=>{const names=new Set(run(['env','list','--names-only']).split(/\r?\n/));return Object.fromEntries(watched.map(n=>[n,names.has(n)?run(['env','get',n]):null]));};const before=snapshot();
+            if(new URL(before.SITE_URL).origin!=='https://pikar-ai-convex-gpbrsadzc-joelferuzi-gmailcoms-projects.vercel.app'||![null,'0','false'].includes(before.VOICE_SERVER_CONTROL_VERIFIED)||!['0','1'].includes(before.FOUNDATION_ONBOARDING_ENABLED)||missingEnv(n=>before[n]??undefined).fixturesActive.length)throw Error();
+            if(!/COMMERCIAL_BILLING_ENABLED:\s*boolean\s*=\s*false/.test(readFileSync('../billing/src/config.ts','utf8')))throw Error();
+            const registry=()=>hash(query('const rows=await ctx.db.query("skills").take(1001);if(rows.length>1000)throw Error("BOUND");return rows;'));
+            const retention=()=>{const x=query('const rows=await ctx.db.query("foundationInterviews").take(201);if(rows.length>200)throw Error("BOUND");const own=rows.filter(x=>x.tenantId.startsWith("retention-qualification-"));if(own.length!==1)throw Error("BOUND");const t=await ctx.db.query("foundationTranscripts").withIndex("by_tenant",q=>q.eq("tenantId",own[0].tenantId)).take(2);if(t.length!==1)throw Error("BOUND");return {interview:own[0],transcript:t[0]};');if(hash([x.interview._id,x.interview.tenantId,x.interview._creationTime])!=='b389a2014e514c7a35e08480dcef446aeb46b360861e2b8b72f9e67fc61f412e'||new Date(x.transcript._creationTime).toISOString()!=='2026-10-17T10:18:29.493Z'||new Date(x.transcript.expiresAt).toISOString()!=='2026-10-24T10:18:29.493Z')throw Error();return hash(x);};
+            phase='preserved-data-before';const rb=registry(),tb=retention();console.log(JSON.stringify({stagingTarget:true,knownRetentionIdentityMatched:true,configurationGuardPassed:true}));
+            phase='current-dry-run';run(['deploy','--dry-run','--typecheck','enable']);
+            phase='generated-types';capture('git',['diff','--exit-code','--','convex/_generated']);
+            phase='current-deploy';run(['deploy','--typecheck','enable','--message','Restore reviewed staging current a129b884445482625b1e8f2a236744fb2a0f2515']);
+            phase='preserved-data-after';target();if(registry()!==rb||retention()!==tb)throw Error();
+            phase='configuration-restore';if(JSON.stringify(snapshot())!==JSON.stringify(before))throw Error();if(before.FOUNDATION_ONBOARDING_ENABLED!=='1')run(['env','set','FOUNDATION_ONBOARDING_ENABLED','--','1']);
+            if(JSON.stringify(snapshot())!==JSON.stringify({...before,FOUNDATION_ONBOARDING_ENABLED:'1'}))throw Error();
+            console.log(JSON.stringify({currentBackendRestored:true,foundationPriorOneRestored:true,otherConfigurationUnchanged:true,registryFingerprintUnchanged:true,retentionFixtureUnchanged:true,productionUntouched:true,rollbackQualified:false}));
+          }catch{console.error(JSON.stringify({recoverySucceeded:false,phase,category,exitCode,privateDiagnosticsSuppressed:true}));process.exitCode=1;}})();
+          NODE
