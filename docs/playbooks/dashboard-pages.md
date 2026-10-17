@@ -1,3 +1,8 @@
+> Last verified: 2026-10-17 — Joel supplied the postal address Dar es Salaam 17107, Tanzania.
+> Public legal pages use that exact locality/postcode without inventing a street address. Draft
+> notices no longer say that address is unconfirmed. Governing law, venue and supervisory-authority
+> review remain open; legal review deferral and disabled billing remain in force.
+
 > Last verified: 2026-10-16 — the Content image-thumbnail comment now accurately describes direct rendering of a Convex bearer file URL without an image optimizer; it no longer claims the URL expires. The Vault uses the same getUrl-backed download query. No thumbnail rendering behavior changed.
 
 > Last verified: 2026-10-16 — export wording now describes reusable stored-file links, asks users to keep the export private because anyone with a link can access its file, and advises saving files before erasure. No automatic URL expiry is promised or implemented. [Convex serving-files documentation](https://docs.convex.dev/file-storage/serve-files) states that direct file URLs can be reused/shared and revocation requires deleting the stored file. The existing Settings download DOM test checks this disclosure alongside the downloaded export; no storage behavior changed.
