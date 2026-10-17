@@ -501,6 +501,20 @@ async function writeProfileDoc(
   const size = new TextEncoder().encode(text).length;
   const title = profile.name || "Business profile";
 
+  // Keep an already indexed current source stable across approvals of unrelated sections.
+  // Failed/missing-index documents still enter the existing repair path below.
+  if (
+    existing?.tenantId === tenantId &&
+    existing.kind === PROFILE_KIND &&
+    existing.status === "ready" &&
+    existing.ragEntryId &&
+    !existing.graphCleanupHash &&
+    existing.title === title &&
+    existing.text === text &&
+    existing.contentHash === hash
+  )
+    return existing._id;
+
   let vaultDocId: Id<"vaultDocuments">;
   if (existing) {
     if (existing.ragEntryId)

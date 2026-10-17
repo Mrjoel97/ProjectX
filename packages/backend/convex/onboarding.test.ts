@@ -933,3 +933,33 @@ test("the offer persists NO state — asking twice writes nothing", async () => 
     })),
   ).toEqual(before);
 });
+
+test("unchanged indexed profile keeps its grounding while missing index still repairs", async () => {
+  const t = setup();
+  await seedDerivedSme(t);
+  const a = asTenant(t);
+  const { vaultDocId } = await a.mutation(api.onboarding.commitProfile, { profile: PROFILE });
+  await finishIndexing(t, vaultDocId);
+  const before = await t.run((ctx) => ctx.db.get(vaultDocId));
+  const queue = await t.run(
+    async (ctx) => (await ctx.db.system.query("_scheduled_functions").collect()).length,
+  );
+  expect(await a.mutation(api.onboarding.updateProfile, { profile: PROFILE })).toMatchObject({
+    vaultDocId,
+  });
+  expect(await t.run((ctx) => ctx.db.get(vaultDocId))).toEqual(before);
+  expect((await hydrate(t, TENANT, vaultDocId)).docIds).toContain(vaultDocId);
+  expect(
+    await t.run(
+      async (ctx) => (await ctx.db.system.query("_scheduled_functions").collect()).length,
+    ),
+  ).toBe(queue);
+  await t.run((ctx) => ctx.db.patch(vaultDocId, { ragEntryId: undefined }));
+  await a.mutation(api.onboarding.updateProfile, { profile: PROFILE });
+  expect((await t.run((ctx) => ctx.db.get(vaultDocId)))?.status).toBe("processing");
+  expect(
+    await t.run(
+      async (ctx) => (await ctx.db.system.query("_scheduled_functions").collect()).length,
+    ),
+  ).toBe(queue + 1);
+});

@@ -597,3 +597,103 @@ test("purge and receipt/outbox roll back atomically on audit failure", async () 
   expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
   expect(await t.run((ctx) => ctx.db.query("auditExportQueue").collect())).toHaveLength(0);
 });
+
+test("one delivery amendment preserves the other five indexed sources and advances approved history", async () => {
+  const t = setup();
+  const a = await complete(t);
+  await t.mutation(internal.foundation.saveTurn, {
+    tenantId: TENANT,
+    revision: 1,
+    profile,
+    slots,
+    answer: {
+      section: "delivery",
+      text: "Ship every Friday.",
+      intent: "current",
+      eventId: "delivery_1",
+    },
+    reply: "Review.",
+  });
+  const first = await a.mutation(api.foundation.publish, {
+    revision: 2,
+    reviewHash: (await a.query(api.foundation.review, {}))!.reviewHash,
+  });
+  await t.run(async (ctx) => {
+    for (const [index, id] of first.docIds.entries())
+      await ctx.db.patch(id, {
+        status: "ready",
+        ragEntryId: index === 3 ? undefined : `smoke::preserved-${index}`,
+      });
+  });
+  const before = await t.run(async (ctx) => Promise.all(first.docIds.map((id) => ctx.db.get(id))));
+  const queuedBefore = await t.run(
+    async (ctx) => (await ctx.db.system.query("_scheduled_functions").collect()).length,
+  );
+  const draft = (await a.query(api.foundation.get, {}))!;
+  const revision = await a.mutation(api.foundation.edit, {
+    revision: 2,
+    profile: draft.profile,
+    answers: draft.answers.map((x) =>
+      x.eventId === "delivery_1" ? { ...x, text: "Ship every Tuesday." } : x,
+    ),
+  });
+  const review = (await a.query(api.foundation.review, {}))!;
+  const next = await a.mutation(api.foundation.publish, {
+    revision,
+    reviewHash: review.reviewHash,
+  });
+  expect(next.docIds).toEqual(first.docIds);
+  const after = await t.run(async (ctx) => Promise.all(first.docIds.map((id) => ctx.db.get(id))));
+  for (const index of [0, 1, 2, 4, 5]) expect(after[index]).toEqual(before[index]);
+  expect(after[3]?.status).toBe("processing");
+  expect(after[3]?.text).toContain("Ship every Tuesday.");
+  expect(after[3]?.text).not.toContain("Ship every Friday.");
+  expect(after[3]?.contentHash).not.toBe(before[3]?.contentHash);
+  expect(
+    await t.run(
+      async (ctx) => (await ctx.db.system.query("_scheduled_functions").collect()).length,
+    ),
+  ).toBe(queuedBefore + 1);
+  expect(await a.query(api.foundation.history, {})).toHaveLength(2);
+  const tier = await t.run((ctx) => ctx.db.query("tenantProfiles").first());
+  expect(tier?.blueprintSourceDocIds).toEqual(first.docIds);
+  expect((await a.query(api.foundation.get, {}))?.publishedRevision).toBe(revision);
+});
+
+test.each([
+  "failed",
+  "missing_index",
+] as const)("unchanged %s source still schedules repair", async (mode) => {
+  const t = setup();
+  const a = await complete(t);
+  const first = await a.mutation(api.foundation.publish, {
+    revision: 1,
+    reviewHash: (await a.query(api.foundation.review, {}))!.reviewHash,
+  });
+  await t.run(async (ctx) => {
+    for (const [index, id] of first.docIds.entries())
+      await ctx.db.patch(id, {
+        status: index === 3 && mode === "failed" ? "failed" : "ready",
+        ragEntryId: index === 3 ? undefined : `smoke::preserved-${index}`,
+      });
+  });
+  const before = await t.run(
+    async (ctx) => (await ctx.db.system.query("_scheduled_functions").collect()).length,
+  );
+  const draft = (await a.query(api.foundation.get, {}))!;
+  const revision = await a.mutation(api.foundation.edit, {
+    revision: 1,
+    profile: draft.profile,
+    answers: draft.answers,
+  });
+  await a.mutation(api.foundation.publish, {
+    revision,
+    reviewHash: (await a.query(api.foundation.review, {}))!.reviewHash,
+  });
+  expect((await t.run((ctx) => ctx.db.get(first.docIds[3]!)))?.status).toBe("processing");
+  expect(
+    await t.run(
+      async (ctx) => (await ctx.db.system.query("_scheduled_functions").collect()).length,
+    ),
+  ).toBe(before + 1);
+});
