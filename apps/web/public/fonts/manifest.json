@@ -1,0 +1,119 @@
+{
+  "sourceLayoutCommit": "e92bd5e51cc60368dd94095483bdb7b62f8f1690",
+  "source": "Official Google Fonts CSS2, fetched 2026-10-17; byte-identical to existing Next build cache",
+  "assets": [
+    {
+      "family": "Bricolage Grotesque",
+      "url": "https://fonts.gstatic.com/s/bricolagegrotesque/v9/3y9H6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiawDFXphjhQYrcK.woff2",
+      "sha256": "ea16948d4a91b77221f119ad27d4ac7a7581c98cf990712047f89a531a49ef28",
+      "bytes": 8652,
+      "file": "ea16948d4a91b77221f119ad27d4ac7a7581c98cf990712047f89a531a49ef28.woff2",
+      "preload": false
+    },
+    {
+      "family": "Bricolage Grotesque",
+      "url": "https://fonts.gstatic.com/s/bricolagegrotesque/v9/3y9H6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiawDVXphjhQYrcK.woff2",
+      "sha256": "a22c997a894377f36d81c904163e0c05fbbcd32f0ca2e7beedb86b39be1296a1",
+      "bytes": 18740,
+      "file": "a22c997a894377f36d81c904163e0c05fbbcd32f0ca2e7beedb86b39be1296a1.woff2",
+      "preload": false
+    },
+    {
+      "family": "Bricolage Grotesque",
+      "url": "https://fonts.gstatic.com/s/bricolagegrotesque/v9/3y9H6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiawA1XphjhQYg.woff2",
+      "sha256": "4fd48b2c1ab27220e71f15f990550261b35245c3bdfd8d8025b4bdac0459ee2d",
+      "bytes": 41236,
+      "file": "4fd48b2c1ab27220e71f15f990550261b35245c3bdfd8d8025b4bdac0459ee2d.woff2",
+      "preload": true
+    },
+    {
+      "family": "Public Sans",
+      "url": "https://fonts.gstatic.com/s/publicsans/v21/ijwRs572Xtc6ZYQws9YVwnNJfJ7QwOk1Fig.woff2",
+      "sha256": "e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae",
+      "bytes": 7576,
+      "file": "e43b193880fdb1d6adf494192bcdf77b008cafe910b0cb07d44d46a564d1cdae.woff2",
+      "preload": false
+    },
+    {
+      "family": "Public Sans",
+      "url": "https://fonts.gstatic.com/s/publicsans/v21/ijwRs572Xtc6ZYQws9YVwnNIfJ7QwOk1Fig.woff2",
+      "sha256": "1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8",
+      "bytes": 18372,
+      "file": "1c8a26c0ed4312dacc36670714794c9f4b4a0972ccb45f2936646bd8d444d5f8.woff2",
+      "preload": false
+    },
+    {
+      "family": "Public Sans",
+      "url": "https://fonts.gstatic.com/s/publicsans/v21/ijwRs572Xtc6ZYQws9YVwnNGfJ7QwOk1.woff2",
+      "sha256": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d",
+      "bytes": 26636,
+      "file": "c1b6da516e0062e9c2f341b3a51dd2d621d946da72f06c6cfe05fd9d2dd8622d.woff2",
+      "preload": true
+    },
+    {
+      "family": "JetBrains Mono",
+      "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPx3cwgknk-6nFg.woff2",
+      "sha256": "9343de2ca5d9549f792e7962375af8efb0f320c7643bfd36c884b5a30e5c396f",
+      "bytes": 1664,
+      "file": "9343de2ca5d9549f792e7962375af8efb0f320c7643bfd36c884b5a30e5c396f.woff2",
+      "preload": false
+    },
+    {
+      "family": "JetBrains Mono",
+      "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxTcwgknk-6nFg.woff2",
+      "sha256": "4995a9a43ac659ec32fcd8b463755cd6a07b31a6e6b3894a6a153b661cf490e2",
+      "bytes": 8892,
+      "file": "4995a9a43ac659ec32fcd8b463755cd6a07b31a6e6b3894a6a153b661cf490e2.woff2",
+      "preload": false
+    },
+    {
+      "family": "JetBrains Mono",
+      "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxPcwgknk-6nFg.woff2",
+      "sha256": "49c3da6c9a2b279b0f1f860f5cfb1f5dc38d88a5c7be9c9b1837bbc4e3db6111",
+      "bytes": 6800,
+      "file": "49c3da6c9a2b279b0f1f860f5cfb1f5dc38d88a5c7be9c9b1837bbc4e3db6111.woff2",
+      "preload": false
+    },
+    {
+      "family": "JetBrains Mono",
+      "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPx_cwgknk-6nFg.woff2",
+      "sha256": "d44eb1936043a56038eb02dd70b243f379bef65783f94ec12f277550720411f1",
+      "bytes": 5872,
+      "file": "d44eb1936043a56038eb02dd70b243f379bef65783f94ec12f277550720411f1.woff2",
+      "preload": false
+    },
+    {
+      "family": "JetBrains Mono",
+      "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPx7cwgknk-6nFg.woff2",
+      "sha256": "9c38cb2d0d2d93c1ee6e21fa78db76f13ea7e15e15cc64214c7ca89b6aaa35c4",
+      "bytes": 11596,
+      "file": "9c38cb2d0d2d93c1ee6e21fa78db76f13ea7e15e15cc64214c7ca89b6aaa35c4.woff2",
+      "preload": false
+    },
+    {
+      "family": "JetBrains Mono",
+      "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwgknk-4.woff2",
+      "sha256": "2c32b9b3ee358c119e210f6f5195f9bd34894d78a785ff2e95d60e718e400af4",
+      "bytes": 31340,
+      "file": "2c32b9b3ee358c119e210f6f5195f9bd34894d78a785ff2e95d60e718e400af4.woff2",
+      "preload": true
+    }
+  ],
+  "licenses": [
+    {
+      "file": "bricolagegrotesque-OFL.txt",
+      "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/bricolagegrotesque/OFL.txt",
+      "sha256": "4b5a7d8f37f5602621c8a8d7358a6a2e71317e6c231c661e15aef0275d3e07ba"
+    },
+    {
+      "file": "publicsans-OFL.txt",
+      "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/publicsans/OFL.txt",
+      "sha256": "157a9e77f7580246e97c769490e2e977ae94399f9d30f4556015c41fe8c28bac"
+    },
+    {
+      "file": "jetbrainsmono-OFL.txt",
+      "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/OFL.txt",
+      "sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d"
+    }
+  ]
+}

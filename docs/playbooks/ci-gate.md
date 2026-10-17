@@ -1,4 +1,5 @@
 > Last verified: 2026-10-17 — The read-only seven-day observer now requires the pinned checkpoint's code-authored atomic purge receipt as well as absence after the eligible sweep. Six offline boundary tests reject missing/forged receipts; elapsed production/staging time remains unqualified until the original 2026-10-24 deadline. cronAttributionVerified remains false.
+> 2026-10-17 font build reliability: all three existing brand families are vendored with official OFL licenses and SHA256 provenance. Build-time next/font/google fetching and its generated query replacement path are removed. Exact cached WOFF2 bytes, subset ranges, weights, fallback metrics and latin preloads are retained. This removes that dependency class; it does not prove the root cause of the earlier intermittent Turbopack failure. Font byte/reference/coverage regressions run in the web suite.
 
 # Playbook: CI gate (typecheck / lint / test / build)
 

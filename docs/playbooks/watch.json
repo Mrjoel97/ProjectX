@@ -177,7 +177,11 @@
     "packages/core/src/connectionsSurface.test.ts",
     "apps/web/app/(app)/deleteFirst.test.ts",
     "apps/web/app/legal.ts",
-    "apps/web/app/terms/"
+    "apps/web/app/terms/",
+    "apps/web/app/layout.tsx",
+    "apps/web/app/fonts.css",
+    "apps/web/app/fonts.test.ts",
+    "apps/web/public/fonts/"
   ],
   "cockpit.md": [
     "scripts/check-phase23-probe-controls",
