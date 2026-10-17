@@ -2,12 +2,12 @@
 
 Last reviewed: 2026-10-17. Implementation starting baseline: `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
 Release implementation and deployment evidence: Codex, acting on the repository owner's instructions. Ongoing operator and specialist review assignments remain open under the owner roles below; deployment does not close those operational ownership tasks.
-Current production runtime: `de18285d7466ea743d42199dc1d8de4a66dccbf9`, verified 2026-10-16 in [run 38815539297](https://github.com/Mrjoel97/ProjectX/actions/runs/38815539297). Local implementation and tests never imply live provider verification. Production voice/foundation activation and the remaining drills below are still open; staging foundation is enabled for controlled acceptance.
+Current production runtime: `be63035592c7333d04322af40eeb4a3d380244ca`, verified 2026-10-17 in [run 39023562539](https://github.com/Mrjoel97/ProjectX/actions/runs/39023562539). Local implementation and tests never imply live provider verification. Production voice/foundation activation and the remaining drills below are still open; staging foundation is enabled for controlled acceptance.
 
 | Gate | Owner role | Current state | Required closure evidence |
 |---|---|---|---|
 | Operations guide | Release engineer | Current/previous exact-revision local setup and restoration rehearsals passed; hosted recovery pending | Fresh setup, staging release and recovery using only the guide |
-| Release configuration | Release engineer | Exact-SHA CI, production configuration gate, Convex dry-run/generated-type check, deploy/seed, staged probe and promotion passed at de18285 with step-scoped credentials; rollback drill pending | Exact SHA, configuration check, environment protections, successful staged promotion and rollback |
+| Release configuration | Release engineer | Exact-SHA CI, production configuration gate, Convex dry-run/generated-type check, deploy/seed, staged probe and promotion passed at be63035 with step-scoped credentials; rollback drill pending | Exact SHA, configuration check, environment protections, successful staged promotion and rollback |
 | External delivery | Backend engineer | Implemented locally: durable claims/receipts and manual uncertainty review; live reconciliation pending | Durable attempt state, no blind resend, concurrent/crash/timeout tests and controlled provider reconciliation |
 | Cost admission | Backend engineer | Paid admission and strict voice bounds tested; live OpenRouter embedding usage/settlement exercised in isolated staging; voice/invoice reconciliation pending | Atomic reservations, all paid callers migrated, idempotent settlement, uncertain holds, provider reconciliation |
 | Identity | Security/backend engineer | Isolated native signup verification, replay rejection, recovery/reset and old/new JWT checks passed; expiry and browser acceptance remain open | Cross-tenant negative tests, password verification/recovery, privilege and callback checks |
@@ -24,7 +24,7 @@ Current production runtime: `de18285d7466ea743d42199dc1d8de4a66dccbf9`, verified
 | Connectors | Provider operator | Per-provider gates remain binding | Current connection, scope/expiry/revoke/read evidence for each enabled provider |
 | Recurrence | Workflow operator | Existing gate remains binding | Required actual DST/OAuth/provider traces; do not enable on simulated evidence alone |
 | Skill activation | Model operator | Per-skill evidence required | Seed/version identity, evaluation, activation and rollback evidence |
-| CI portability/build | Release engineer | Local Windows checks and hosted Linux CI passed; release de18285 passed PR44/main CI and production workflow; suite: 8,194 passed, two skipped, plus 34 operator regressions | Clean Windows/Linux checks and resolved or dispositioned build warnings |
+| CI portability/build | Release engineer | Local Windows checks and hosted Linux CI passed; release be63035 passed PR45/main CI and production workflow; suite: 8,220 passed, two skipped, plus 34 operator regressions | Clean Windows/Linux checks and resolved or dispositioned build warnings |
 
 ## Delivery order
 
@@ -74,10 +74,10 @@ implementation changes; old evidence is not current assurance.
 
 The unchecked tasks require additional implementation or operational evidence. The runtime release recorded above does not establish completion of every original gap.
 
-As of 2026-10-17, the latest recognised staging invitation still has no inspected post-attempt
-account state. The requested four-boolean diagnostic remains open. Chrome inventory reported an
-unrelated private site and automatic approval review refused its accessibility snapshot; no account
-or delivery conclusion is inferred from that refusal. The owner requested continued direct fixes.
+On 2026-10-17, Chrome inventory reported an unrelated private site and automatic approval review
+refused its accessibility snapshot. The owner requested continued direct fixes. A separate pinned,
+read-only staging workflow subsequently obtained the account/invite state without publishing fixture
+identifiers; its results are recorded below. No account conclusion is inferred from the browser refusal.
 Source review found actionable voice lifecycle and foundation correction defects, recorded below.
 No seven-day checkpoint observation start has been recorded. Follow the private timestamp/evidence
 protocol and accountable-owner/legal records in [operations](operations.md#configuration-planes).
@@ -107,6 +107,56 @@ identity regressions passed with no fingerprint changes required. Graphify was u
 Convex-edge fixup ran but does not establish a complete graph refresh. Exact-head hosted CI/release
 evidence must be attached before treating these corrections as deployed. Production
 foundation/controlled voice and commercial billing remain off.
+
+[PR45](https://github.com/Mrjoel97/ProjectX/pull/45) exact head
+`29785234c2a00ed7eb3c7816bd24e59a313327dd` passed
+[CI 39022997943](https://github.com/Mrjoel97/ProjectX/actions/runs/39022997943): 8,220 package tests
+passed, two existing skips, 34 operator regressions, typecheck/lint/free gates/planning/build passed.
+Its merged main revision is `be63035592c7333d04322af40eeb4a3d380244ca`; both commits have exact
+tree `9d57528a993d4296dd311e74fd7773dea82fdaaa`.
+
+[Staging backend run 39023282442](https://github.com/Mrjoel97/ProjectX/actions/runs/39023282442)
+required that exact successful PR CI and checked out only its literal source SHA. Dependencies
+installed without the deployment key; only the final guarded step received the existing staging
+secret. The exact woozy target, coordinated signup origin, absent fixture activation and disabled
+voice were checked before deployment; dry-run/generated types, deployment and direct strict-exit
+skill seeding passed. Captured activation/origin configuration was unchanged afterward. No provider
+action or account-data query was invoked. This supersedes the first successful run's weaker
+origin/seed verification; it does not qualify a native signup or onboarding session.
+
+The same reviewed source built as READY non-production preview
+`https://pikar-ai-convex-ltit9wxav-joelferuzi-gmailcoms-projects.vercel.app`, artifact
+`dpl_96wXoqeJhGCKBGxQTuTvEfa5iMec`. All 2,784 tracked blobs matched the commit; all 11 served
+signin assets were checked, with the staging backend present and production backend absent. No
+alias or staging `SITE_URL` changed. The coordinated GP preview remains the signup origin; this
+new preview is available for the repaired client acceptance checks once authentication is resolved.
+The temporary staging workflow branch remains: automatic approval review rejected its deletion
+because deployment authorization did not explicitly include branch deletion. No cleanup workaround
+was attempted, and no historical metadata purge is claimed.
+
+[Main CI 39023291826](https://github.com/Mrjoel97/ProjectX/actions/runs/39023291826) and
+[production release 39023562539](https://github.com/Mrjoel97/ProjectX/actions/runs/39023562539)
+passed for merged revision `be63035592c7333d04322af40eeb4a3d380244ca`. Independent Vercel inspection
+confirmed READY production artifact `dpl_8i7Q57Wdwqab2toqaMMtdmTLuqUC` in the expected project,
+with all four existing production aliases resolving to it. Home, signin, signup, privacy and terms
+returned HTTP 200 HTML; all 11 signin client assets returned HTTP 200 and compiled the production
+Convex hostname without the staging hostname. These checks establish deployment and public-route
+health, not interactive identity, microphone, authenticated export or six-document acceptance.
+No feature activation or commercial billing change was made.
+
+[Read-only signup diagnostic 39023822180](https://github.com/Mrjoel97/ProjectX/actions/runs/39023822180)
+checked out exact main revision `be630355` only after its successful CI, installed without the staging
+key and exposed that key only to the final target-guarded inspection step. Its sandboxed inline query
+selected the unique matching foundation-test invite family within the newest 100 invitations, deriving
+the invited email internally. No actual test email, user/storage ID, invite code, hash of an email,
+message body or credential appeared in its source/output. A zero/multiple-match or duplicate-user
+result would refuse interpretation. Observed booleans: `fixtureMatchUnique=true`, `userExists=false`,
+`emailVerified=false`, `inviteExists=true`, `inviteRedeemed=false`. These establish no matching user
+and an unredeemed invitation at query time within that bounded selector. The failure precedes
+committed account creation; verification delivery is not the next branch to investigate. Exact
+submitted email/code and the original admission failure remain unproven; do not claim signup fixed,
+redeem/reset the invite or alter mail configuration based on these booleans. No account,
+configuration or provider write was performed. The temporary diagnostic branch is retained.
 
 ## Implemented code checklist
 

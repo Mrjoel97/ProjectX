@@ -1,7 +1,7 @@
 # Current operations guide
 
 Source inspection: 2026-10-15, starting revision `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
-Production runtime revision `de18285d7466ea743d42199dc1d8de4a66dccbf9` deployed through [release run 38815539297](https://github.com/Mrjoel97/ProjectX/actions/runs/38815539297), verified on 2026-10-16 (Africa/Dar_es_Salaam). Convex deployment, registry seed, staged probe, promotion and durable-origin verification passed. [Release readiness](release-readiness.md) records the evidence and live gates that remain open; deployment does not establish voice/onboarding activation or complete provider qualification.
+Production runtime revision `be63035592c7333d04322af40eeb4a3d380244ca` deployed through [release run 39023562539](https://github.com/Mrjoel97/ProjectX/actions/runs/39023562539), verified on 2026-10-17 (Africa/Dar_es_Salaam). Convex deployment, registry seed, staged probe, promotion and durable-origin verification passed. [Release readiness](release-readiness.md) records the evidence and live gates that remain open; deployment does not establish voice/onboarding activation or complete provider qualification.
 This guide is the current entry point; dated playbook notes and ADRs explain historical decisions.
 
 ## Architecture and ownership
