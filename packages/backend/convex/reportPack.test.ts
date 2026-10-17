@@ -21,7 +21,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildBoardPackMarkdown } from "@pikar/core";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 // `audit.log` maintains the auditCounts aggregate, so the component must be registered or the REAL
 // insert path throws `Component "auditCounts" is not registered`. Relative import — the package
 // blocks the deep specifier. Same idiom as contentAudit/cash/calendar tests.
@@ -30,6 +30,7 @@ import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component
 // reaches `workflow.start`. Same shape as vault.test.ts / contentAudit.test.ts.
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+import { schedulingTest as it } from "../test/pausedScheduler";
 import { api, internal } from "./_generated/api";
 import { renderAndStorePack } from "./reportPack";
 import schema from "./schema";
@@ -373,7 +374,7 @@ describe("non-groundability is the ABSENT ingest call", () => {
     expect(await scheduled(t)).toHaveLength(0);
   });
 
-  test("the SAME reads DO change when the pack is promoted", async () => {
+  it("the SAME reads DO change when the pack is promoted", async () => {
     // Non-vacuity for the assertion above: those fields are not constants, and a pack stays
     // promotable through the ONE door rather than being quietly excluded from it.
     const t = withIngest();
@@ -389,6 +390,7 @@ describe("non-groundability is the ABSENT ingest call", () => {
     const after = (await packs(t))[0];
     expect(after?.origin).toBe("agent_promoted");
     expect(after?.status).toBe("processing");
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
   });
 
   test("neither pack module names an ingest door", () => {
@@ -420,7 +422,7 @@ describe("replay and failure", () => {
     expect(await storageObjects(t)).toHaveLength(1);
   });
 
-  test("a PROMOTED pack is still recognised on replay — promotion is not a new authorship", async () => {
+  it("a PROMOTED pack is still recognised on replay — promotion is not a new authorship", async () => {
     // The two halves of this were each covered and never composed. `promoteToReference` patches
     // this row's `origin` from "agent" to "agent_promoted", so a replay guard admitting only
     // "agent" stops seeing the pack the moment the user trusts it — and every regeneration after
@@ -433,6 +435,7 @@ describe("replay and failure", () => {
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     await as(t).mutation(api.vault.promoteToReference, { vaultDocId: first.vaultDocId });
+    expect(vi.getTimerCount()).toBeGreaterThan(0); // Replay tests the row, not ingestion execution.
 
     const second = await as(t).action(api.reportPack.generateBoardPack, W);
     expect(second.ok).toBe(true);

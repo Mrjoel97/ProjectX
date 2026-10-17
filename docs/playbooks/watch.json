@@ -23,7 +23,9 @@
     "scripts/check-playbooks.mjs",
     "scripts/check-planning.mjs",
     "apps/web/proxy.ts",
-    ".gitattributes"
+    ".gitattributes",
+    "packages/backend/test/pausedScheduler.ts",
+    "packages/backend/convex/pausedScheduler.test.ts"
   ],
   "beta-admission.md": [
     "packages/backend/scripts/nativeSignupProbe",
