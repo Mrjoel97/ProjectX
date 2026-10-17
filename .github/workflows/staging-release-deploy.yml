@@ -1,0 +1,65 @@
+name: staging-remaining-release-backend
+on:
+  push:
+    branches: [codex/staging-remaining-release-operator-20261017]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  deploy:
+    if: github.repository == 'Mrjoel97/ProjectX'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    concurrency:
+      group: staging-qualification
+      cancel-in-progress: false
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: operator
+          persist-credentials: false
+      - name: Check operator without deployment credentials
+        run: node --check operator/.github/scripts/staging-release-deploy.mjs
+      - name: Require exact reviewed source CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_SHA: 67bf46a6c640ee0a0f18d3bf65d3324479f6ef2e
+          EXPECTED_CI_RUN_ID: 39045024386
+        run: |
+          node <<'NODE'
+          (async()=>{
+            if(!/^[a-f0-9]{40}$/.test(process.env.SOURCE_SHA)||!/^\d+$/.test(process.env.EXPECTED_CI_RUN_ID))throw Error();
+            const r=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs?head_sha='+process.env.SOURCE_SHA+'&per_page=100',{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
+            if(!r.ok)throw Error();const {workflow_runs:runs,total_count}=await r.json();if(!Array.isArray(runs)||total_count>100)throw Error();
+            const x=runs.filter(x=>x.head_sha===process.env.SOURCE_SHA&&x.workflow_id===325088000&&x.path==='.github/workflows/ci.yml'&&['pull_request','push'].includes(x.event)).sort((a,b)=>b.id-a.id||b.run_attempt-a.run_attempt)[0];
+            if(!x||String(x.id)!==process.env.EXPECTED_CI_RUN_ID||x.name!=='ci'||x.repository.full_name!=='Mrjoel97/ProjectX'||x.head_repository.full_name!=='Mrjoel97/ProjectX'||x.status!=='completed'||x.conclusion!=='success')throw Error();
+            console.log(JSON.stringify({exactSourceCiPassed:true}));
+          })().catch(()=>{console.error('CI_GATE_FAILED');process.exitCode=1;});
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          ref: 67bf46a6c640ee0a0f18d3bf65d3324479f6ef2e
+          path: current
+          persist-credentials: false
+      - run: corepack enable
+      - name: Install exact source without deployment credentials
+        working-directory: current
+        run: pnpm install --frozen-lockfile
+      - name: Capture preserved state and strictly dry-run immutable source
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
+        run: node operator/.github/scripts/staging-release-deploy.mjs prepare
+      - name: Deploy reviewed current backend only
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
+        run: node operator/.github/scripts/staging-release-deploy.mjs deploy
+      - name: Always verify original configuration and retained data
+        if: always()
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
+        run: node operator/.github/scripts/staging-release-deploy.mjs verify
