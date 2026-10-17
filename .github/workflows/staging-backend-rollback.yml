@@ -1,0 +1,60 @@
+name: staging-backend-rollback-qualification
+on:
+  push:
+    branches: [codex/staging-backend-rollback-20261017]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  rollback:
+    if: github.repository == 'Mrjoel97/ProjectX'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: staging
+    concurrency:
+      group: staging-qualification
+      cancel-in-progress: false
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: operator
+          persist-credentials: false
+      - name: Check exact operator source without deployment credentials
+        env:
+          OPERATOR_SHA: ${{ github.sha }}
+        run: |
+          test "$(git -C operator rev-parse HEAD)" = "$OPERATOR_SHA"
+          node --check operator/.github/scripts/staging-backend-rollback.mjs
+      - name: Require both exact source CI runs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node <<'NODE'
+          (async()=>{for(const [id,sha] of [[39025828381,'a129b884445482625b1e8f2a236744fb2a0f2515'],[38815049837,'de18285d7466ea743d42199dc1d8de4a66dccbf9']]){
+            const r=await fetch('https://api.github.com/repos/Mrjoel97/ProjectX/actions/runs/'+id,{headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
+            if(!r.ok)throw Error();const x=await r.json();
+            if(x.head_sha!==sha||x.name!=='ci'||x.workflow_id!==325088000||x.event!=='push'||x.repository.full_name!=='Mrjoel97/ProjectX'||x.head_repository.full_name!=='Mrjoel97/ProjectX'||x.status!=='completed'||x.conclusion!=='success')throw Error();
+          }console.log(JSON.stringify({bothExactSourceCiPassed:true}));})().catch(()=>{console.error('CI_GATE_FAILED');process.exitCode=1;});
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          ref: a129b884445482625b1e8f2a236744fb2a0f2515
+          path: release
+          fetch-depth: 0
+          persist-credentials: false
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+        working-directory: release
+      - name: Guard staging and rehearse compatible rollback
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
+        run: node operator/.github/scripts/staging-backend-rollback.mjs run
+      - name: Restore current backend and exact prior configuration
+        if: always()
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
+        run: node operator/.github/scripts/staging-backend-rollback.mjs restore
