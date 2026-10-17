@@ -1,3 +1,5 @@
+> Last verified: 2026-10-17 — The audit viewer coverage guard explicitly distinguishes reserved retention control accounting from tenant activity. Runtime tests pin its control namespace and generic-writer refusal; no retention receipt is projected into a user's audit view.
+
 > Last verified: 2026-10-17 — Joel supplied the postal address Dar es Salaam 17107, Tanzania.
 > Public legal pages use that exact locality/postcode without inventing a street address. Draft
 > notices no longer say that address is unconfirmed. Governing law, venue and supervisory-authority

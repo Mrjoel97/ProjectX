@@ -366,6 +366,10 @@ describe("the allowlist against the write sites it claims to cover", () => {
     "authoring_probe.contained",
   ]);
 
+  // Production retention accounting lives in the reserved control namespace, never a tenant view.
+  // foundation.test verifies the actual writer namespace and audit.test refuses forged receipts.
+  const CONTROL_ACCOUNTING_EVENTS = new Set(["foundation_retention.purged"]);
+
   test("excluded authoring control events remain reserved operator probe receipts", () => {
     const probe = readFileSync(join(convexDir, "authoringProbe.ts"), "utf8");
     const writes = [...probe.matchAll(/await appendAudit\(ctx,\s*\{([\s\S]*?)\n\s*\}\);/g)];
@@ -402,7 +406,10 @@ describe("the allowlist against the write sites it claims to cover", () => {
 
     expect(literals.size).toBeGreaterThan(60); // anti-vacuity: the scan really found the write sites
     const unaccounted = [...literals].filter(
-      (e) => !NOT_PRODUCTION.has(e) && !Object.hasOwn(AUDIT_VIEWER_EVENTS, e),
+      (e) =>
+        !NOT_PRODUCTION.has(e) &&
+        !CONTROL_ACCOUNTING_EVENTS.has(e) &&
+        !Object.hasOwn(AUDIT_VIEWER_EVENTS, e),
     );
     expect(unaccounted, "add these to AUDIT_VIEWER_EVENTS or to NOT_PRODUCTION").toEqual([]);
   });

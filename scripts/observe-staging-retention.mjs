@@ -21,15 +21,28 @@ const expiresAt = Date.parse("2026-10-24T10:18:29.493Z");
 const firstEligibleSweep = Date.parse("2026-10-24T11:15:00Z");
 const observedAt = Date.now();
 if (rows.length === 1 &&
-  (Math.abs(rows[0]._creationTime - createdAt) > 1 ||
+  (rows[0].eventId !== "retention-clock-probe" || Math.abs(rows[0]._creationTime - createdAt) > 1 ||
    Math.abs(rows[0].expiresAt - expiresAt) > 1)) throw Error("FIXTURE_CHANGED");
 if (observedAt < expiresAt && rows.length !== 1) throw Error("EARLY_ABSENCE");
 if (observedAt >= firstEligibleSweep && rows.length !== 0) throw Error("PURGE_NOT_OBSERVED");
+const checkpointDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(
+  JSON.stringify([fixtures[0].tenantId, "retention-clock-probe", new Date(createdAt).toISOString(), new Date(expiresAt).toISOString()])));
+const checkpointHash = Array.from(new Uint8Array(checkpointDigest), b => b.toString(16).padStart(2, "0")).join("");
+const receipts = await ctx.db.query("audit").withIndex("by_correlation", q => q.eq("correlationId", "foundation-retention:" + checkpointHash)).take(2);
+if (receipts.length > 1) throw Error("AMBIGUOUS_RECEIPT");
+const receipt = receipts[0];
+if (receipt && (receipt.tenantId !== "control:foundation-retention:v1" || receipt.eventType !== "foundation_retention.purged" || receipt.actor !== "system:retention" ||
+    !receipt.payload || Object.keys(receipt.payload).sort().join(",") !== "count,createdAt,expiresAt,hash,purgedAt" ||
+    receipt.payload.hash !== checkpointHash || receipt.payload.count !== 1 || !Number.isFinite(receipt.payload.createdAt) || !Number.isFinite(receipt.payload.expiresAt) || Math.abs(receipt.payload.createdAt - createdAt) > 1 || Math.abs(receipt.payload.expiresAt - expiresAt) > 1 ||
+    !Number.isFinite(receipt.payload.purgedAt) || receipt.payload.purgedAt < expiresAt || receipt.payload.purgedAt > observedAt ||
+    receipt.ts !== receipt.payload.purgedAt || receipt.exportVersion !== 2 || rows.length !== 0)) throw Error("INVALID_RECEIPT");
+if (observedAt >= firstEligibleSweep && !receipt) throw Error("MISSING_PURGE_RECEIPT");
 return { observedAt: new Date(observedAt).toISOString(),
   createdAt: new Date(createdAt).toISOString(), expiresAt: new Date(expiresAt).toISOString(),
   inventoryComplete: true, fixtureUnique: true, checkpointCount: rows.length,
   beforeExpiryPresenceVerified: observedAt < expiresAt,
   elapsedExpiryAbsenceObserved: observedAt >= firstEligibleSweep && rows.length === 0,
+  receiptVerified: Boolean(receipt),
   cronAttributionVerified: false,
   nativeLifecycleVerified: false };
 `;
@@ -72,6 +85,7 @@ export function observe() {
     "checkpointCount",
     "beforeExpiryPresenceVerified",
     "elapsedExpiryAbsenceObserved",
+    "receiptVerified",
     "cronAttributionVerified",
     "nativeLifecycleVerified",
   ];

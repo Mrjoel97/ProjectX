@@ -25,6 +25,7 @@ import { ConvexError, type Infer, v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type ActionCtx, internalQuery, type QueryCtx } from "./_generated/server";
+import { appendAudit, RETENTION_AUDIT_NAMESPACE, RETENTION_CORRELATION_PREFIX } from "./audit";
 import {
   foundationAnswer,
   foundationProfile,
@@ -306,7 +307,31 @@ export const purgeTranscripts = internalMutation({
       .query("foundationTranscripts")
       .withIndex("by_expiry", (q) => q.lte("expiresAt", Date.now()))
       .take(100);
-    for (const row of expired) await ctx.db.delete(row._id);
+    for (const row of expired) {
+      const checkpointHash = await contentHash(
+        JSON.stringify([
+          row.tenantId,
+          row.eventId,
+          new Date(row._creationTime).toISOString(),
+          new Date(row.expiresAt).toISOString(),
+        ]),
+      );
+      await ctx.db.delete(row._id);
+      // Receipt, outbox and deletion commit together. No raw tenant, event or transcript survives here.
+      await appendAudit(ctx, {
+        tenantId: RETENTION_AUDIT_NAMESPACE,
+        correlationId: RETENTION_CORRELATION_PREFIX + checkpointHash,
+        eventType: "foundation_retention.purged",
+        actor: "system:retention",
+        payload: {
+          hash: checkpointHash,
+          count: 1,
+          createdAt: row._creationTime,
+          expiresAt: row.expiresAt,
+          purgedAt: Date.now(),
+        },
+      });
+    }
     if (expired.length === 100)
       await ctx.scheduler.runAfter(0, internal.foundation.purgeTranscripts, {});
     return expired.length;

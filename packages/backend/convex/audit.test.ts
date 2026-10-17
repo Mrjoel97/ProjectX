@@ -150,3 +150,23 @@ test.each([
   expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([]);
   expect(await t.run((ctx) => ctx.db.query("auditExportQueue").collect())).toEqual([]);
 });
+
+test.each([
+  { tenantId: "control:foundation-retention:v1" },
+  { eventType: "foundation_retention.purged" },
+  { correlationId: "foundation-retention:opaque" },
+])("generic writer refuses retention receipt forgery %j", async (reserved) => {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  await expect(
+    t.mutation(internal.audit.log, {
+      tenantId: "ordinary",
+      correlationId: "ordinary",
+      eventType: "ordinary",
+      actor: "system:retention",
+      payload: { count: 1 },
+      ...reserved,
+    }),
+  ).rejects.toThrow("RESERVED_EVIDENCE_NAMESPACE");
+  expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+});

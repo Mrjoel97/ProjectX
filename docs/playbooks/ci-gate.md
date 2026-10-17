@@ -1,3 +1,5 @@
+> Last verified: 2026-10-17 — The read-only seven-day observer now requires the pinned checkpoint's code-authored atomic purge receipt as well as absence after the eligible sweep. Six offline boundary tests reject missing/forged receipts; elapsed production/staging time remains unqualified until the original 2026-10-24 deadline. cronAttributionVerified remains false.
+
 # Playbook: CI gate (typecheck / lint / test / build)
 
 > Last verified: 2026-10-17 — the read-only staging retention observer refuses ambiguous or
