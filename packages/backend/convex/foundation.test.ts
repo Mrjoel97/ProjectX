@@ -3,6 +3,7 @@ import {
   FOUNDATION_TRANSCRIPT_TTL,
   renderFoundation,
 } from "@pikar/core/foundation";
+import { v } from "convex/values";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -11,6 +12,7 @@ import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/s
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import { contentHash } from "./lib/hash";
+import { internalAction } from "./lib/tenantLifecycle";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -27,8 +29,8 @@ const rateModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
 );
 const TENANT = "foundation_test";
-function setup() {
-  const t = convexTest(schema, modules);
+function setup(moduleOverrides = modules) {
+  const t = convexTest(schema, moduleOverrides);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   t.registerComponent("workflow", workflowSchema, workflowModules);
   t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
@@ -696,4 +698,95 @@ test.each([
       async (ctx) => (await ctx.db.system.query("_scheduled_functions").collect()).length,
     ),
   ).toBe(before + 1);
+});
+
+test("expiring pilot admits only its tenant and rejects late extraction commits", async () => {
+  const t = setup();
+  const tenantId = "j57aaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const a = t.withIdentity({ subject: tenantId });
+  const other = t.withIdentity({ subject: "j57bbbbbbbbbbbbbbbbbbbbbbbbbbbbb" });
+  const issuedAt = Date.now(),
+    expiresAt = issuedAt + 900000;
+  vi.stubEnv("FOUNDATION_ONBOARDING_ENABLED", "0");
+  vi.stubEnv("NATIVE_ONBOARDING_PILOT", JSON.stringify({ tenantId, issuedAt, expiresAt }));
+  expect(await a.query(api.foundation.enabled, {})).toBe(true);
+  expect(await other.query(api.foundation.enabled, {})).toBe(false);
+  await expect(other.mutation(api.foundation.begin, {})).rejects.toThrow(
+    "FOUNDATION_ONBOARDING_DISABLED",
+  );
+  await a.mutation(api.foundation.begin, {});
+  await a.action(api.foundation.answer, {
+    revision: 0,
+    eventId: "planned",
+    section: "offers",
+    intent: "planned",
+    answer: "Synthetic future offer",
+  });
+  const before = await a.query(api.foundation.get, {});
+  expect(before?.revision).toBe(1);
+  vi.setSystemTime(expiresAt);
+  expect(await a.query(api.foundation.enabled, {})).toBe(false);
+  await expect(
+    t.mutation(internal.foundation.saveTurn, {
+      tenantId,
+      revision: 1,
+      profile,
+      slots,
+      answer: {
+        section: "essentials",
+        text: "Late paid extraction",
+        intent: "current",
+        eventId: "late-pilot",
+      },
+      reply: "Late",
+    }),
+  ).rejects.toThrow("FOUNDATION_ONBOARDING_DISABLED");
+  await expect(
+    a.mutation(api.foundation.publish, { revision: 1, reviewHash: "stale" }),
+  ).rejects.toThrow("FOUNDATION_ONBOARDING_DISABLED");
+  expect(await a.query(api.foundation.get, {})).toEqual(before);
+  await a.mutation(api.foundation.discard, { revision: 1 });
+  expect(await a.query(api.foundation.get, {})).toBeNull();
+});
+
+test("pilot expiry after extraction cannot start the second paid model call", async () => {
+  const tenantId = "j57aaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    issuedAt = Date.now(),
+    expiresAt = issuedAt + 900000;
+  vi.stubEnv("FOUNDATION_ONBOARDING_ENABLED", "0");
+  vi.stubEnv("NATIVE_ONBOARDING_PILOT", JSON.stringify({ tenantId, issuedAt, expiresAt }));
+  const secondCall = vi.fn();
+  const t = setup({
+    ...modules,
+    "./onboarding.ts": async () => ({
+      ...(await import("./onboarding")),
+      extractProfileInternal: internalAction({
+        args: { tenantId: v.string(), intakeText: v.string() },
+        handler: async () => {
+          vi.setSystemTime(expiresAt);
+          return profile;
+        },
+      }),
+      converseInternal: internalAction({
+        args: { tenantId: v.string(), slots: v.any(), userMessage: v.string() },
+        handler: async () => {
+          secondCall();
+          throw Error("Second paid action must not start");
+        },
+      }),
+    }),
+  });
+  const owner = t.withIdentity({ subject: tenantId });
+  await owner.mutation(api.foundation.begin, {});
+  await expect(
+    owner.action(api.foundation.answer, {
+      revision: 0,
+      eventId: "slow-extraction",
+      section: "essentials",
+      intent: "current",
+      answer: "Synthetic test business",
+    }),
+  ).rejects.toThrow("FOUNDATION_ONBOARDING_DISABLED");
+  expect(secondCall).not.toHaveBeenCalled();
+  expect((await owner.query(api.foundation.get, {}))?.revision).toBe(0);
 });

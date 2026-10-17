@@ -605,3 +605,53 @@ test("the ABNORMAL end of a doc-scoped session also leaves exactly one", async (
   );
   expect(briefs).toHaveLength(1);
 });
+
+test("pilot session rechecks revocation and caps its watchdog at grant expiry while end stays available", async () => {
+  vi.useFakeTimers();
+  try {
+    const t = setup(),
+      tenantId = "j57aaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const issuedAt = Date.now(),
+      expiresAt = issuedAt + 900000;
+    const grant = JSON.stringify({ tenantId, issuedAt, expiresAt });
+    vi.stubEnv("FOUNDATION_ONBOARDING_ENABLED", "0");
+    vi.stubEnv("NATIVE_ONBOARDING_PILOT", grant);
+    const owner = t.withIdentity({ subject: tenantId });
+    await owner.mutation(api.foundation.begin, {});
+    vi.setSystemTime(expiresAt - 120000);
+    const reservationId = await seedReservation(t, tenantId);
+    vi.stubEnv("NATIVE_ONBOARDING_PILOT", "");
+    await expect(
+      t.mutation(internal.voice.startSession, {
+        tenantId,
+        reservationId,
+        controlled: true,
+        onboarding: true,
+        pilotEndsAt: expiresAt,
+        callId: "rtc_revoked",
+      }),
+    ).rejects.toThrow("VOICE_PILOT_EXPIRED");
+    expect(await t.run((ctx) => ctx.db.query("voiceSessions").collect())).toHaveLength(0);
+    vi.stubEnv("NATIVE_ONBOARDING_PILOT", grant);
+    const { sessionId } = await t.mutation(internal.voice.startSession, {
+      tenantId,
+      reservationId,
+      controlled: true,
+      onboarding: true,
+      pilotEndsAt: expiresAt,
+      callId: "rtc_pilot",
+    });
+    const session = await get(t, sessionId);
+    expect(session?.endsAt).toBe(expiresAt);
+    expect(session?.endsAt).toBe((session?.startedAt ?? 0) + 120000);
+    const scheduled = await listScheduled(t);
+    expect(scheduled.find((row) => row._id === session?.watchdogFnId)?.scheduledTime).toBe(
+      expiresAt,
+    );
+    vi.setSystemTime(expiresAt);
+    await owner.mutation(api.voice.endSessionClean, { sessionId });
+    expect((await get(t, sessionId))?.status).not.toBe("active");
+  } finally {
+    vi.useRealTimers();
+  }
+});

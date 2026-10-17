@@ -1,4 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { foundationPilotExpiresAt } from "@pikar/core/foundationPilot";
 // Plan-06 VOIC-02/VOIC-03: the server-side voice-session engine — a THIN adapter (§1) over the
 // pure @pikar/voice FSM/cap math + the in-repo scheduler/CAS/ingest precedents. Domain logic
 // (capEndsAt, isEnded) lives in @pikar/voice; @pikar/cost prices the metering; this file only
@@ -60,6 +61,7 @@ export const startSession = internalMutation({
   args: {
     tenantId: v.optional(v.string()),
     controlled: v.optional(v.boolean()),
+    pilotEndsAt: v.optional(v.number()),
     callId: v.string(),
     reservationId: v.optional(v.id("spendEvents")),
     onboarding: v.optional(v.boolean()),
@@ -69,7 +71,16 @@ export const startSession = internalMutation({
   },
   handler: async (
     ctx,
-    { callId, language, docRef, reservationId, onboarding, tenantId: suppliedTenant, controlled },
+    {
+      callId,
+      language,
+      docRef,
+      reservationId,
+      onboarding,
+      tenantId: suppliedTenant,
+      controlled,
+      pilotEndsAt,
+    },
   ): Promise<{ sessionId: Id<"voiceSessions"> }> => {
     const tenantId = suppliedTenant ?? String((await getAuthUserId(ctx)) ?? "");
     if (!tenantId) throw new Error("UNAUTHENTICATED");
@@ -125,7 +136,18 @@ export const startSession = internalMutation({
     }
 
     const startedAt = Date.now();
-    const endsAt = controlled ? startedAt + 300_000 : capEndsAt(startedAt);
+    if (
+      pilotEndsAt !== undefined &&
+      (foundationPilotExpiresAt(process.env.NATIVE_ONBOARDING_PILOT, tenantId) !== pilotEndsAt ||
+        !controlled ||
+        !onboarding ||
+        !Number.isSafeInteger(pilotEndsAt) ||
+        pilotEndsAt <= startedAt)
+    )
+      throw new Error("VOICE_PILOT_EXPIRED");
+    const endsAt = controlled
+      ? Math.min(startedAt + 300_000, pilotEndsAt ?? Infinity)
+      : capEndsAt(startedAt);
     const sessionId = await ctx.db.insert("voiceSessions", {
       tenantId: tenantId,
       status: "active",

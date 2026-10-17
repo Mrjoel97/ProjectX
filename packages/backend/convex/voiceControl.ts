@@ -74,6 +74,8 @@ export const run = internalAction({
         callId: crypto.randomUUID(),
         ceilingCents: VOICE_RESPONSE_CEILING_CENTS,
       });
+      // Admission can finish after the deadline; retain its hold without starting new work.
+      if (failed || Date.now() >= initial.endsAt) throw new Error("VOICE_SESSION_INACTIVE");
       send({ type: "response.create", response: { max_output_tokens: VOICE_OUTPUT_TOKENS } });
     };
     const handle = async (event: Record<string, unknown>) => {

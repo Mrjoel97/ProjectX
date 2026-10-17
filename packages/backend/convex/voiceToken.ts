@@ -1,4 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { foundationPilotExpiresAt } from "@pikar/core/foundationPilot";
 // Server-owned Realtime signaling. connect is the only public entry point.
 // Internal mint secrets never leave this module/server action chain; private registration
 // arms termination before the browser receives answer SDP. See docs/playbooks/voice.md.
@@ -113,7 +114,11 @@ export const mintClientSecret = internalAction({
     // The mint is a SECOND trust boundary alongside `voice.startSession` — and the FIRST one in
     // wall-clock order, since the browser mints before it has a session row. A document must
     // exist, be this tenant's, and be `ready`; the thrown message is a STATUS, never content.
-    if (onboarding && process.env.FOUNDATION_ONBOARDING_ENABLED !== "1")
+    if (
+      onboarding &&
+      process.env.FOUNDATION_ONBOARDING_ENABLED !== "1" &&
+      foundationPilotExpiresAt(process.env.NATIVE_ONBOARDING_PILOT, tenantId) === undefined
+    )
       throw new Error("voice: onboarding unavailable");
     if (onboarding && docId) throw new Error("voice: incompatible purpose");
     let instructions = skill.body;
@@ -187,8 +192,21 @@ export const mintClientSecret = internalAction({
         },
       });
 
-    const post = (withTools: boolean): Promise<Response> =>
-      fetch(CLIENT_SECRETS_URL, {
+    const admittedPilot = onboarding
+      ? foundationPilotExpiresAt(process.env.NATIVE_ONBOARDING_PILOT, tenantId)
+      : undefined;
+    const post = (withTools: boolean): Promise<Response> => {
+      if (
+        onboarding &&
+        ((process.env.FOUNDATION_ONBOARDING_ENABLED !== "1" &&
+          foundationPilotExpiresAt(process.env.NATIVE_ONBOARDING_PILOT, tenantId) === undefined) ||
+          (admittedPilot !== undefined &&
+            process.env.VOICE_SERVER_CONTROL_VERIFIED !== "1" &&
+            foundationPilotExpiresAt(process.env.NATIVE_ONBOARDING_PILOT, tenantId) !==
+              admittedPilot))
+      )
+        throw new Error("voice: onboarding unavailable");
+      return fetch(CLIENT_SECRETS_URL, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ""}`,
@@ -197,6 +215,7 @@ export const mintClientSecret = internalAction({
         signal: AbortSignal.timeout(15_000),
         body: sessionBody(withTools),
       });
+    };
 
     // OPEN QUESTION 3 (14-RESEARCH), both branches shipped. The TypeScript client_secrets
     // reference lists `tools`/`tool_choice` on RealtimeSessionCreateRequest; the REST reference
@@ -273,7 +292,12 @@ export const connect = tenantAction({
     ctx,
     { offerSdp, docId, onboarding },
   ): Promise<{ answerSdp: string; sessionId: Id<"voiceSessions">; endsAt: number }> => {
-    if (process.env.VOICE_SERVER_CONTROL_VERIFIED !== "1")
+    const pilotEndsAt =
+      onboarding && !docId
+        ? foundationPilotExpiresAt(process.env.NATIVE_ONBOARDING_PILOT, ctx.tenantId)
+        : undefined;
+    const pilotOnly = process.env.VOICE_SERVER_CONTROL_VERIFIED !== "1";
+    if (pilotOnly && (pilotEndsAt === undefined || pilotEndsAt - Date.now() < 300_000))
       throw new Error("VOICE_CONTROL_NOT_VERIFIED");
     assertMediaOnlyOffer(offerSdp);
     const mint = await ctx.runAction(internal.voiceToken.mintClientSecret, {
@@ -281,6 +305,11 @@ export const connect = tenantAction({
       docId,
       onboarding,
     });
+    if (
+      pilotOnly &&
+      foundationPilotExpiresAt(process.env.NATIVE_ONBOARDING_PILOT, ctx.tenantId) !== pilotEndsAt
+    )
+      throw new Error("VOICE_CONTROL_NOT_VERIFIED");
     // The ephemeral credential exists only inside server-to-provider exchanges.
     const response = await fetch(CALLS_URL, {
       method: "POST",
@@ -290,15 +319,16 @@ export const connect = tenantAction({
     });
     if (!response.ok) throw new Error("VOICE_CONNECTION_REFUSED");
     const callId = trustedCallId(response.headers.get("Location"));
-    const answerSdp = await response.text();
     let sessionId: Id<"voiceSessions"> | undefined;
     try {
+      const answerSdp = await response.text();
       if (answerSdp.length > 32_768 || /m=application|sctp/i.test(answerSdp))
         throw new Error("VOICE_UNSAFE_ANSWER");
       const started = await ctx.runMutation(internal.voice.startSession, {
         tenantId: ctx.tenantId,
         callId,
         controlled: true,
+        ...(pilotOnly ? { pilotEndsAt } : {}),
         reservationId: mint.reservationId,
         onboarding,
         docRef: docId,
