@@ -37,6 +37,8 @@
 - Local checks: backend foundation/voice/onboarding isolation tests; browser component tests for explicit approval, stale revision and typed fallback. Live speech quality, interruptions, provider usage reconciliation, microphone/device behavior and authenticated cross-device UAT remain release evidence gates.
 - Rollback: unset FOUNDATION_ONBOARDING_ENABLED; keep additive tables/indexes and active registry seed. Existing approved documents remain usable; drafts are read-only with discard available until the switch is enabled again. Resume enrichment through Continue business setup on the profile/Blueprint surface.
 
+> Last verified: 2026-10-18 — Onboarding voice enrichment saves the user's statement directly and returns to the existing Realtime coach without calling the optional typed coaching model. Essential-fact extraction/validation, revision checks, current/planned provenance, pilot admission and explicit six-document publication are unchanged. Typed answers still use section-aware coaching with a save-on-failure fallback. Focused regressions cover all five voice enrichment sections, idempotent retries and required essential validation. This removes an extra model wait; live end-to-end latency remains to be measured.
+
 # Playbook: Persona Onboarding & Business Profile
 
 > Last verified: 2026-10-17 — correction navigation follows the saved server phase/revision. Offer-only edits preserve the selected reference section; an essential revision returns to essentials only when the server requires reconfirmation. Two rendered correction scenarios pass, including an essentials answer already present during an offer edit.

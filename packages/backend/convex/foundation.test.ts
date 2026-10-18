@@ -11,6 +11,7 @@ import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/comp
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
+import { internalQuery } from "./_generated/server";
 import { contentHash } from "./lib/hash";
 import { internalAction } from "./lib/tenantLifecycle";
 import schema from "./schema";
@@ -237,7 +238,19 @@ test("editing enrichment preserves unchanged essential facts", async () => {
 });
 
 test("typed enrichment preserves the user's draft and responds with a section-aware next step", async () => {
-  const t = setup();
+  const coachLookup = vi.fn();
+  const t = setup({
+    ...modules,
+    "./skills.ts": async () => ({
+      getActiveSkill: internalQuery({
+        args: { name: v.string() },
+        handler: async () => {
+          coachLookup();
+          throw new Error("COACH_UNAVAILABLE");
+        },
+      }),
+    }),
+  });
   const a = await complete(t);
   vi.stubEnv("OPENROUTER_API_KEY", "");
   vi.stubEnv("OPENAI_API_KEY", "");
@@ -257,6 +270,104 @@ test("typed enrichment preserves the user's draft and responds with a section-aw
     section: "offers",
   });
   expect(saved?.profile.targetCustomer).toBe("");
+  expect(coachLookup).toHaveBeenCalledOnce();
+});
+
+test.each([
+  "offers",
+  "operations",
+  "delivery",
+  "goals",
+  "constraints",
+] as const)("voice %s saves directly without waiting for the typed coaching model", async (section) => {
+  const coachLookup = vi.fn();
+  const t = setup({
+    ...modules,
+    "./skills.ts": async () => ({
+      getActiveSkill: internalQuery({
+        args: { name: v.string() },
+        handler: async () => {
+          coachLookup();
+          throw new Error("VOICE_MUST_NOT_WAIT_FOR_TYPED_COACH");
+        },
+      }),
+    }),
+  });
+  const a = await complete(t);
+  const sessionId = await t.run((ctx) =>
+    ctx.db.insert("voiceSessions", {
+      tenantId: TENANT,
+      onboarding: true,
+      status: "active",
+      startedAt: Date.now(),
+      endsAt: Date.now() + 60_000,
+      createdAt: Date.now(),
+      inAudioTok: 0,
+      outAudioTok: 0,
+      textInTok: 0,
+      textOutTok: 0,
+    }),
+  );
+  const answer = {
+    sessionId,
+    eventId: `voice_${section}`,
+    answer: "I might offer mobile beauty services.",
+    section,
+    intent: "planned" as const,
+  };
+  const result = await t.action(internal.foundation.answerFromVoice, answer);
+  expect(result).toMatchObject({ revision: 2, complete: true });
+  expect(coachLookup).not.toHaveBeenCalled();
+  const saved = await a.query(api.foundation.get, {});
+  expect(saved?.answers.at(-1)).toMatchObject({
+    text: answer.answer,
+    section,
+    intent: "planned",
+    eventId: answer.eventId,
+  });
+  expect(saved?.profile).toEqual(profile);
+  expect(await t.action(internal.foundation.answerFromVoice, answer)).toEqual(result);
+  expect((await a.query(api.foundation.get, {}))?.revision).toBe(2);
+  expect(await t.run((ctx) => ctx.db.query("spendEvents").collect())).toEqual([]);
+});
+
+test("voice essentials still await authoritative fact validation before saving", async () => {
+  const validate = vi.fn(() => ({ slots, reply: "Please confirm your headcount." }));
+  const t = setup({
+    ...modules,
+    "./onboarding.ts": async () => ({
+      ...(await import("./onboarding")),
+      converseInternal: internalAction({
+        args: { tenantId: v.string(), slots: v.any(), userMessage: v.string() },
+        handler: async () => validate(),
+      }),
+    }),
+  });
+  const a = await complete(t);
+  const sessionId = await t.run((ctx) =>
+    ctx.db.insert("voiceSessions", {
+      tenantId: TENANT,
+      onboarding: true,
+      status: "active",
+      startedAt: Date.now(),
+      endsAt: Date.now() + 60_000,
+      createdAt: Date.now(),
+      inAudioTok: 0,
+      outAudioTok: 0,
+      textInTok: 0,
+      textOutTok: 0,
+    }),
+  );
+  const result = await t.action(internal.foundation.answerFromVoice, {
+    sessionId,
+    eventId: "voice_essential_validation",
+    answer: "I work alone.",
+    section: "essentials",
+    intent: "current",
+  });
+  expect(validate).toHaveBeenCalledOnce();
+  expect(result.reply).toBe("Please confirm your headcount.");
+  expect((await a.query(api.foundation.get, {}))?.answers.at(-1)?.text).toBe("I work alone.");
 });
 
 test.each([
