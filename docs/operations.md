@@ -2,13 +2,25 @@
 
 ## Latest onboarding status — 2026-10-18
 
+**Global foundation onboarding is enabled in production.** Following the owner's explicit rollout instruction after voice and six-document acceptance, `FOUNDATION_ONBOARDING_ENABLED=1` was saved in `opulent-octopus-494` on October 18. The authenticated production onboarding page was independently verified writable, with Start voice onboarding available after the owner pilot had expired. No runtime deployment, ordinary-voice change, budget reset or billing activation was performed. Roll back admission by setting this flag to `0`; retain additive tables, approved documents, registry and cleanup workers. Do not restore production data to roll back a feature flag.
+
+The native owner `/admin` readiness query reported every required name set and every agent prompt present. Its ready state also verifies no active fixture seams and no non-durable origins. Billing remains code-disabled. Optional provider/WORM configuration gaps retain their own feature gates. Global admission does not bypass authentication, invitations, tenant boundaries, paid-work reservations or explicit document approval. Both voice routes retain the 15-minute cap. The expired pilot was not renewed and is not required for global onboarding.
+
+Native Vault semantic search in Workspace Docs returned the published Operating model. Its on-demand rendered excerpt matched the approved revision 17 prefix after normalizing Markdown headings/emphasis and whitespace (1,475 displayed characters). This proves reference selection and current excerpt hydration for that source; it does not prove every source's matched RAG chunks or end-to-end agent grounding. Draft revision 18 remains unapproved.
+
+Remaining checks are not waived by this rollout: the seven-day checkpoint observation becomes eligible October 24, provider/in-flight erasure and invoice/send reconciliation need live external evidence, and legal review remains external. The existing read-only retention workflow is scheduled for October 24 at 11:30 UTC, after its eligible sweep; preserve the original checkpoint and receipt protocol. See the readiness matrix for accountable owner Joel and the remaining closure requirements.
+
+Production backup inspection found no existing snapshots and automatic scheduling set to Never (marked Pro). A manual database backup with **Include file storage** selected was created October 18 at 14:57:15 UTC and the dashboard confirmed completion in 23 seconds. It expires in seven days. No backup download, production restore, plan purchase or schedule change occurred. This closes the absence of a recovery snapshot, not recurring backup coverage or a restore rehearsal. Joel must preserve/renew coverage before the snapshot expires; do not restore deleted identities or expired private content without reconciling erasure fences and retention obligations.
+
+### Acceptance history before global activation
+
 This update supersedes the older current-status paragraphs below. Production runtime is `f921de951b77c3a57b378fa86be81f5e48587199`, with [main CI 39131026130](https://github.com/Mrjoel97/ProjectX/actions/runs/39131026130) and [release 39131345607](https://github.com/Mrjoel97/ProjectX/actions/runs/39131345607) passed. Normal voice remains capped at 15 minutes. Onboarding voice avoids redundant coaching-model work and requires a full 15 minutes remaining in its owner-only 30-minute pilot before connecting.
 
 The owner now confirms working production onboarding voice and review/approval of all six business documents. Read-only browser inspection independently verified approved revision 17, six Ready published sources and six Ready foundational references in the confirmed Business Blueprint. Interview revision 18 is a later saved draft and is not implicitly approved. The remaining real-business approval gate is closed for revision 17 only.
 
 For the latest retry, the owner authorized up to $5 extra AI usage today. An audited one-time 417-cent allowance restored their remaining daily budget from 83 to 500 cents without clearing reservations, changing recorded spend or altering the original window. It expires October 18 at 18:54:14.950 UTC (21:54 EAT). Other users and deployment budgets were unchanged. Subsequent failures at 17:06 EAT were `VOICE_PILOT_WINDOW_TOO_SHORT`, not budget failures; admission was renewed and the owner reported a successful retry.
 
-Billing and global foundation admission remain disabled. The temporary owner pilot expires automatically; a browser refresh does not renew it. Keep the current-revision retrieval trace, actual October 24 retention observation, provider reconciliation, in-flight erasure, upload/cancellation and remaining recovery/legal gates open as detailed in [release readiness](release-readiness.md). This acceptance record does not authorize broader feature changes or approval of later drafts.
+At that acceptance checkpoint, billing and global foundation admission were disabled. The subsequent owner-authorized activation above supersedes only the admission state. Billing stays disabled and all separately identified operational checks remain open as detailed in [release readiness](release-readiness.md).
 
 ## Historical production baseline — 2026-10-17
 
