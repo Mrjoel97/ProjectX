@@ -11,6 +11,7 @@ import {
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { Component, type CSSProperties, type ReactNode, useState } from "react";
+import { BufferMarketing } from "./BufferPanel";
 
 const card: CSSProperties = {
   background: "var(--card)",
@@ -62,7 +63,11 @@ export function ChannelsView({
 }) {
   return (
     <section style={card}>
-      <h2>Channels</h2>
+      <h2>Direct channel connections</h2>
+      <p>
+        Buffer manages your selected social channels above. These rows describe separate direct
+        connections.
+      </p>
       <div style={grid}>
         {MARKETING_CHANNEL_CATALOG.map((channel) => {
           const state = marketingChannelState(channel.id, { connected, configured });
@@ -427,8 +432,14 @@ export function MarketingView() {
         <p>
           Review channel availability, create tracked file links and record consent-aware leads.
         </p>
-        <p>Social publishing is unavailable. Any outbound email requires your separate approval.</p>
+        <p>
+          Use Buffer for approved social posts and engagement reports. Direct social-network
+          connections remain separate.
+        </p>
       </header>
+      <SectionBoundary name="Buffer social marketing">
+        <BufferMarketing />
+      </SectionBoundary>
       <SectionBoundary name="Channels">
         <Channels />
       </SectionBoundary>

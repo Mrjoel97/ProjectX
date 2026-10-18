@@ -23,6 +23,45 @@ http.route({ path: "/uploads", method: "OPTIONS", handler: uploadHttp });
 // Wire Convex Auth sign-in/callback httpAction routes.
 auth.addHttpRoutes(http);
 
+http.route({
+  path: "/buffer/callback",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    const site = process.env.SITE_URL;
+    let destination: URL;
+    try {
+      const origin = new URL(site ?? "");
+      if (origin.protocol !== "https:" || origin.username || origin.password)
+        throw new Error("BUFFER_NOT_CONFIGURED");
+      destination = new URL("/connect-buffer", origin);
+    } catch {
+      return new Response(null, { status: 503 });
+    }
+    try {
+      const url = new URL(req.url);
+      if (["state", "code", "error"].some((key) => url.searchParams.getAll(key).length > 1))
+        throw new Error("BUFFER_INVALID_STATE");
+      const result = await ctx.runAction(internal.bufferActions.callback, {
+        state: url.searchParams.get("state") ?? "",
+        code: url.searchParams.get("code") ?? undefined,
+        denied: url.searchParams.has("error"),
+      });
+      if (result.receipt) destination.searchParams.set("complete", result.receipt);
+      else destination.searchParams.set("result", "cancelled");
+    } catch {
+      destination.searchParams.set("result", "failed");
+    }
+    return new Response(null, {
+      status: 303,
+      headers: {
+        Location: destination.toString(),
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer",
+      },
+    });
+  }),
+});
+
 // Bearer links are the only public funnel surface. HEAD is routed to GET by Convex,
 // so inspect the actual method before any aggregate mutation.
 http.route({

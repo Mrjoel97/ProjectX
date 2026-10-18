@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Buffer changes the executive tool registry and schema, so the evaluator identity includes the Buffer modules, pure contracts and reused credential envelope. The exact code-owned evaluator revision is refreshed to retire older candidate evidence; no paid evaluation, new passing evidence or skill activation is claimed. Buffer tools remain absent from eval contexts.
+
 > Last verified: 2026-10-15 — evaluator source-shape guards normalize checkout line endings. The evaluator fingerprint now includes paidBudgetModel and authentication revocation/lifetime dependencies; the suite revision and manifest are refreshed to invalidate earlier evidence after these legitimate runtime changes. This refresh is identity bookkeeping, not a new evaluation or release approval.
 
 > Last verified: 2026-10-15 — Ordinary SDK loop steps and standalone document/digest/edit/voice-brief calls use paidBudgetModel admission and immediate provider-cost settlement. Errors with uncertain billing retain their hold and suppress automatic model fallback. Fixture-only MockLanguageModelV4 paths keep deterministic arithmetic. Live billing reconciliation remains unverified.

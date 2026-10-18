@@ -5,6 +5,7 @@ import { useAction, useQuery } from "convex/react";
 import { useState } from "react";
 import { DisconnectGoogle } from "../../_components/DisconnectGoogle";
 import { DisconnectMicrosoft } from "../../_components/DisconnectMicrosoft";
+import { BufferConnectionRow } from "../marketing/BufferPanel";
 import {
   type ConnectorRow,
   connectorBusyLabel,
@@ -72,6 +73,7 @@ export function ConnectionsPanel() {
 
       <GoogleRow />
       <MicrosoftRow />
+      <BufferConnectionRow />
       <ConnectorRows />
     </section>
   );

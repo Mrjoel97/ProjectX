@@ -107,7 +107,7 @@ export type ConnectionFailureClass = (typeof CONNECTION_FAILURE_CLASSES)[number]
 /** The stable tuple ciphertext is bound to. Every field is server-owned; none is user input. */
 export type CredentialScope = {
   tenantId: string;
-  provider: Provider;
+  provider: Provider | "buffer";
   /** Server-minted, opaque, stable for the life of the row. Not the provider's account id. */
   connectionId: string;
   environment: ConnectorEnvironment;
@@ -175,7 +175,8 @@ function aad(scope: CredentialScope, keyVersion: CredentialKeyVersion): Uint8Arr
 }
 
 function assertScope(scope: CredentialScope): void {
-  if (!isProvider(scope.provider)) throw new Error("Credential scope has an unknown provider.");
+  if (scope.provider !== "buffer" && !isProvider(scope.provider))
+    throw new Error("Credential scope has an unknown provider.");
   if (!isConnectorEnvironment(scope.environment)) {
     throw new Error("Credential scope has an unknown environment.");
   }

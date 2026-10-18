@@ -35,7 +35,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 67 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 71 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -58,6 +58,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │                                                                            │
 // │ ── Connections (OAuth tokens) ──────────────────────────── ~L1425          │
 // │   notifications, gmailTokens, microsoftCalendarTokens                      │
+// │   bufferOAuthStates, bufferConnections, bufferPosts, bufferReports          │
 // │                                                                            │
 // │ ── Vault (Document Store) ──────────────────────────────── ~L956           │
 // │   vaultSources, vaultDocuments, vaultFolders, vaultSheets, uploadReceipts                  │
@@ -190,6 +191,104 @@ const shotElement = v.object({
 });
 
 export default defineSchema({
+  bufferOAuthStates: defineTable({
+    tenantId: v.string(),
+    stateHash: v.string(),
+    connectionId: v.string(),
+    phase: v.union(v.literal("request"), v.literal("exchanging"), v.literal("complete")),
+    tokenExpiresAt: v.optional(v.number()),
+    ciphertextB64: v.string(),
+    ivB64: v.string(),
+    keyVersion: v.union(v.literal("v1"), v.literal("v2")),
+    expiresAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_state_hash", ["stateHash"])
+    .index("by_expiry", ["expiresAt"]),
+  bufferConnections: defineTable({
+    tenantId: v.string(),
+    connectionId: v.string(),
+    revision: v.number(),
+    ciphertextB64: v.optional(v.string()),
+    ivB64: v.optional(v.string()),
+    keyVersion: v.union(v.literal("v1"), v.literal("v2")),
+    status: v.union(
+      v.literal("connected"),
+      v.literal("reauth_required"),
+      v.literal("disconnected"),
+    ),
+    expiresAt: v.number(),
+    updatedAt: v.number(),
+    refreshLease: v.optional(v.string()),
+    refreshStartedAt: v.optional(v.number()),
+    organizationId: v.optional(v.string()),
+    organizationName: v.optional(v.string()),
+    channels: v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        service: v.string(),
+        available: v.boolean(),
+        boards: v.optional(v.array(v.object({ id: v.string(), name: v.string() }))),
+      }),
+    ),
+    selectedChannelIds: v.array(v.string()),
+    dailyReports: v.boolean(),
+    nextReportAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_report_due", ["dailyReports", "nextReportAt"]),
+  bufferPosts: defineTable({
+    tenantId: v.string(),
+    connectionId: v.string(),
+    organizationId: v.string(),
+    campaign: v.string(),
+    channelId: v.string(),
+    text: v.string(),
+    imageUrl: v.optional(v.string()),
+    mode: v.union(v.literal("addToQueue"), v.literal("customScheduled")),
+    videoUrl: v.optional(v.string()),
+    mediaTitle: v.optional(v.string()),
+    categoryId: v.optional(v.string()),
+    boardId: v.optional(v.string()),
+    isAiGenerated: v.optional(v.boolean()),
+    dueAt: v.optional(v.number()),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("approved"),
+      v.literal("submitting"),
+      v.literal("scheduled"),
+      v.literal("buffer_review"),
+      v.literal("sent"),
+      v.literal("failed"),
+      v.literal("unknown"),
+      v.literal("discarded"),
+    ),
+    bufferPostId: v.optional(v.string()),
+    failure: v.optional(v.string()),
+    approvedAt: v.optional(v.number()),
+  }).index("by_tenant", ["tenantId"]),
+  bufferReports: defineTable({
+    tenantId: v.string(),
+    connectionId: v.string(),
+    organizationId: v.string(),
+    channelIds: v.array(v.string()),
+    startAt: v.number(),
+    endAt: v.number(),
+    createdAt: v.number(),
+    metricsUpdatedAt: v.union(v.number(), v.null()),
+    metrics: v.array(
+      v.object({
+        type: v.string(),
+        name: v.string(),
+        value: v.number(),
+        unit: v.union(v.literal("count"), v.literal("percentage")),
+      }),
+    ),
+  }).index("by_tenant", ["tenantId"]),
   // Short-lived authentication deny-list; must survive the content erasure it enforces.
   authRevocations: defineTable({
     userId: v.string(),
@@ -1742,6 +1841,9 @@ export default defineSchema({
       v.literal("setRecipients"),
       v.literal("removeRecipient"),
       v.literal("setSubject"),
+      v.literal("readBufferChannels"),
+      v.literal("readBufferEngagement"),
+      v.literal("stageBufferPost"),
       v.literal("setMode"),
       v.literal("setSendTime"),
       v.literal("draftBody"),

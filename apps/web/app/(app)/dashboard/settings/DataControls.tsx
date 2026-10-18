@@ -37,7 +37,15 @@ const GOOGLE_CONSENT = "https://myaccount.google.com/permissions";
 /** Mirrors `tenantDelete.ts`'s local result shape. Per-provider truth is reported, never averaged
  *  into one boolean — Google revokes at the provider, Microsoft does not (GOVN-03). */
 type ProviderDeletionResult = {
-  provider: "google" | "microsoft";
+  provider:
+    | "google"
+    | "microsoft"
+    | "billing"
+    | "hubspot"
+    | "quickbooks"
+    | "stripe"
+    | "paypal"
+    | "buffer";
   localRowDeleted: boolean;
   revokedAtProvider: boolean;
   failure: boolean;
@@ -232,6 +240,10 @@ export function DataControls() {
               myapps.microsoft.com
             </a>{" "}
             (work or school). You are told below which outcome each account actually reached.
+          </p>
+          <p style={body}>
+            Buffer credentials are removed from Pikar. To revoke the Buffer grant itself, remove
+            Pikar in your Buffer account’s API settings.
           </p>
           <p style={body}>
             The audit archive is retained. It holds {AUDIT_ARCHIVE_STATEMENT} What stays is the

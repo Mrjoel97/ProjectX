@@ -8,6 +8,7 @@
  * @module
  */
 
+import type { ApiFromModules, FilterApi, FunctionReference } from "convex/server";
 import type * as agenda from "../agenda.js";
 import type * as agentSteps from "../agentSteps.js";
 import type * as aggregates from "../aggregates.js";
@@ -174,13 +175,19 @@ import type * as workflowPackEventLog from "../workflowPackEventLog.js";
 import type * as workflowPackOutcomes from "../workflowPackOutcomes.js";
 import type * as worm from "../worm.js";
 import type * as wormCursor from "../wormCursor.js";
+import type * as buffer from "../buffer.js";
+import type * as bufferActions from "../bufferActions.js";
+import type * as bufferTools from "../bufferTools.js";
+import type * as lib_bufferMcp from "../lib/bufferMcp.js";
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
-
+/**
+ * A utility for referencing Convex functions in your app's API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
 declare const fullApi: ApiFromModules<{
   "agenda": typeof agenda;
   "agentSteps": typeof agentSteps;
@@ -348,33 +355,13 @@ declare const fullApi: ApiFromModules<{
   "workflowPackOutcomes": typeof workflowPackOutcomes;
   "worm": typeof worm;
   "wormCursor": typeof wormCursor;
+  "buffer": typeof buffer;
+  "bufferActions": typeof bufferActions;
+  "bufferTools": typeof bufferTools;
+  "lib/bufferMcp": typeof lib_bufferMcp;
 }>;
-
-/**
- * A utility for referencing Convex functions in your app's public API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = api.myModule.myFunction;
- * ```
- */
-export declare const api: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "public">
->;
-
-/**
- * A utility for referencing Convex functions in your app's internal API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = internal.myModule.myFunction;
- * ```
- */
-export declare const internal: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "internal">
->;
+export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "public">>;
+export declare const internal: FilterApi<typeof fullApi, FunctionReference<any, "internal">>;
 
 export declare const components: {
   workflow: import("@convex-dev/workflow/_generated/component.js").ComponentApi<"workflow">;

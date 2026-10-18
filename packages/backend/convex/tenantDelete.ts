@@ -28,7 +28,15 @@ type ProviderDeletionResult = {
   /** 28.1-08 widened this to three and the connector arm to seven. BOTH this type AND
    *  `providerResultValidator` below must carry the same members — a value that satisfies one and
    *  not the other is a runtime rejection under a perfectly green typecheck. */
-  provider: "google" | "microsoft" | "billing" | "hubspot" | "quickbooks" | "stripe" | "paypal";
+  provider:
+    | "google"
+    | "microsoft"
+    | "billing"
+    | "hubspot"
+    | "quickbooks"
+    | "stripe"
+    | "paypal"
+    | "buffer";
   localRowDeleted: boolean;
   revokedAtProvider: boolean;
   failure: boolean;
@@ -78,6 +86,7 @@ const providerResultValidator = v.object({
     v.literal("quickbooks"),
     v.literal("stripe"),
     v.literal("paypal"),
+    v.literal("buffer"),
   ),
   localRowDeleted: v.boolean(),
   revokedAtProvider: v.boolean(),
@@ -225,7 +234,12 @@ export const authorizeTenantDeletion = internalMutation({
       .query("connectorConnections")
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
       .collect();
+    const buffer = await ctx.db
+      .query("bufferConnections")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .unique();
     return {
+      bufferHadRow: !!buffer,
       googleConnected: !!google,
       microsoftConnected: !!microsoft,
       billingActive: !!billing,
@@ -462,6 +476,7 @@ const authorizeTenantDeletionRef = makeFunctionReference<
   { tenantId: string; userId: Id<"users"> },
   {
     googleConnected: boolean;
+    bufferHadRow: boolean;
     microsoftConnected: boolean;
     billingActive: boolean;
     /** A THIRD copy of a shape that has to move together — the hand-written reference type does
@@ -686,6 +701,17 @@ export const deleteTenantData = tenantErasureAction({
           },
         ];
       }),
+      ...(connected.bufferHadRow
+        ? [
+            {
+              provider: "buffer" as const,
+              localRowDeleted: true,
+              revokedAtProvider: false,
+              failure: false,
+              revokeUpstream: "unsupported" as const,
+            },
+          ]
+        : []),
     ];
 
     await ctx.runMutation(internal.authRevocations.beginErasure, { userId: ctx.userId });

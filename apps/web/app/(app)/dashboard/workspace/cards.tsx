@@ -2300,6 +2300,9 @@ const VERB: Record<string, [running: string, done: string]> = {
   // lives in the card body, and BRAND §1 forbids claiming an action that did not happen.
   dispatchRevenue: ["Looking at your revenue…", "Reviewed your revenue"],
   readRevenueCrm: ["Reading your CRM…", "Read your CRM"],
+  readBufferChannels: ["Reading your Buffer channels…", "Read your Buffer channels"],
+  readBufferEngagement: ["Reading social engagement…", "Read social engagement"],
+  stageBufferPost: ["Preparing a campaign post…", "Campaign post ready for review"],
   readBusinessFinance: ["Reading your business finances…", "Read your business finances"],
   // STAGES a draft and sends nothing. REVN-06 stops at the existing human Approve gate, so this
   // must never read "Sent" or "Reminded" — the send happens on Approve, if at all.

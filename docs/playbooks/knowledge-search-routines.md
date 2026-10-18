@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — ADR-058 adds four explicitly inventoried Buffer modules, buffer.ts as a scheduler caller and one fixed Buffer snapshot/retention cron. The owner requested this selected-channel reporting workflow. The daily driver reads opt-in metrics and reconciles already-approved post status; it never approves or republishes posts. This is a narrow exception to the historical system-jobs-only inventory, not release of the deferred generic recurrence engine. Existing DST/standing-approval gates remain unchanged.
+
 > Last verified: 2026-10-17 — the closed module and scheduler inventories now explicitly include ragErasure.ts. Its internal native-erasure continuation observes existing deletion work, stops at 60 pending polls, and adds no user routine or recurring business action.
 
 > Last verified: 2026-10-15 — Pinned workflow run ordinals now count audit history through200-row query pages in an internal action, preserving the exact event filter while bounding each database transaction. New runs retain the existing governed action and audit behavior. Local53 pinned workflow tests pass.
