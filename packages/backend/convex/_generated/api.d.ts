@@ -8,15 +8,14 @@
  * @module
  */
 
-import type { ApiFromModules, FilterApi, FunctionReference } from "convex/server";
 import type * as agenda from "../agenda.js";
 import type * as agentSteps from "../agentSteps.js";
 import type * as aggregates from "../aggregates.js";
 import type * as approvals from "../approvals.js";
 import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
-import type * as authoringProbe from "../authoringProbe.js";
 import type * as authRevocations from "../authRevocations.js";
+import type * as authoringProbe from "../authoringProbe.js";
 import type * as billing from "../billing.js";
 import type * as billingApi from "../billingApi.js";
 import type * as billingLedger from "../billingLedger.js";
@@ -24,6 +23,9 @@ import type * as billingRollup from "../billingRollup.js";
 import type * as billingWebhook from "../billingWebhook.js";
 import type * as blueprint from "../blueprint.js";
 import type * as briefings from "../briefings.js";
+import type * as buffer from "../buffer.js";
+import type * as bufferActions from "../bufferActions.js";
+import type * as bufferTools from "../bufferTools.js";
 import type * as calendar from "../calendar.js";
 import type * as calendarComplete from "../calendarComplete.js";
 import type * as calendarEvents from "../calendarEvents.js";
@@ -73,6 +75,7 @@ import type * as knowledgeVaultDrive from "../knowledgeVaultDrive.js";
 import type * as lib_agenda from "../lib/agenda.js";
 import type * as lib_allowlist from "../lib/allowlist.js";
 import type * as lib_authEmail from "../lib/authEmail.js";
+import type * as lib_bufferMcp from "../lib/bufferMcp.js";
 import type * as lib_dispatchShared from "../lib/dispatchShared.js";
 import type * as lib_env from "../lib/env.js";
 import type * as lib_evalBudgetModel from "../lib/evalBudgetModel.js";
@@ -162,8 +165,8 @@ import type * as verticalData from "../verticalData.js";
 import type * as verticalEvalEvidence from "../verticalEvalEvidence.js";
 import type * as verticalEvalSources from "../verticalEvalSources.js";
 import type * as verticalPackBinding from "../verticalPackBinding.js";
-import type * as verticalPacks from "../verticalPacks.js";
 import type * as verticalPackTelemetry from "../verticalPackTelemetry.js";
+import type * as verticalPacks from "../verticalPacks.js";
 import type * as verticalVisual from "../verticalVisual.js";
 import type * as voice from "../voice.js";
 import type * as voiceControl from "../voiceControl.js";
@@ -175,19 +178,13 @@ import type * as workflowPackEventLog from "../workflowPackEventLog.js";
 import type * as workflowPackOutcomes from "../workflowPackOutcomes.js";
 import type * as worm from "../worm.js";
 import type * as wormCursor from "../wormCursor.js";
-import type * as buffer from "../buffer.js";
-import type * as bufferActions from "../bufferActions.js";
-import type * as bufferTools from "../bufferTools.js";
-import type * as lib_bufferMcp from "../lib/bufferMcp.js";
 
-/**
- * A utility for referencing Convex functions in your app's API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = api.myModule.myFunction;
- * ```
- */
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
+
 declare const fullApi: ApiFromModules<{
   "agenda": typeof agenda;
   "agentSteps": typeof agentSteps;
@@ -195,8 +192,8 @@ declare const fullApi: ApiFromModules<{
   "approvals": typeof approvals;
   "audit": typeof audit;
   "auth": typeof auth;
-  "authoringProbe": typeof authoringProbe;
   "authRevocations": typeof authRevocations;
+  "authoringProbe": typeof authoringProbe;
   "billing": typeof billing;
   "billingApi": typeof billingApi;
   "billingLedger": typeof billingLedger;
@@ -204,6 +201,9 @@ declare const fullApi: ApiFromModules<{
   "billingWebhook": typeof billingWebhook;
   "blueprint": typeof blueprint;
   "briefings": typeof briefings;
+  "buffer": typeof buffer;
+  "bufferActions": typeof bufferActions;
+  "bufferTools": typeof bufferTools;
   "calendar": typeof calendar;
   "calendarComplete": typeof calendarComplete;
   "calendarEvents": typeof calendarEvents;
@@ -253,6 +253,7 @@ declare const fullApi: ApiFromModules<{
   "lib/agenda": typeof lib_agenda;
   "lib/allowlist": typeof lib_allowlist;
   "lib/authEmail": typeof lib_authEmail;
+  "lib/bufferMcp": typeof lib_bufferMcp;
   "lib/dispatchShared": typeof lib_dispatchShared;
   "lib/env": typeof lib_env;
   "lib/evalBudgetModel": typeof lib_evalBudgetModel;
@@ -342,8 +343,8 @@ declare const fullApi: ApiFromModules<{
   "verticalEvalEvidence": typeof verticalEvalEvidence;
   "verticalEvalSources": typeof verticalEvalSources;
   "verticalPackBinding": typeof verticalPackBinding;
-  "verticalPacks": typeof verticalPacks;
   "verticalPackTelemetry": typeof verticalPackTelemetry;
+  "verticalPacks": typeof verticalPacks;
   "verticalVisual": typeof verticalVisual;
   "voice": typeof voice;
   "voiceControl": typeof voiceControl;
@@ -355,13 +356,33 @@ declare const fullApi: ApiFromModules<{
   "workflowPackOutcomes": typeof workflowPackOutcomes;
   "worm": typeof worm;
   "wormCursor": typeof wormCursor;
-  "buffer": typeof buffer;
-  "bufferActions": typeof bufferActions;
-  "bufferTools": typeof bufferTools;
-  "lib/bufferMcp": typeof lib_bufferMcp;
 }>;
-export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "public">>;
-export declare const internal: FilterApi<typeof fullApi, FunctionReference<any, "internal">>;
+
+/**
+ * A utility for referencing Convex functions in your app's public API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
+export declare const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+>;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
+export declare const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+>;
 
 export declare const components: {
   workflow: import("@convex-dev/workflow/_generated/component.js").ComponentApi<"workflow">;
