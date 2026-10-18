@@ -96,6 +96,7 @@ function SignUp() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy || !codeAccepted) return;
     setError(null);
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
@@ -185,100 +186,120 @@ function SignUp() {
         role="status"
         style={{ marginTop: "-0.4rem" }}
       >
-        {preflight === undefined
-          ? "Checking your invite…"
-          : codeAccepted
-            ? `Invite code recognised for ${preflight.invitedEmailMasked}. Your email has not been checked yet.`
-            : "That invite code isn't valid. It may have been used already, or mistyped."}
+        {!code.trim()
+          ? "Enter the invite code from your invitation."
+          : preflight === undefined
+            ? "Checking your invite…"
+            : codeAccepted
+              ? `Invite code recognised for ${preflight.invitedEmailMasked}. Your email has not been checked yet.`
+              : "This code can't start a new signup. Check your invitation, or continue an existing signup below."}
       </p>
 
-      {preflight?.valid === false && (
-        <p className="auth-switch">
-          If you already started signing up, <Link href="/signin">sign in</Link> with the same email
-          and password to continue. You may still need to verify your email.
-        </p>
+      {code.trim() && preflight?.valid === false && (
+        <section aria-label="Continue an existing signup">
+          <h3>Already started signing up?</h3>
+          <p className="auth-tagline">
+            Sign in with the exact email and password you used. If email verification is unfinished,
+            you can complete it there or send a new verification code. You do not need another
+            invitation to continue an existing account.
+          </p>
+          <Link href="/signin" className="auth-submit">
+            Continue to sign in <ArrowIcon />
+          </Link>
+          <p className="auth-switch">
+            Used Google or Microsoft? Choose the same provider on the sign-in page.
+          </p>
+          <p className="auth-switch">
+            Haven't created an account? Check the code above or{" "}
+            <Link href="/signup">request access</Link>.
+          </p>
+        </section>
       )}
 
-      <p className="auth-tagline">
-        Enter the exact email address that received your invitation, including any +suffix.
-        Recognising the code does not confirm that the email you enter matches it.
-      </p>
+      {codeAccepted && (
+        <>
+          <p className="auth-tagline">
+            Enter the exact email address that received your invitation, including any +suffix.
+            Recognising the code does not confirm that the email you enter matches it.
+          </p>
 
-      <form onSubmit={onSubmit}>
-        <TextField
-          label="Full Name"
-          icon={<UserIcon />}
-          value={name}
-          onChange={setName}
-          placeholder="John Doe"
-          autoComplete="name"
-          required
-        />
-        <TextField
-          label="Email Address"
-          icon={<MailIcon />}
-          type="email"
-          value={email}
-          onChange={setEmail}
-          placeholder="name@company.com"
-          autoComplete="email"
-          required
-        />
-        <PasswordField
-          label="Password"
-          icon={<LockIcon />}
-          value={password}
-          onChange={setPassword}
-          placeholder="Create a password"
-          autoComplete="new-password"
-        />
-        <PasswordField
-          label="Confirm Password"
-          icon={<CheckCircleIcon />}
-          value={confirm}
-          onChange={setConfirm}
-          placeholder="Confirm password"
-          autoComplete="new-password"
-        />
-        {/* Disabled until preflight accepts, so an invited user is not sent through a signup that
+          <form onSubmit={onSubmit}>
+            <TextField
+              label="Full Name"
+              icon={<UserIcon />}
+              value={name}
+              onChange={setName}
+              placeholder="John Doe"
+              autoComplete="name"
+              required
+            />
+            <TextField
+              label="Email Address"
+              icon={<MailIcon />}
+              type="email"
+              value={email}
+              onChange={setEmail}
+              placeholder="name@company.com"
+              autoComplete="email"
+              required
+            />
+            <PasswordField
+              label="Password"
+              icon={<LockIcon />}
+              value={password}
+              onChange={setPassword}
+              placeholder="Create a password"
+              autoComplete="new-password"
+            />
+            <PasswordField
+              label="Confirm Password"
+              icon={<CheckCircleIcon />}
+              value={confirm}
+              onChange={setConfirm}
+              placeholder="Confirm password"
+              autoComplete="new-password"
+            />
+            {/* Disabled until preflight accepts, so an invited user is not sent through a signup that
             cannot succeed. The server still refuses independently — this is courtesy, not a gate. */}
-        <button type="submit" className="auth-submit" disabled={busy || !codeAccepted}>
-          {busy ? "Creating account…" : "Create Account"}
-          {!busy && <ArrowIcon />}
-        </button>
-      </form>
+            <button type="submit" className="auth-submit" disabled={busy || !codeAccepted}>
+              {busy ? "Creating account…" : "Create Account"}
+              {!busy && <ArrowIcon />}
+            </button>
+          </form>
 
-      <div className="auth-or">OR</div>
+          <div className="auth-or">OR</div>
 
-      {providers?.google !== false && (
-        <button
-          type="button"
-          className="auth-google"
-          disabled={!codeAccepted || busy}
-          onClick={() => void onOAuth("google", "Google")}
-        >
-          <GoogleIcon /> {busy ? "Connecting…" : "Continue with Google"}
-        </button>
-      )}
+          {providers?.google !== false && (
+            <button
+              type="button"
+              className="auth-google"
+              disabled={!codeAccepted || busy}
+              onClick={() => void onOAuth("google", "Google")}
+            >
+              <GoogleIcon /> {busy ? "Connecting…" : "Continue with Google"}
+            </button>
+          )}
 
-      {/* Rendered only where the deployment actually holds Entra credentials. A button that
+          {/* Rendered only where the deployment actually holds Entra credentials. A button that
           dead-ends at the provider is worse than no button — see beta-admission.md. */}
-      {providers?.microsoft === true && (
-        <button
-          type="button"
-          className="auth-google"
-          disabled={!codeAccepted || busy}
-          style={{ marginTop: "0.6rem" }}
-          onClick={() => void onOAuth("microsoft-entra-id", "Microsoft")}
-        >
-          {busy ? "Connecting…" : "Continue with Microsoft"}
-        </button>
-      )}
+          {providers?.microsoft === true && (
+            <button
+              type="button"
+              className="auth-google"
+              disabled={!codeAccepted || busy}
+              style={{ marginTop: "0.6rem" }}
+              onClick={() => void onOAuth("microsoft-entra-id", "Microsoft")}
+            >
+              {busy ? "Connecting…" : "Continue with Microsoft"}
+            </button>
+          )}
 
-      <p className="auth-switch" style={{ marginBottom: "0.2rem" }}>
-        Sign in with the same provider you used at signup — accounts aren't linked across providers
-        during the beta.
-      </p>
+          <p className="auth-switch" style={{ marginBottom: "0.2rem" }}>
+            Sign in with the same provider you used at signup — accounts aren't linked across
+            providers during the beta.
+          </p>
+        </>
+      )}
       <p className="auth-switch">
         Already have an account? <Link href="/signin">Sign in</Link>
       </p>
