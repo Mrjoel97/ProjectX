@@ -9,16 +9,18 @@ import { LockIcon, MailIcon } from "./icons";
 export function PasswordChallenge({
   mode,
   email: initialEmail,
+  codeRequested = true,
   onBack,
 }: {
   mode: "verify" | "reset";
   email: string;
+  codeRequested?: boolean;
   onBack: () => void;
 }) {
   const { signIn } = useAuthActions();
   const router = useRouter();
   const [email, setEmail] = useState(initialEmail);
-  const [requested, setRequested] = useState(mode === "verify");
+  const [requested, setRequested] = useState(mode === "verify" && codeRequested);
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -70,8 +72,13 @@ export function PasswordChallenge({
       </h2>
       <p className="auth-tagline" role="status">
         {requested
-          ? "If your account is eligible, a code has been sent. It expires in 15 minutes."
+          ? `If this address has an eligible password account, check ${email} for your ${mode === "verify" ? "verification" : "password reset"} email, including Spam and Promotions. The code expires in 15 minutes. If it does not arrive, wait a few minutes and request a new code.`
           : "Enter the email address you use to sign in."}
+      </p>
+      <p className="auth-tagline">
+        {mode === "verify"
+          ? "The verification code goes to your own email inbox, not the Pikar AI owner's inbox. It is different from your invitation code."
+          : "The reset code goes to the email address of your password account."}
       </p>
       {error && (
         <p className="auth-error" role="alert">
@@ -87,6 +94,7 @@ export function PasswordChallenge({
           onChange={(value) => {
             setEmail(value);
             setCode("");
+            setRequested(false);
           }}
           autoComplete="email"
           required
@@ -140,7 +148,7 @@ export function PasswordChallenge({
         </button>
       )}
       <button className="auth-google" type="button" disabled={busy} onClick={onBack}>
-        Back to sign in
+        Back
       </button>
     </div>
   );

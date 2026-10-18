@@ -57,6 +57,7 @@ function SignUp() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [challenge, setChallenge] = useState<"verify" | "reset" | null>(null);
+  const [codeRequested, setCodeRequested] = useState(false);
 
   const providers = useQuery(api.invites.authProviders, {});
   // Skip the round trip until there is something worth checking.
@@ -119,6 +120,8 @@ function SignUp() {
       });
       if (!result.signingIn) {
         setPassword("");
+        setConfirm("");
+        setCodeRequested(true);
         setChallenge("verify");
         setBusy(false);
         return;
@@ -139,6 +142,7 @@ function SignUp() {
       <PasswordChallenge
         mode={challenge}
         email={email}
+        codeRequested={codeRequested}
         onBack={() => {
           setChallenge(null);
           setBusy(false);
@@ -206,6 +210,19 @@ function SignUp() {
           <Link href="/signin" className="auth-submit">
             Continue to sign in <ArrowIcon />
           </Link>
+          <button
+            type="button"
+            className="auth-google"
+            disabled={busy}
+            onClick={() => {
+              setPassword("");
+              setConfirm("");
+              setCodeRequested(false);
+              setChallenge("verify");
+            }}
+          >
+            Finish email verification
+          </button>
           <p className="auth-switch">
             Used Google or Microsoft? Choose the same provider on the sign-in page.
           </p>
@@ -221,6 +238,10 @@ function SignUp() {
           <p className="auth-tagline">
             Enter the exact email address that received your invitation, including any +suffix.
             Recognising the code does not confirm that the email you enter matches it.
+          </p>
+          <p className="auth-tagline">
+            After creating your account, check that email inbox for a separate verification code.
+            Your invitation code is only for starting signup.
           </p>
 
           <form onSubmit={onSubmit}>

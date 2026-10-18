@@ -2,6 +2,7 @@
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, test, vi } from "vitest";
+import SignInRoute from "../signin/page";
 import SignUpRoute from "./page";
 
 const mocks = vi.hoisted(() => ({ signIn: vi.fn(), push: vi.fn(), valid: true }));
@@ -54,7 +55,10 @@ test("unavailable invites offer continuation without a blocked signup form or OA
     );
     expect(container.querySelector("form")).toBeNull();
     expect(container.querySelector('input[aria-label="Password"]')).toBeNull();
-    expect(container.querySelector("button.auth-google")).toBeNull();
+    const recovery = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Finish email verification",
+    );
+    expect(recovery).toBeDefined();
     expect(mocks.signIn).not.toHaveBeenCalled();
 
     // A corrected live code restores the normal signup path; no admission is bypassed.
@@ -64,6 +68,55 @@ test("unavailable invites offer continuation without a blocked signup form or OA
     expect(container.querySelector('input[aria-label="Password"]')).not.toBeNull();
     expect(container.querySelector('section[aria-label="Continue an existing signup"]')).toBeNull();
     expect(mocks.signIn).not.toHaveBeenCalled();
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
+
+test.each([
+  ["signup", SignUpRoute],
+  ["signin", SignInRoute],
+] as const)("%s can request email verification without creating another account", async (_route, Page) => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  mocks.valid = false;
+  mocks.signIn.mockResolvedValue({ signingIn: false });
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(createElement(Page)));
+    await act(async () =>
+      [...container.querySelectorAll("button")]
+        .find((b) => b.textContent === "Finish email verification")
+        ?.click(),
+    );
+    expect(container.textContent).toContain("Verify your email");
+    expect(container.textContent).toContain("not the Pikar AI owner's inbox");
+    expect(container.querySelector('input[aria-label="Verification code"]')).toBeNull();
+    const input = container.querySelector('input[aria-label="Email address"]') as HTMLInputElement;
+    await act(async () => {
+      input.value = "tester@example.test";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      container
+        .querySelector("form")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(mocks.signIn).toHaveBeenCalledExactlyOnceWith("password", {
+      email: "tester@example.test",
+      flow: "email-verification",
+    });
+    expect(container.textContent).toContain("check tester@example.test");
+    expect(container.querySelector('input[aria-label="Verification code"]')).not.toBeNull();
+    const email = container.querySelector('input[aria-label="Email address"]') as HTMLInputElement;
+    await act(async () => {
+      email.value = "another@example.test";
+      email.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(container.querySelector('input[aria-label="Verification code"]')).toBeNull();
+    expect(container.textContent).toContain("Send code");
   } finally {
     await act(async () => root.unmount());
     container.remove();

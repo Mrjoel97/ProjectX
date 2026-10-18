@@ -226,6 +226,48 @@ describe("waitlist capture and owner-gated issuance", () => {
 });
 
 describe("public preflight", () => {
+  test("issued invitations persist for the owner and track verification without reopening codes", async () => {
+    const h = await harness();
+    const invite = await approvedInvite(h, "resume@example.com");
+    const before = await identityRows(h.t);
+    expect(await h.asOwner.query(api.invites.pending, {})).toEqual([]);
+    expect(await h.asOwner.query(api.invites.issued, {})).toEqual([
+      {
+        inviteId: invite.inviteId,
+        email: "resume@example.com",
+        code: invite.code,
+        status: "ready",
+      },
+    ]);
+    expect(await identityRows(h.t)).toEqual(before);
+    await expect(h.t.query(api.invites.issued, {})).rejects.toThrow();
+    await expect(h.asStranger.query(api.invites.issued, {})).rejects.toThrow(/OWNER_REQUIRED/);
+    const userId = await admit(h.t, {
+      type: "credentials",
+      provider: passwordProvider,
+      profile: { email: "resume@example.com", inviteCode: invite.code },
+    });
+    expect(await h.asOwner.query(api.invites.issued, {})).toEqual([
+      {
+        inviteId: invite.inviteId,
+        email: "resume@example.com",
+        code: null,
+        status: "verification_pending",
+      },
+    ]);
+    await h.t.run((ctx) => ctx.db.patch(userId, { emailVerificationTime: Date.now() }));
+    expect((await h.asOwner.query(api.invites.issued, {}))[0]?.status).toBe("registered");
+    expect((await h.t.query(api.invites.preflight, { code: invite.code })).valid).toBe(false);
+    await h.t.run((ctx) =>
+      ctx.db.patch(invite.inviteId, {
+        email: "",
+        redeemedUserId: undefined,
+        redeemedSubject: undefined,
+      }),
+    );
+    expect(await h.asOwner.query(api.invites.issued, {})).toEqual([]);
+  });
+
   test("a live code reports valid with a masked address and nothing else", async () => {
     const h = await harness();
     const invite = await approvedInvite(h, "preflight@example.com");
