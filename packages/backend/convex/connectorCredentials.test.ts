@@ -506,6 +506,11 @@ describe("revocation records what Pikar actually did, not what it wishes it did"
   test("a FAILED upstream attempt is distinguishable from both, so a retry is offerable", async () => {
     const h = await harness();
     await connect(h, h.tenantA);
+    // A legitimate timestamp can contain the provider's status-code digits (CI regression).
+    const connectedAt = 1792333503410;
+    const [connection] = await connectionRows(h);
+    if (!connection) throw new Error("Expected the test connection");
+    await h.t.run((ctx) => ctx.db.patch(connection._id, { connectedAt }));
     await h.t.mutation(internal.connectorCredentials.recordRevocation, {
       ...scopeArgs(h.tenantA),
       upstream: "attempted_failed",
@@ -513,8 +518,19 @@ describe("revocation records what Pikar actually did, not what it wishes it did"
     });
     const [status] = await h.asA.query(api.connectorCredentials.connectorStatuses, {});
     expect(status?.revocation?.upstream).toBe("attempted_failed");
-    // The provider's status CODE is operator detail; it must not ride out to the browser.
-    expect(JSON.stringify(status)).not.toContain("503");
+    // Check the exact client-safe contract, including nested keys; a substring scan also
+    // matches innocent timestamps. Extra provider detail must still fail this assertion.
+    expect(status).toEqual({
+      provider: "quickbooks",
+      environment: "production",
+      status: "revoked",
+      connectedAt,
+      accessExpiresAt: null,
+      lastReadAt: null,
+      lastFailureClass: null,
+      lastFailureAt: null,
+      revocation: { upstream: "attempted_failed", residualAccessUntil: null },
+    });
   });
 
   test("HubSpot's unproven cascade is expressible: the grant may outlive the revoke", async () => {
