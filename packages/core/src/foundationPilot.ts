@@ -1,6 +1,7 @@
 /** Deployment-operator-only admission for one native test tenant. Global release
  * flags remain independent; this grant never admits general/document voice. */
-export const FOUNDATION_PILOT_MAX_MS = 15 * 60_000;
+// Leave time to open the app before starting a full fifteen-minute voice session.
+export const FOUNDATION_PILOT_MAX_MS = 30 * 60_000;
 
 export function foundationPilotExpiresAt(
   raw: string | undefined,

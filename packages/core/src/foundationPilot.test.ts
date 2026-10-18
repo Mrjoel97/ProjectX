@@ -5,6 +5,13 @@ const tenantId = "j57aaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const now = 1_800_000_000_000;
 const grant = { tenantId, issuedAt: now, expiresAt: now + FOUNDATION_PILOT_MAX_MS };
 
+test("the test window includes setup time before a full fifteen-minute call", () => {
+  expect(FOUNDATION_PILOT_MAX_MS).toBe(30 * 60_000);
+  expect(foundationPilotExpiresAt(JSON.stringify(grant), tenantId, now + 8 * 60_000)).toBe(
+    grant.expiresAt,
+  );
+});
+
 test("only the exact tenant is admitted during the bounded interval", () => {
   const raw = JSON.stringify(grant);
   expect(foundationPilotExpiresAt(raw, tenantId, now)).toBe(grant.expiresAt);

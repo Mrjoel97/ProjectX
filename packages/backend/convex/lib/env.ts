@@ -38,7 +38,7 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     name: "NATIVE_ONBOARDING_PILOT",
     tier: "feature",
     whatBreaks:
-      "Optional operator-issued JSON grant for one native test tenant, valid for at most fifteen minutes; malformed or expired grants never open onboarding or live voice.",
+      "Owner-only onboarding JSON grant, valid for at most thirty minutes. Voice needs fifteen minutes remaining. Invalid or expired grants never admit onboarding.",
   },
   {
     name: "VOICE_SERVER_CONTROL_VERIFIED",
