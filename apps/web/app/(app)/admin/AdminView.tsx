@@ -108,7 +108,7 @@ export function AdminView() {
   // The live code is held in memory for THIS session only, so the owner can copy the link. It is
   // never written to a log, an audit payload, or anywhere else (CLAUDE.md §4). `approve` is
   // replay-safe, so re-approving is how you get it back rather than persisting it here.
-  const [issued, setIssued] = useState<Record<string, string>>({});
+  const [issued, setIssued] = useState<Record<string, { code: string; email: string }>>({});
   const [copied, setCopied] = useState<string | null>(null);
 
   async function onApprove(waitlistId: PendingRow["waitlistId"]) {
@@ -116,7 +116,10 @@ export function AdminView() {
     setError(null);
     try {
       const invite = await approve({ waitlistId });
-      setIssued((prior) => ({ ...prior, [waitlistId]: invite.code }));
+      setIssued((prior) => ({
+        ...prior,
+        [waitlistId]: { code: invite.code, email: invite.email },
+      }));
     } catch {
       setError("Could not approve that request. Reload and try again.");
     }
@@ -161,6 +164,34 @@ export function AdminView() {
         <p className="caps-label" style={{ margin: 0 }}>
           Beta waitlist
         </p>
+        <p style={{ margin: 0, color: "var(--ink-2)" }}>
+          Each tester requests access at <Link href="/signup">/signup</Link>. Approve their request
+          here, then share their individual invite link with that same email address.
+        </p>
+
+        {/* Approval removes the request from the reactive pending query. Keep the returned
+            handoff separate so the owner can still copy it after that row disappears. */}
+        {Object.entries(issued).map(([id, invite]) => (
+          <div key={id} style={{ display: "grid", gap: "0.4rem" }} role="status">
+            <strong>Invitation ready for {invite.email}</strong>
+            <code style={{ wordBreak: "break-all", color: "var(--ink)" }}>
+              /signup?invite={invite.code}
+            </code>
+            <div>
+              <button
+                type="button"
+                className="vault-button"
+                onClick={() => void onCopy(invite.code)}
+              >
+                {copied === invite.code ? "Copied" : "Copy invite link"}
+              </button>
+            </div>
+            <p style={{ margin: 0, color: "var(--ink-2)", fontSize: "0.85rem" }}>
+              Send this to {invite.email}. It only works for that address, and only once. Copy it
+              before leaving this page.
+            </p>
+          </div>
+        ))}
 
         {pending === undefined && <p style={{ margin: 0, color: "var(--ink-2)" }}>Loading…</p>}
 
@@ -171,7 +202,7 @@ export function AdminView() {
         )}
 
         {pending?.map((row) => {
-          const code = issued[row.waitlistId];
+          if (issued[row.waitlistId]) return null;
           return (
             <div
               key={row.waitlistId}
@@ -193,36 +224,16 @@ export function AdminView() {
                 </p>
               )}
 
-              {code ? (
-                <div style={{ display: "grid", gap: "0.4rem" }}>
-                  <code style={{ wordBreak: "break-all", color: "var(--ink)" }}>
-                    /signup?invite={code}
-                  </code>
-                  <div>
-                    <button
-                      type="button"
-                      className="vault-button"
-                      onClick={() => void onCopy(code)}
-                    >
-                      {copied === code ? "Copied" : "Copy invite link"}
-                    </button>
-                  </div>
-                  <p style={{ margin: 0, color: "var(--ink-2)", fontSize: "0.85rem" }}>
-                    Send this to {row.email}. It only works for that address, and only once.
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <button
-                    type="button"
-                    className="vault-button"
-                    disabled={busy === row.waitlistId}
-                    onClick={() => void onApprove(row.waitlistId)}
-                  >
-                    {busy === row.waitlistId ? "Approving…" : "Approve & mint invite"}
-                  </button>
-                </div>
-              )}
+              <div>
+                <button
+                  type="button"
+                  className="vault-button"
+                  disabled={busy === row.waitlistId}
+                  onClick={() => void onApprove(row.waitlistId)}
+                >
+                  {busy === row.waitlistId ? "Approving…" : "Approve & mint invite"}
+                </button>
+              </div>
             </div>
           );
         })}
