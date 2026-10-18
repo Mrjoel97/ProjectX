@@ -1,5 +1,17 @@
 # Current operations guide
 
+## Latest onboarding status — 2026-10-18
+
+This update supersedes the older current-status paragraphs below. Production runtime is `f921de951b77c3a57b378fa86be81f5e48587199`, with [main CI 39131026130](https://github.com/Mrjoel97/ProjectX/actions/runs/39131026130) and [release 39131345607](https://github.com/Mrjoel97/ProjectX/actions/runs/39131345607) passed. Normal voice remains capped at 15 minutes. Onboarding voice avoids redundant coaching-model work and requires a full 15 minutes remaining in its owner-only 30-minute pilot before connecting.
+
+The owner now confirms working production onboarding voice and review/approval of all six business documents. Read-only browser inspection independently verified approved revision 17, six Ready published sources and six Ready foundational references in the confirmed Business Blueprint. Interview revision 18 is a later saved draft and is not implicitly approved. The remaining real-business approval gate is closed for revision 17 only.
+
+For the latest retry, the owner authorized up to $5 extra AI usage today. An audited one-time 417-cent allowance restored their remaining daily budget from 83 to 500 cents without clearing reservations, changing recorded spend or altering the original window. It expires October 18 at 18:54:14.950 UTC (21:54 EAT). Other users and deployment budgets were unchanged. Subsequent failures at 17:06 EAT were `VOICE_PILOT_WINDOW_TOO_SHORT`, not budget failures; admission was renewed and the owner reported a successful retry.
+
+Billing and global foundation admission remain disabled. The temporary owner pilot expires automatically; a browser refresh does not renew it. Keep the current-revision retrieval trace, actual October 24 retention observation, provider reconciliation, in-flight erasure, upload/cancellation and remaining recovery/legal gates open as detailed in [release readiness](release-readiness.md). This acceptance record does not authorize broader feature changes or approval of later drafts.
+
+## Historical production baseline — 2026-10-17
+
 Source inspection: 2026-10-15, starting revision `53d96a263f055e14bbb1c6a1a35c6d7bb58c9652`.
 Current production runtime revision `d95168841ec5e698cd1b6f5b690c76532471aa27` deployed through [release 39057023401](https://github.com/Mrjoel97/ProjectX/actions/runs/39057023401), following [main CI 39056721598](https://github.com/Mrjoel97/ProjectX/actions/runs/39056721598). Normal controlled voice admission is enabled with the 15-minute cap. The bounded owner onboarding pilot expired and its grant was removed; global foundation admission and commercial billing remain disabled. During that pilot, the owner reported production speaking, interruption, reconnect, refresh, typed fallback and correction of a saved answer all worked. Server evidence records one controlled onboarding session, seven trusted responses/reservations, confirmed provider termination, zero unresolved response reservations, 23 cents actual usage, and the initial 100-cent hold retained. Six owned documents were ready at foundation revision 2 and `publishedRevision` 2; the owner has not reviewed all six, so human approval remains open. See [release readiness](release-readiness.md) for all remaining gates and limits.
 This guide is the current entry point; dated playbook notes and ADRs explain historical decisions.
