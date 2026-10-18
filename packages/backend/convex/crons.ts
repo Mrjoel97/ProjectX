@@ -93,4 +93,6 @@ crons.daily(
   {},
 );
 crons.interval("voice-transient-retention", { hours: 1 }, internal.voice.sweepTransientControl, {});
+// Claims due opt-in reports in small batches; Buffer refresh and metrics reads remain tenant-scoped.
+crons.interval("buffer-engagement-reports", { minutes: 15 }, internal.buffer.tickReports, {});
 export default crons;

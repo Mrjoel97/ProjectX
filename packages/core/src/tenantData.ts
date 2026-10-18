@@ -57,6 +57,10 @@ export const TENANT_TABLE_CLASSIFICATION = {
   telemetry: "tenant_owned",
   notifications: "tenant_owned",
   gmailTokens: "tenant_credential",
+  bufferConnections: "tenant_credential",
+  bufferOAuthStates: "tenant_credential",
+  bufferPosts: "tenant_owned",
+  bufferReports: "tenant_owned",
   microsoftCalendarTokens: "tenant_credential",
   // One deployment-wide guardrail row; tenant spend remains in spendEvents/spendCoverage.
   guardrailConfig: "global",

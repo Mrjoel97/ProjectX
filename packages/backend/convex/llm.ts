@@ -133,6 +133,7 @@ import type { GenericActionCtx } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
+import { buildBufferTools } from "./bufferTools";
 import {
   applyGmailCapability,
   GMAIL_CONNECTION_REQUIRED_REPLY,
@@ -2684,6 +2685,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
     ...(grants.invoiceReminderStage
       ? buildInvoiceReminderTool(ctx, tenantId, planId, evalRevenueFixtureId)
       : ({} as ReturnType<typeof buildInvoiceReminderTool>)),
+    ...(grants.dispatch && toolCtx.threadId && toolCtx.rootRequestId && !toolCtx.evalContext
+      ? buildBufferTools(ctx, tenantId)
+      : ({} as ReturnType<typeof buildBufferTools>)),
     setSubject: tool({
       description: "Set the email subject line.",
       inputSchema: jsonSchema<{ subject: string }>({

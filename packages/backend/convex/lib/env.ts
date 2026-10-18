@@ -154,10 +154,14 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
   // to connect, loudly (`requireHubSpotConfig` throws naming the variable). There is deliberately no
   // development fallback — `p25-no-dev-fallback`.
   //
-  // The credential ENCRYPTION key (`CONNECTOR_CREDENTIAL_KEY_V1`/`_V2`) is NOT here because it is
-  // read through a computed `process.env[name]` in `connectorCredentials.requireCredentialKey`, so
-  // the literal scan in `env.test.ts` cannot see it. Its operations live in
-  // `docs/playbooks/revenue-connectors.md`.
+  // Buffer's safe readiness projection reads V1 directly; V2 remains an optional rotation key
+  // resolved on demand by connectorCredentials.requireCredentialKey. Never project either value.
+  {
+    name: "CONNECTOR_CREDENTIAL_KEY_V1",
+    tier: "feature",
+    whatBreaks:
+      "Buffer authorization and encrypted connector credential storage require the V1 AES-GCM key. Reconnection cannot repair a missing encryption key.",
+  },
   {
     name: "HUBSPOT_OAUTH_CLIENT_ID",
     tier: "feature",

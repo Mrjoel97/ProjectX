@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — The credential-envelope scope additionally accepts the standalone Buffer provider for AES-GCM tenant/connection/provider binding. The revenue Provider union, provider gates, entities and four connector lanes remain unchanged. Buffer uses separate tables and OAuth/MCP lifecycle; see buffer.md and ADR-058.
+
 > Last verified: 2026-10-15 — provider decision marker parsing accepts LF and CRLF; offline self-tests explicitly exercise both. Decision vocabulary, evidence rules, live gates and release seals are unchanged.
 
 # Playbook: Revenue connectors - shared lifecycle, gates and release semantics

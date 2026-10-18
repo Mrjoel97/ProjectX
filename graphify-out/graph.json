@@ -111185,6 +111185,46 @@
       "id": "packages_backend_convex_schema_foundationrevisions_table",
       "community": 460,
       "norm_label": "foundationRevisions (table)"
+    },
+    {
+      "label": "bufferOAuthStates (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L193",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_bufferoauthstates_table",
+      "community": 460,
+      "norm_label": "bufferOAuthStates (table)"
+    },
+    {
+      "label": "bufferConnections (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L199",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_bufferconnections_table",
+      "community": 460,
+      "norm_label": "bufferConnections (table)"
+    },
+    {
+      "label": "bufferPosts (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L211",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_bufferposts_table",
+      "community": 460,
+      "norm_label": "bufferPosts (table)"
+    },
+    {
+      "label": "bufferReports (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L221",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_bufferreports_table",
+      "community": 460,
+      "norm_label": "bufferReports (table)"
     }
   ],
   "links": [
@@ -305871,6 +305911,57 @@
       "confidence_score": 1,
       "source": "apps_web_app_app_admin_adminview",
       "target": "packages_backend_convex_invites"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L193",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_bufferoauthstates_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L199",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_bufferconnections_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L211",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_bufferposts_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L221",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_bufferreports_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/tenantDelete.ts",
+      "source_location": "L229",
+      "weight": 1,
+      "context": "db_read",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_tenantdelete",
+      "target": "packages_backend_convex_schema_bufferconnections_table"
     }
   ],
   "hyperedges": [],

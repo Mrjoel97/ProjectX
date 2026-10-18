@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Owner-authorized Buffer integration adds account OAuth, selected-channel campaign drafts, explicit human scheduling approval and thirty-day engagement snapshots. This supersedes the historical no-social-publishing ceiling only for the Buffer path. Direct channel blockers, funnels and Gmail controls remain unchanged. See buffer.md and ADR-058; hosted Pikar acceptance is pending.
+
 # Playbook: Marketing and aggregate funnel links
 
 > Last verified: 2026-09-12 — Phase 31-03 public GET transport, HEAD rejection and paginated artifact picker; UI and live acceptance remain pending.

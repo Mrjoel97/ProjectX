@@ -111,6 +111,9 @@ const CONVEX_MODULES = [
   "billingWebhook.ts",
   "blueprint.ts",
   "briefings.ts",
+  "buffer.ts",
+  "bufferActions.ts",
+  "bufferTools.ts",
   "calendar.ts",
   "calendarComplete.ts",
   "calendarEvents.ts",
@@ -161,6 +164,7 @@ const CONVEX_MODULES = [
   "lib/agenda.ts",
   "lib/allowlist.ts",
   "lib/authEmail.ts",
+  "lib/bufferMcp.ts",
   "lib/dispatchShared.ts",
   "lib/env.ts",
   "lib/evalBudgetModel.ts",
@@ -281,6 +285,8 @@ const CONVEX_MODULES = [
 // and publication ingestion; bounded graph cleanup continuation. None adds user routines.
 const SCHEDULER_CALL_SITES = [
   "billingRollup.ts",
+  // ADR-058: explicitly approved Buffer writes and opt-in daily metric reads only.
+  "buffer.ts",
   "cockpit.ts",
   "delivery.ts",
   // 42-03: `startTeamRun` schedules one durable starter per fan-out worker. It is the ONE place a
@@ -383,7 +389,7 @@ describe("the scheduling primitives have a CLOSED, PINNED call-site set", () => 
     }
   });
 
-  test("crons.ts holds only global system jobs, by pinned name", () => {
+  test("crons.ts holds the named system jobs and opt-in Buffer snapshot driver", () => {
     const crons = code.find((f) => f.file === "crons.ts");
     expect(crons, "crons.ts is not in the corpus").toBeDefined();
     // POSITIVE CONTROL: this really is the cron registry and it really does register jobs.
@@ -406,6 +412,8 @@ describe("the scheduling primitives have a CLOSED, PINNED call-site set", () => 
       "billing-invoice-rollup",
       // Privacy retention of transient provider control state; never starts user work.
       "voice-transient-retention",
+      // Owner-authorized, selected-channel reporting; it never approves or repeats posts.
+      "buffer-engagement-reports",
     ]);
   });
 });

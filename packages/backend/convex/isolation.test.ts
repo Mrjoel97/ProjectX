@@ -160,6 +160,12 @@ function indexesOf(table: string): { indexDescriptor: string; fields: string[] }
  * Adding an index without adding it here fails the suite. That is the whole mechanism.
  */
 const NON_TENANT_LEADING: Record<string, string> = {
+  "bufferOAuthStates.by_state_hash":
+    "internal one-use OAuth callback/receipt lookup; activation requires the initiating authenticated tenant",
+  "bufferOAuthStates.by_expiry":
+    "internal bounded retention deletes expired OAuth requests and pending grants only",
+  "bufferConnections.by_report_due":
+    "internal bounded opt-in report scheduler only; provider reads recheck tenant erasure fences",
   "uploadReceipts.by_ticket":
     "internal one-use capability resolution; issuer binds tenant before URL leaves the server",
   "uploadReceipts.by_storage":

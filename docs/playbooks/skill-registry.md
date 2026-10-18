@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Regenerated the exact golden evaluator revision and manifest after adding Buffer runtime/schema behavior. The 46-case corpus and casesHash remain unchanged. Older live evidence does not qualify this source revision; no paid evaluation, passing receipt, prompt activation or rollback is implied.
+
 > Last verified: 2026-10-17 — regenerated the golden evaluator revision after generated-file lifecycle ownership changed. All 46 cases and their case hashes remain unchanged. Prior live receipts do not qualify this revision; no provider evaluation ran.
 
 > Last verified: 2026-10-15 — Optimizer eligibility samples the newest1000 feedback rows and returns truncated. The token-authenticated trajectory export returns100-row cursor pages; scripts/skillopt-export.mjs follows cursors for the CI dataset and rejects repeated/invalid cursors. Registry maximum-version reads are indexed; operator inspect counts disclose their1000-row cap.

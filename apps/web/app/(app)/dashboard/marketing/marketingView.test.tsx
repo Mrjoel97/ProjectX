@@ -19,6 +19,15 @@ const mocks = vi.hoisted(() => ({
 vi.mock("convex/react", () => ({
   useQuery: (api: unknown) => {
     const name = getFunctionName(api as never);
+    if (name === "buffer:status")
+      return {
+        configured: true,
+        connected: false,
+        status: "disconnected",
+        channels: [],
+        selectedChannelIds: [],
+      };
+    if (name === "buffer:posts" || name === "buffer:reports") return [];
     if (name === "funnels:list") {
       if (mocks.queryFailure) throw new Error("offline");
       return { items: [], hasMore: false };
@@ -30,6 +39,7 @@ vi.mock("convex/react", () => ({
     status: "CanLoadMore",
     loadMore: mocks.loadMore,
   }),
+  useAction: () => mocks.record,
   useMutation: (api: unknown) => {
     const name = getFunctionName(api as never);
     return name === "funnels:create"

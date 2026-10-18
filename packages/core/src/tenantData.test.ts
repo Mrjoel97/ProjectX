@@ -52,7 +52,8 @@ describe("tenant table classification registry", () => {
     // + funnels (31-01): tenant-owned fixed-source aggregate links = 61.
     // + researchControls (2026-09-12 request controls): tenant-owned bounded attempt state = 62.
     // + three foundation tables and expiring auth revocations = 67 with owned upload receipts.
-    expect(schemaTables).toHaveLength(67);
+    // + Buffer connections, transient OAuth, campaign posts and reports = 71.
+    expect(schemaTables).toHaveLength(71);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -64,6 +65,8 @@ describe("tenant table classification registry", () => {
       .sort();
 
     expect(credentialTables).toEqual([
+      "bufferConnections",
+      "bufferOAuthStates",
       // 28-03: the tenant's connector grant (AES-256-GCM ciphertext) and its in-flight OAuth state.
       // Phase 29 added NO credential table — `knowledgeSearches` is `tenant_owned`, and a knowledge
       // search reads through the connectors' own credentials rather than holding one of its own.
