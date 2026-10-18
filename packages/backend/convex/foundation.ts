@@ -150,6 +150,7 @@ const answerForTenant = async (
     section: Infer<typeof foundationSection>;
     intent: "current" | "planned";
   },
+  coachEnrichment = true,
 ): Promise<{ revision: number; reply: string; complete: boolean }> => {
   requireFoundationEnabled(ctx.tenantId);
   if (
@@ -200,7 +201,7 @@ const answerForTenant = async (
       oneLineDescription: slots.oneLineDescription ?? profile.oneLineDescription,
     };
     reply = turn.reply;
-  } else if (a.section !== "essentials") {
+  } else if (a.section !== "essentials" && coachEnrichment) {
     // Typed enrichment gets the same proactive coaching as live onboarding. Suggestions are
     // returned only as conversational guidance; the saved answer below remains exactly the
     // user's text, with current/planned intent and source provenance intact.
@@ -710,6 +711,9 @@ export const answerFromVoice = internalAction({
     return answerForTenant(
       { ...ctx, tenantId: session.tenantId },
       { ...a, revision: row.revision },
+      // Realtime already coaches the conversation. Save before returning its tool result
+      // without waiting for a second coaching model; essential fact validation still runs.
+      false,
     );
   },
 });

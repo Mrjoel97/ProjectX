@@ -16,6 +16,8 @@ controlEvents and controlCommands are bounded transient content on the tenant-ow
 
 Official protocol references: [WebRTC](https://developers.openai.com/api/docs/guides/voice-webrtc?api=realtime), [server controls](https://developers.openai.com/api/docs/guides/voice-server-controls?api=realtime&voice-api=realtime). Local evidence: voiceControl.test.ts covers gate-before-egress, trusted usage settlement, missing-usage holds, termination and retention; voice/voiceToken/voiceDoc/foundation/onboarding regression104passed. Live browser/provider acceptance remains gated.
 
+> Last verified: 2026-10-18 — Foundation voice no longer waits for the typed enrichment coaching model after a save tool call. The active Realtime model supplies conversational coaching after the durable draft commit. Essential validation remains authoritative. General/document voice, VAD, model pins, response reservations, session limits and provider termination are unchanged. Local regressions establish removal of the redundant call, not a measured browser latency improvement.
+
 # Playbook: Live Voice Sessions
 
 > Last verified: 2026-09-06 (36-01, G24 — `voiceDoc.ts`'s review seam moved from `offlineSeamAvailable()`
