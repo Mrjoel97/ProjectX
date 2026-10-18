@@ -110,7 +110,7 @@ Release-workflow hardening at 17ef16fe978efda4a2feee53e34e14c127603661 adds expl
 - [ ] 2. Close delivery ambiguity, atomic paid-work admission, identity and privacy boundaries.
 - [ ] 3. Bound graph and other retrieval reads; extract affected domain logic incrementally.
 - [ ] 4. Add durable progressive interview, voice purpose/tools, retention and typed fallback.
-- [ ] 5. Generate six foundation documents; review and atomically publish approved revisions with Blueprint.
+- [x] 5. Generate six foundation documents; review and atomically publish approved revisions with Blueprint. Owner approved revision 17 on October 18; all six sources and Blueprint references are Ready.
 - [ ] 6. Add enrichment/diffs, indexing repair, export/deletion, controlled live evidence and flagged rollout.
 
 ## Agreed product requirements
@@ -160,10 +160,12 @@ implementation changes; old evidence is not current assurance.
 - [ ] Verify erasure during already-running work and against external provider systems. Retained audit/billing/security exceptions remain explicit.
 - [x] Independently verify all five known original native test blobs, the exact deleted user and tenant upload receipts absent. This is scoped cleanup evidence, not proof of all possible storage/provider residuals.
 - [x] Inventory request-time `.collect()` paths; replace unbounded histories with exact indexes, pagination or bounded cleanup; extract research/PDF/media read modules. See [retrieval inventory](governance/retrieval-boundaries-2026-10-15.md). Production index rollout and load evidence remain release checks.
-- [ ] Run real microphone/browser onboarding: interruption, reconnect, resume, typed/upload fallback, correction, six-document review, explicit approval and repeat publication. Confirm only current approved documents ground answers.
+- [x] Run real microphone/browser onboarding: owner confirmed voice, interruption, reconnect, resume, typed fallback and correction; October 18 review/approval persisted as revision 17 with six Ready sources and Blueprint references, following earlier revision 2.
+- [ ] Complete browser upload fallback/cancellation and a current-approved-revision retrieval trace; do not substitute Ready status for grounding evidence.
 - [x] Inspect the complete pre-upgrade workflow inventory and confirm both ingestion pools quiet before enabling foundation onboarding in staging. Required skill versions/configuration were verified; staging activation succeeded in run 38785222601.
 - [x] Complete isolated native API six-document acceptance, exact reviewed-content/Blueprint export, small-file decoded-byte verification and post-erasure JWT refusal. This does not qualify browser/microphone acceptance or real business approval.
-- [ ] Complete live skill/voice evaluation and browser onboarding acceptance before production foundation or controlled voice activation.
+- [x] Complete owner production browser onboarding voice and six-document approval acceptance; see October 18 evidence above.
+- [ ] Complete remaining per-skill live evaluation and broader release gates before global foundation activation.
 - [ ] Observe seven-day transcript expiry and bounded cleanup; verify discard, export and account erasure.
 - [ ] Review legal content using the owner-confirmed postal address. Keep billing disabled as explicitly instructed; do not activate it during this release. Resolve WORM retention, connector and recurrence provider evidence independently and preserve their gates.
 
