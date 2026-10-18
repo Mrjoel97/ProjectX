@@ -622,13 +622,13 @@ test("the ABNORMAL end of a doc-scoped session also leaves exactly one", async (
   expect(briefs).toHaveLength(1);
 });
 
-test("pilot session rechecks revocation and caps its watchdog at grant expiry while end stays available", async () => {
+test("pilot session grants fifteen minutes after setup and refuses a shortened window while end stays available", async () => {
   vi.useFakeTimers();
   try {
     const t = setup(),
       tenantId = "j57aaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const issuedAt = Date.now(),
-      expiresAt = issuedAt + 900000;
+      expiresAt = issuedAt + 1800000;
     const grant = JSON.stringify({ tenantId, issuedAt, expiresAt });
     vi.stubEnv("FOUNDATION_ONBOARDING_ENABLED", "0");
     vi.stubEnv("NATIVE_ONBOARDING_PILOT", grant);
@@ -649,20 +649,34 @@ test("pilot session rechecks revocation and caps its watchdog at grant expiry wh
     ).rejects.toThrow("VOICE_PILOT_EXPIRED");
     expect(await t.run((ctx) => ctx.db.query("voiceSessions").collect())).toHaveLength(0);
     vi.stubEnv("NATIVE_ONBOARDING_PILOT", grant);
+    await expect(
+      t.mutation(internal.voice.startSession, {
+        tenantId,
+        reservationId,
+        controlled: true,
+        onboarding: true,
+        pilotEndsAt: expiresAt,
+        callId: "rtc_short_window",
+      }),
+    ).rejects.toThrow("VOICE_PILOT_WINDOW_TOO_SHORT");
+    expect(await t.run((ctx) => ctx.db.query("voiceSessions").collect())).toHaveLength(0);
+    // Eight minutes spent opening the app must not reduce the session itself.
+    vi.setSystemTime(issuedAt + 8 * 60_000);
+    const freshReservationId = await seedReservation(t, tenantId);
     const { sessionId } = await t.mutation(internal.voice.startSession, {
       tenantId,
-      reservationId,
+      reservationId: freshReservationId,
       controlled: true,
       onboarding: true,
       pilotEndsAt: expiresAt,
       callId: "rtc_pilot",
     });
     const session = await get(t, sessionId);
-    expect(session?.endsAt).toBe(expiresAt);
-    expect(session?.endsAt).toBe((session?.startedAt ?? 0) + 120000);
+    expect(session?.endsAt).toBe((session?.startedAt ?? 0) + 900000);
+    expect(session?.endsAt).toBeLessThan(expiresAt);
     const scheduled = await listScheduled(t);
     expect(scheduled.find((row) => row._id === session?.watchdogFnId)?.scheduledTime).toBe(
-      expiresAt,
+      session?.endsAt,
     );
     vi.setSystemTime(expiresAt);
     await owner.mutation(api.voice.endSessionClean, { sessionId });

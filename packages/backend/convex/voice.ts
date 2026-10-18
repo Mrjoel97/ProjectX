@@ -145,6 +145,10 @@ export const startSession = internalMutation({
         pilotEndsAt <= startedAt)
     )
       throw new Error("VOICE_PILOT_EXPIRED");
+    // A test-access window must not silently shorten a newly admitted conversation.
+    // Recheck after signaling so setup time cannot consume the promised session duration.
+    if (pilotEndsAt !== undefined && pilotEndsAt < capEndsAt(startedAt))
+      throw new Error("VOICE_PILOT_WINDOW_TOO_SHORT");
     const endsAt = controlled
       ? Math.min(capEndsAt(startedAt), pilotEndsAt ?? Infinity)
       : capEndsAt(startedAt);

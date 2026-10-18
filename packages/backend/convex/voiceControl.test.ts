@@ -355,7 +355,7 @@ test("pilot voice admits only onboarding for its tenant and refuses expiry befor
   const t = setup(),
     tenantId = "j57aaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
   const issuedAt = Date.now(),
-    expiresAt = issuedAt + 900000;
+    expiresAt = issuedAt + 1800000;
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
   vi.stubEnv("VOICE_SERVER_CONTROL_VERIFIED", "0");
@@ -382,4 +382,29 @@ test("pilot voice admits only onboarding for its tenant and refuses expiry befor
     owner.action(api.voiceToken.connect, { offerSdp: "invalid", onboarding: true }),
   ).rejects.toThrow("VOICE_CONTROL_NOT_VERIFIED");
   expect(fetcher).not.toHaveBeenCalled();
+});
+
+test.each([
+  "0",
+  "1",
+])("short onboarding pilot refuses provider work even when ordinary voice is enabled (%s)", async (ordinaryVoiceEnabled) => {
+  const t = setup();
+  const tenantId = "j57aaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const issuedAt = Date.now();
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  vi.stubEnv("VOICE_SERVER_CONTROL_VERIFIED", ordinaryVoiceEnabled);
+  vi.stubEnv("FOUNDATION_ONBOARDING_ENABLED", "0");
+  vi.stubEnv(
+    "NATIVE_ONBOARDING_PILOT",
+    JSON.stringify({ tenantId, issuedAt, expiresAt: issuedAt + 14 * 60_000 }),
+  );
+  await expect(
+    t.withIdentity({ subject: tenantId }).action(api.voiceToken.connect, {
+      offerSdp: "invalid",
+      onboarding: true,
+    }),
+  ).rejects.toThrow("VOICE_PILOT_WINDOW_TOO_SHORT");
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(await t.run((ctx) => ctx.db.query("spendEvents").collect())).toEqual([]);
 });

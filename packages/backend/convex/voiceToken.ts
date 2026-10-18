@@ -9,6 +9,7 @@ import { SAVE_FOUNDATION_ANSWER_TOOL } from "@pikar/core/foundation";
 import {
   buildDocDigest,
   CALLS_URL,
+  CAP_MS,
   CLIENT_SECRETS_URL,
   DEFAULT_REALTIME_MODEL,
   hangupUrl,
@@ -297,8 +298,9 @@ export const connect = tenantAction({
         ? foundationPilotExpiresAt(process.env.NATIVE_ONBOARDING_PILOT, ctx.tenantId)
         : undefined;
     const pilotOnly = process.env.VOICE_SERVER_CONTROL_VERIFIED !== "1";
-    if (pilotOnly && (pilotEndsAt === undefined || pilotEndsAt - Date.now() < 300_000))
-      throw new Error("VOICE_CONTROL_NOT_VERIFIED");
+    if (pilotOnly && pilotEndsAt === undefined) throw new Error("VOICE_CONTROL_NOT_VERIFIED");
+    if (pilotEndsAt !== undefined && pilotEndsAt - Date.now() < CAP_MS)
+      throw new Error("VOICE_PILOT_WINDOW_TOO_SHORT");
     assertMediaOnlyOffer(offerSdp);
     const mint = await ctx.runAction(internal.voiceToken.mintClientSecret, {
       tenantId: ctx.tenantId,
