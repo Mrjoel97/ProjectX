@@ -11,8 +11,8 @@ vi.mock("convex/react", () => ({
   useQuery: () => ({
     valid: mocks.valid,
     invitedEmailMasked: "t***@example.test",
-    google: false,
-    microsoft: false,
+    google: true,
+    microsoft: true,
   }),
 }));
 vi.mock("next/navigation", () => ({
@@ -36,6 +36,38 @@ vi.mock("../fields", () => {
       onInput: (event: React.FormEvent<HTMLInputElement>) => onChange(event.currentTarget.value),
     });
   return { TextField: Field, PasswordField: Field };
+});
+
+test("unavailable invites offer continuation without a blocked signup form or OAuth attempt", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  mocks.valid = false;
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(createElement(SignUpRoute)));
+    expect(container.textContent).toContain("This code can't start a new signup.");
+    expect(container.textContent).toContain("send a new verification code");
+    expect(container.textContent).toContain("Choose the same provider");
+    expect(container.querySelector('a.auth-submit[href="/signin"]')?.textContent).toContain(
+      "Continue to sign in",
+    );
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector('input[aria-label="Password"]')).toBeNull();
+    expect(container.querySelector("button.auth-google")).toBeNull();
+    expect(mocks.signIn).not.toHaveBeenCalled();
+
+    // A corrected live code restores the normal signup path; no admission is bypassed.
+    mocks.valid = true;
+    await act(async () => root.render(createElement(SignUpRoute)));
+    expect(container.querySelector("form")).not.toBeNull();
+    expect(container.querySelector('input[aria-label="Password"]')).not.toBeNull();
+    expect(container.querySelector('section[aria-label="Continue an existing signup"]')).toBeNull();
+    expect(mocks.signIn).not.toHaveBeenCalled();
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
 });
 
 afterEach(() => {
