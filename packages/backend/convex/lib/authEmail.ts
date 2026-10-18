@@ -59,9 +59,17 @@ export function authEmailProvider(purpose: "verify" | "reset") {
           text: `Your ${purpose === "verify" ? "email verification" : "password reset"} code is:\n\n${token}\n\nIt expires in 15 minutes. If you did not request this, ignore this email.`,
         }),
       }).catch(() => {
+        console.warn("AUTH_EMAIL_DELIVERY_FAILED", { purpose, reason: "transport" });
         throw new Error("AUTH_EMAIL_SEND_FAILED");
       });
-      if (!response.ok) throw new Error("AUTH_EMAIL_SEND_FAILED");
+      if (!response.ok) {
+        console.warn("AUTH_EMAIL_DELIVERY_FAILED", {
+          purpose,
+          reason: "provider_rejected",
+          status: response.status,
+        });
+        throw new Error("AUTH_EMAIL_SEND_FAILED");
+      }
     },
   });
 }

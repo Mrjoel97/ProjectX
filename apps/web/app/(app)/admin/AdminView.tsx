@@ -102,24 +102,17 @@ function EnvReadiness() {
 
 export function AdminView() {
   const pending = useQuery(api.invites.pending, {});
+  const issued = useQuery(api.invites.issued, {});
   const approve = useMutation(api.invites.approve);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // The live code is held in memory for THIS session only, so the owner can copy the link. It is
-  // never written to a log, an audit payload, or anywhere else (CLAUDE.md §4). `approve` is
-  // replay-safe, so re-approving is how you get it back rather than persisting it here.
-  const [issued, setIssued] = useState<Record<string, { code: string; email: string }>>({});
   const [copied, setCopied] = useState<string | null>(null);
 
   async function onApprove(waitlistId: PendingRow["waitlistId"]) {
     setBusy(waitlistId);
     setError(null);
     try {
-      const invite = await approve({ waitlistId });
-      setIssued((prior) => ({
-        ...prior,
-        [waitlistId]: { code: invite.code, email: invite.email },
-      }));
+      await approve({ waitlistId });
     } catch {
       setError("Could not approve that request. Reload and try again.");
     }
@@ -169,27 +162,53 @@ export function AdminView() {
           here, then share their individual invite link with that same email address.
         </p>
 
-        {/* Approval removes the request from the reactive pending query. Keep the returned
-            handoff separate so the owner can still copy it after that row disappears. */}
-        {Object.entries(issued).map(([id, invite]) => (
-          <div key={id} style={{ display: "grid", gap: "0.4rem" }} role="status">
-            <strong>Invitation ready for {invite.email}</strong>
-            <code style={{ wordBreak: "break-all", color: "var(--ink)" }}>
-              /signup?invite={invite.code}
-            </code>
-            <div>
-              <button
-                type="button"
-                className="vault-button"
-                onClick={() => void onCopy(invite.code)}
-              >
-                {copied === invite.code ? "Copied" : "Copy invite link"}
-              </button>
-            </div>
-            <p style={{ margin: 0, color: "var(--ink-2)", fontSize: "0.85rem" }}>
-              Send this to {invite.email}. It only works for that address, and only once. Copy it
-              before leaving this page.
-            </p>
+        <p className="caps-label" style={{ margin: 0 }}>
+          Issued invitations
+        </p>
+        {issued === undefined && <p>Loading invitations…</p>}
+        {issued?.length === 0 && <p>No invitations issued yet.</p>}
+        {issued?.map((invite) => (
+          <div key={invite.inviteId} style={{ display: "grid", gap: "0.4rem" }} role="status">
+            <strong>
+              {invite.status === "ready" ? "Invitation ready for" : "Account status for"}{" "}
+              {invite.email}
+            </strong>
+            {invite.code ? (
+              <>
+                <code style={{ wordBreak: "break-all", color: "var(--ink)" }}>
+                  /signup?invite={invite.code}
+                </code>
+                <div>
+                  <button
+                    type="button"
+                    className="vault-button"
+                    onClick={() => {
+                      if (invite.code) void onCopy(invite.code);
+                    }}
+                  >
+                    {copied === invite.code ? "Copied" : "Copy invite link"}
+                  </button>
+                </div>
+                <p style={{ margin: 0, color: "var(--ink-2)", fontSize: "0.85rem" }}>
+                  Send this to {invite.email}. It only starts an account for that address. You can
+                  return here to copy this same link after a reload.
+                </p>
+              </>
+            ) : (
+              <p style={{ margin: 0, color: "var(--ink-2)" }}>
+                {invite.status === "verification_pending"
+                  ? "Awaiting email verification. The invitation has already created this account. Continue at sign-in and choose Finish email verification; do not create another account."
+                  : invite.status === "registered"
+                    ? "Account created. Continue with the original password or sign-in provider."
+                    : "This invitation has been used and cannot create another account."}
+                {invite.status !== "unavailable" && (
+                  <>
+                    {" "}
+                    <Link href="/signin">Open sign-in</Link>
+                  </>
+                )}
+              </p>
+            )}
           </div>
         ))}
 
@@ -202,7 +221,6 @@ export function AdminView() {
         )}
 
         {pending?.map((row) => {
-          if (issued[row.waitlistId]) return null;
           return (
             <div
               key={row.waitlistId}

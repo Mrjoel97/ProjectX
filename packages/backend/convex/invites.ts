@@ -197,8 +197,7 @@ export const preflight = query({
   },
 });
 
-/** Owner-only. Pending waitlist rows, oldest first. Deliberately returns no invite code: a live
- *  code is handed back exactly once, by `approve`. */
+/** Owner-only. Pending waitlist rows, oldest first. No invite codes in this queue. */
 export const pending = ownerQuery({
   args: {},
   handler: async (ctx) => {
@@ -214,6 +213,37 @@ export const pending = ownerQuery({
       referral: row.referral ?? null,
       requestedAt: row.requestedAt,
     }));
+  },
+});
+
+/** Durable owner handoff. Reloading must not lose an issued invitation. Spent codes stay spent;
+ *  their account status tells the owner which continuation to share. Erased identities stay absent. */
+export const issued = ownerQuery({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db.query("betaInvites").order("desc").take(200);
+    return Promise.all(
+      rows
+        .filter((row) => row.email)
+        .map(async (row) => {
+          const user = row.redeemedUserId ? await ctx.db.get(row.redeemedUserId) : null;
+          const status =
+            row.redeemedAt === undefined
+              ? ("ready" as const)
+              : !user
+                ? ("unavailable" as const)
+                : row.redeemedSubject?.startsWith("password|") &&
+                    user.emailVerificationTime === undefined
+                  ? ("verification_pending" as const)
+                  : ("registered" as const);
+          return {
+            inviteId: row._id,
+            email: row.email,
+            code: status === "ready" ? row.code : null,
+            status,
+          };
+        }),
+    );
   },
 });
 

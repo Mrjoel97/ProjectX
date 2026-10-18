@@ -16,6 +16,7 @@ export default function SignIn() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [challenge, setChallenge] = useState<"verify" | "reset" | null>(null);
+  const [codeRequested, setCodeRequested] = useState(false);
 
   /**
    * The OAuth buttons used to be `onClick={() => void signIn(…)}`. `void` discards the promise, so
@@ -51,6 +52,7 @@ export default function SignIn() {
       const result = await signIn("password", { email, password, flow: "signIn" });
       if (!result.signingIn) {
         setPassword("");
+        setCodeRequested(true);
         setChallenge("verify");
         setBusy(false);
         return;
@@ -69,6 +71,7 @@ export default function SignIn() {
       <PasswordChallenge
         mode={challenge}
         email={email}
+        codeRequested={codeRequested}
         onBack={() => {
           setChallenge(null);
           setBusy(false);
@@ -114,6 +117,19 @@ export default function SignIn() {
           {!busy && <ArrowIcon />}
         </button>
       </form>
+
+      <button
+        type="button"
+        className="auth-google"
+        disabled={busy}
+        onClick={() => {
+          setPassword("");
+          setCodeRequested(false);
+          setChallenge("verify");
+        }}
+      >
+        Finish email verification
+      </button>
 
       <button
         type="button"

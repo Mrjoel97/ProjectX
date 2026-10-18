@@ -104,6 +104,44 @@ test("signup creates no session until matching email OTP; replay fails", async (
   ).rejects.toThrow("AUTHENTICATION_FAILED");
 });
 
+test("failed delivery leaves a spent invite but direct verification resumes the same account", async () => {
+  const t = harness();
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  vi.mocked(fetch).mockResolvedValueOnce(new Response("private provider body", { status: 403 }));
+  try {
+    await expect(signup(t)).rejects.toThrow("AUTHENTICATION_FAILED");
+    const invite = await t.run((ctx) => ctx.db.query("betaInvites").unique());
+    if (!invite) throw new Error("Expected the retained invitation");
+    expect(invite?.redeemedAt).toEqual(expect.any(Number));
+    expect((await t.query(api.invites.preflight, { code: invite.code })).valid).toBe(false);
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toHaveLength(1);
+    expect(await t.run((ctx) => ctx.db.query("authSessions").collect())).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith("AUTH_EMAIL_DELIVERY_FAILED", {
+      purpose: "verify",
+      reason: "provider_rejected",
+      status: 403,
+    });
+    expect(JSON.stringify(warn.mock.calls)).not.toMatch(/owner@example|private provider body/);
+    await t.action(api.auth.signIn, {
+      provider: "password",
+      params: { flow: "email-verification", email: "owner@example.com" },
+    });
+    expect(sent.at(-1)?.to).toBe("owner@example.com");
+    const result = await t.action(api.auth.signIn, {
+      provider: "password",
+      params: { flow: "email-verification", email: "owner@example.com", code: lastCode() },
+    });
+    expect(result.tokens).toBeTruthy();
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toHaveLength(1);
+    expect(await t.run((ctx) => ctx.db.query("authAccounts").collect())).toHaveLength(1);
+    expect((await t.run((ctx) => ctx.db.query("users").unique()))?.emailVerificationTime).toEqual(
+      expect.any(Number),
+    );
+  } finally {
+    warn.mockRestore();
+  }
+});
+
 test("reset hides unknown accounts, rotates the password, and invalidates prior sessions", async () => {
   const t = harness();
   await signup(t);
