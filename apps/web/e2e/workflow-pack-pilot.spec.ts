@@ -1,5 +1,4 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
@@ -8,7 +7,10 @@ import { expect, type Page, test } from "@playwright/test";
 //
 // ⚠️ THIS SPEC HAS NEVER BEEN RUN GREEN. It was authored in the session that built the surfaces it
 // drives, on a deployment whose model provider had no balance, so the paid half could not execute.
-// Do NOT read it as coverage and do NOT record browser evidence from a partial pass — the pack gate
+// Historical card/lifecycle receipts exist; the complete per-pack behavioral protocol is still
+// missing. The @evidence block now REFUSES without calling the backend. Card-only reachability,
+// stale files and imported artifacts cannot produce a new qualification receipt.
+// Do NOT read discovery as coverage or record browser evidence from a partial pass — the pack gate
 // takes `hasPassingPackBrowserEvidence`, and a row written from a run that never exercised a pack
 // would certify a version nobody watched. The FIRST person to run this should expect to fix things.
 //
@@ -141,46 +143,6 @@ const quickStarts = (page: Page) => page.getByRole("region", { name: "Guided wor
 const candidates = (page: Page) =>
   page.getByRole("region", { name: "Candidate workflows — owner preview" });
 
-/** Versions the BROWSER actually saw, per pack — written by the @preview block, read by the
- *  evidence writer at the bottom. Nothing else may populate it: evidence must name the version the
- *  card RENDERED, not one re-derived from the registry afterwards.
- *
- *  ON DISK, NOT IN MODULE STATE. Playwright starts a FRESH WORKER after a failure or a retry, which
- *  resets module-level variables — measured: the viewport tests filled a `Map`, one unrelated test
- *  failed, and the evidence writer then found an empty map and skipped itself. A file survives the
- *  worker; the run id in it is what ties the rows to one browser run. */
-/**
- * PER DEPLOYMENT, and that is not tidiness — it is the same per-deployment rule the whole pack gate
- * rests on. This file survives between runs, so a single shared name let a PROD evidence run read a
- * DEV run's observations: on 2026-08-26 it held dev's versions (campaign-plan v5, sales-call-prep
- * v10) while prod was all v1. Most would have failed the version pin, but `business-pulse: 1` exists
- * on BOTH — so the writer was one crash away from recording, against prod's row, a browser run that
- * happened on dev. Evidence naming a deployment it never visited is precisely what this plane exists
- * to make impossible.
- *
- * Keying on the origin means a run can only ever read back what a browser pointed at THAT origin
- * wrote. A stale file for another deployment is now unreadable rather than silently authoritative.
- */
-const SEEN_PATH = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  `.auth/pack-seen-${appOrigin.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.json`,
-);
-
-const readSeen = (): Record<string, number> => {
-  try {
-    return JSON.parse(readFileSync(SEEN_PATH, "utf8")) as Record<string, number>;
-  } catch {
-    return {};
-  }
-};
-
-const rememberSeen = (title: string, version: number) => {
-  const all = readSeen();
-  all[title] = version;
-  mkdirSync(dirname(SEEN_PATH), { recursive: true });
-  writeFileSync(SEEN_PATH, JSON.stringify(all, null, 2));
-};
-
 /** The OWNER's live-pack controls (27-11) — the turn-off switch, and the settle signal that tells
  *  `@dark` the pack queries have answered when something IS active. */
 const ownerControls = (page: Page) =>
@@ -188,7 +150,7 @@ const ownerControls = (page: Page) =>
 
 /** Card TITLE -> pack id. The titles are code-owned in `@pikar/core`'s `WORKFLOW_PACKS`; this spec
  *  cannot import that (it drives a built app), so the pairing is stated once here and a title that
- *  is not in it fails the evidence writer loudly rather than silently skipping a pack. */
+ *  is not in it fails the candidate-card assertion rather than silently skipping a pack. */
 const TITLE_TO_PACK: Record<string, string> = {
   "Business pulse": "business-pulse",
   "Campaign plan": "campaign-plan",
@@ -434,7 +396,8 @@ test.describe("@preview the owner can reach every candidate pack", () => {
         const m = /Candidate v(\d+)/i.exec(badge.trim());
         expect(m, `a candidate card rendered no version badge: "${badge}"`).not.toBeNull();
         const title = (await card.getByRole("heading").innerText()).trim();
-        rememberSeen(title, Number(m?.[1]));
+        expect(TITLE_TO_PACK[title], `unknown candidate card: ${title}`).toBeDefined();
+        expect(Number(m?.[1])).toBeGreaterThan(0);
 
         // Reachable means the control is really operable, not merely painted.
         const start = card.getByRole("button", { name: /^Preview / });
@@ -470,48 +433,25 @@ test.describe("@preview the owner can reach every candidate pack", () => {
   });
 });
 
-// ── LAST IN THE FILE, AND LAST IN THE RUN: anything that shells out to convex ─────────────────
+// ── FAIL-CLOSED: no browser evidence until the full per-pack protocol exists ───────────────────
+// The former writer promoted persisted title/version observations to pass:true with two assumed
+// viewports and one assumed passing case. That proves neither the current run nor 27-09's useful,
+// partial/refusal, edit/reject, injection/privacy and recovery protocol. Remove its file importer
+// and backend call entirely; old private observations and accepted registry receipts are untouched.
 //
-// `convexRun` ends the browser session. Nothing below may navigate, and nothing above may run after
-// it. Playwright does not guarantee file ordering across workers — run this with `--workers=1`.
-// THE EVIDENCE WRITER (27-11). It shells out to convex, so it lives down here with the drills and
-// nothing below it may navigate. It writes ONLY what the browser actually established: `viewports`
-// is the number of viewport tests that populated `seen`, and a pack absent from `seen` gets no row
-// at all rather than an optimistic one.
-//
-// `pass: false` IS RECORDED FOR A PACK THE BROWSER COULD NOT REACH, deliberately: a missing row and
-// a failing row both leave the gate shut, but only the failing row says someone looked.
-test.describe("@evidence record what the browser established", () => {
-  test("write a browser evidence row for every candidate the browser reached", async () => {
-    const seen = Object.entries(readSeen());
-    test.skip(
-      seen.length === 0,
-      "the @preview block never ran or found nothing — nothing to record",
+// Do not replace this refusal with artifact import or a caller-provided pass boolean. A future
+// writer must derive evidence from this run's completed required cases, bind exact deployment,
+// candidate/body/version and actual viewport outcomes, and refuse missing/failed/skipped cells.
+// Independent owner judgment remains a separate act. This does not change the backend gate.
+test.describe("@evidence full per-workflow browser acceptance", () => {
+  test("refuses evidence while the required behavioral protocol is missing", () => {
+    throw new Error(
+      "PACK_BROWSER_PROTOCOL_MISSING: no evidence was written. " +
+        "Current-run exact candidate/version/viewport observations and completed per-pack " +
+        "useful, partial/refusal, edit/reject, injection/privacy and recovery outcomes are required. " +
+        "Card reachability, historical files and imported artifacts cannot qualify a workflow. " +
+        "See .planning/phases/48-readiness-and-qualification-closure/48-BROWSER-PREPARATION.md.",
     );
-
-    const runId =
-      process.env.PIKAR_E2E_RUN_ID ?? `pw-${seen.length}-${seen.map(([t]) => t).join("-")}`;
-    for (const [title, version] of seen) {
-      const packId = TITLE_TO_PACK[title];
-      expect(packId, `no pack id known for card title "${title}"`).toBeDefined();
-      const name = `pack-${packId}`;
-      convexRun("skills:recordPackBrowserEvidence", {
-        name,
-        version,
-        browserEvidence: JSON.stringify({
-          runner: "playwright:pack",
-          runId,
-          pass: true,
-          skillVersions: { [name]: version },
-          authenticated: true,
-          viewports: 2,
-          casesPassed: 1,
-          casesTotal: 1,
-          deploymentRef: appOrigin,
-          ts: Date.now(),
-        }),
-      });
-    }
   });
 });
 

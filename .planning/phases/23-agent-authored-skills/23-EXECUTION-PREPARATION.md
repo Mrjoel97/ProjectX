@@ -1,5 +1,28 @@
 # Phase 23 execution preparation — 2026-09-11
 
+## Current continuation — 2026-10-19
+
+Phase48's signed-in production read-only recovery supersedes the historical setup assumptions
+below: A is already owner, B is non-owner, the recovered thread has zero candidates/tool calls,
+and its probe has zero turns/calls with a closed expired unused envelope. See
+`../48-readiness-and-qualification-closure/48-RECOVERY-2026-10-19.json` and48-02-SUMMARY.
+No private once-lock file was found or removed. No certified handoff exists.
+
+Use only the explicit existing-owner continuation after its new concrete checkpoint:
+`PIKAR_PHASE23_CONTINUE_EXISTING_OWNER=1`, exact `PIKAR_PHASE23_PREVIOUS_THREAD_ID` and
+`PIKAR_PHASE23_PREVIOUS_BUDGET_ID`; leave `PIKAR_PHASE23_ALLOW_OWNER_BOOTSTRAP` unset.
+The harness double-checks terminal zero-use prior controls and requires a new authorization hash
+before creating a distinct bounded envelope/thread. It does not reuse old spend authorization.
+Fresh native A owner/B non-owner witnesses produce `existingOwnerAtStart:true`, never a fictional
+`nonOwnerBeforeBootstrap` witness. The closed handoff validator accepts exactly one of those
+branches; historical artifact bytes and downstream hash binding remain unchanged.
+
+The local development-only public-refusal route/helper prepares23-07's genuine B call after
+passing exact-row evaluation. It is production404 and does not grant access. Fresh native B
+authentication on the exact local app/backend, fixed server-side candidate/B pins and independent
+unchanged-governance reads remain required. Offline tests do not establish a live refusal.
+The remaining original authoring/evaluation/owner decisions remain separate checkpoints.
+
 ## September 12 continuation
 
 The user subsequently authorized the exact $1/two-submission checkpoint with “do it”, recorded
@@ -141,9 +164,10 @@ user action is that concrete authorization after prerequisite review, not a cred
 
 ## Required live prerequisites
 
-1. Two distinct fresh password-authenticated controlled tenants, both observed as non-owner before
-   A's separate owner bootstrap; B remains non-owner. A pre-existing owner login cannot supply
-   that historical witness. The private adaptation needle and auth storage states stay uncommitted.
+1. Two distinct fresh password-authenticated controlled tenants. Fresh mode observes both non-owner
+   before A's separately authorized bootstrap. The reconciled existing-owner mode instead observes
+   A owner/B non-owner and records that truthful alternative without a new grant. It cannot supply
+   the historical non-owner witness. The private adaptation needle and auth states stay uncommitted.
 2. All Phase 23 free gates and previous implementation mutation records; the accepted Phase 21
    bundle remains the prerequisite, without inventing an unobserved runtime-attribution requirement.
 3. A real ordinary Executive authoring turn that calls `authorSkillCandidate` exactly once,

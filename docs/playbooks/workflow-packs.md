@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Free Phase48 harness hardening removes the pilot's persisted title/version importer and the tenant-customization writer's post-observation email/newest-candidate lookup. Both `@evidence` cases fail with explicit missing-protocol errors before any read or backend write; neither can certify card-only, stale, imported or substituted observations. Historical accepted receipts remain untouched. A future writer must derive exact current-run candidate/version/deployment, actual viewport outcomes and completed required per-pack behavioral cells; missing/failed/skipped cells cannot pass. The backend activation gate is unchanged. Web typecheck, two focused forged-artifact regressions, Biome and discovery of19cases across both specs pass. No live qualification is claimed here.
+
 > Last verified: 2026-10-19 — Skills and Workflows is the sidebar library for existing active-only workflow offers. Starts open the returned thread in My Workspace. Owner candidate preview pins the displayed version; prior-version rollback and deactivation retain server owner checks. Phase 29 customization remains on its separate undiscoverable route. Existing browser spec entry points moved, but per-workflow positive/refusal/edit/reject/recovery acceptance is not certified by this relocation.
 
 > Last verified: 2026-10-15 — Owner candidate and rollback selectors read the highest version directly from the new name/status/version index. Skill publication reads the maximum immutable version rather than loading its full history. No activation evidence gate changes; local skills and discovery suites pass.
@@ -2027,6 +2029,13 @@ Run `graphify query "workflow packs"` for the current subgraph. Couplings graphi
     tweak; it is a compliance change.
 
 ## How to change safely
+
+- **Restoring the pilot browser-evidence writer:** `workflow-pack-pilot.spec.ts` currently refuses
+  `@evidence` with `PACK_BROWSER_PROTOCOL_MISSING`. Implement the actual per-pack protocol first;
+  bind completed case outcomes to the current run, exact deployment/candidate/body/version and
+  observed viewports. Never import historical card-observation files or trust a supplied `pass`
+  field to clear it. Preserve existing accepted receipts and independent owner decisions. The
+  missing protocol is detailed in `48-BROWSER-PREPARATION.md`; discovery alone certifies nothing.
 
 - **Adding a pack**: add the id to `WORKFLOW_PACK_IDS`, add a `v.literal` to
   `workflowPackEvents.packId` in the SAME commit, add the spec, then the body (both files) and

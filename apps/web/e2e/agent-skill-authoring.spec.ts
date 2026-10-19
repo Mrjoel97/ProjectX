@@ -5,7 +5,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AGENT_AUTHORABLE_SKILLS, AGENT_EVAL_SUITE } from "@pikar/contracts/skill";
 import { expect, type Page, test } from "@playwright/test";
-import { authenticate, nonOwner } from "./phase23NativeAuth";
+import { authenticate, existingOwner, nonOwner } from "./phase23NativeAuth";
+import { assertPhase23PriorAttempt, phase23OwnerMode } from "./phase23OwnerContinuation";
 import { type ProbeExpectation, probeReadback, requestedCap } from "./phase23ProbeControls";
 
 // Opt-in paid browser proof. Listing/default E2E runs never author a candidate or grant owner.
@@ -77,6 +78,7 @@ function stable<T>(read: () => T): T {
   demand(canonical(first) === canonical(read()), "PHASE23_READBACK_CHANGED");
   return first;
 }
+
 function readProbe(expected: ProbeExpectation, turns: 0 | 1 | 2, closed = false) {
   return probeReadback(
     query("authoringProbe:inspect", { budgetId: expected.budgetId }),
@@ -129,10 +131,7 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
   demand(process.env.PIKAR_PHASE23_TWO_IDENTITIES === "1", "PHASE23_TWO_IDENTITIES_REQUIRED");
   demand(process.env.PIKAR_E2E_PROVISION !== "1", "PHASE23_PROVISIONING_FORBIDDEN");
   const capCents = requestedCap(process.env.PIKAR_PHASE23_CAP_CENTS);
-  demand(
-    process.env.PIKAR_PHASE23_ALLOW_OWNER_BOOTSTRAP === "1",
-    "PHASE23_OWNER_BOOTSTRAP_AUTHORIZATION_REQUIRED",
-  );
+  const ownerMode = phase23OwnerMode(process.env);
   demand(
     /^[a-f0-9]{64}$/.test(process.env.PIKAR_PHASE23_BROWSER_AUTHORIZATION_SHA256 ?? ""),
     "PHASE23_BROWSER_AUTHORIZATION_REQUIRED",
@@ -179,24 +178,46 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
   let budgetClosed = false;
   try {
     const foreignPage = await foreignContext.newPage();
-    const primaryId = await nonOwner(page);
+    const primaryId =
+      ownerMode.kind === "existing-owner" ? await existingOwner(page) : await nonOwner(page);
     const foreignId = await nonOwner(foreignPage, true);
     demand(primaryId !== foreignId, "PHASE23_IDENTITIES_COLLIDE");
     const prior = stable(() =>
       query("smokeAssert:agentAuthoringStateForThread", {
         tenantId: primaryId,
-        sourceThreadId: "phase23-pre-authoring",
+        sourceThreadId:
+          ownerMode.kind === "existing-owner"
+            ? ownerMode.previousThreadId
+            : "phase23-pre-authoring",
       }),
     );
     demand(
       prior.totalRowCount === 0 &&
+        prior.candidateCount === 0 &&
+        prior.authoringToolCalls === 0 &&
         prior.requestCount === 0 &&
         prior.governance.approvedPlanCount === 0,
       "PHASE23_FRESH_TENANT_REQUIRED",
     );
 
-    const grant = query("owner:bootstrapOwner", { userId: primaryId });
-    demand(grant.changed === true, "PHASE23_OWNER_BOOTSTRAP_NOT_FRESH");
+    let previousAttempt: ReturnType<typeof assertPhase23PriorAttempt> | undefined;
+    if (ownerMode.kind === "fresh-bootstrap") {
+      const grant = query("owner:bootstrapOwner", { userId: primaryId });
+      demand(grant.changed === true, "PHASE23_OWNER_BOOTSTRAP_NOT_FRESH");
+    } else {
+      previousAttempt = assertPhase23PriorAttempt(
+        stable(() => query("authoringProbe:inspect", { budgetId: ownerMode.previousBudgetId })),
+        stable(() =>
+          query("guardrails:evalBudgetStatus", { budgetId: ownerMode.previousBudgetId }),
+        ),
+        {
+          tenantId: primaryId,
+          threadId: ownerMode.previousThreadId,
+          budgetId: ownerMode.previousBudgetId,
+          newAuthorizationSha256: process.env.PIKAR_PHASE23_BROWSER_AUTHORIZATION_SHA256 as string,
+        },
+      );
+    }
     const prepared = query("authoringProbe:prepare", {
       userId: primaryId,
       capCents,
@@ -206,6 +227,12 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
       typeof prepared.threadId === "string" && typeof prepared.budgetId === "string",
       "PHASE23_PROBE_PREPARATION_INVALID",
     );
+    if (ownerMode.kind === "existing-owner")
+      demand(
+        prepared.threadId !== ownerMode.previousThreadId &&
+          prepared.budgetId !== ownerMode.previousBudgetId,
+        "PHASE23_PREVIOUS_ATTEMPT_REUSE_FORBIDDEN",
+      );
     probe = {
       tenantId: primaryId,
       threadId: prepared.threadId,
@@ -371,7 +398,9 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
         authoringToolCalls: created.authoringToolCalls,
         authenticated: true,
         viewportCount: 2,
-        nonOwnerBeforeBootstrap: true,
+        ...(ownerMode.kind === "existing-owner"
+          ? { existingOwnerAtStart: true }
+          : { nonOwnerBeforeBootstrap: true }),
         foreignRemainedNonOwner: true,
         preEvalActivationDisabled: true,
         refusalBefore: created.governance,
@@ -389,6 +418,8 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
         handoffSha256: digest,
         budgetReceipt,
         budgetReceiptSha256: createHash("sha256").update(canonical(budgetReceipt)).digest("hex"),
+        ownerWitness: ownerMode.kind,
+        ...(previousAttempt ? { previousAttempt } : {}),
       }),
       contentType: "application/json",
     });

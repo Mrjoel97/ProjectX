@@ -1,0 +1,75 @@
+{
+  "kind": "phase48-read-only-recovery-observation.v1",
+  "observedOn": "2026-10-19",
+  "sourceCommit": "a142c0e8ea2f2459dd280df7c01685f50ed009bf",
+  "transport": "signed-in Convex dashboard, existing internal queries only",
+  "deployment": "opulent-octopus-494",
+  "deployedSourceRevisionIndependentlyVerified": false,
+  "primaryTenantId": "qd7bqyyt3yked865nd2b3fm1s18e917z",
+  "foreignTenantId": "qd79msa8e29c2nkg629cvxp5xd8e8gk1",
+  "ownership": { "primaryIsOwner": true, "foreignIsOwner": false },
+  "ledgerWindow": {
+    "sinceMs": 1785542400000,
+    "untilMs": 1792454400000,
+    "limit": 500,
+    "returnedRows": 4,
+    "truncated": false,
+    "authoringProbeEnvelopeCount": 1,
+    "probeClosureCount": 1,
+    "otherPaidCallRows": 2,
+    "otherPaidCallReservationCount": 1,
+    "otherPaidCallActualCount": 1,
+    "otherPaidCallActualUsd": 0.00000016,
+    "wholeLifetimeClaimed": false
+  },
+  "probe": {
+    "budgetId": "ps76dmw7zp8rngqbdbcddw6f558edfxc",
+    "threadId": "m57929vc8gh530905dxbs799hd8ecmv4",
+    "authorizationSha256": "f9cdd5d3700b34742bbaa0506091cc4c93e99d88eea3e65cc355e202bf787178",
+    "expiresAt": 1789383034269,
+    "started": 0,
+    "finished": 0,
+    "failed": 0,
+    "containmentRefusals": 0,
+    "policyAcceptanceEstablished": false
+  },
+  "budget": {
+    "capCents": 100,
+    "actualUsd": 0,
+    "callCount": 0,
+    "settledCount": 0,
+    "unsettledCount": 0,
+    "unresolvedCents": 0,
+    "remainingCents": 0,
+    "breached": false,
+    "closed": true,
+    "expired": true
+  },
+  "sourceThread": {
+    "candidateCount": 0,
+    "candidates": [],
+    "authoringToolCalls": 0,
+    "activeCount": 0,
+    "activeIds": [],
+    "totalRowCount": 0,
+    "requestCount": 0,
+    "governance": {
+      "approvedPlanCount": 0,
+      "auditCount": 0,
+      "requestCount": 0,
+      "sha256": "91628eb7b7fb848156f2874f00f1a35f70b4894c2a0d652c357d8cf94a9b28c3",
+      "toolGrantSha256": "7f8472093be0c056125c884efd44689a8aa133729624986daa063646f3ed92b1"
+    }
+  },
+  "repeatedReadAgreement": { "sourceThread": true, "budget": true, "probe": true },
+  "historicalAttempt": {
+    "knownOnceLockId": "3de192cf-9ffa-427e-a7f7-83a0d33910f0",
+    "exactLockPathAvailable": false,
+    "certifiedHandoffAvailable": false,
+    "certifiedEvalResultAvailable": false,
+    "certifiedLiveResultAvailable": false
+  },
+  "newPaidCalls": 0,
+  "productionWrites": 0,
+  "qualifiesPhase23": false
+}

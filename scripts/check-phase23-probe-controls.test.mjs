@@ -132,3 +132,47 @@ test("auth-only readiness cannot invoke the paid runner and both contexts start 
   assert.ok(!helper.includes("error.message"));
   assert.ok(auth.indexOf("await nonOwner") < auth.indexOf(".storageState({ path:"));
 });
+
+test("auth-only existing-owner mode stays explicit, native and independent of spend authorization", () => {
+  const auth = readFileSync(
+    new URL("../apps/web/e2e/phase23-auth-only.spec.ts", import.meta.url),
+    "utf8",
+  );
+  const helper = readFileSync(
+    new URL("../apps/web/e2e/phase23NativeAuth.ts", import.meta.url),
+    "utf8",
+  );
+  const paid = readFileSync(
+    new URL("../apps/web/e2e/agent-skill-authoring.spec.ts", import.meta.url),
+    "utf8",
+  );
+  assert.ok(
+    auth.includes("const continuation = process.env.PIKAR_PHASE23_CONTINUE_EXISTING_OWNER"),
+  );
+  assert.ok(auth.includes('continuation !== undefined && continuation !== "1"'));
+  assert.match(
+    auth,
+    /existingOwnerAtStart\s*\?\s*await existingOwner\(page\)\s*:\s*await nonOwner\(page\)/,
+  );
+  assert.ok(auth.includes("primaryOwner: existingOwnerAtStart"));
+  assert.ok(auth.includes("foreignOwner: false"));
+  assert.ok(auth.includes("existingOwnerAtStart: true"));
+  for (const forbidden of [
+    "phase23OwnerContinuation",
+    "phase23OwnerMode",
+    "AUTHORIZATION_SHA256",
+    "openEvalBudget",
+    "capCents",
+  ])
+    assert.ok(!auth.includes(forbidden));
+  assert.ok(paid.includes("authenticate, existingOwner, nonOwner"));
+  assert.ok(!paid.includes("async function existingOwner"));
+  assert.match(helper, /user\?\.owner !== expectedOwner\s*\|\|\s*user\.userId !== expectedId/);
+  assert.equal((helper.match(/readExpectedIdentity\(false, true\)/g) ?? []).length, 2);
+  assert.ok(
+    helper.indexOf(
+      "await authenticate(page);",
+      helper.indexOf("export async function existingOwner"),
+    ) < helper.lastIndexOf("readExpectedIdentity(false, true)"),
+  );
+});
