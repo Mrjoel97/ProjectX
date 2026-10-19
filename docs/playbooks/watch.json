@@ -1,4 +1,5 @@
 {
+  "zernio.md": ["packages/core/src/zernioPilot", "packages/backend/scripts/zernioPilot"],
   "buffer.md": [
     "packages/core/src/buffer",
     "packages/backend/convex/buffer",
