@@ -131,33 +131,43 @@ the exposure decision remain separate; no release is enabled by this spec.
 
 ### Phase 23 two-identity preparation and opt-in browser proof (live run remains pending)
 
-`PIKAR_PHASE23_TWO_IDENTITIES=1` opts into two seeded password users. Supply the usual
-`E2E_USER_EMAIL/PASSWORD` and distinct `E2E_FOREIGN_USER_EMAIL/PASSWORD`. Setup resolves both
-durable user ids, refuses owners/ambiguity, seeds onboarding before authentication (CLI calls can
-invalidate sessions), and verifies fresh JWT subjects/expiry before saving the two gitignored
-states `e2e/.auth/user.json` and `e2e/.auth/foreign.json`. Setup never grants ownership.
-The single Chromium project runs serially without retries or traces in this mode. Owner provisioning
-and storage-state overrides are refused because either would bypass the non-owner-first boundary.
-Use `playwright test --project=setup` to prepare only; ordinary feature runs remain unchanged.
+`PIKAR_PHASE23_TWO_IDENTITIES=1` identifies two controlled password users. Supply the usual
+`E2E_USER_EMAIL/PASSWORD` and distinct `E2E_FOREIGN_USER_EMAIL/PASSWORD`, with exact separately
+pinned primary/foreign user IDs. Use the shared native-form helper and `--no-deps` to bypass
+legacy `auth.setup.ts`; do not seed onboarding, decode tokens or replay saved auth for this
+acceptance. Empty contexts, unique exact-ID lookup and actual `/ops` presentation establish
+readiness. Gitignored state exports are fixed lineage labels, not timeless credentials to replay.
+Run Chromium serially without retries, traces or video. Ordinary feature setup remains separate.
+
+Free native readiness uses `phase23-auth-only.spec.ts` with `PIKAR_PHASE23_AUTH_ONLY=1` and a fresh
+`PHASE23_RUN_ID`. For the recovered A owner/B non-owner setup, add
+`PIKAR_PHASE23_CONTINUE_EXISTING_OWNER=1`. Leave browser-probe, owner-bootstrap and provisioning
+flags unset. This mode imports no paid continuation policy and requires no budget/hash; it only
+authenticates and writes an exclusive private readiness receipt. It does not activate/evaluate
+anything. Its live execution still needs local backend configuration and controlled sign-in.
 
 `agent-skill-authoring.spec.ts` is the serial live harness. In addition to the identity flag, it
-requires `PIKAR_PHASE23_BROWSER_PROBE=1`, `PIKAR_PHASE23_ALLOW_OWNER_BOOTSTRAP=1`, the SHA-256 of
+requires `PIKAR_PHASE23_BROWSER_PROBE=1`, an explicit owner mode, the SHA-256 of
 the explicit browser-spend authorization in `PIKAR_PHASE23_BROWSER_AUTHORIZATION_SHA256`, and the
 high-entropy `PHASE23_PRIVATE_NEEDLE`. Set these only after the actual live checkpoint. The harness
-runs free gates, verifies both non-owner surfaces, bootstraps only A, then sends exactly two ordinary
-cockpit turns (one explicit adaptation and one escalation refusal). B remains non-owner. It resolves
+runs free gates and fresh native authentication. Fresh mode requires
+`PIKAR_PHASE23_ALLOW_OWNER_BOOTSTRAP=1`, observes A/B non-owner and bootstraps only A.
+Recovered mode requires `PIKAR_PHASE23_CONTINUE_EXISTING_OWNER=1`, exact previous thread/budget
+pins and the bootstrap flag unset. It verifies A owner/B non-owner and terminal unused old
+controls, then prepares a distinct envelope with a different freshly authorized hash. Neither mode
+resets old locks. Both send exactly two ordinary cockpit turns (one explicit adaptation and one
+escalation refusal). B remains non-owner. The harness resolves
 the browser's actual source (`--inspect-agent-source <tenantId>:<sourceThreadId>`), requires duplicate
 identical readbacks, and checks real candidate/provenance/governance, owner desktop/mobile rendering
 and foreign isolation before exclusive handoff creation. A routing failure stops without substituting
 a direct candidate write or changing a skill body. No paid evaluation or activation is included.
 
 List without authenticating or spending:
-`pnpm --filter @pikar/web test:e2e -- e2e/agent-skill-authoring.spec.ts --project=chromium --list`.
-The actual authorized probe uses the same command without `--list`. The existing tenant/deployment
-model budgets govern both turns; authorize those configured budgets at the live checkpoint. The
-harness does not manufacture a separate per-probe spending reservation or claim that a prompt is a
-budget control. After an interrupted bootstrap, use the retained exact identities and checkpoint
-state; do not rerun setup against an already-owner A or create a substitute candidate.
+`pnpm --filter @pikar/web test:e2e -- e2e/agent-skill-authoring.spec.ts --project=chromium --list --no-deps`.
+The actual authorized probe uses the same command without `--list`, only after its concrete
+checkpoint. `PIKAR_PHASE23_CAP_CENTS` selects the existing hard-capped native aggregate envelope;
+the old expired budget cannot be reused. Unknown usage stays held, and containment does not prove
+policy refusal. Do not rerun fresh setup against an already-owner A or create a substitute row.
 
 The reusable validator is
 `.planning/phases/23-agent-authored-skills/validate-live-artifact.mjs`. It exports
@@ -169,6 +179,8 @@ when the named secret environment variable is missing. Never put the needle on t
 
 All three schemas are recursively closed. The handoff records candidate identity, source/lineage,
 baseline/effective/global/foreign snapshots, fixed auth path labels and browser witness counters.
+The owner witness is exactly one of legacy `nonOwnerBeforeBootstrap:true` or truthful recovered
+`existingOwnerAtStart:true`; neither branch manufactures the other observation.
 Eval/live artifacts bind the exact prior bytes, same candidate/deployment/suite, non-owner refusal
 state and owner activation/rollback. Browser fields are observations supplied by the operator, not
 facts a JSON validator can independently certify. No live artifact is created by the self-test.

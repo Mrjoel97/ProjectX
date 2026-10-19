@@ -31,6 +31,32 @@ const live = { schema: "phase23-live-result.v1", handoffSha256: e.handoffSha256,
   activation: { candidate: { ...e.candidate, status: "active", rollbackEligible: true, ownerApproval }, effective: { ...row, scope: "tenant", id: h.candidate.id, version: 2, bodyHash: h.candidate.bodyHash }, global: row, foreign: h.foreignBefore, ownerUiClickObserved: true },
   rollback: { candidate: { ...e.candidate, status: "archived", rollbackEligible: true, ownerApproval }, effective: { ...row, scope: "tenant", id: "baseline1" }, global: row, foreign: h.foreignBefore, baselineId: "baseline1", auditEventCount: 1, auditEventId: "audit1" }, eval: e.eval };
 const context = { privateNeedle, handoffBytes, evalBytes };
+// A current existing-owner witness is explicit; it never invents the missing historic witness.
+const continuation = structuredClone(h);
+delete continuation.browser.nonOwnerBeforeBootstrap;
+continuation.browser.existingOwnerAtStart = true;
+const continuationBytes = JSON.stringify(continuation);
+validateArtifact("handoff", continuation, { privateNeedle });
+const continuationEval = { ...e, handoffSha256: sha256(continuationBytes) };
+const continuationEvalBytes = JSON.stringify(continuationEval);
+validateArtifact("eval", continuationEval, { privateNeedle, handoffBytes: continuationBytes });
+validateArtifact("live", { ...live, handoffSha256: sha256(continuationBytes), evalResultSha256: sha256(continuationEvalBytes) },
+  { privateNeedle, handoffBytes: continuationBytes, evalBytes: continuationEvalBytes });
+assert.equal(JSON.stringify(h), handoffBytes, "legacy artifact bytes remain unchanged");
+for (const mutate of [
+  (v) => { v.browser.nonOwnerBeforeBootstrap = true; },
+  (v) => { v.browser.nonOwnerBeforeBootstrap = false; },
+  (v) => { delete v.browser.existingOwnerAtStart; },
+  (v) => { v.browser.existingOwnerAtStart = false; },
+  (v) => { v.browser.existingOwnerAtStart = "true"; },
+  (v) => { v.browser.innocent = "extra"; },
+  (v) => { v.browser.foreignRemainedNonOwner = false; },
+]) {
+  const changed = structuredClone(continuation);
+  mutate(changed);
+  assert.throws(() => validateArtifact("handoff", changed, { privateNeedle }), /PHASE23_ARTIFACT_INVALID/);
+}
+assert.throws(() => validateArtifact("eval", continuationEval, context), /PHASE23_ARTIFACT_INVALID/);
 const reject = (kind, original, mutate) => {
   const copy = JSON.parse(JSON.stringify(original));
   mutate(copy);

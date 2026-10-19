@@ -51,7 +51,13 @@ const candidate = (stage) => exact({ ...candidateFields,
 const state = exact({ sha256: hash, auditCount: count, requestCount: count, approvedPlanCount: count, toolGrantSha256: hash });
 const evalRun = exact({ runId: ref, passed: positive, total: positive, retries: count, model: ref, costUsd: money, costCapUsd: money, authorizationSha256: hash });
 const authRefs = exact({ primaryStorageStateRef: literal("e2e/.auth/user.json"), foreignStorageStateRef: literal("e2e/.auth/foreign.json"), primaryUserId: ref, foreignUserId: ref });
-const browser = exact({ sourceThreadId: ref, observedAt: positive, activityTool: literal("authorSkillCandidate"), candidateCount: literal(1), authoringToolCalls: literal(1), authenticated: literal(true), viewportCount: positive, nonOwnerBeforeBootstrap: literal(true), foreignRemainedNonOwner: literal(true), preEvalActivationDisabled: literal(true), refusalBefore: state, refusalAfter: state });
+// Preserve every legacy artifact. A continuation names the actually observed existing owner;
+// it cannot also claim a fresh non-owner/bootstrap witness. Both branches remain exactly closed.
+const browser = (v) => exact({ sourceThreadId: ref, observedAt: positive, activityTool: literal("authorSkillCandidate"), candidateCount: literal(1), authoringToolCalls: literal(1), authenticated: literal(true), viewportCount: positive,
+  ...(Object.hasOwn(v ?? {}, "existingOwnerAtStart")
+    ? { existingOwnerAtStart: literal(true) }
+    : { nonOwnerBeforeBootstrap: literal(true) }),
+  foreignRemainedNonOwner: literal(true), preEvalActivationDisabled: literal(true), refusalBefore: state, refusalAfter: state })(v);
 const schemas = {
   handoff: exact({ schema: literal("phase23-live-handoff.v1"), deploymentHash: hash, suite, candidate: candidate("handoff"), rollbackBaseline: baseline, effectiveBefore: skill, globalBefore: globalSkill, foreignBefore: foreign, authRefs, browser }),
   eval: exact({ schema: literal("phase23-eval-result.v1"), handoffSha256: hash, deploymentHash: hash, suite, candidate: candidate("eval"), eval: evalRun,

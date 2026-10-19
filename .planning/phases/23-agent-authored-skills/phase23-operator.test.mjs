@@ -14,6 +14,9 @@ test("exact handoff compares source, immutable candidate, governance, baseline a
   const provenance = {...c, tenantSkillId: c.id};
   const source = {candidateCount: 1, authoringToolCalls: 1, candidates: [{tenantSkillId: c.id}], governance: {count: 1}};
   assertLiveMatches("handoff", artifact, snapshot, provenance, source);
+  // Both validated witness shapes retain the exact same read-only state/hash comparisons.
+  for (const witness of [{nonOwnerBeforeBootstrap: true}, {existingOwnerAtStart: true}])
+    assertLiveMatches("handoff", {...artifact, browser: {...artifact.browser, ...witness}}, snapshot, provenance, source);
   for (const key of ["deploymentHash", "currentEffective", "globalCurrent", "foreignCurrent", "rollbackBaseline"])
     assert.throws(() => assertLiveMatches("handoff", artifact, {...snapshot, [key]: "changed"}, provenance, source));
   assert.throws(() => assertLiveMatches("handoff", artifact, snapshot, {...provenance, sourceTurnId: "other"}, source));

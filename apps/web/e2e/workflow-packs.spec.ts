@@ -1,6 +1,3 @@
-import { spawnSync } from "node:child_process";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
 // ══ 29-10 (ROUT-01 / ROUT-02) — the authenticated browser gate for /dashboard/workflows ═══════
@@ -27,10 +24,10 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 //      evidence planes a global pack body clears, keyed to the row id. Refusal is still the default
 //      and still the answer for a row with nothing behind it; what changed is that it is EARNABLE.
 //
-// This file is one of the three producers that make it earnable: the `@evidence` block at the
-// bottom writes the BROWSER plane for the exact row this run exercised. Activation itself remains
-// an `ownerMutation` and is deliberately NOT driven from here — no control on this surface offers
-// it, and that absence is still asserted below.
+// Historical browser-plane writes exist; they are not revoked here. The @evidence block below
+// now refuses new writes: settings/viewports cannot certify a newest candidate resolved later,
+// and the required per-candidate behavioral protocol has not been implemented. Activation remains
+// an ownerMutation and is deliberately NOT driven from this surface.
 //
 // ── COST ─────────────────────────────────────────────────────────────────────────────────────
 //
@@ -57,20 +54,9 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 // per-test pack, because six packs are a governed closed set and the tests should use the real one.
 test.describe.configure({ mode: "serial" });
 
-/** Where the `setup` project saved A's session. Mirrors `playwright.config.ts`'s own default —
- *  inlined rather than imported, because Playwright refuses to let a spec import a test file. */
-const STORAGE_STATE = process.env.PIKAR_E2E_STORAGE_STATE ?? "e2e/.auth/user.json";
-
 const PACK = "Brand review";
-/** The registry name behind the card title. `WORKFLOW_PACK_SKILL_NAMES` is derived as `pack-${id}`
- *  over the registered ids; a .ts spec cannot import the .mjs-side registry, so it is written out
- *  and the `@evidence` block fails loudly (no such customization) if it is ever wrong. */
-const PACK_SKILL_NAME = "pack-brand-review";
-
-/** WHICH VIEWPORTS ACTUALLY RENDERED THE SAVED SETTINGS. Filled by the multi-viewport test, read by
- *  the `@evidence` block at the bottom, which records `viewports: VIEWPORTS_SEEN.size` — the number
- *  the browser EARNED. A run whose narrow viewport failed writes 1 and the pack gate refuses it,
- *  which is the honest outcome; a hardcoded 2 would certify a layout nobody looked at. */
+/** Actual rendered viewports for the settings-layout assertion only. These observations do not
+ *  identify a candidate row or establish its behavioral qualification. No evidence is written. */
 const VIEWPORTS_SEEN = new Set<string>();
 
 /** The complete set of controls the customization form may offer. This is the closed schema made
@@ -354,101 +340,20 @@ test.describe("@run manual reruns are fresh — COSTS MONEY", () => {
   });
 });
 
-// ── LAST IN THE FILE, AND LAST IN THE RUN: anything that shells out to convex ─────────────────
-//
-// `convexRun` ENDS THE BROWSER SESSION on a local deployment (e2e/README.md, measured 2026-08-14):
-// the saved `storageState` is dead from the moment it lands and the next navigation goes to
-// /signin. So nothing below may navigate, and nothing above may be scheduled after it — run this
-// file with `--workers=1`, as `workflow-pack-pilot.spec.ts` does for the same reason.
-const backendDir =
-  process.env.PIKAR_E2E_BACKEND_DIR ??
-  resolve(dirname(fileURLToPath(import.meta.url)), "../../../packages/backend");
-const convexBin = resolve(backendDir, "node_modules/convex/bin/main.js");
-
-/** Unflagged means DEV. 27-12: a browser run pointed at production by `PIKAR_E2E_BASE_URL` must
- *  never write its evidence to the dev row — a run that certifies a deployment it never touched. */
-const TARGET_ARGS = process.env.PIKAR_CONVEX_TARGET === "prod" ? ["--prod"] : [];
-const CLI_FAILURE = /Failed to run function|isn't running|not listening|Error: /;
-
-/** ⚠️ ENDS THE BROWSER SESSION. Never call this before a navigation you still need. */
-function convexRun<T>(fn: string, args: Record<string, unknown>): T {
-  const r = spawnSync(
-    process.execPath,
-    [convexBin, "run", ...TARGET_ARGS, fn, JSON.stringify(args)],
-    {
-      cwd: backendDir,
-      encoding: "utf8",
-    },
-  );
-  if (r.error) throw new Error(`spawn failed for ${fn}: ${r.error.message}`);
-  const stderr = r.stderr ?? "";
-  if (CLI_FAILURE.test(stderr)) throw new Error(`${fn} failed:\n${stderr.trim()}`);
-  const out = (r.stdout ?? "").trim();
-  // A VOID FUNCTION PRINTS NOTHING, AND THAT IS SUCCESS. `recordTenantPackBrowserEvidence` returns
-  // nothing; `JSON.parse("")` would throw and report a write that landed as a failure. The failure
-  // signature above is what decides, never the empty string and never the exit code — on Windows
-  // the CLI aborts with a libuv `UV_HANDLE_CLOSING` assertion AFTER printing a good answer.
-  if (out === "") return undefined as T;
-  return JSON.parse(out) as T;
-}
-
-/**
- * THE BROWSER PLANE FOR A TENANT PACK CANDIDATE — the third of the three producers.
- *
- * WHAT IT RECORDS IS WHAT THE BROWSER ESTABLISHED, and nothing else. `VIEWPORTS_SEEN` is filled by
- * the test above, one entry per viewport that actually rendered the saved settings; the artifact
- * carries `viewports: VIEWPORTS_SEEN.size`, so a run where the second viewport failed writes a
- * number the gate refuses rather than an optimistic 2. The pilot spec's rule, one scope down.
- *
- * IT WRITES TO A ROW ID, NEVER A NAME. Two tenants can each own version 2 of `pack-brand-review`,
- * so `recordTenantPackBrowserEvidence` takes the candidate id and re-checks the artifact names that
- * exact row before storing it — a mis-aimed artifact fails at the write, where someone is watching.
- */
-test.describe("@evidence the browser plane for this tenant's candidate", () => {
-  test("record what this run established about the exact candidate row", () => {
-    test.skip(
-      VIEWPORTS_SEEN.size === 0,
-      "no viewport rendered the saved settings — there is nothing this run may certify",
-    );
-    const email = process.env.E2E_USER_EMAIL;
-    expect(
-      email,
-      "E2E_USER_EMAIL is needed to resolve the tenant this run signed in as",
-    ).toBeTruthy();
-
-    // THE TENANT IS THE USER ID — `requireTenant` returns the JWT subject before '|' (e2e/README.md).
-    const who = convexRun<{ userId?: string }>("owner:findUserIdByEmail", { email });
-    const tenantId = who?.userId;
-    expect(tenantId, `no user row for ${email}`).toBeTruthy();
-
-    const row = convexRun<{ id: string; version: number } | null>(
-      "skills:newestTenantCustomization",
-      { tenantId, name: PACK_SKILL_NAME },
-    );
-    expect(row, `${tenantId} has no ${PACK_SKILL_NAME} customization to certify`).toBeTruthy();
-
-    convexRun("skills:recordTenantPackBrowserEvidence", {
-      candidateId: (row as { id: string }).id,
-      browserEvidence: JSON.stringify({
-        runner: "playwright:tenant-pack",
-        runId: process.env.PIKAR_E2E_RUN_ID ?? `pw-tenant-${(row as { id: string }).id}`,
-        pass: true,
-        authenticated: true,
-        viewports: VIEWPORTS_SEEN.size,
-        casesPassed: 1,
-        casesTotal: 1,
-        tenantTarget: {
-          candidateId: (row as { id: string }).id,
-          name: PACK_SKILL_NAME,
-          version: (row as { version: number }).version,
-        },
-        deploymentRef: process.env.PIKAR_E2E_BASE_URL ?? "http://127.0.0.1:3111",
-        ts: Date.now(),
-      }),
-    });
-    console.log(
-      `[evidence] browser plane written for tenantSkills ${(row as { id: string }).id} ` +
-        `(${PACK_SKILL_NAME} v${(row as { version: number }).version}) at ${VIEWPORTS_SEEN.size} viewports`,
+// ── FAIL-CLOSED: settings observations are not exact candidate behavioral evidence ─────────────
+// The former writer resolved E2E_USER_EMAIL and newestTenantCustomization after the UI tests. A
+// concurrent edit or different authenticated storage state could certify a tenant/row the browser
+// never saw. A viewport set cannot supply current-run candidate/body pins or behavioral outcomes.
+// Historical accepted receipts stay untouched; there is no new row lookup, artifact importer or
+// backend write here. Implement actual exact-row journeys before restoring an evidence producer.
+test.describe("@evidence exact tenant-candidate browser acceptance", () => {
+  test("refuses evidence while the exact candidate behavioral protocol is missing", () => {
+    throw new Error(
+      "TENANT_PACK_BROWSER_PROTOCOL_MISSING: no evidence was written. " +
+        "Current-run authenticated tenant, exact candidate/body/version, actual viewport and " +
+        "completed required behavioral outcomes must be observed by the browser. " +
+        "Saved settings, imported auth metadata and a later newest-row lookup cannot qualify " +
+        "a tenant candidate.",
     );
   });
 });

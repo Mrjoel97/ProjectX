@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { test } from "@playwright/test";
-import { nonOwner } from "./phase23NativeAuth";
+import { existingOwner, nonOwner } from "./phase23NativeAuth";
 
 test.describe.configure({ mode: "serial", retries: 0 });
 test.use({
@@ -11,7 +11,7 @@ test.use({
   video: "off",
   storageState: { cookies: [], origins: [] },
 });
-test("fresh A/B native sign-in and non-owner readiness only @phase23-auth-only", async ({
+test("fresh A/B native sign-in and explicit owner-state readiness only @phase23-auth-only", async ({
   page,
   browser,
 }) => {
@@ -26,14 +26,20 @@ test("fresh A/B native sign-in and non-owner readiness only @phase23-auth-only",
     process.env.PIKAR_E2E_PROVISION
   )
     throw new Error("PHASE23_AUTH_ONLY_SCOPE_INVALID");
+  const continuation = process.env.PIKAR_PHASE23_CONTINUE_EXISTING_OWNER;
+  if (continuation !== undefined && continuation !== "1")
+    throw new Error("PHASE23_AUTH_ONLY_OWNER_MODE_INVALID");
+  const existingOwnerAtStart = continuation === "1";
   const runId = process.env.PHASE23_RUN_ID;
   if (!runId || !/^[a-f0-9-]{36}$/.test(runId)) throw new Error("PHASE23_AUTH_ONLY_RUN_REQUIRED");
+  const receiptDirectory = resolve("../../output/playwright/phase23-acceptance");
+  mkdirSync(receiptDirectory, { recursive: true });
   const foreignContext = await browser.newContext({
     storageState: { cookies: [], origins: [] },
     baseURL: process.env.PIKAR_E2E_BASE_URL ?? "http://127.0.0.1:3111",
   });
   try {
-    const primaryUserId = await nonOwner(page);
+    const primaryUserId = existingOwnerAtStart ? await existingOwner(page) : await nonOwner(page);
     const foreignUserId = await nonOwner(await foreignContext.newPage(), true);
     if (primaryUserId === foreignUserId) throw new Error("PHASE23_AUTH_IDENTITIES_COLLIDE");
     await page.context().storageState({ path: "e2e/.auth/user.json" });
@@ -43,7 +49,7 @@ test("fresh A/B native sign-in and non-owner readiness only @phase23-auth-only",
       sha256: createHash("sha256").update(readFileSync(path)).digest("hex"),
     }));
     writeFileSync(
-      resolve("../../output/playwright/phase23-acceptance", `auth-only-${runId}.json`),
+      resolve(receiptDirectory, `auth-only-${runId}.json`),
       JSON.stringify(
         {
           schema: "phase23-auth-only.v1",
@@ -51,7 +57,8 @@ test("fresh A/B native sign-in and non-owner readiness only @phase23-auth-only",
           runId,
           primaryUserId,
           foreignUserId,
-          primaryOwner: false,
+          primaryOwner: existingOwnerAtStart,
+          ...(existingOwnerAtStart ? { existingOwnerAtStart: true } : {}),
           foreignOwner: false,
           freshPasswordSignIn: true,
           previousStateLoaded: false,

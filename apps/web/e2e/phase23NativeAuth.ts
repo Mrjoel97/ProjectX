@@ -11,7 +11,8 @@ type AuthStage =
   | "SUBMIT"
   | "AUTHENTICATED"
   | "IDENTITY"
-  | "NON_OWNER_UI";
+  | "NON_OWNER_UI"
+  | "OWNER_UI";
 function mark(role: "A" | "B", stage: AuthStage, status: "started" | "passed" | "failed") {
   process.stdout.write(
     `${JSON.stringify({ event: "phase23_native_auth", role, stage, status })}\n`,
@@ -76,7 +77,7 @@ export async function authenticate(page: Page, foreign = false) {
 }
 
 /** The only server operation in the shared auth helper is this exact read-only identity lookup. */
-export async function nonOwner(page: Page, foreign = false) {
+function readExpectedIdentity(foreign: boolean, expectedOwner: boolean): string {
   const role = foreign ? "B" : "A";
   const email = process.env[foreign ? "E2E_FOREIGN_USER_EMAIL" : "E2E_USER_EMAIL"];
   const expectedId =
@@ -97,12 +98,37 @@ export async function nonOwner(page: Page, foreign = false) {
     );
     if (result.status !== 0 || result.error) throw new Error("read failed");
     const user = JSON.parse(result.stdout);
-    if (user?.owner !== false || user.userId !== expectedId) throw new Error("identity mismatch");
+    if (user?.owner !== expectedOwner || user.userId !== expectedId)
+      throw new Error("identity mismatch");
     mark(role, "IDENTITY", "passed");
   } catch {
     mark(role, "IDENTITY", "failed");
     throw new Error("PHASE23_AUTH_IDENTITY_FAILED");
   }
+  return expectedId;
+}
+
+/** Fresh existing-owner witness; it never grants or revokes a role. */
+export async function existingOwner(page: Page): Promise<string> {
+  const expectedId = readExpectedIdentity(false, true);
+  await authenticate(page);
+  mark("A", "OWNER_UI", "started");
+  try {
+    await page.goto("/ops");
+    await expect(page.getByText("Tenant skill candidates", { exact: true })).toBeVisible();
+    // The shared read checks BOTH exact user id and owner flag again after native sign-in.
+    if (readExpectedIdentity(false, true) !== expectedId) throw new Error("identity changed");
+    mark("A", "OWNER_UI", "passed");
+  } catch {
+    mark("A", "OWNER_UI", "failed");
+    throw new Error("PHASE23_AUTH_OWNER_UI_FAILED");
+  }
+  return expectedId;
+}
+
+export async function nonOwner(page: Page, foreign = false) {
+  const role = foreign ? "B" : "A";
+  const expectedId = readExpectedIdentity(foreign, false);
   await authenticate(page, foreign);
   mark(role, "NON_OWNER_UI", "started");
   try {
