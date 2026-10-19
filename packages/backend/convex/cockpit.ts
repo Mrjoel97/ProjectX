@@ -218,6 +218,16 @@ async function ensureThreadAndPlan(
   return { threadId: tid, planId: plan._id };
 }
 
+/** Create only the tenant-owned conversation and plan for a first file/voice submission.
+ * No greeting, model call, user message, approval or external work is created here. */
+export const prepareIntakeThread = tenantAction({
+  args: {},
+  handler: async (ctx): Promise<{ threadId: string }> => {
+    const { threadId } = await ensureThreadAndPlan(ctx, undefined, "Files and voice");
+    return { threadId };
+  },
+});
+
 /**
  * Run ONE curated knowledge-work pack (27-07, PACK-02/PACK-03) — `sendCockpitMessage`'s shape with
  * one substitution: the governed loop runs the pack body under the pack's code-owned tool allow-list

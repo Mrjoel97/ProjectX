@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Fresh-input intake and draft-only dictation change cockpit/intake evaluator source identity. Refresh the exact revision and suite manifest without changing the46 cases or claiming paid qualification, activation or lifecycle evidence.
+
 > Last verified: 2026-10-19 — Skills and Workflows displays tenant-scoped user/agent draft history. Draft entry retains the existing owner-only UI boundary; publishing still creates candidates only, with no activation or evaluation control. Phase 23 plans 06–09 authenticated lifecycle evidence remains outstanding; this interface does not close those gates.
 
 > Last verified: 2026-10-19 — Refreshed the golden exact-source revision after final reporting metadata changes; the 46-case corpus and its hash are unchanged. This is not new evaluation evidence.

@@ -12,7 +12,9 @@ vi.mock("convex/react", () => ({
 vi.mock("@convex-dev/agent/react", () => ({
   useThreadMessages: () => ({ results: [], status: "Exhausted" }),
 }));
-vi.mock("./IntakeControls", () => ({ IntakeControls: () => null }));
+vi.mock("./IntakeControls", () => ({
+  IntakeControls: ({ children }: { children: import("react").ReactNode }) => children,
+}));
 
 import { ChatPane } from "./ChatPane";
 
@@ -37,13 +39,7 @@ test("typed submit uses the bounded server default without a research selector",
   const root = createRoot(host);
   try {
     await act(async () => root.render(<Composer />));
-    const tools = requireElement<HTMLDetailsElement>(host, "details");
-    expect(tools.open).toBe(false);
-    const summary = requireElement<HTMLElement>(tools, 'summary[aria-label="Message tools"]');
-    await act(async () => summary.click());
-    expect(tools.open).toBe(true);
-    await act(async () => summary.click());
-    expect(tools.open).toBe(false);
+    expect(host.querySelector('summary[aria-label="Message tools"]')).toBeNull();
     expect(host.querySelector("select")).toBeNull();
     expect(host.textContent).not.toContain("Research page attempts");
     expect(requireElement<HTMLTextAreaElement>(host, "textarea").rows).toBe(1);

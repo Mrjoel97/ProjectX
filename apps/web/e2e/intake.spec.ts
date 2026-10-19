@@ -33,19 +33,7 @@ test("attach a file -> classified content appears in the conversation (INTK-02)"
   const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
 
-  // Mint the thread first — IntakeControls needs a threadId (same lift ChatPane already does;
-  // Lane A mounts IntakeControls only once threadId is truthy).
-  const say = async (text: string) => {
-    await composer.fill(text);
-    await composer.press("Enter");
-    await expect(composer).toHaveValue("", { timeout: 20_000 });
-    // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
-    // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
-    await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, {
-      timeout: 90_000,
-    });
-  };
-  await say("SMOKE::agent::add=alice@example.com");
+  // Start directly with the attachment; no preliminary greeting.
 
   const chat = page.getByTestId("chat-pane");
 
@@ -55,6 +43,8 @@ test("attach a file -> classified content appears in the conversation (INTK-02)"
     mimeType: "text/plain",
     buffer: smokeBlob("SMOKE::extract::", "Please review the attached budget for Q3."),
   });
+
+  await page.getByRole("button", { name: "Send", exact: true }).click();
 
   // The extracted, redacted safeText merges into the SAME thread as a new turn — the framed
   // attachment content becomes visible in the conversation (attachToThread -> sendCockpitMessage).
@@ -68,29 +58,20 @@ test("dictate -> transcript enters as a request turn (INTK-03, one-shot)", async
 
   const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
-  const say = async (text: string) => {
-    await composer.fill(text);
-    await composer.press("Enter");
-    await expect(composer).toHaveValue("", { timeout: 20_000 });
-    // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
-    // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
-    await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, {
-      timeout: 90_000,
-    });
-  };
-  await say("SMOKE::agent::add=bob@example.com");
+  // Start directly with dictation; transcription stays editable until Send.
 
   const chat = page.getByTestId("chat-pane");
 
-  // Headless-safe dictation seam (no real mic) — same upload -> dictateToThread path a real
-  // record/stop takes; the transcript merges VERBATIM (frameForConversation's dictation branch,
-  // never wrapped like an attachment).
+  // Headless-safe recording seam: transcribeDraft fills the composer without sending.
   const dictationInput = page.getByTestId("dictation-test-input");
   await dictationInput.setInputFiles({
     name: "dictation.webm",
     mimeType: "audio/webm",
     buffer: smokeBlob("SMOKE::transcribe::", "send an email to bob@example.com about lunch"),
   });
+
+  await expect(composer).toHaveValue(/send an email to \S+ about lunch/, { timeout: 20_000 });
+  await page.getByRole("button", { name: "Send", exact: true }).click();
 
   // The transcript enters as a request turn with its PII REDACTED in the rendered bubble
   // ("send an email to [EMAIL_1] about lunch"), so match the sentence, not the raw address.
