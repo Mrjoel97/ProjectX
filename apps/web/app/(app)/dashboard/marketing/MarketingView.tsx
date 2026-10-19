@@ -12,6 +12,7 @@ import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { Component, type CSSProperties, type ReactNode, useState } from "react";
 import { BufferMarketing } from "./BufferPanel";
+import { ZernioMarketing } from "./ZernioPanel";
 
 const card: CSSProperties = {
   background: "var(--card)",
@@ -433,12 +434,15 @@ export function MarketingView() {
           Review channel availability, create tracked file links and record consent-aware leads.
         </p>
         <p>
-          Use Buffer for approved social posts and engagement reports. Direct social-network
-          connections remain separate.
+          Use Buffer for approved social posts and Zernio for Instagram and TikTok reports. Direct
+          social-network connections remain separate.
         </p>
       </header>
       <SectionBoundary name="Buffer social marketing">
         <BufferMarketing />
+      </SectionBoundary>
+      <SectionBoundary name="Zernio social reports">
+        <ZernioMarketing />
       </SectionBoundary>
       <SectionBoundary name="Channels">
         <Channels />

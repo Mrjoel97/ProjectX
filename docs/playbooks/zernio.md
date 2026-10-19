@@ -1,0 +1,44 @@
+> Last verified: 2026-10-19 — Report scope, publisher attribution, sample bounds and freshness are returned as structured metadata. Endpoint/cron inventories and privacy guards pass; no long inline agent prompt is introduced.
+
+> Last verified: 2026-10-19 — production connector implemented under ADR-060; offline boundary tests pass. Hosted release and persistent customer activation are tracked separately from the revoked pilot grant.
+
+# Production reporting
+
+Customers bring their own profile-scoped, read-only Accounts/Analytics key at /connect-zernio. An authenticated beginConnect mutation issues a ten-minute one-use HTTP capability bound to the tenant/profile/generation. The Origin-checked, 2KiB HTTP intake encrypts the key with the existing deployment credential key and provider=zernio authenticated data before passing any function arguments. Never place plaintext credentials in Convex actions, URLs, logs, fixtures, screenshots or chat. API key permission metadata cannot be fully attested by auth/verify; Pikar enforces fixed-origin GET-only behavior and requests restricted read-only keys.
+
+Select at most two Instagram/TikTok accounts, then refresh from Marketing. Daily refresh is off until explicitly selected. The hourly cron claims up to 25 due tenants and advances them one day; workers recheck erasure/generation/revision and use a ten-minute lease plus a five-minute minimum refresh interval. No provider publication or account provisioning occurs. API/provider failures retain the previous complete cached report with a visible failure notice; a genuine empty window is distinct from absent metrics. Pagination is capped at five pages of 100 posts per account and fails explicitly beyond that ceiling.
+
+Reports cover ninety inclusive UTC publication dates and contain per-post lifetime metric snapshots. Fetched time is not upstream freshness; provider update strings are retained without assigning an unspecified timezone. No sums of overlapping reach or engagement rates are produced. External posts do not establish Buffer publisher provenance. The executive readZernioEngagement tool reads only the tenant's cached evidence (up to 20 sample posts per account); it cannot connect, alter selection, refresh or publish. Samples include a total post count; they are not the entire report.
+
+Connections are tenant credentials (summary-only export); the latest report is tenant-owned export/erasure data. Local disconnect removes both and fences late work. Revoke the key in Zernio API Keys to end upstream access as well. Erasure records local deletion without claiming upstream revocation. The temporary pilot key was verified deleted on 2026-10-19; existing keys were untouched.
+
+Key files: packages/core/src/zernio.ts, convex/zernio.ts and zernioActions.ts, Marketing/ZernioPanel.tsx, and connect-zernio/page.tsx. Run core zernio, backend zernio/isolation/routines/toolRegistrySnapshot/tenantExport/tenantDelete/privacyLifecycle, web zernioPanel/marketingView and existing Buffer regressions. Run the full release gate before deploying. The crypto envelope uses the existing CONNECTOR_CREDENTIAL_KEY_V1/V2, SITE_URL and CONVEX_SITE_URL configuration; no operator-level Zernio key is added to deployment configuration.
+
+# Playbook: Zernio analytics pilot
+
+> Last verified: 2026-10-19 — live read-only pilot returned Instagram and TikTok metrics and matched a native TikTok post also shown in Buffer. Buffer-published provenance remains unqualified; this is not a deployed Pikar reporting connector.
+> Authority: owner's approval of a two-account analytics pilot for Buffer-published posts.
+
+## Scope
+
+Qualify Zernio before adding a hosted reporting integration. Existing Pikar publishing remains on Buffer. The pilot reads only the existing Instagram/TikTok profile, at most two accounts, and post analytics over ninety inclusive UTC dates (source=all). It cannot publish, connect new accounts, buy a plan, use X or change Pikar production data.
+
+## Files and operation
+
+- `packages/core/src/zernioPilot.ts`: strict account/metric/page boundaries; missing values are not zeros.
+- `packages/backend/scripts/zernioPilot.mjs`: fixed-origin GET reader and one-use loopback credential intake.
+- `packages/backend/scripts/zernioPilot.test.mjs`: runnable `node --test` checks of scope, read-only calls, errors and credential intake.
+
+Run `node packages/backend/scripts/zernioPilot.mjs serve <profile-id> [known-buffer-platform-post-id ...]`. It binds only 127.0.0.1 and prints a random local URL that expires after thirty minutes. Use the password field to submit a profile-scoped, read-only key limited to Analytics and Accounts. Do not put a key in chat, command arguments, source, environment files, screenshots, logs or reports. The intake validates host/origin, body size and one-use submission; credentials remain in process memory. Stop the process after checking its safe result. Revoke only the pilot key after the test, keeping pre-existing keys untouched.
+
+The reader uses only `/api/v1/auth/verify`, `/api/v1/accounts?profileId=...` and bounded pages of `/api/v1/analytics` with explicit profile/account/date/source filters. It rejects foreign accounts, unexpected platforms, post rows without the selected account and pagination exceeding five pages. No raw vendor errors, account identifiers, post contents, media or keys enter its result. Combined posts use per-account analytics, never the aggregate across accounts. Source timestamps without a timezone are preserved verbatim and must not be presented as UTC freshness. Individual post metrics and source timestamps remain distinct; no sum of overlapping reach or invented engagement rate is produced.
+
+## Acceptance
+
+Check both accounts' connection health. Buffer Sent history includes native-platform posts; require an explicit Published via Buffer label or equivalent publishing receipt before supplying a known Buffer-published platform ID. A Sent-history match alone does not establish the publisher. Compare returned counts/metrics with Zernio's dashboard, record source freshness, and match at least one platform post ID to a known post published through Buffer. `complete` requires both channels returning metrics without reconnection and an exact Buffer-post match. Empty/failed analytics is incomplete, not a successful zero report.
+
+The [multi-tenant model](https://docs.zernio.com/multi-tenant) supports one profile per Pikar tenant for a later hosted integration. Build that only after this live proof, with server-side credentials, tenant-bound profile ownership, erasure/export classification, consent and budget controls. The [external-post guide](https://docs.zernio.com/analytics/sync-external-posts) describes explicit LinkedIn personal-post imports, while its analytics overview retains a conflicting older restriction; no LinkedIn guarantee follows from an Instagram/TikTok pilot. Current pricing has two free connected accounts across a team, not per Pikar customer. No new paid connection is authorized by this pilot.
+
+## Live qualification (2026-10-19)
+
+Both existing accounts were active without reconnection. The 2026-07-22 through 2026-10-19 window returned 174 TikTok and 189 Instagram external posts. One TikTok platform ID taken from Buffer’s Sent history matched exactly, returning 7 likes and 99 views, matching Buffer’s displayed counts. Buffer labels it Published via Tiktok, so that run’s supplied-ID completion flag is not accepted as proof of Buffer publishing. No new post was published. Both account reads and cross-provider native-post metrics are verified; Buffer-published provenance, Instagram publisher provenance, all-platform coverage, background refresh, and a hosted Pikar connection remain unqualified. The temporary profile-scoped key is for this pilot only and must be revoked afterward.

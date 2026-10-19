@@ -35,7 +35,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 71 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 73 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -59,6 +59,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │ ── Connections (OAuth tokens) ──────────────────────────── ~L1425          │
 // │   notifications, gmailTokens, microsoftCalendarTokens                      │
 // │   bufferOAuthStates, bufferConnections, bufferPosts, bufferReports          │
+// │   zernioConnections, zernioReports                                        │
 // │                                                                            │
 // │ ── Vault (Document Store) ──────────────────────────────── ~L956           │
 // │   vaultSources, vaultDocuments, vaultFolders, vaultSheets, uploadReceipts                  │
@@ -205,6 +206,77 @@ export default defineSchema({
     .index("by_tenant", ["tenantId"])
     .index("by_state_hash", ["stateHash"])
     .index("by_expiry", ["expiresAt"]),
+  zernioConnections: defineTable({
+    tenantId: v.string(),
+    connectionId: v.string(),
+    profileId: v.string(),
+    revision: v.number(),
+    status: v.union(
+      v.literal("connecting"),
+      v.literal("connected"),
+      v.literal("disconnected"),
+      v.literal("reauth_required"),
+    ),
+    channels: v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        platform: v.union(v.literal("instagram"), v.literal("tiktok")),
+        available: v.boolean(),
+      }),
+    ),
+    selectedAccountIds: v.array(v.string()),
+    dailyReports: v.boolean(),
+    nextReportAt: v.number(),
+    nextRefreshAt: v.number(),
+    updatedAt: v.number(),
+    ciphertextB64: v.optional(v.string()),
+    ivB64: v.optional(v.string()),
+    keyVersion: v.optional(v.union(v.literal("v1"), v.literal("v2"))),
+    ticketHash: v.optional(v.string()),
+    connectExpiresAt: v.optional(v.number()),
+    connectClaimed: v.optional(v.boolean()),
+    lease: v.optional(v.string()),
+    leaseUntil: v.optional(v.number()),
+    lastAttemptAt: v.optional(v.number()),
+    lastFailure: v.optional(v.string()),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_ticket", ["ticketHash"])
+    .index("by_report_due", ["dailyReports", "nextReportAt"]),
+  zernioReports: defineTable({
+    tenantId: v.string(),
+    connectionId: v.string(),
+    report: v.object({
+      fromDate: v.string(),
+      toDate: v.string(),
+      fetchedAt: v.number(),
+      accounts: v.array(
+        v.object({
+          accountId: v.string(),
+          platform: v.union(v.literal("instagram"), v.literal("tiktok")),
+          posts: v.array(
+            v.object({
+              postId: v.string(),
+              source: v.union(v.literal("external"), v.literal("zernio")),
+              updatedAt: v.union(v.string(), v.null()),
+              metrics: v.object({
+                impressions: v.optional(v.number()),
+                reach: v.optional(v.number()),
+                likes: v.optional(v.number()),
+                comments: v.optional(v.number()),
+                shares: v.optional(v.number()),
+                saves: v.optional(v.number()),
+                clicks: v.optional(v.number()),
+                views: v.optional(v.number()),
+                engagementRate: v.optional(v.number()),
+              }),
+            }),
+          ),
+        }),
+      ),
+    }),
+  }).index("by_tenant", ["tenantId"]),
   bufferConnections: defineTable({
     tenantId: v.string(),
     connectionId: v.string(),
@@ -1843,6 +1915,7 @@ export default defineSchema({
       v.literal("setSubject"),
       v.literal("readBufferChannels"),
       v.literal("readBufferEngagement"),
+      v.literal("readZernioEngagement"),
       v.literal("stageBufferPost"),
       v.literal("setMode"),
       v.literal("setSendTime"),

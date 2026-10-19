@@ -178,6 +178,8 @@ import type * as workflowPackEventLog from "../workflowPackEventLog.js";
 import type * as workflowPackOutcomes from "../workflowPackOutcomes.js";
 import type * as worm from "../worm.js";
 import type * as wormCursor from "../wormCursor.js";
+import type * as zernio from "../zernio.js";
+import type * as zernioActions from "../zernioActions.js";
 
 import type {
   ApiFromModules,
@@ -356,6 +358,8 @@ declare const fullApi: ApiFromModules<{
   "workflowPackOutcomes": typeof workflowPackOutcomes;
   "worm": typeof worm;
   "wormCursor": typeof wormCursor;
+  "zernio": typeof zernio;
+  "zernioActions": typeof zernioActions;
 }>;
 
 /**

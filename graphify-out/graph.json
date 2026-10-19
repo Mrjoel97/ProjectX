@@ -111225,6 +111225,26 @@
       "id": "packages_backend_convex_schema_bufferreports_table",
       "community": 460,
       "norm_label": "bufferReports (table)"
+    },
+    {
+      "label": "zernioConnections (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L208",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_zernioconnections_table",
+      "community": 460,
+      "norm_label": "zernioConnections (table)"
+    },
+    {
+      "label": "zernioReports (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L246",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_zernioreports_table",
+      "community": 460,
+      "norm_label": "zernioReports (table)"
     }
   ],
   "links": [
@@ -305962,6 +305982,26 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_tenantdelete",
       "target": "packages_backend_convex_schema_bufferconnections_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L208",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_zernioconnections_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L246",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_zernioreports_table"
     }
   ],
   "hyperedges": [],

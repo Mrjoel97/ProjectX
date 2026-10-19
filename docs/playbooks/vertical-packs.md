@@ -1,3 +1,7 @@
+> Last verified: 2026-10-19 — Refreshed native exact-source pins after final reporting metadata changes; the six-lane forty-case corpus is unchanged. No live evaluation or activation is claimed.
+
+> Last verified: 2026-10-19 — Native evaluator source identity is refreshed and now includes Zernio reporting/parser modules. Six lanes and forty corpus cases are unchanged; no live evaluation, semantic pass or activation is claimed.
+
 > Last verified: 2026-10-19 — Refreshed native evaluator source pins after the Buffer hosted OAuth/API repair. The six-lane, forty-case corpus is unchanged; this is identity bookkeeping, not a live evaluation or qualification.
 
 > Last verified: 2026-10-19 — Regenerated native evaluator pins after Buffer changed shared runtime/schema sources; its source inventory now includes the Buffer modules and reused envelope contract. The six-lane, forty-case corpus is unchanged. Old exact-source evidence is retired; no live evaluation, semantic pass or activation is claimed.

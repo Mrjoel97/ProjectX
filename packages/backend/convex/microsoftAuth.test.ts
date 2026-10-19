@@ -378,7 +378,9 @@ describe("25-06: no second OAuth surface exists, and mail readiness is derived n
     // 11 -> 12 at 31-03: the approved GET-only /f/ bearer route increments fixed aggregate
     // counters and redirects to trusted Vault bytes. It is not another OAuth callback.
     // ADR-058 adds one tenant-bound Buffer OAuth callback, separate from Microsoft.
-    expect(routes).toBe(15);
+    // ADR-060 adds POST and OPTIONS for one-use Zernio credential intake, not OAuth callbacks.
+    expect(routes).toBe(17);
+    expect(httpSource.match(/path:\s*"\/zernio\/connect"/g)).toHaveLength(2);
     expect(httpSource.match(/path:\s*"\/buffer\/callback"/g)).toHaveLength(1);
     expect(httpSource.match(/path:\s*"\/uploads"/g)).toHaveLength(2);
     expect(httpSource.match(/pathPrefix:\s*"\/f\/"/g)).toHaveLength(1);

@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — readZernioEngagement joins the existing lineage-bound executive tool surface and reads cached tenant reports only. It cannot refresh, connect or publish. Schema/registry and evaluator identities are refreshed; no paid evaluation or skill activation is implied.
+
 > Last verified: 2026-10-19 — Buffer hosted actions now use the registered app OAuth/API route; the engagement tool returns a specific third-party-app restriction. The exact evaluator identity is refreshed after this runtime change, without new paid evaluations or skill activation.
 
 > Last verified: 2026-10-19 — Buffer changes the executive tool registry and schema, so the evaluator identity includes the Buffer modules, pure contracts and reused credential envelope. The exact code-owned evaluator revision is refreshed to retire older candidate evidence; no paid evaluation, new passing evidence or skill activation is claimed. Buffer tools remain absent from eval contexts.

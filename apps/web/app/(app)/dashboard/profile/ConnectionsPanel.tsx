@@ -6,6 +6,7 @@ import { useState } from "react";
 import { DisconnectGoogle } from "../../_components/DisconnectGoogle";
 import { DisconnectMicrosoft } from "../../_components/DisconnectMicrosoft";
 import { BufferConnectionRow } from "../marketing/BufferPanel";
+import { ZernioConnectionRow } from "../marketing/ZernioPanel";
 import {
   type ConnectorRow,
   connectorBusyLabel,
@@ -74,6 +75,7 @@ export function ConnectionsPanel() {
       <GoogleRow />
       <MicrosoftRow />
       <BufferConnectionRow />
+      <ZernioConnectionRow />
       <ConnectorRows />
     </section>
   );
