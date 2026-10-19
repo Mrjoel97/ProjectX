@@ -45,7 +45,7 @@ export function BufferConnectionRow() {
   const [notice, setNotice] = useState("");
   return (
     <div style={{ ...card, padding: 18 }}>
-      <strong>Buffer — social publishing &amp; engagement reports</strong>
+      <strong>Buffer — social publishing</strong>
       <p>
         {status === undefined
           ? "Checking connection…"
@@ -303,13 +303,13 @@ export function BufferMarketing() {
           <section style={card}>
             <h2>Engagement report</h2>
             <p>
-              Last 30 days across your selected channels. Buffer refreshes engagement metrics daily;
-              missing metrics are unavailable, not zero.
+              Buffer does not currently allow engagement reports through third-party app
+              connections. View analytics in Buffer. Reconnecting will not enable this permission.
             </p>
             <button
               type="button"
               style={button}
-              disabled={busy || !channels.length}
+              disabled={busy || !channels.length || !status.reportsAvailable}
               onClick={async () => {
                 setBusy(true);
                 try {
@@ -369,7 +369,7 @@ export function BufferMarketing() {
                   )}
               </>
             ) : (
-              <p>No report yet. Refresh to retrieve actual Buffer engagement data.</p>
+              <p>No engagement report is available through this connection.</p>
             )}
           </section>
         </>

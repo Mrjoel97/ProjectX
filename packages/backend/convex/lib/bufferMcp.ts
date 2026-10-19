@@ -1,4 +1,4 @@
-import { BUFFER_MCP_URL, bufferRecord, unpackBufferTool } from "@pikar/core/buffer";
+import { BUFFER_API_URL, BUFFER_MCP_URL, bufferRecord, unpackBufferTool } from "@pikar/core/buffer";
 
 /** Fixed-origin MCP transport. No model-supplied URLs, generic operations or credential logging. */
 export class BufferFailure extends Error {
@@ -32,6 +32,26 @@ export async function bufferJson(url: string, init: RequestInit): Promise<Record
     );
   try {
     return bufferRecord(await response.json());
+  } catch {
+    throw new BufferFailure("invalid_response");
+  }
+}
+
+/** Only code-owned queries reach this server helper; provider error prose never leaves it. */
+export async function bufferGraphql(
+  accessToken: string,
+  query: string,
+  variables: Record<string, unknown> = {},
+): Promise<Record<string, unknown>> {
+  const result = await bufferJson(BUFFER_API_URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ query, variables }),
+  });
+  // A partial mutation response is uncertain, so it must never become an automatic retry.
+  if (result.errors) throw new BufferFailure("invalid_response");
+  try {
+    return bufferRecord(result.data);
   } catch {
     throw new BufferFailure("invalid_response");
   }

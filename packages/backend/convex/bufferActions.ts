@@ -1,14 +1,11 @@
 import {
   BUFFER_AUTH_URL,
   BUFFER_ID,
-  BUFFER_MCP_URL,
-  BUFFER_REGISTER_URL,
   BUFFER_SCOPES,
   BUFFER_TOKEN_URL,
   bufferCreateArguments,
   bufferRecord,
   normalizeBufferChannels,
-  normalizeBufferMetrics,
 } from "@pikar/core/buffer";
 import { openCredential, sealCredential } from "@pikar/revenue";
 import { v } from "convex/values";
@@ -16,7 +13,7 @@ import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { requireCredentialKey } from "./connectorCredentials";
-import { BufferFailure, bufferJson, callBufferTool } from "./lib/bufferMcp";
+import { BufferFailure, bufferGraphql, bufferJson } from "./lib/bufferMcp";
 import { tenantAction } from "./lib/functions";
 import { internalAction } from "./lib/tenantLifecycle";
 
@@ -137,21 +134,9 @@ export const startConnect = tenantAction({
   handler: async (ctx): Promise<{ url: string }> => {
     await requireCredentialKey();
     const redirectUri = callbackUrl();
-    const client = await bufferJson(BUFFER_REGISTER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_name: "Pikar AI social marketing",
-        client_uri: process.env.SITE_URL,
-        redirect_uris: [redirectUri],
-        grant_types: ["authorization_code", "refresh_token"],
-        response_types: ["code"],
-        token_endpoint_auth_method: "none",
-        scope: BUFFER_SCOPES.join(" "),
-      }),
-    });
-    if (typeof client.client_id !== "string" || !client.client_id)
-      throw new Error("BUFFER_REGISTRATION_FAILED");
+    const clientId = process.env.BUFFER_OAUTH_CLIENT_ID?.trim();
+    if (!clientId || !/^[A-Za-z0-9_-]{16,256}$/.test(clientId))
+      throw new Error("BUFFER_NOT_CONFIGURED");
     const state = nonce();
     const verifier = nonce();
     const connectionId = crypto.randomUUID();
@@ -170,21 +155,20 @@ export const startConnect = tenantAction({
       connectionId,
       stateHash: await hash(state),
       ...(await seal(ctx.tenantId, `${connectionId}:state`, {
-        clientId: client.client_id,
+        clientId,
         verifier,
         redirectUri,
       })),
     });
     const url = new URL(BUFFER_AUTH_URL);
     url.search = new URLSearchParams({
-      client_id: client.client_id,
+      client_id: clientId,
       redirect_uri: redirectUri,
       response_type: "code",
       scope: BUFFER_SCOPES.join(" "),
       state,
       code_challenge: challenge,
       code_challenge_method: "S256",
-      resource: BUFFER_MCP_URL,
       prompt: "consent",
     }).toString();
     return { url: url.toString() };
@@ -217,7 +201,6 @@ export const callback = internalAction({
         redirect_uri: state.redirectUri,
         code: a.code,
         code_verifier: state.verifier,
-        resource: BUFFER_MCP_URL,
       }),
     });
     const grant = tokenGrant(tokens, state.clientId);
@@ -261,7 +244,6 @@ async function authorized(
           grant_type: "refresh_token",
           client_id: grant.clientId,
           refresh_token: grant.refreshToken,
-          resource: BUFFER_MCP_URL,
         }),
       });
       grant = tokenGrant(tokens, grant.clientId, grant.scope);
@@ -294,7 +276,11 @@ async function authorized(
 }
 
 async function organizationsFor(token: string): Promise<{ id: string; name: string }[]> {
-  const account = await callBufferTool(token, "get_account", {});
+  const data = await bufferGraphql(
+    token,
+    "query PikarOrganizations{account{organizations{id name}}}",
+  );
+  const account = bufferRecord(data.account);
   if (!Array.isArray(account.organizations) || account.organizations.length > 100)
     throw new Error("BUFFER_INVALID_RESPONSE");
   return account.organizations.map((value) => {
@@ -317,14 +303,11 @@ export const loadChannels = tenantAction({
       (org) => org.id === a.organizationId,
     );
     if (!organization) throw new Error("BUFFER_ORGANIZATION_NOT_ALLOWED");
-    const result = await callBufferTool(grant.accessToken, "execute_query", {
-      summary: "Read connected social channels for the selected Buffer organization",
-      query:
-        "query PikarChannels($org:OrganizationId!){channels(input:{organizationId:$org}){id name service isDisconnected isLocked metadata{... on PinterestMetadata{boards{serviceId name}}}}}",
-      variables: { org: organization.id },
-    });
-    if (result.errors) throw new Error("BUFFER_CHANNEL_READ_FAILED");
-    const data = bufferRecord(result.data ?? result);
+    const data = await bufferGraphql(
+      grant.accessToken,
+      "query PikarChannels($org:OrganizationId!){channels(input:{organizationId:$org}){id name service isDisconnected isLocked metadata{... on PinterestMetadata{boards{serviceId name}}}}}",
+      { org: organization.id },
+    );
     const channels = normalizeBufferChannels(data.channels);
     await ctx.runMutation(internal.buffer.storeChannels, {
       tenantId: ctx.tenantId,
@@ -336,58 +319,23 @@ export const loadChannels = tenantAction({
   },
 });
 
-async function reportFor(ctx: ActionCtx, tenantId: string, expectedConnectionId?: string) {
-  const { row, grant } = await authorized(ctx, tenantId);
-  if (expectedConnectionId && (row.connectionId !== expectedConnectionId || !row.dailyReports))
-    return;
-  if (!row.organizationId || !row.selectedChannelIds.length)
-    throw new Error("BUFFER_SELECT_CHANNELS");
-  const endAt = Date.now();
-  const startAt = endAt - 30 * 86400_000;
-  const result = await callBufferTool(grant.accessToken, "get_aggregated_post_metrics", {
-    organizationId: row.organizationId,
-    channelIds: row.selectedChannelIds,
-    startDateTime: new Date(startAt).toISOString(),
-    endDateTime: new Date(endAt).toISOString(),
-  });
-  const metrics = normalizeBufferMetrics(result.metrics);
-  const refreshed =
-    result.metricsUpdatedAt === null
-      ? null
-      : typeof result.metricsUpdatedAt === "string"
-        ? Date.parse(result.metricsUpdatedAt)
-        : NaN;
-  if (refreshed !== null && (!Number.isFinite(refreshed) || refreshed > endAt + 60_000))
-    throw new Error("BUFFER_INVALID_METRICS");
-  await ctx.runMutation(internal.buffer.saveReport, {
-    tenantId,
-    connectionId: row.connectionId,
-    organizationId: row.organizationId,
-    channelIds: row.selectedChannelIds,
-    startAt,
-    endAt,
-    metricsUpdatedAt: refreshed,
-    metrics,
-  });
-  return { metrics, metricsUpdatedAt: refreshed, startAt, endAt };
-}
 export const refreshReport = tenantAction({
   args: {},
-  handler: (ctx) => reportFor(ctx, ctx.tenantId),
+  handler: async () => {
+    throw new Error("BUFFER_REPORTS_UNAVAILABLE_FOR_APP_CLIENTS");
+  },
 });
 export const dailyReport = internalAction({
   args: { tenantId: v.string(), connectionId: v.string() },
   handler: async (ctx, a) => {
-    try {
-      await reportFor(ctx, a.tenantId, a.connectionId);
-    } finally {
-      await syncFor(ctx, a.tenantId, a.connectionId);
-    }
+    await syncFor(ctx, a.tenantId, a.connectionId);
   },
 });
 export const agentReport = internalAction({
   args: { tenantId: v.string() },
-  handler: (ctx, a) => reportFor(ctx, a.tenantId),
+  handler: async () => {
+    throw new Error("BUFFER_REPORTS_UNAVAILABLE_FOR_APP_CLIENTS");
+  },
 });
 export const agentChannels = internalAction({
   args: { tenantId: v.string() },
@@ -417,8 +365,15 @@ export const publishPost = internalAction({
         throw new Error("BUFFER_CHANNEL_NOT_ALLOWED");
       const args = bufferCreateArguments(post, target.service);
       attempted = true;
-      const result = await callBufferTool(grant.accessToken, "create_post", args);
-      const saved = bufferRecord(result.post ?? result);
+      const result = await bufferGraphql(
+        grant.accessToken,
+        "mutation PikarCreatePost($input:CreatePostInput!){createPost(input:$input){__typename ... on PostActionSuccess{post{id status}}}}",
+        { input: args },
+      );
+      const created = bufferRecord(result.createPost);
+      if (typeof created.__typename !== "string") throw new BufferFailure("invalid_response");
+      if (created.__typename !== "PostActionSuccess") throw new BufferFailure("rejected");
+      const saved = bufferRecord(created.post);
       if (typeof saved.id !== "string" || !BUFFER_ID.test(saved.id))
         throw new Error("BUFFER_UNCONFIRMED_POST");
       const status = postStatus(saved.status);
@@ -463,13 +418,11 @@ async function syncFor(
   const fields = posts
     .map((_, index) => `p${index}: post(input: { id: $id${index} }) { id channelId status }`)
     .join(" ");
-  const result = await callBufferTool(grant.accessToken, "execute_query", {
-    summary: "Check publishing status for Pikar's approved Buffer posts",
-    query: `query PikarPostStatus(${definitions}) { ${fields} }`,
-    variables: Object.fromEntries(posts.map((post, index) => [`id${index}`, post.bufferPostId])),
-  });
-  if (result.errors) throw new Error("BUFFER_STATUS_UNAVAILABLE");
-  const data = bufferRecord(result.data ?? result);
+  const data = await bufferGraphql(
+    grant.accessToken,
+    `query PikarPostStatus(${definitions}) { ${fields} }`,
+    Object.fromEntries(posts.map((post, index) => [`id${index}`, post.bufferPostId])),
+  );
   const updates = posts.flatMap((post, index) => {
     if (!data[`p${index}`]) return [];
     const value = bufferRecord(data[`p${index}`]);

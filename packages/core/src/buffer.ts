@@ -2,12 +2,13 @@
 export const BUFFER_MCP_URL = "https://mcp.buffer.com/mcp";
 export const BUFFER_AUTH_URL = "https://auth.buffer.com/auth";
 export const BUFFER_TOKEN_URL = "https://auth.buffer.com/token";
-export const BUFFER_REGISTER_URL = "https://auth.buffer.com/reg";
+export const BUFFER_API_URL = "https://api.buffer.com";
+// Registered third-party clients cannot request MCP resources or insights access.
+export const BUFFER_REPORTS_AVAILABLE = false;
 export const BUFFER_SCOPES = [
   "account:read",
   "posts:read",
   "posts:write",
-  "insights:read",
   "offline_access",
 ] as const;
 export const BUFFER_ID = /^[a-f0-9]{24}$/i;

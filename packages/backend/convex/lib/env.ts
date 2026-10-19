@@ -157,6 +157,12 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
   // Buffer's safe readiness projection reads V1 directly; V2 remains an optional rotation key
   // resolved on demand by connectorCredentials.requireCredentialKey. Never project either value.
   {
+    name: "BUFFER_OAUTH_CLIENT_ID",
+    tier: "feature",
+    whatBreaks:
+      "Buffer connection requires a registered public PKCE app client with this deployment's exact HTTPS callback. This identifier is public, not a secret.",
+  },
+  {
     name: "CONNECTOR_CREDENTIAL_KEY_V1",
     tier: "feature",
     whatBreaks:

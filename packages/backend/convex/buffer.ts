@@ -1,4 +1,9 @@
-import { BUFFER_ID, bufferCreateArguments, validateBufferDraft } from "@pikar/core/buffer";
+import {
+  BUFFER_ID,
+  BUFFER_REPORTS_AVAILABLE,
+  bufferCreateArguments,
+  validateBufferDraft,
+} from "@pikar/core/buffer";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalQuery } from "./_generated/server";
@@ -41,6 +46,7 @@ export const status = tenantQuery({
     return {
       configured:
         !!process.env.CONNECTOR_CREDENTIAL_KEY_V1 &&
+        !!process.env.BUFFER_OAUTH_CLIENT_ID?.trim() &&
         !!process.env.CONVEX_SITE_URL &&
         !!process.env.SITE_URL,
       connected: row?.status === "connected",
@@ -50,6 +56,7 @@ export const status = tenantQuery({
       channels: row?.channels ?? [],
       selectedChannelIds: row?.selectedChannelIds ?? [],
       dailyReports: row?.dailyReports ?? false,
+      reportsAvailable: BUFFER_REPORTS_AVAILABLE,
     };
   },
 });
@@ -303,6 +310,8 @@ export const storeChannels = internalMutation({
 export const selectChannels = tenantMutation({
   args: { channelIds: v.array(v.string()), dailyReports: v.boolean() },
   handler: async (ctx, a) => {
+    if (a.dailyReports && !BUFFER_REPORTS_AVAILABLE)
+      throw new Error("BUFFER_REPORTS_UNAVAILABLE_FOR_APP_CLIENTS");
     const row = await ctx.db
       .query("bufferConnections")
       .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))

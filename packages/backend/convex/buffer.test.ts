@@ -3,7 +3,7 @@ import { importCredentialKey, openCredential, sealCredential } from "@pikar/reve
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
-import { bufferJson, callBufferTool } from "./lib/bufferMcp";
+import { bufferGraphql, bufferJson, callBufferTool } from "./lib/bufferMcp";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.*s");
@@ -152,9 +152,19 @@ describe("Buffer account isolation and lifecycle", () => {
   test("disconnect clears encrypted credentials, pending callbacks and background reporting", async () => {
     const h = await setup();
     await connect(h);
-    await h.asUser.mutation(api.buffer.selectChannels, {
-      channelIds: [channelId],
-      dailyReports: true,
+    await expect(
+      h.asUser.mutation(api.buffer.selectChannels, {
+        channelIds: [channelId],
+        dailyReports: true,
+      }),
+    ).rejects.toThrow("BUFFER_REPORTS_UNAVAILABLE_FOR_APP_CLIENTS");
+    // A pre-upgrade opt-in must still be cleared on disconnect.
+    await h.t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("bufferConnections")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", h.tenantId))
+        .unique();
+      await ctx.db.patch(row!._id, { dailyReports: true });
     });
     await h.t.mutation(internal.buffer.storeState, {
       tenantId: h.tenantId,
@@ -378,8 +388,162 @@ test("the MCP transport handles the real multi-block response without exposing e
   vi.unstubAllGlobals();
 });
 
-test("the requested production grant includes insights and background access", () => {
-  expect(BUFFER_SCOPES).toContain("insights:read");
+test("the production grant uses only supported app-client scopes and background access", () => {
+  expect(BUFFER_SCOPES).not.toContain("insights:read");
   expect(BUFFER_SCOPES).toContain("offline_access");
   expect(BUFFER_SCOPES).not.toContain("account:write");
+});
+
+test("registered-app OAuth connects, reads channels and rotates tokens without DCR or MCP resources", async () => {
+  const h = await setup();
+  vi.stubEnv("CONNECTOR_CREDENTIAL_KEY_V1", btoa("0".repeat(32)));
+  vi.stubEnv("CONVEX_SITE_URL", "https://test.convex.site");
+  vi.stubEnv("SITE_URL", "https://app.example.com");
+  vi.stubEnv("BUFFER_OAUTH_CLIENT_ID", "");
+  const requests: { url: string; init: RequestInit }[] = [];
+  const provider = vi.fn(async (url: string, init: RequestInit) => {
+    requests.push({ url, init });
+    expect(init.redirect).toBe("error");
+    if (url === "https://auth.buffer.com/token") {
+      const form = new URLSearchParams(String(init.body));
+      expect(form.get("resource")).toBeNull();
+      expect(form.get("client_id")).toBe("registered-public-client");
+      if (form.get("grant_type") === "authorization_code") {
+        expect(form.get("redirect_uri")).toBe("https://test.convex.site/buffer/callback");
+        expect(form.get("code_verifier")).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      } else {
+        expect(form.get("refresh_token")).toBe("first-refresh");
+      }
+      return Response.json({
+        access_token: "synthetic-access",
+        refresh_token:
+          form.get("grant_type") === "authorization_code" ? "first-refresh" : "rotated-refresh",
+        scope: BUFFER_SCOPES.join(" "),
+        expires_in: 3600,
+      });
+    }
+    expect(url).toBe("https://api.buffer.com");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer synthetic-access");
+    const body = JSON.parse(String(init.body));
+    if (body.query.includes("PikarOrganizations"))
+      return Response.json({
+        data: { account: { organizations: [{ id: organizationId, name: "Own organization" }] } },
+      });
+    if (body.query.includes("PikarCreatePost"))
+      return Response.json({
+        data: {
+          createPost: {
+            __typename: "PostActionSuccess",
+            post: { id: channelId, status: "scheduled" },
+          },
+        },
+      });
+    expect(body.variables).toEqual({ org: organizationId });
+    return Response.json({
+      data: {
+        channels: [
+          {
+            id: channelId,
+            name: "Own channel",
+            service: "linkedin",
+            isLocked: false,
+            isDisconnected: false,
+          },
+        ],
+      },
+    });
+  });
+  vi.stubGlobal("fetch", provider);
+  expect((await h.asUser.query(api.buffer.status, {})).configured).toBe(false);
+  await expect(h.asUser.action(api.bufferActions.startConnect, {})).rejects.toThrow(
+    "BUFFER_NOT_CONFIGURED",
+  );
+  expect(provider).not.toHaveBeenCalled();
+  vi.stubEnv("BUFFER_OAUTH_CLIENT_ID", "registered-public-client");
+  const start = new URL((await h.asUser.action(api.bufferActions.startConnect, {})).url);
+  expect(provider).not.toHaveBeenCalled();
+  expect(start.origin).toBe("https://auth.buffer.com");
+  expect(start.searchParams.get("resource")).toBeNull();
+  expect(start.searchParams.get("scope")).toBe(BUFFER_SCOPES.join(" "));
+  expect(start.searchParams.get("client_id")).toBe("registered-public-client");
+  expect(start.searchParams.get("code_challenge_method")).toBe("S256");
+  const callback = await h.t.action(internal.bufferActions.callback, {
+    state: start.searchParams.get("state")!,
+    code: "synthetic-code",
+    denied: false,
+  });
+  await h.asUser.mutation(api.buffer.completeConnect, { receipt: callback.receipt! });
+  expect(await h.asUser.query(api.buffer.status, {})).toMatchObject({
+    connected: true,
+    configured: true,
+    reportsAvailable: false,
+  });
+  expect(await h.asUser.action(api.bufferActions.organizations, {})).toEqual([
+    { id: organizationId, name: "Own organization" },
+  ]);
+  await h.asUser.action(api.bufferActions.loadChannels, { organizationId });
+  await h.asUser.mutation(api.buffer.selectChannels, {
+    channelIds: [channelId],
+    dailyReports: false,
+  });
+  const beforeReport = requests.length;
+  await expect(h.asUser.action(api.bufferActions.refreshReport, {})).rejects.toThrow(
+    "BUFFER_REPORTS_UNAVAILABLE_FOR_APP_CLIENTS",
+  );
+  expect(requests).toHaveLength(beforeReport);
+  await h.t.run(async (ctx) => {
+    const row = await ctx.db
+      .query("bufferConnections")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", h.tenantId))
+      .unique();
+    await ctx.db.patch(row!._id, { expiresAt: 0 });
+  });
+  await h.asUser.action(api.bufferActions.organizations, {});
+  const renewed = await h.t.query(internal.buffer.connection, { tenantId: h.tenantId });
+  const key = await importCredentialKey(btoa("0".repeat(32)), "v1");
+  const grant = JSON.parse(
+    await openCredential(
+      key,
+      {
+        tenantId: h.tenantId,
+        connectionId: renewed!.connectionId,
+        provider: "buffer",
+        environment: "production",
+      },
+      {
+        ciphertextB64: renewed!.ciphertextB64!,
+        ivB64: renewed!.ivB64!,
+        keyVersion: "v1",
+        algorithm: "AES-256-GCM",
+      },
+    ),
+  );
+  expect(grant.refreshToken).toBe("rotated-refresh");
+  vi.useFakeTimers();
+  const postId = await h.asUser.mutation(api.buffer.stagePost, {
+    campaign: "Test",
+    channelId,
+    text: "Explicitly approved test fixture",
+    mode: "addToQueue",
+  });
+  await h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 });
+  await h.t.finishAllScheduledFunctions(vi.runAllTimers);
+  await h.t.action(internal.bufferActions.publishPost, { tenantId: h.tenantId, postId });
+  expect((await h.asUser.query(api.buffer.posts, {}))[0]?.status).toBe("scheduled");
+  expect(requests.filter((r) => String(r.init.body).includes("PikarCreatePost"))).toHaveLength(1);
+});
+
+test("GraphQL partial errors remain uncertain and never expose provider details", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        data: { createPost: null },
+        errors: [{ message: "private upstream details" }],
+      }),
+    ),
+  );
+  await expect(
+    bufferGraphql("synthetic-token", "mutation Fixture{createPost{__typename}}"),
+  ).rejects.toThrow("BUFFER_INVALID_RESPONSE");
 });
