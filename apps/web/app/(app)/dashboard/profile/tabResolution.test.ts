@@ -101,12 +101,13 @@ describe("the tab pages derive their tab from the URL, never from a mount-time s
 describe("the rail reaches the consolidated surfaces", () => {
   const shell = read("../../layout.tsx");
 
-  // Compliance lives in the NAV array (object syntax); Settings is a JSX attribute in the rail
-  // foot. Both forms are asserted as written so this fails if either entry is edited back.
-  test("Compliance and Settings point at tabs, not at their old standalone routes", () => {
-    expect(shell).toContain('href: "/dashboard/approvals?tab=compliance"');
+  test("one governance entry and one Settings entry reach the existing tabbed surfaces", () => {
+    expect(shell).toContain('label: "Approval and Compliance"');
+    expect(shell).toContain('href: "/dashboard/approvals"');
     expect(shell).toContain('href="/dashboard/profile?tab=settings"');
-    expect(shell).not.toContain('{ label: "Compliance", href: "/ops"');
+    expect(shell).not.toContain('label: "Compliance"');
+    expect(shell).not.toContain(">Business Profile</span>");
+    expect(shell).not.toContain(">Connections</span>");
   });
 
   // The <a> was a workaround for the mount-time snapshot: a full document load forced a remount.

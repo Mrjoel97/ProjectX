@@ -28,14 +28,11 @@ describe("25.2 item 1 — no 'Soon' placeholder in the rail", () => {
   });
 });
 
-describe("25.2 item 2 — Compliance is owner-only in the rail", () => {
-  test("the Compliance entry is marked ownerOnly and the rail filters on the owner flag", () => {
-    const entry = layout.slice(
-      layout.indexOf('label: "Compliance"'),
-      layout.indexOf("My Workspace"),
-    );
-    expect(entry).toMatch(/ownerOnly:\s*true/);
-    expect(layout).toMatch(/NAV\.filter\(\(item\) => !item\.ownerOnly \|\| isOwner\)/);
+describe("the combined governance entry preserves owner-only alerts", () => {
+  test("approval access remains shared and the dead-letter badge requires the owner flag", () => {
+    expect(layout).toContain('label: "Approval and Compliance"');
+    expect(layout).not.toContain('label: "Compliance"');
+    expect(layout).toContain("isOwner && <DeadLetterBadge />");
     expect(layout).toContain("useQuery(api.owner.viewer, {})");
   });
 });

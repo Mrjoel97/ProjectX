@@ -14,13 +14,11 @@ import {
   FileIcon,
   GlobeIcon,
   GridIcon,
-  MailIcon,
   MicIcon,
   PieIcon,
   ShieldIcon,
   SignOutIcon,
   TrendIcon,
-  UserIcon,
   VaultIcon,
   WalletIcon,
 } from "../(auth)/icons";
@@ -39,11 +37,10 @@ import { ErrorBoundary } from "./dashboard/workspace/ErrorBoundary";
 // Knowledge Vault went LIVE with Phase 5 (lane-c merge): /dashboard/vault.
 // The retired /submit and /review links are gone (cockpit supersession, Phase 3.1);
 // the pages stay on disk and reachable by URL.
-// 25.2: every entry has an href (the "Soon" placeholder is gone) and `ownerOnly` hides the
-// operator surfaces from tenants — the URL still resolves for the owner.
-const NAV: Array<{ label: string; icon: ReactNode; href: string; ownerOnly?: boolean }> = [
+// Every entry has an href; operator-only controls keep their page-level owner checks.
+const NAV: Array<{ label: string; icon: ReactNode; href: string }> = [
   { label: "Command Center", href: "/dashboard", icon: <GridIcon /> },
-  { label: "Approvals", href: "/dashboard/approvals", icon: <BellIcon /> },
+  { label: "Approval and Compliance", href: "/dashboard/approvals", icon: <BellIcon /> },
   // Activated 26-10 Task 3 on owner direction, 2026-08-09. The branch below keys off `href`, not
   // `soon`, so adding the href IS the activation. Rollback is deleting the href — the ledger
   // writers, coverage start and enforcement limiters keep running regardless (the non-negotiable
@@ -63,18 +60,6 @@ const NAV: Array<{ label: string; icon: ReactNode; href: string; ownerOnly?: boo
   // 31-07: activated after the explicit Marketing navigation approval, 2026-09-12.
   // Remove this entry and its compact href to hide discovery without altering links or contacts.
   { label: "Marketing", href: "/dashboard/marketing", icon: <GlobeIcon /> },
-  // Compliance is a TAB on the approvals page now, not its own route. `/ops` still resolves
-  // (ops/page.tsx keeps a default export) so old bookmarks survive, but the rail sends people
-  // to the consolidated surface. The owner gate travels with `ComplianceView` itself, so this
-  // href change moves a mount point and NOT an authorization boundary.
-  {
-    label: "Compliance",
-    href: "/dashboard/approvals?tab=compliance",
-    icon: <ShieldIcon size={18} />,
-    // 25.2 (G14): eval signals and dead letters are the OPERATOR's read. `ComplianceView` gates
-    // only its optimizer panel on the owner, so the rail entry itself carries the gate.
-    ownerOnly: true,
-  },
   { label: "My Workspace", href: "/dashboard/workspace", icon: <BoltIcon size={18} /> },
   { label: "Live Voice", href: "/dashboard/voice", icon: <MicIcon size={18} /> },
   // 26-17 Task 3: LIVE on the owner UAT verdict, 2026-08-22 ("The report interface is okay").
@@ -100,7 +85,8 @@ const TABBAR_HREFS = [
 // badge, not a toast — `newCount` is a LIVE query, so the count reflects the DB and
 // only falls when an operator marks the letter resolved. It never auto-clears and
 // never dismisses on click. `undefined` = still loading → render nothing (no flash).
-// It lives on the Compliance (/ops) rail item and stays visible when the rail collapses.
+// It lives on the combined Approval and Compliance rail item, only for the owner, and stays
+// visible when the rail collapses. Compliance's page-level authorization remains unchanged.
 function DeadLetterBadge() {
   const count = useQuery(api.deadLetters.newCount);
   if (!count) return null;
@@ -173,19 +159,8 @@ function Shell({ children }: { children: ReactNode }) {
   // e.g. /review/[id]-style child routes keep their parent item lit. A nav href may carry a
   // `?tab=` deep link, but `usePathname()` never does — so compare the path portion only,
   // otherwise such an item can never light up.
-  // ponytail: "Business Profile" and "Connections" both strip to /dashboard/profile, so both
-  // light up at once (known, PARKED — 2026-08-02 whole-branch review MED 3). Fixing it cleanly
-  // needs either useSearchParams or a layout-level `?tab=` mirror that goes stale the moment the
-  // user switches tabs in-page without a navigation; cosmetic only, not worth either cost yet.
-  // Upgrade path: once useSearchParams (or an equivalent live signal) is adopted elsewhere, drive
-  // this off the actual selected tab instead of the path prefix.
+  // Each tabbed surface has one rail entry, so it stays active across its internal tabs.
   const isActive = (href: string) => {
-    // ponytail: pathname-only match, so entries that differ ONLY by `?tab=` all highlight
-    // together — "Approvals" + "Compliance" now, and "Business Profile" + "Connections" +
-    // "Settings" (the profile pair already behaved this way before the consolidation). Making
-    // exactly one win needs the live query string in this shell, i.e. `useSearchParams` here plus
-    // a Suspense boundary around the rail; that is a shell refactor, not a nav-wiring change, so
-    // it is deliberately not done here. Upgrade path: extract <RailNav> and give it that boundary.
     // String.split always returns at least one element, so this index is never undefined.
     const path = href.split("?")[0] ?? "";
     return path === "/dashboard" ? pathname === path : pathname.startsWith(path);
@@ -202,7 +177,7 @@ function Shell({ children }: { children: ReactNode }) {
         </Link>
 
         <div className="rail-nav">
-          {NAV.filter((item) => !item.ownerOnly || isOwner).map((item) => (
+          {NAV.map((item) => (
             <Link
               key={item.label}
               href={item.href}
@@ -212,37 +187,21 @@ function Shell({ children }: { children: ReactNode }) {
             >
               {item.icon}
               <span className="rail-label">{item.label}</span>
-              {item.href === "/dashboard/approvals?tab=compliance" && <DeadLetterBadge />}
-              {item.href === "/dashboard/approvals" && <ApprovalsBadge />}
+              {item.href === "/dashboard/approvals" && (
+                <span className="rail-badges">
+                  <ApprovalsBadge />
+                  {isOwner && <DeadLetterBadge />}
+                </span>
+              )}
             </Link>
           ))}
         </div>
 
         <div className="rail-foot">
           <Link
-            href="/dashboard/profile"
-            className={`rail-item${isActive("/dashboard/profile") ? " is-active" : ""}`}
-            title={collapsed ? "Business Profile" : undefined}
-          >
-            <UserIcon />
-            <span className="rail-label">Business Profile</span>
-          </Link>
-          {/* Back to <Link> (was a plain <a> that forced a full document reload). That workaround
-              existed only because profile/page.tsx snapshotted `?tab=` at mount and a same-route
-              soft navigation does not remount. That page now derives both tab levels from
-              `useSearchParams` on every render, so soft navigation is correct again and the reload
-              is no longer needed. Do NOT reintroduce the <a> without first re-breaking that page. */}
-          <Link
-            href="/dashboard/profile?tab=connections"
-            className={`rail-item${isActive("/dashboard/profile?tab=connections") ? " is-active" : ""}`}
-            title={collapsed ? "Connections" : undefined}
-          >
-            <MailIcon />
-            <span className="rail-label">Connections</span>
-          </Link>
-          <Link
             href="/dashboard/profile?tab=settings"
             className={`rail-item${isActive("/dashboard/profile?tab=settings") ? " is-active" : ""}`}
+            aria-current={isActive("/dashboard/profile?tab=settings") ? "page" : undefined}
             title={collapsed ? "Settings" : undefined}
           >
             <ShieldIcon size={18} />

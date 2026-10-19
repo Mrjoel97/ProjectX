@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Settings is the only profile-related sidebar entry. The existing Business Profile, Connections and Settings tabs, URL-derived selection and legacy deep links remain available; onboarding and account identity behavior are unchanged.
+
 > Last verified: 2026-10-19 — Connections now exposes optional Zernio reporting beside Buffer. The profile onboarding and account identity flows are unchanged.
 
 > Last verified: 2026-10-19 — Connections includes a separate Buffer account row and channel-selection route. It uses the existing authenticated app and business profile; it does not reset onboarding or alter foundation admission. Buffer tokens are server-side, and disconnect explains manual upstream revocation. See buffer.md.

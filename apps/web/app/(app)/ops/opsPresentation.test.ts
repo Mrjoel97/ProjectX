@@ -206,18 +206,16 @@ describe("/ops owner presentation boundary", () => {
     );
   });
 
-  test("the shared shell still exposes Compliance and its tenant DLQ badge", () => {
-    // The owner branch lives inside OpsPage, while these two affordances live in its unchanged
+  test("the shared shell exposes the consolidated governance surface and owner DLQ badge", () => {
+    // The owner branch lives inside OpsPage, while these two affordances live in the combined
     // parent shell. This complementary source assertion is intentionally not described as render
     // evidence; it prevents a future cleanup from satisfying the page test while orphaning /ops.
     expect(shellSource.length).toBeGreaterThan(5_000);
     // Asserted as two facts, not one formatted line: Biome wraps this NAV entry across several
     // lines, so pinning the joined form would fail on a pure reformat.
-    expect(shellSource).toContain('label: "Compliance"');
-    expect(shellSource).toContain('href: "/dashboard/approvals?tab=compliance"');
-    expect(shellSource).toContain(
-      'item.href === "/dashboard/approvals?tab=compliance" && <DeadLetterBadge />',
-    );
+    expect(shellSource).toContain('label: "Approval and Compliance"');
+    expect(shellSource).toContain('href: "/dashboard/approvals"');
+    expect(shellSource).toContain("isOwner && <DeadLetterBadge />");
     expect(shellSource).toContain("useQuery(api.deadLetters.newCount)");
   });
 });

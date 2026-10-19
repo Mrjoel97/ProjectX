@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — The sidebar has one “Approval and Compliance” entry for the existing approvals/compliance tabs, preserving approval counts and the owner-only dead-letter badge. Settings is the sole sidebar entry for Business Profile, Connections and Settings; it remains active across all three tabs. Long navigation labels wrap, and collapsed badges remain grouped. Existing routes and page authorization are unchanged.
+
 > Last verified: 2026-10-19 — Zernio TikTok post links require the supplied account handle and a numeric platform post ID; absent/invalid handles remain plain post references. No placeholder publisher handle is invented.
 
 > Last verified: 2026-10-19 — Marketing adds Zernio report management and per-post lifetime metrics, with explicit account selection, daily opt-in and stale/unavailable states. Buffer remains the publishing provider.
