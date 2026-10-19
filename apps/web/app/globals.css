@@ -716,6 +716,18 @@ button.rail-item:hover {
 .rail-label {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: normal;
+}
+
+.rail-badges {
+  display: inline-flex;
+  flex: none;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.rail-badges .rail-badge {
+  margin-left: 0;
 }
 
 /* 25.2 (G15): the compact primary nav. Hidden above 48rem, where the rail owns that width. Same
@@ -735,7 +747,8 @@ button.rail-item:hover {
 
 .tabbar-item {
   position: relative;
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -748,6 +761,7 @@ button.rail-item:hover {
   font-size: 0.68rem;
   line-height: 1.1;
   text-decoration: none;
+  text-align: center;
 }
 
 .tabbar-item.is-active {
@@ -784,12 +798,13 @@ button.rail-item:hover {
   justify-content: center;
 }
 
-.rail.is-collapsed .rail-badge {
+.rail.is-collapsed .rail-badges {
   position: absolute;
   top: 0.15rem;
   right: 0.35rem;
   margin: 0;
   transform: scale(0.85);
+  transform-origin: right top;
 }
 
 .rail-foot {
