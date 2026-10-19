@@ -381,8 +381,12 @@ export const agentReport = internalQuery({
         sampled: a.posts.length > 20,
         posts: a.posts.slice(0, 20),
       })),
-      caveat:
-        "Lifetime metrics for posts published in this date window; external means outside Zernio, not necessarily Buffer. Only up to 20 sample posts per account are included; never treat samples as totals. Retrieval time is not upstream data freshness. Missing metrics are unavailable. Account reach and engagement rates must not be summed.",
+      metricScope: "post_lifetime",
+      publisherAttribution: "unverified",
+      missingMetricMeaning: "unavailable",
+      sampleLimitPerAccount: 20,
+      reachAndRateAggregation: "unsupported",
+      retrievalIsUpstreamFreshness: false,
     };
   },
 });

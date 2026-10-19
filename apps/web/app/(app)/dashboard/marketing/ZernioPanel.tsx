@@ -310,9 +310,17 @@ export function ZernioConnect() {
     </main>
   );
 }
-function AccountPosts({ account }: { account: ZernioReport["accounts"][number] }) {
+function AccountPosts({
+  account,
+  username,
+}: {
+  account: ZernioReport["accounts"][number];
+  username?: string;
+}) {
   const [count, setCount] = useState(10);
   const posts = account.posts;
+  const handle = username?.replace(/^@/, "");
+  const validHandle = handle && handle !== account.platform && /^[A-Za-z0-9._]{1,30}$/.test(handle);
   return (
     <>
       {!posts.length ? (
@@ -336,9 +344,9 @@ function AccountPosts({ account }: { account: ZernioReport["accounts"][number] }
                 {posts.slice(0, count).map((p) => (
                   <tr key={p.postId}>
                     <th scope="row">
-                      {account.platform === "tiktok" && /^\d+$/.test(p.postId) ? (
+                      {account.platform === "tiktok" && validHandle && /^\d+$/.test(p.postId) ? (
                         <a
-                          href={`https://www.tiktok.com/@_/video/${p.postId}`}
+                          href={`https://www.tiktok.com/@${handle}/video/${p.postId}`}
                           target="_blank"
                           rel="noreferrer"
                         >
@@ -408,7 +416,7 @@ export function ZernioReportView({
             {channels.find((c) => c.id === a.accountId)?.name ?? a.platform} · {a.platform}
           </h3>
           <p>{a.posts.length} posts returned</p>
-          <AccountPosts account={a} />
+          <AccountPosts account={a} username={channels.find((c) => c.id === a.accountId)?.name} />
         </article>
       ))}
     </>

@@ -8,7 +8,7 @@ export function buildBufferTools(ctx: ActionCtx, tenantId: string): ToolSet {
   return {
     readZernioEngagement: tool({
       description:
-        "Read this user's latest cached Zernio Instagram/TikTok report. Check freshness and availability. Metrics are lifetime snapshots of posts in the stated publication window; external posts are not necessarily Buffer-published. Never invent missing metrics or sum reach or engagement rates.",
+        "Read cached Zernio Instagram/TikTok metrics. Reports contain lifetime snapshots; external posts do not establish the publisher. Missing metrics are unavailable. Check timestamps and sampling limits.",
       inputSchema: jsonSchema<Record<string, never>>({
         type: "object",
         properties: {},

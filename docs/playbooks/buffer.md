@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — The Zernio cached-read tool uses a concise tool contract with structured report scope and sampling metadata; Buffer publishing and its insights restriction are unchanged.
+
 > Last verified: 2026-10-19 — the executive tool builder also exposes cached Zernio report reads, with separate provider attribution and no provider refresh or publishing capability. Buffer third-party insights remain unavailable; Zernio reports do not imply Buffer publisher provenance.
 
 # Playbook: Buffer social marketing

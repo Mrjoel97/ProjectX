@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Report scope, publisher attribution, sample bounds and freshness are returned as structured metadata. Endpoint/cron inventories and privacy guards pass; no long inline agent prompt is introduced.
+
 > Last verified: 2026-10-19 — production connector implemented under ADR-060; offline boundary tests pass. Hosted release and persistent customer activation are tracked separately from the revoked pilot grant.
 
 # Production reporting

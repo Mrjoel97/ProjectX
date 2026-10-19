@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — The closed HTTP route inventory now includes POST/OPTIONS Zernio credential intake (17 routes total), while the Microsoft OAuth callback remains unique.
+
 > Last verified: 2026-10-19 — The HTTP router adds one-use Zernio credential intake; its authenticated ticket binds tenant/profile before any key is submitted. The executive cached-report tool is included in registry snapshots and grants no provider write or refresh capability.
 
 > Last verified: 2026-10-19 — The executive grant with request lineage gains readBufferChannels, readBufferEngagement and stageBufferPost outside eval contexts. No model approval or publish tool exists. Agent steps have matching closed schema names and UI labels; toolRegistrySnapshot retains specialist and no-lineage boundaries. The Buffer marketing handoff pre-fills a request without sending it. See buffer.md and ADR-058.
