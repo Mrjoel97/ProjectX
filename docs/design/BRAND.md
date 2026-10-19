@@ -140,3 +140,5 @@ Open the file to see the real thing. Viewed & described above: Command Center da
 5. Honor §6 accessibility rules — they are requirements, not suggestions.
 
 2026-10-19: Skills and Workflows holds guided workflow cards and user/agent skill draft history. Keep the workspace composer compact; research limits remain server-owned. The work-status X hides the notice and explicitly leaves jobs running.
+
+The compact composer keeps optional file/folder/voice and thought-process controls inside a native Message tools disclosure. Tools and Send remain visible, with the accuracy disclaimer below.

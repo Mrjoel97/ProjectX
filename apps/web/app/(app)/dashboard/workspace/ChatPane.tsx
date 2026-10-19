@@ -418,6 +418,7 @@ export function ChatPane({
             }}
             placeholder="What business outcome should we work on?"
             rows={1}
+            title="Press Shift+Enter for a new line"
             style={{
               width: "100%",
               border: "none",
@@ -430,34 +431,46 @@ export function ChatPane({
             }}
           />
           <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
-            <span style={{ flex: 1 }} />
-            {/* This phase IS the feature this button was waiting for, so its title no longer
+            <details style={{ flex: 1, minWidth: 0 }}>
+              <summary
+                aria-label="Message tools"
+                className="composer-pill"
+                style={{ minHeight: 44, cursor: "pointer", width: "fit-content" }}
+              >
+                + Tools
+              </summary>
+              <div
+                style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", paddingTop: "0.4rem" }}
+              >
+                {/* This phase IS the feature this button was waiting for, so its title no longer
                 promises a future one — shipping the trace while the button still called it
                 unbuilt is exactly the small dishonesty BRAND §5's honest-zeros rule prevents
                 (the literal old string is left out so a grep guard stays meaningful). It toggles
                 the bubble's collapsible "Thought Process" trace (BRAND §5, verbatim), and is
                 disabled only while there is genuinely no trace to show. */}
-            <button
-              type="button"
-              className="icon-btn"
-              disabled={steps.length === 0}
-              aria-pressed={open}
-              onClick={() => setTraceOpen(!open)}
-              title={
-                steps.length === 0
-                  ? "Thought process — send a message and the agent's steps show here"
-                  : open
-                    ? "Hide the agent's thought process"
-                    : "Show the agent's thought process"
-              }
-            >
-              <BrainIcon size={17} />
-            </button>
-            <IntakeControls
-              ref={intakeRef}
-              threadId={threadId}
-              onPendingChange={setHasPendingIntake}
-            />
+                <button
+                  type="button"
+                  className="icon-btn"
+                  disabled={steps.length === 0}
+                  aria-pressed={open}
+                  onClick={() => setTraceOpen(!open)}
+                  title={
+                    steps.length === 0
+                      ? "Thought process — send a message and the agent's steps show here"
+                      : open
+                        ? "Hide the agent's thought process"
+                        : "Show the agent's thought process"
+                  }
+                >
+                  <BrainIcon size={17} />
+                </button>
+                <IntakeControls
+                  ref={intakeRef}
+                  threadId={threadId}
+                  onPendingChange={setHasPendingIntake}
+                />
+              </div>
+            </details>
             {/* Busy affordance (FIX 3): while a turn is in flight the button shows a spinning ring,
                 stays disabled, and says "Working…" (title + aria-label + aria-busy) — visible at a
                 glance and not colour-dependent (BRAND §6). Deliberately NOT red: BRAND reserves amber
@@ -470,8 +483,9 @@ export function ChatPane({
               disabled={busy || text.trim() === ""}
               onClick={() => void onSend()}
               style={{
-                width: "2.5rem",
-                height: "2.5rem",
+                width: "2.75rem",
+                height: "2.75rem",
+                alignSelf: "flex-start",
                 flex: "none",
                 borderRadius: "999px",
                 background: "var(--teal-600)",
@@ -498,8 +512,7 @@ export function ChatPane({
         <p
           style={{ margin: 0, textAlign: "center", fontSize: "0.72rem", color: "var(--ink-soft)" }}
         >
-          Pikar AI can make mistakes. Consider checking important information. Press Shift+Enter for
-          a new line.
+          Pikar AI can make mistakes. Consider checking important information.
         </p>
       </div>
     </div>
