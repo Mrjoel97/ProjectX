@@ -30,6 +30,26 @@ const row = (over: Partial<Row> = {}): Row => ({
 });
 
 describe("audit viewer projection — the payload boundary", () => {
+  test("dictation drafts expose only the character count, never transcript or PII details", () => {
+    const p = projectAuditRow(
+      row({
+        eventType: "intake.dictation_draft",
+        payload: {
+          charCount: 42,
+          storageId: "upload_1",
+          text: "Private voice transcript",
+          piiCounts: { email: 1 },
+          filename: "private-recording.wav",
+        },
+      }),
+    );
+    expect(p.known).toBe(true);
+    expect(p.refs).toEqual({ charCount: 42 });
+    expect(JSON.stringify(p)).not.toContain("Private voice transcript");
+    expect(JSON.stringify(p)).not.toContain("private-recording");
+    expect(JSON.stringify(p)).not.toContain("email");
+  });
+
   test("vertical controls and outcomes expose bounded refs without document or dataset values", () => {
     const control = projectAuditRow(
       row({

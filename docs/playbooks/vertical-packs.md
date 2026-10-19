@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Refreshed native evaluator source identity after workspace intake gained metadata-only thread preparation, batched uploads and review-first voice transcription. The six-lane forty-case corpus is unchanged. This bookkeeping does not claim a live evaluation, qualification or activation.
+
 > Last verified: 2026-10-19 — Refreshed native exact-source pins after final reporting metadata changes; the six-lane forty-case corpus is unchanged. No live evaluation or activation is claimed.
 
 > Last verified: 2026-10-19 — Native evaluator source identity is refreshed and now includes Zernio reporting/parser modules. Six lanes and forty corpus cases are unchanged; no live evaluation, semantic pass or activation is claimed.
