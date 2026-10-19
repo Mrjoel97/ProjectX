@@ -65,7 +65,6 @@ async function transcribeAudio(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
   bytes: Uint8Array,
-  artifactId: Id<"intakeArtifacts">,
 ): Promise<string> {
   const sniffed = decodeUtf8(bytes);
   if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX) && fixtureSeamFor(tenantId))
@@ -159,7 +158,10 @@ type RunIntakeArgs = {
 async function runIntake(
   ctx: GenericActionCtx<DataModel>,
   { tenantId, threadId, storageId, filename, mimeType, isDictation }: RunIntakeArgs,
+  collect?: (text: string) => Promise<{ threadId: string }>,
 ): Promise<{ threadId: string }> {
+  if (!(await ctx.runQuery(api.plans.byThread, { threadId })))
+    throw new Error("INTAKE_THREAD_NOT_OWNED");
   await ctx.runMutation(internal.uploads.bindOwned, { tenantId, storageId });
   // A registered authoring probe admits text turns only. Extraction happens before cockpit
   // budget attachment, so refuse here before OCR, transcription, storage or embedding work.
@@ -167,6 +169,7 @@ async function runIntake(
   // The sole merge/reply channel — a governed stop and the eventual successful merge both flow
   // through the SAME public action (ZERO edits to cockpit.ts/llm.ts).
   const respond = async (text: string): Promise<{ threadId: string }> => {
+    if (collect) return collect(text);
     await ctx.runAction(api.cockpit.sendCockpitMessage, { threadId, text });
     return { threadId };
   };
@@ -216,7 +219,7 @@ async function runIntake(
   // 5. EXTRACTION MODEL CALL (the bounded GRDL-01 exception) -> rawText.
   let rawText: string;
   if (kind === "audio") {
-    rawText = await transcribeAudio(ctx, tenantId, bytes, artifactId);
+    rawText = await transcribeAudio(ctx, tenantId, bytes);
   } else if (kind === "image" || kind === "pdf") {
     rawText = await extractVisual(ctx, tenantId, bytes, mimeType, artifactId);
   } else if (kind === "document") {
@@ -332,4 +335,117 @@ export const dictateToThread = tenantAction({
       mimeType: "audio/webm",
       isDictation: true,
     }),
+});
+
+/** One explicit Send is one governed turn, including a whole folder.
+ * All uploads and the destination are tenant-checked before extraction. Existing single-file
+ * callers retain their behavior; this collector changes neither extraction nor approval gates. */
+export const submitInputs = tenantAction({
+  args: {
+    threadId: v.string(),
+    files: v.array(
+      v.object({
+        storageId: v.id("_storage"),
+        filename: v.string(),
+        mimeType: v.string(),
+      }),
+    ),
+    instructions: v.optional(v.string()),
+    clientContext: v.object({ tz: v.string(), nowMs: v.number() }),
+  },
+  handler: async (
+    ctx,
+    { threadId, files, instructions, clientContext },
+  ): Promise<{ threadId: string }> => {
+    if (files.length === 0 || files.length > 20) throw new Error("INTAKE_FILE_COUNT_INVALID");
+    if ((instructions?.length ?? 0) > 12000) throw new Error("INTAKE_INSTRUCTIONS_TOO_LONG");
+    if (!(await ctx.runQuery(api.plans.byThread, { threadId })))
+      throw new Error("INTAKE_THREAD_NOT_OWNED");
+    await ctx.runQuery(internal.authoringProbe.assertUnregisteredThread, {
+      tenantId: ctx.tenantId,
+      threadId,
+    });
+    const gate = await ctx.runMutation(internal.guardrails.preCall, { tenantId: ctx.tenantId });
+    if (!gate.ok) throw new Error("INTAKE_PAUSED");
+    let total = 0;
+    for (const file of files) {
+      if (file.filename.length > 512 || file.mimeType.length > 200)
+        throw new Error("INTAKE_METADATA_INVALID");
+      await ctx.runMutation(internal.uploads.bindOwned, {
+        tenantId: ctx.tenantId,
+        storageId: file.storageId,
+      });
+      const blob = await ctx.storage.get(file.storageId);
+      if (!blob || blob.size > INTAKE_UPLOAD_CAP_BYTES) throw new Error("INTAKE_UPLOAD_INVALID");
+      total += blob.size;
+      if (total > 50 * 1024 * 1024) throw new Error("INTAKE_BATCH_TOO_LARGE");
+    }
+    const scan = scanText(instructions ?? "");
+    if (!scan.ok) throw new Error("INTAKE_INSTRUCTIONS_UNSAFE");
+    const frames: string[] = [];
+    for (const file of files) {
+      await runIntake(
+        ctx,
+        { tenantId: ctx.tenantId, threadId, ...file, isDictation: false },
+        async (text) => {
+          frames.push(text);
+          return { threadId };
+        },
+      );
+    }
+    const text = [scan.value.safeText.trim(), ...frames].filter((part) => part.trim()).join("\n\n");
+    if (!text) throw new Error("INTAKE_EMPTY_TRANSCRIPT");
+    if (text.length > 200000) throw new Error("INTAKE_TEXT_TOO_LARGE");
+    return await ctx.runAction(api.cockpit.sendCockpitMessage, { threadId, text, clientContext });
+  },
+});
+
+/** Recording Stop produces an editable draft only. No thread, agent turn, Vault copy or
+ * extracted text is persisted. The owned temporary audio is deleted even on processing failure. */
+export const transcribeDraft = tenantAction({
+  args: { storageId: v.id("_storage"), threadId: v.optional(v.string()) },
+  handler: async (ctx, { storageId, threadId }): Promise<{ text: string }> => {
+    await ctx.runQuery(internal.uploads.requireOwned, { tenantId: ctx.tenantId, storageId });
+    try {
+      if (threadId) {
+        if (!(await ctx.runQuery(api.plans.byThread, { threadId })))
+          throw new Error("INTAKE_THREAD_NOT_OWNED");
+        await ctx.runQuery(internal.authoringProbe.assertUnregisteredThread, {
+          tenantId: ctx.tenantId,
+          threadId,
+        });
+      }
+      const gate = await ctx.runMutation(internal.guardrails.preCall, { tenantId: ctx.tenantId });
+      if (!gate.ok) throw new Error("DICTATION_PAUSED");
+      const blob = await ctx.storage.get(storageId);
+      if (!blob || blob.size > INTAKE_UPLOAD_CAP_BYTES) throw new Error("DICTATION_UPLOAD_INVALID");
+      const raw = await transcribeAudio(
+        ctx,
+        ctx.tenantId,
+        new Uint8Array(await blob.arrayBuffer()),
+      );
+      const scan = raw.includes(PII_POISON_SENTINEL) ? scanText(undefined) : scanText(raw);
+      if (!scan.ok) {
+        await ctx.runMutation(internal.audit.log, {
+          tenantId: ctx.tenantId,
+          correlationId: storageId,
+          eventType: "intake.extraction_failed",
+          actor: "system",
+          payload: { storageId, kind: "audio", reason: "pii_scan_failed" },
+        });
+        throw new Error("DICTATION_TEXT_UNAVAILABLE");
+      }
+      if (!scan.value.safeText.trim()) throw new Error("DICTATION_TEXT_UNAVAILABLE");
+      await ctx.runMutation(internal.audit.log, {
+        tenantId: ctx.tenantId,
+        correlationId: storageId,
+        eventType: "intake.dictation_draft",
+        actor: "system",
+        payload: { storageId, piiCounts: scan.value.counts, charCount: scan.value.safeText.length },
+      });
+      return { text: scan.value.safeText };
+    } finally {
+      await ctx.storage.delete(storageId);
+    }
+  },
 });

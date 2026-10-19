@@ -93,7 +93,8 @@ describe("every browser caller of sendCockpitMessage carries the trusted clock",
   test("the hook reads the clock at CALL time, not at render", () => {
     const src = readFileSync(HOOK, "utf8");
     // `Date.now()` must sit inside the returned callback; a mounted chat pane can be hours old.
-    expect(src).toMatch(/useCallback\([\s\S]*Date\.now\(\)[\s\S]*\)/);
+    expect(src).toMatch(/useCallback\([\s\S]*clientContext: browserClientContext\(\)/);
+    expect(src).toContain("return { nowMs: Date.now(), tz: browserTimeZone() }");
     expect(src).toContain("clientContext");
     // tz must never be undefined: `v.string()` would throw the whole turn away at the validator.
     expect(src).toContain('"UTC"');

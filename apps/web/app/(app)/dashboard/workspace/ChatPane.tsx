@@ -125,6 +125,16 @@ export function ChatPane({
     }
   }, [sending]);
   const [hasPendingIntake, setHasPendingIntake] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [intakeBusy, setIntakeBusy] = useState(false);
+  const composerInput = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const input = composerInput.current;
+    if (!input) return;
+    input.style.height = "auto";
+    input.style.height = `${text ? Math.max(24, Math.min(input.scrollHeight, 160)) : 24}px`;
+  }, [text]);
+  const sendLock = useRef(false);
   const intakeRef = useRef<IntakeControlsHandle>(null);
   const busy = sending;
   const setBusy = onSending;
@@ -177,7 +187,15 @@ export function ChatPane({
 
   async function onSend() {
     const t = text.trim();
-    if (!t || busy) return;
+    if (
+      (!t && !intakeRef.current?.hasPending()) ||
+      busy ||
+      sendLock.current ||
+      intakeRef.current?.isRecording() ||
+      intakeRef.current?.isBusy()
+    )
+      return;
+    sendLock.current = true;
     setBusy(true);
     // Clear the box IMMEDIATELY (FIX 2) so the turn reads as sent — send() awaits 10-30s and the
     // old order (setText after the await) left the text sitting there the whole time, looking
@@ -185,17 +203,17 @@ export function ChatPane({
     // clear was ordered last originally; keep the guarantee, fix the UX).
     setText("");
     try {
-      const res = await send({ threadId, text: t });
-      if (!threadId) {
-        onThread(res.threadId, t);
-        // Selection never bypasses governance: files and voice stay in the browser until this
-        // ordinary first message has created the plan-backed thread, then reuse intake.ts exactly.
-        await intakeRef.current?.flushToThread(res.threadId);
+      if (intakeRef.current?.hasPending()) {
+        if (!(await intakeRef.current.submit(t, threadId))) setText((current) => current || t);
+      } else {
+        const res = await send({ threadId, text: t });
+        if (!threadId) onThread(res.threadId, t);
       }
     } catch (err) {
       setText(t);
       throw err;
     } finally {
+      sendLock.current = false;
       setBusy(false);
     }
   }
@@ -408,6 +426,7 @@ export function ChatPane({
           }}
         >
           <textarea
+            ref={composerInput}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
@@ -431,82 +450,86 @@ export function ChatPane({
             }}
           />
           <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
-            <details style={{ flex: 1, minWidth: 0 }}>
-              <summary
-                aria-label="Message tools"
-                className="composer-pill"
-                style={{ minHeight: 44, cursor: "pointer", width: "fit-content" }}
-              >
-                + Tools
-              </summary>
-              <div
-                style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", paddingTop: "0.4rem" }}
-              >
-                {/* This phase IS the feature this button was waiting for, so its title no longer
+            <span style={{ flex: 1 }} />
+            {/* This phase IS the feature this button was waiting for, so its title no longer
                 promises a future one — shipping the trace while the button still called it
                 unbuilt is exactly the small dishonesty BRAND §5's honest-zeros rule prevents
                 (the literal old string is left out so a grep guard stays meaningful). It toggles
                 the bubble's collapsible "Thought Process" trace (BRAND §5, verbatim), and is
                 disabled only while there is genuinely no trace to show. */}
-                <button
-                  type="button"
-                  className="icon-btn"
-                  disabled={steps.length === 0}
-                  aria-pressed={open}
-                  onClick={() => setTraceOpen(!open)}
-                  title={
-                    steps.length === 0
-                      ? "Thought process — send a message and the agent's steps show here"
-                      : open
-                        ? "Hide the agent's thought process"
-                        : "Show the agent's thought process"
-                  }
-                >
-                  <BrainIcon size={17} />
-                </button>
-                <IntakeControls
-                  ref={intakeRef}
-                  threadId={threadId}
-                  onPendingChange={setHasPendingIntake}
-                />
-              </div>
-            </details>
-            {/* Busy affordance (FIX 3): while a turn is in flight the button shows a spinning ring,
+            <button
+              type="button"
+              className="icon-btn"
+              disabled={steps.length === 0}
+              aria-pressed={open}
+              onClick={() => setTraceOpen(!open)}
+              title={
+                steps.length === 0
+                  ? "Thought process — send a message and the agent's steps show here"
+                  : open
+                    ? "Hide the agent's thought process"
+                    : "Show the agent's thought process"
+              }
+            >
+              <BrainIcon size={17} />
+            </button>
+            <IntakeControls
+              ref={intakeRef}
+              threadId={threadId}
+              onPendingChange={setHasPendingIntake}
+              onRecordingChange={setRecording}
+              onThread={onThread}
+              onTranscribed={(transcript) => {
+                setText((current) => [current.trimEnd(), transcript].filter(Boolean).join("\n\n"));
+                composerInput.current?.focus();
+              }}
+              onBusyChange={setIntakeBusy}
+              disabled={busy}
+            >
+              {/* Busy affordance (FIX 3): while a turn is in flight the button shows a spinning ring,
                 stays disabled, and says "Working…" (title + aria-label + aria-busy) — visible at a
                 glance and not colour-dependent (BRAND §6). Deliberately NOT red: BRAND reserves amber
                 for the approval gate alone and defines no busy/red token, and red means destructive. */}
-            <button
-              type="button"
-              aria-label={busy ? "Working…" : "Send"}
-              title={busy ? "Working…" : "Send"}
-              aria-busy={busy}
-              disabled={busy || text.trim() === ""}
-              onClick={() => void onSend()}
-              style={{
-                width: "2.75rem",
-                height: "2.75rem",
-                alignSelf: "flex-start",
-                flex: "none",
-                borderRadius: "999px",
-                background: "var(--teal-600)",
-                color: "#fff",
-                border: "none",
-                display: "grid",
-                placeItems: "center",
-                cursor: busy || text.trim() === "" ? "default" : "pointer",
-                opacity: busy || text.trim() === "" ? 0.5 : 1,
-                boxShadow:
-                  "0 8px 18px -8px rgb(0 150 137 / 70%), inset 0 1px 1px rgb(255 255 255 / 35%)",
-              }}
-            >
-              {busy ? <span className="btn-spinner" aria-hidden="true" /> : <SendIcon size={16} />}
-            </button>
+              <button
+                type="button"
+                aria-label={busy ? "Working…" : "Send"}
+                title={busy ? "Working…" : "Send"}
+                aria-busy={busy}
+                disabled={
+                  busy || recording || intakeBusy || (text.trim() === "" && !hasPendingIntake)
+                }
+                onClick={() => void onSend()}
+                style={{
+                  width: "2.75rem",
+                  height: "2.75rem",
+                  alignSelf: "flex-start",
+                  flex: "none",
+                  borderRadius: "999px",
+                  background: "var(--teal-600)",
+                  color: "#fff",
+                  border: "none",
+                  display: "grid",
+                  placeItems: "center",
+                  cursor:
+                    busy || recording || intakeBusy || (text.trim() === "" && !hasPendingIntake)
+                      ? "default"
+                      : "pointer",
+                  opacity:
+                    busy || recording || intakeBusy || (text.trim() === "" && !hasPendingIntake)
+                      ? 0.5
+                      : 1,
+                  boxShadow:
+                    "0 8px 18px -8px rgb(0 150 137 / 70%), inset 0 1px 1px rgb(255 255 255 / 35%)",
+                }}
+              >
+                {busy ? (
+                  <span className="btn-spinner" aria-hidden="true" />
+                ) : (
+                  <SendIcon size={16} />
+                )}
+              </button>
+            </IntakeControls>
           </div>
-          {!threadId && hasPendingIntake && text.trim() === "" && (
-            <p role="status" style={{ margin: 0, fontSize: "0.78rem", color: "var(--ink-soft)" }}>
-              Add typed instructions for the staged file or voice note, then send them together.
-            </p>
-          )}
         </div>
         {/* Brand-mandated honesty line (BRAND.md §1) */}
         <p

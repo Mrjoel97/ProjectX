@@ -158,7 +158,6 @@ test("SMOKE brief=today → LATEST TRACE renders step rows on both surfaces, car
 
   // The brain button IS this feature (it used to say "coming soon"): it expands the collapsible
   // "Thought Process" trace — BRAND §5's specified affordance, verbatim.
-  await page.locator('summary[aria-label="Message tools"]').click();
   const brain = page.getByRole("button", { name: "Show the agent's thought process" });
   await expect(brain).toBeEnabled();
   await brain.click();

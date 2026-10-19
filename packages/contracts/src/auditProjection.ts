@@ -159,6 +159,7 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
   "graph.sent": ["requestId", "provider"],
   "guardrail.blocked": ["requestId", "reason"],
   "intake.extracted": ["artifactId", "kind", "charCount"],
+  "intake.dictation_draft": ["charCount"],
   "intake.extraction_failed": ["artifactId", "kind", "reason"],
   // Phase 29 (KNOW-01) — the governance event a COMPLETED unified knowledge search writes (a run
   // stopped after the reads writes `knowledge.search_stopped` instead, below; exactly one of the

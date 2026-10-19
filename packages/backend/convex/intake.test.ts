@@ -387,3 +387,149 @@ describe("attachToThread -> vault (attachments persist, not one-shot prompt cont
     expect(await vaultDocs(t)).toHaveLength(0);
   });
 });
+
+describe("first-input submissions and editable voice drafts", () => {
+  test("preparing a first upload creates only an owned empty conversation", async () => {
+    const t = setup();
+    const asT = t.withIdentity({ subject: TENANT });
+    const { threadId } = await asT.action(api.cockpit.prepareIntakeThread, {});
+    expect((await allMessages(asT, threadId)).page).toHaveLength(0);
+    expect(await asT.query(api.plans.byThread, { threadId })).toMatchObject({
+      status: "collecting",
+    });
+    expect(
+      await t.withIdentity({ subject: "foreign" }).query(api.plans.byThread, { threadId }),
+    ).toBeNull();
+    expect(await t.run((ctx) => ctx.db.query("agentSteps").collect())).toHaveLength(0);
+    expect(await t.run((ctx) => ctx.db.query("requests").collect())).toHaveLength(0);
+  });
+
+  test("a voice draft returns editable redacted text without a thread or agent turn and deletes temporary audio", async () => {
+    const t = setup();
+    const asT = t.withIdentity({ subject: TENANT });
+    const storageId = await t.run((ctx) =>
+      seedOwnedUpload(
+        ctx,
+        TENANT,
+        new Blob(["SMOKE::transcribe::Review my offer with john@example.com."]),
+      ),
+    );
+    const result = await asT.action(api.intake.transcribeDraft, { storageId });
+    expect(result.text).toBe("Review my offer with [EMAIL_1].");
+    expect(await t.run((ctx) => ctx.db.query("plans").collect())).toHaveLength(0);
+    expect(await t.run((ctx) => ctx.db.query("intakeArtifacts").collect())).toHaveLength(0);
+    expect(await vaultDocs(t)).toHaveLength(0);
+    expect(await t.run((ctx) => ctx.storage.get(storageId))).toBeNull();
+    const audit = await t.run((ctx) => ctx.db.query("audit").collect());
+    expect(audit.some((row) => row.eventType === "intake.dictation_draft")).toBe(true);
+    expect(JSON.stringify(audit)).not.toContain("john@example.com");
+    expect(JSON.stringify(audit)).not.toContain("Review my offer");
+  });
+
+  test("a poisoned voice draft fails closed, deletes its audio and creates no conversation", async () => {
+    const t = setup();
+    const asT = t.withIdentity({ subject: TENANT });
+    const storageId = await t.run((ctx) =>
+      seedOwnedUpload(ctx, TENANT, new Blob(["SMOKE::transcribe::PII_POISON::"])),
+    );
+    await expect(asT.action(api.intake.transcribeDraft, { storageId })).rejects.toThrow(
+      "DICTATION_TEXT_UNAVAILABLE",
+    );
+    expect(await t.run((ctx) => ctx.storage.get(storageId))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.query("plans").collect())).toHaveLength(0);
+  });
+
+  test("another tenant's voice upload is refused without deleting their bytes", async () => {
+    const t = setup();
+    const storageId = await t.run((ctx) =>
+      seedOwnedUpload(ctx, "foreign", new Blob(["SMOKE::transcribe::private"])),
+    );
+    await expect(
+      t.withIdentity({ subject: TENANT }).action(api.intake.transcribeDraft, { storageId }),
+    ).rejects.toThrow("UPLOAD_NOT_OWNED");
+    expect(await t.run(async (ctx) => (await ctx.storage.get(storageId)) !== null)).toBe(true);
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+  });
+
+  test("a fresh folder and optional instructions reach the agent in exactly one user turn, without a greeting", async () => {
+    const t = setup();
+    const asT = t.withIdentity({ subject: TENANT });
+    const { threadId } = await asT.action(api.cockpit.prepareIntakeThread, {});
+    const files = [];
+    for (const [filename, text] of [
+      ["folder/one.txt", "Offer: consulting"],
+      ["folder/two.txt", "Contact john@example.com"],
+    ] as const) {
+      const storageId = await t.run((ctx) =>
+        seedOwnedUpload(ctx, TENANT, new Blob([text], { type: "text/plain" })),
+      );
+      files.push({ storageId, filename, mimeType: "text/plain" });
+    }
+    await asT.action(api.intake.submitInputs, {
+      threadId,
+      files,
+      instructions: "Summarize both files for jane@example.com",
+      clientContext: { tz: "Africa/Dar_es_Salaam", nowMs: Date.now() },
+    });
+    const messages = (await allMessages(asT, threadId)).page.filter(
+      (message) => message.message?.role === "user",
+    );
+    expect(messages).toHaveLength(1);
+    const body = JSON.stringify(messages);
+    expect(body).toContain("Summarize both files");
+    expect(body).toContain("folder/one.txt");
+    expect(body).toContain("folder/two.txt");
+    expect(body).not.toContain("john@example.com");
+    expect(body).not.toContain("jane@example.com");
+    expect(body).not.toContain("Hello");
+    expect(await t.run((ctx) => ctx.db.query("intakeArtifacts").collect())).toHaveLength(2);
+  }, 60000);
+
+  test("file-only submission works, and foreign destinations and oversized batches are refused before extraction", async () => {
+    const t = setup();
+    const asT = t.withIdentity({ subject: TENANT });
+    const foreign = await t
+      .withIdentity({ subject: "foreign" })
+      .action(api.cockpit.prepareIntakeThread, {});
+    const storageId = await t.run((ctx) =>
+      seedOwnedUpload(ctx, TENANT, new Blob(["My offer"], { type: "text/plain" })),
+    );
+    const file = { storageId, filename: "offer.txt", mimeType: "text/plain" };
+    const clientContext = { tz: "UTC", nowMs: Date.now() };
+    await expect(
+      asT.action(api.intake.submitInputs, {
+        threadId: foreign.threadId,
+        files: [file],
+        clientContext,
+      }),
+    ).rejects.toThrow("INTAKE_THREAD_NOT_OWNED");
+    expect(await t.run((ctx) => ctx.db.query("intakeArtifacts").collect())).toHaveLength(0);
+    const { threadId } = await asT.action(api.cockpit.prepareIntakeThread, {});
+    await expect(
+      asT.action(api.intake.submitInputs, { threadId, files: Array(21).fill(file), clientContext }),
+    ).rejects.toThrow("INTAKE_FILE_COUNT_INVALID");
+    await asT.action(api.intake.submitInputs, { threadId, files: [file], clientContext });
+    const messages = (await allMessages(asT, threadId)).page.filter(
+      (message) => message.message?.role === "user",
+    );
+    expect(messages).toHaveLength(1);
+    expect(JSON.stringify(messages)).toContain("My offer");
+  }, 60000);
+  test("voice draft refuses a foreign thread before transcription and removes only its own temporary audio", async () => {
+    const t = setup();
+    const foreign = await t
+      .withIdentity({ subject: "foreign" })
+      .action(api.cockpit.prepareIntakeThread, {});
+    const storageId = await t.run((ctx) =>
+      seedOwnedUpload(ctx, TENANT, new Blob(["SMOKE::transcribe::private"])),
+    );
+    await expect(
+      t
+        .withIdentity({ subject: TENANT })
+        .action(api.intake.transcribeDraft, { storageId, threadId: foreign.threadId }),
+    ).rejects.toThrow("INTAKE_THREAD_NOT_OWNED");
+    expect(await t.run((ctx) => ctx.storage.get(storageId))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.query("intakeArtifacts").collect())).toHaveLength(0);
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+  });
+});

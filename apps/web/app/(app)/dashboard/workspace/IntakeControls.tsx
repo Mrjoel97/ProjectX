@@ -3,367 +3,432 @@
 import { api } from "@pikar/backend/api";
 import { useAction, useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import {
+  forwardRef,
+  type ReactNode,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { MicIcon, PaperclipIcon } from "../../../(auth)/icons";
 import { normalizeAudio } from "../../../lib/normalizeAudio";
+import { browserClientContext } from "./useSendCockpitMessage";
 
-// The intake-specific composer controls (INTK-02 attach / INTK-03 one-shot dictate). Fully
-// self-contained — ChatPane.tsx's composer mounts ONE line `<IntakeControls threadId={threadId} />`
-// once `threadId` is minted (cross-lane note, 04-05-SUMMARY.md; mount landed post-merge).
-//
-// Upload flow mirrors AttachmentPicker.tsx/requests.ts's precedent: generateUploadUrl -> POST
-// the raw bytes -> the resulting storageId feeds the governed intake action, which classifies,
-// extracts (bounded GRDL-01 exception), redacts (fail-closed), costs, audits (refs-only), and
-// MERGES into the SAME conversation via the existing api.cockpit.sendCockpitMessage (intake.ts,
-// Plan 04) — IntakeControls never touches the conversation directly; it only drives the upload.
-//
-// ONE-SHOT dictation only (record -> stop -> transcribe). NO WebRTC/realtime/ephemeral tokens
-// (that boundary is Phase 6 — 04-05-PLAN.md Pitfall 6).
-
-// Client-side mirror of intake.ts's INTAKE_UPLOAD_CAP_BYTES — that module is a "use node" Convex
-// action (server-only), not importable into this client bundle. UX guard only; the server always
-// re-derives the authoritative cap from the real loaded bytes (intake.ts's Rule-2 discipline).
-const INTAKE_UPLOAD_CAP_BYTES = 20 * 1024 * 1024; // 20 MiB — keep in sync with intake.ts
-const CAP_LABEL = `${Math.floor(INTAKE_UPLOAD_CAP_BYTES / (1024 * 1024))}MB`;
-
-// Extensions are listed ALONGSIDE the MIME types on purpose: Chrome resolves an `accept` MIME type
-// to extensions via the OS registry, and Windows has no entry for text/markdown — so a MIME-only
-// list makes .md files invisible in the picker (the folder just looks empty). classify() already
-// routes both text/markdown and a .md filename to the "document" path.
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_BATCH_BYTES = 50 * 1024 * 1024;
 const ATTACH_ACCEPT = "image/*,application/pdf,audio/*,text/plain,text/markdown,.txt,.md,.markdown";
-
-type StorageId = FunctionArgs<typeof api.intake.attachToThread>["storageId"];
-
-/**
- * Attach picker + one-shot MediaRecorder dictation, wired through generateUploadUrl -> POST ->
- * intake.attachToThread/dictateToThread. Self-contained: takes `threadId` (minted by the first
- * chat turn, same lift ChatPane already does) and renders no conversation output itself — the
- * merge happens server-side and the existing chat/card views pick it up reactively.
- */
-/** A staged file plus the identity a File does not carry. See `nextStagedId`. */
-type StagedFile = { id: string; file: File };
-
+type Uploaded = FunctionArgs<typeof api.intake.submitInputs>["files"][number];
+type Staged = { id: string; file: File };
 export type IntakeControlsHandle = {
-  /** Process everything the user staged on a fresh chat against its newly-created thread. */
-  flushToThread: (threadId: string) => Promise<void>;
+  hasPending: () => boolean;
+  isRecording: () => boolean;
+  isBusy: () => boolean;
+  submit: (instructions: string, threadId?: string) => Promise<boolean>;
 };
-
-type IntakeControlsProps = {
+type Props = {
   threadId?: string;
-  onPendingChange?: (hasPending: boolean) => void;
+  disabled?: boolean;
+  onPendingChange?: (pending: boolean) => void;
+  onRecordingChange?: (recording: boolean) => void;
+  onThread: (id: string, label: string) => void;
+  onTranscribed: (text: string) => void;
+  onBusyChange?: (busy: boolean) => void;
+  children: ReactNode;
 };
 
-/**
- * Existing chats keep the original immediate upload/dictation behaviour. A fresh chat stages the
- * exact same File/Blob objects locally until ChatPane's first ordinary send mints a governed
- * thread, then `flushToThread` feeds them through the existing intake actions. Nothing is uploaded
- * or processed merely because it was selected.
- */
-export const IntakeControls = forwardRef<IntakeControlsHandle, IntakeControlsProps>(
-  function IntakeControls({ threadId, onPendingChange }, ref) {
-    const generateUploadUrl = useMutation(api.intakeDb.generateUploadUrl);
-    const attachToThread = useAction(api.intake.attachToThread);
-    const dictateToThread = useAction(api.intake.dictateToThread);
+/** Files wait for one explicit Send with optional instructions. Recording Stop produces editable text only.
+ * A first submission creates only conversation metadata, then enters the same governed intake
+ * pipeline. No greeting or preliminary model turn is needed. Failed inputs stay available. */
+export const IntakeControls = forwardRef<IntakeControlsHandle, Props>(function IntakeControls(
+  {
+    threadId,
+    disabled = false,
+    onPendingChange,
+    onRecordingChange,
+    onThread,
+    onTranscribed,
+    onBusyChange,
+    children,
+  },
+  ref,
+) {
+  const generateUploadUrl = useMutation(api.intakeDb.generateUploadUrl);
+  const prepareThread = useAction(api.cockpit.prepareIntakeThread);
+  const submitInputs = useAction(api.intake.submitInputs);
+  const transcribeDraft = useAction(api.intake.transcribeDraft);
+  const [voiceDraft, setVoiceDraft] = useState<Blob | null>(null);
+  const [pending, setPending] = useState<Staged[]>([]);
+  const pendingRef = useRef<Staged[]>([]);
+  const uploads = useRef(new Map<string, Uploaded>());
+  const destination = useRef(threadId);
+  const sequence = useRef(0);
+  const [busy, setBusy] = useState(false);
+  const submission = useRef(false);
+  const [recording, setRecording] = useState(false);
+  const recordingRef = useRef(false);
+  const acquiring = useRef(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
+  const dictationInput = useRef<HTMLInputElement>(null);
+  const recorder = useRef<MediaRecorder | null>(null);
+  const mounted = useRef(true);
 
-    const [busy, setBusy] = useState(false);
-    const [recording, setRecording] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [pendingFiles, setPendingFiles] = useState<StagedFile[]>([]);
-    const [pendingDictation, setPendingDictation] = useState<Blob | null>(null);
-
-    // Monotonic, not crypto.randomUUID(): this id never leaves the component and only has to be
-    // unique within one composer session, so it needs no entropy and no secure-context assumption.
-    const nextStagedId = useRef(0);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const folderInputRef = useRef<HTMLInputElement>(null);
-    const dictationTestInputRef = useRef<HTMLInputElement>(null);
-    const recorderRef = useRef<MediaRecorder | null>(null);
-    const chunksRef = useRef<Blob[]>([]);
-
-    async function upload(file: Blob, mimeType: string): Promise<StorageId | null> {
-      const url = await generateUploadUrl();
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": mimeType },
-        body: file,
+  useEffect(() => {
+    destination.current = threadId;
+  }, [threadId]);
+  useEffect(() => {
+    onPendingChange?.(pending.length > 0);
+  }, [pending, onPendingChange]);
+  useEffect(() => {
+    onRecordingChange?.(recording);
+  }, [recording, onRecordingChange]);
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (recorder.current?.state === "recording") recorder.current.stop();
+      for (const track of recorder.current?.stream.getTracks() ?? []) track.stop();
+    };
+  }, []);
+  const update = (next: Staged[]) => {
+    pendingRef.current = next;
+    setPending(next);
+  };
+  const remove = (id: string) => {
+    uploads.current.delete(id);
+    update(pendingRef.current.filter((item) => item.id !== id));
+  };
+  function stage(files: File[]): boolean {
+    if (!files.length || submission.current) return false;
+    if (pendingRef.current.length + files.length > 20) {
+      setError("Choose up to 20 files per message. Split larger folders into smaller groups.");
+      return false;
+    }
+    if (files.some((file) => file.size > MAX_FILE_BYTES)) {
+      setError("Each file or recording must be 20 MB or smaller.");
+      return false;
+    }
+    if (
+      [...pendingRef.current.map((item) => item.file), ...files].reduce(
+        (size, file) => size + file.size,
+        0,
+      ) > MAX_BATCH_BYTES
+    ) {
+      setError("Keep the files in one message under 50 MB.");
+      return false;
+    }
+    setError(null);
+    update([
+      ...pendingRef.current,
+      ...files.map((file) => ({ id: String(sequence.current++), file })),
+    ]);
+    return true;
+  }
+  async function submit(
+    instructions: string,
+    existingThreadId = destination.current,
+  ): Promise<boolean> {
+    if (submission.current || recordingRef.current || !pendingRef.current.length) return false;
+    submission.current = true;
+    setBusy(true);
+    setError(null);
+    const batch = [...pendingRef.current];
+    try {
+      let target = existingThreadId;
+      if (!target) {
+        const created = await prepareThread({});
+        target = created.threadId;
+        destination.current = target;
+        onThread(target, "Uploaded files");
+      }
+      const files: Uploaded[] = [];
+      let total = 0;
+      for (const item of batch) {
+        let uploaded = uploads.current.get(item.id);
+        if (!uploaded) {
+          const payload = item.file.type.startsWith("audio/")
+            ? await normalizeAudio(item.file)
+            : item.file;
+          total += payload.size;
+          if (payload.size > MAX_FILE_BYTES || total > MAX_BATCH_BYTES)
+            throw new Error("INPUT_TOO_LARGE");
+          const url = await generateUploadUrl({});
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": payload.type || "application/octet-stream" },
+            body: payload,
+          });
+          if (!response.ok) throw new Error("UPLOAD_FAILED");
+          const { storageId } = await response.json();
+          uploaded = {
+            storageId,
+            filename: item.file.webkitRelativePath || item.file.name,
+            mimeType: payload.type || "application/octet-stream",
+          };
+          uploads.current.set(item.id, uploaded);
+        }
+        files.push(uploaded);
+      }
+      await submitInputs({
+        threadId: target,
+        files,
+        instructions: instructions || undefined,
+        clientContext: browserClientContext(),
       });
-      if (!res.ok) return null;
-      const { storageId } = (await res.json()) as { storageId: StorageId };
-      return storageId;
+      const accepted = new Set(batch.map((item) => item.id));
+      for (const id of accepted) uploads.current.delete(id);
+      update(pendingRef.current.filter((item) => !accepted.has(item.id)));
+      return true;
+    } catch {
+      setError(
+        "Could not finish this submission. Your inputs are kept. Check this conversation before trying again; use smaller files if needed.",
+      );
+      return false;
+    } finally {
+      submission.current = false;
+      setBusy(false);
     }
-
-    async function runAttach(file: File, destinationThreadId = threadId): Promise<boolean> {
-      if (busy || !destinationThreadId) return false;
-      if (file.size > INTAKE_UPLOAD_CAP_BYTES) {
-        setError(`${file.name}: over ${CAP_LABEL}.`);
-        return false;
-      }
-      setBusy(true);
-      setError(null);
-      try {
-        const payload = file.type.startsWith("audio/") ? await normalizeAudio(file) : file;
-        const mimeType = payload.type || "application/octet-stream";
-        const storageId = await upload(payload, mimeType);
-        if (!storageId) {
-          setError(`${file.name}: upload failed.`);
-          return false;
-        }
-        await attachToThread({
-          threadId: destinationThreadId,
-          storageId,
-          filename: file.webkitRelativePath || file.name,
-          mimeType,
-          size: payload.size,
-        });
-        return true;
-      } catch {
-        setError(`${file.name}: couldn't process that file. Please try again.`);
-        return false;
-      } finally {
-        setBusy(false);
-      }
+  }
+  useImperativeHandle(ref, () => ({
+    hasPending: () => pendingRef.current.length > 0,
+    isRecording: () => recordingRef.current,
+    isBusy: () => submission.current,
+    submit,
+  }));
+  async function readyVoice(blob: Blob) {
+    if (!mounted.current || submission.current) return;
+    setVoiceDraft(blob);
+    submission.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      if (blob.size > MAX_FILE_BYTES) throw new Error("DICTATION_TOO_LARGE");
+      const pcm = await normalizeAudio(blob);
+      if (pcm.size > MAX_FILE_BYTES) throw new Error("DICTATION_TOO_LARGE");
+      const url = await generateUploadUrl({});
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "audio/wav" },
+        body: pcm,
+      });
+      if (!response.ok) throw new Error("UPLOAD_FAILED");
+      const { storageId } = await response.json();
+      const result = await transcribeDraft({
+        storageId,
+        ...(destination.current ? { threadId: destination.current } : {}),
+      });
+      if (!mounted.current) return;
+      onTranscribed(result.text);
+      setVoiceDraft(null);
+    } catch {
+      if (mounted.current)
+        setError(
+          "Could not transcribe this recording. It is kept here so you can retry. Nothing was sent to the agent.",
+        );
+    } finally {
+      submission.current = false;
+      if (mounted.current) setBusy(false);
     }
-
-    async function runDictate(blob: Blob, destinationThreadId = threadId): Promise<boolean> {
-      if (busy || !destinationThreadId) return false;
-      if (blob.size > INTAKE_UPLOAD_CAP_BYTES) {
-        setError(`Recording: over ${CAP_LABEL}.`);
-        return false;
-      }
-      setBusy(true);
-      setError(null);
-      try {
-        const pcm = await normalizeAudio(blob);
-        const storageId = await upload(pcm, "audio/wav");
-        if (!storageId) {
-          setError("Dictation upload failed.");
-          return false;
-        }
-        await dictateToThread({ threadId: destinationThreadId, storageId });
-        return true;
-      } catch {
-        setError("Couldn't process the dictation. Please try again.");
-        return false;
-      } finally {
-        setBusy(false);
-      }
+  }
+  async function toggleRecord() {
+    if (busy || disabled || submission.current || acquiring.current) return;
+    if (recordingRef.current) {
+      recorder.current?.stop();
+      return;
     }
-
-    function acceptFiles(files: File[]) {
-      if (files.length === 0) return;
-      setError(null);
-      if (threadId) {
-        void (async () => {
-          for (const file of files) await runAttach(file, threadId);
-        })();
+    setError(null);
+    let stream: MediaStream | undefined;
+    acquiring.current = true;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!mounted.current) {
+        for (const track of stream.getTracks()) track.stop();
         return;
       }
-      setPendingFiles((current) => [
-        ...current,
-        ...files.map((file) => ({ id: (nextStagedId.current++).toString(), file })),
-      ]);
+      const rec = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      rec.ondataavailable = (event) => {
+        if (event.data.size) chunks.push(event.data);
+      };
+      rec.onstop = () => {
+        for (const track of rec.stream.getTracks()) track.stop();
+        recordingRef.current = false;
+        if (!mounted.current) return;
+        setRecording(false);
+        void readyVoice(new Blob(chunks, { type: rec.mimeType || "audio/webm" }));
+      };
+      recorder.current = rec;
+      recordingRef.current = true;
+      rec.start();
+      setRecording(true);
+    } catch {
+      for (const track of stream?.getTracks() ?? []) track.stop();
+      recordingRef.current = false;
+      setRecording(false);
+      setError(
+        "Microphone access or recording failed. Check your microphone permission and try again.",
+      );
+    } finally {
+      acquiring.current = false;
     }
-
-    function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
-      const files = Array.from(e.target.files ?? []);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      acceptFiles(files);
-    }
-
-    function onPickFolder(e: React.ChangeEvent<HTMLInputElement>) {
-      const files = Array.from(e.target.files ?? []);
-      if (folderInputRef.current) folderInputRef.current.value = "";
-      acceptFiles(files);
-    }
-
-    // Headless-safe dictation seam: a headless Playwright run can't grant a real microphone, so
-    // this hidden test-only input drives the SAME upload -> dictateToThread path a real
-    // recording's onstop handler takes below (intake.spec.ts, Task 2). Never rendered for real use.
-    function onPickDictationTestFile(e: React.ChangeEvent<HTMLInputElement>) {
-      const file = e.target.files?.[0];
-      if (dictationTestInputRef.current) dictationTestInputRef.current.value = "";
-      if (file) void runDictate(file);
-    }
-
-    async function toggleRecord() {
-      if (busy) return;
-      if (recording) {
-        recorderRef.current?.stop();
-        return;
-      }
-      setError(null);
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const rec = new MediaRecorder(stream);
-        chunksRef.current = [];
-        rec.ondataavailable = (e) => {
-          if (e.data.size > 0) chunksRef.current.push(e.data);
-        };
-        rec.onstop = () => {
-          for (const track of stream.getTracks()) track.stop();
-          setRecording(false);
-          const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
-          if (threadId) void runDictate(blob, threadId);
-          else setPendingDictation(blob);
-        };
-        recorderRef.current = rec;
-        rec.start();
-        setRecording(true);
-      } catch {
-        setError("Microphone access was denied — dictation needs it to record.");
-      }
-    }
-
-    const locked = busy || recording;
-    const hasPending = pendingFiles.length > 0 || pendingDictation !== null;
-
-    useEffect(() => onPendingChange?.(hasPending), [hasPending, onPendingChange]);
-
-    useImperativeHandle(
-      ref,
-      () => ({
-        flushToThread: async (destinationThreadId: string) => {
-          // Each action is the established governed intake path. Keep failed items staged so the
-          // user can retry; remove only work the backend accepted.
-          for (const staged of pendingFiles) {
-            if (await runAttach(staged.file, destinationThreadId)) {
-              setPendingFiles((current) => current.filter((item) => item.id !== staged.id));
-            }
-          }
-          if (pendingDictation && (await runDictate(pendingDictation, destinationThreadId))) {
-            setPendingDictation(null);
-          }
-        },
-      }),
-      // DELIBERATELY NO DEPENDENCY ARRAY. The handle closes over runAttach/runDictate, which are
-      // re-created every render and in turn close over `busy`. Memoising it on
-      // [pendingDictation, pendingFiles] kept whichever copy existed when those last changed, so a
-      // stale `busy: true` made every flush return false and silently send nothing. Listing the two
-      // functions instead only moves the problem to useCallback chains. Rebuilding the handle on
-      // every render is correct by construction and costs one ref assignment.
-    );
-
-    // display:contents — the paperclip/mic triggers sit inline in the composer's icon row
-    // (BRAND.md §5, same idiom as AttachmentPicker) while the error line wraps full-width below.
-    return (
-      <div style={{ display: "contents" }}>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ATTACH_ACCEPT}
-          aria-label="Attach a file"
-          data-testid="attach-file-input"
-          disabled={locked}
-          onChange={onPickFile}
-          style={{ display: "none" }}
-        />
-        <input
-          ref={folderInputRef}
-          type="file"
-          accept={ATTACH_ACCEPT}
-          aria-label="Attach a folder"
-          data-testid="attach-folder-input"
-          disabled={locked}
-          onChange={onPickFolder}
-          style={{ display: "none" }}
-          {...({ directory: "", webkitdirectory: "" } as Record<string, string>)}
-        />
-        <button
-          type="button"
-          className="icon-btn"
-          aria-label="Attach a file"
-          title="Attach a file — its content joins the conversation"
-          disabled={locked}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <PaperclipIcon size={17} />
-        </button>
-        <button
-          type="button"
-          className="composer-pill"
-          aria-label="Attach a folder"
-          title="Attach a folder — supported files join the conversation"
-          disabled={locked}
-          onClick={() => folderInputRef.current?.click()}
-          style={{ paddingInline: "0.55rem" }}
-        >
-          Folder
-        </button>
+  }
+  const locked = busy || disabled || recording;
+  return (
+    <div style={{ display: "contents" }}>
+      <input
+        ref={fileInput}
+        type="file"
+        multiple
+        accept={ATTACH_ACCEPT}
+        aria-label="Attach a file"
+        data-testid="attach-file-input"
+        disabled={locked}
+        onChange={(event) => {
+          stage(Array.from(event.target.files ?? []));
+          event.target.value = "";
+        }}
+        style={{ display: "none" }}
+      />
+      <input
+        ref={folderInput}
+        type="file"
+        accept={ATTACH_ACCEPT}
+        aria-label="Attach a folder"
+        data-testid="attach-folder-input"
+        disabled={locked}
+        onChange={(event) => {
+          stage(Array.from(event.target.files ?? []));
+          event.target.value = "";
+        }}
+        style={{ display: "none" }}
+        {...({ directory: "", webkitdirectory: "" } as Record<string, string>)}
+      />
+      <button
+        type="button"
+        className="icon-btn"
+        aria-label="Attach a file"
+        title="Attach files and add optional instructions"
+        disabled={locked}
+        onClick={() => fileInput.current?.click()}
+      >
+        <PaperclipIcon size={17} />
+      </button>
+      <button
+        type="button"
+        className="composer-pill"
+        aria-label="Attach a folder"
+        title="Attach a folder and add optional instructions"
+        disabled={locked}
+        onClick={() => folderInput.current?.click()}
+      >
+        Folder
+      </button>
+      <span
+        style={{ display: "inline-flex", gap: "0.35rem", alignItems: "center", marginLeft: "auto" }}
+      >
         <button
           type="button"
           className="icon-btn"
           aria-label={recording ? "Stop recording" : "Record dictation"}
+          title={recording ? "Stop and transcribe voice note" : "Record a voice note"}
           aria-pressed={recording}
-          title={recording ? "Stop recording" : "Record dictation"}
-          disabled={busy && !recording}
+          disabled={busy || disabled}
           onClick={() => void toggleRecord()}
-          style={recording ? { background: "var(--teal-600)", color: "#fff" } : undefined}
+          style={{
+            minWidth: 44,
+            minHeight: 44,
+            ...(recording ? { background: "var(--teal-600)", color: "var(--card)" } : {}),
+          }}
         >
           <MicIcon size={17} />
         </button>
-        {recording && (
-          <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Recording…</span>
-        )}
-        {busy && !recording && (
-          <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Extracting…</span>
-        )}
-        {!threadId && hasPending && (
-          <div
-            data-testid="pending-intake"
-            role="status"
-            style={{ flexBasis: "100%", display: "grid", gap: "0.25rem" }}
-          >
-            <span style={{ fontSize: "0.78rem", color: "var(--ink-soft)" }}>
-              Ready for your first message. Add instructions above, then Send.
-            </span>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
-              {pendingFiles.map(({ id, file }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className="composer-pill"
-                  aria-label={`Remove ${file.webkitRelativePath || file.name}`}
-                  title="Remove this staged file"
-                  onClick={() =>
-                    setPendingFiles((current) => current.filter((item) => item.id !== id))
-                  }
-                  style={{ height: "auto", maxWidth: "100%", whiteSpace: "normal" }}
-                >
-                  {file.webkitRelativePath || file.name} ×
-                </button>
-              ))}
-              {pendingDictation && (
-                <button
-                  type="button"
-                  className="composer-pill"
-                  aria-label="Remove voice instruction"
-                  title="Remove this staged voice instruction"
-                  onClick={() => setPendingDictation(null)}
-                >
-                  Voice instruction ready ×
-                </button>
-              )}
-            </div>
+        {children}
+      </span>
+      {recording && (
+        <span role="status" style={{ color: "var(--ink-soft)", fontSize: "0.8rem" }}>
+          Recording… Stop to review the text.
+        </span>
+      )}
+      {busy && (
+        <span role="status" style={{ color: "var(--ink-soft)", fontSize: "0.8rem" }}>
+          {voiceDraft ? "Transcribing voice note…" : "Processing files…"}
+        </span>
+      )}
+      {pending.length > 0 && (
+        <div
+          data-testid="pending-intake"
+          role="status"
+          style={{ flexBasis: "100%", display: "grid", gap: "0.3rem" }}
+        >
+          <span style={{ color: "var(--ink-soft)", fontSize: "0.78rem" }}>
+            Ready to send. Add instructions if you want, then Send.
+          </span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+            {pending.map(({ id, file }) => (
+              <button
+                key={id}
+                type="button"
+                className="composer-pill"
+                disabled={locked}
+                aria-label={`Remove ${file.webkitRelativePath || file.name}`}
+                onClick={() => remove(id)}
+                style={{ maxWidth: "100%", whiteSpace: "normal", overflowWrap: "anywhere" }}
+              >
+                {file.webkitRelativePath || file.name} ×
+              </button>
+            ))}
           </div>
-        )}
-        {error && (
-          <p
-            role="alert"
-            style={{ color: "#dc2626", fontSize: "0.8rem", margin: 0, flexBasis: "100%" }}
+        </div>
+      )}
+      {voiceDraft && !busy && (
+        <div style={{ flexBasis: "100%", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="composer-pill"
+            disabled={locked}
+            onClick={() => void readyVoice(voiceDraft)}
           >
-            {error}
-          </p>
-        )}
-        <input
-          ref={dictationTestInputRef}
-          type="file"
-          accept="audio/*"
-          data-testid="dictation-test-input"
-          disabled={locked}
-          onChange={onPickDictationTestFile}
-          style={{ display: "none" }}
-        />
-      </div>
-    );
-  },
-);
+            Retry transcription
+          </button>
+          <button
+            type="button"
+            className="composer-pill"
+            disabled={locked}
+            onClick={() => {
+              setVoiceDraft(null);
+              setError(null);
+            }}
+          >
+            Clear voice draft
+          </button>
+        </div>
+      )}
+      {error && (
+        <p
+          role="alert"
+          style={{ color: "var(--ink)", fontSize: "0.8rem", margin: 0, flexBasis: "100%" }}
+        >
+          {error}
+        </p>
+      )}
+      <input
+        ref={dictationInput}
+        type="file"
+        accept="audio/*"
+        data-testid="dictation-test-input"
+        disabled={locked}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void readyVoice(file);
+        }}
+        style={{ display: "none" }}
+      />
+    </div>
+  );
+});

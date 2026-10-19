@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Review-first voice transcription emits `intake.dictation_draft`; the audit viewer projects only its character count and existing correlation reference. Transcript text, filenames and nested PII counts remain outside the projection. A focused regression covers this boundary; no recording is sent as an agent turn until the user explicitly sends the written prompt.
+
 > Last verified: 2026-10-19 — Zernio connections export as credential summaries; the latest report exports as tenant-owned data. Both ride the existing erasure walk. Erasure reports local deletion with upstream revocation unsupported, requiring key revocation in Zernio; no provider grant is automatically deleted.
 
 > Last verified: 2026-10-19 — Buffer connection/OAuth tables are tenant credentials with summary-only export; Buffer campaign posts and engagement snapshots are tenant-owned export/erasure data. Deletion reports local credential removal without claiming upstream revocation, and scheduled provider posts may survive locally disconnecting. Raw credentials/provider responses do not enter audit or dead-letter payloads. See buffer.md.

@@ -31,7 +31,9 @@ vi.mock("@convex-dev/agent/react", () => ({
   useThreadMessages: () => ({ results: [], status: "Exhausted" }),
 }));
 vi.mock("./useSendCockpitMessage", () => ({ useSendCockpitMessage: () => vi.fn() }));
-vi.mock("./IntakeControls", () => ({ IntakeControls: () => null }));
+vi.mock("./IntakeControls", () => ({
+  IntakeControls: ({ children }: { children: import("react").ReactNode }) => children,
+}));
 vi.mock("./RevenuePackPanel", () => ({ RevenuePackPanel: () => null }));
 vi.mock("./MediaCanvas", () => ({
   MediaCanvas: ({ plan }: { plan: Record<string, unknown> }) => (
