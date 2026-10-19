@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Refreshed native evaluator source pins after the Buffer hosted OAuth/API repair. The six-lane, forty-case corpus is unchanged; this is identity bookkeeping, not a live evaluation or qualification.
+
 > Last verified: 2026-10-19 — Regenerated native evaluator pins after Buffer changed shared runtime/schema sources; its source inventory now includes the Buffer modules and reused envelope contract. The six-lane, forty-case corpus is unchanged. Old exact-source evidence is retired; no live evaluation, semantic pass or activation is claimed.
 
 > Last verified: 2026-10-17 — regenerated the native evaluator fingerprint after generated-file lifecycle ownership changed. The six-lane, 40-case corpus and source fixtures are unchanged. Offline fingerprint checks are not new live qualification.

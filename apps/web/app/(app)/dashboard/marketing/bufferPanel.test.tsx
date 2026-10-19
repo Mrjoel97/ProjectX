@@ -35,6 +35,7 @@ beforeEach(() => {
       ],
       selectedChannelIds: [channelId],
       dailyReports: false,
+      reportsAvailable: false,
     },
     "buffer:posts": [],
     "buffer:reports": [],
@@ -118,16 +119,25 @@ test("the callback completes once and clears the receipt from browser history", 
   expect(window.location.search).toBe("");
   expect(mocks.calls["bufferActions:startConnect"]).not.toHaveBeenCalled();
 });
-test("only explicit channel selection enables background reporting", async () => {
+test("channel selection works while unsupported background reporting stays disabled", async () => {
   await act(async () => root.render(<ConnectBufferPage />));
   expect(mocks.calls["buffer:selectChannels"]).not.toHaveBeenCalled();
   const boxes = host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
   expect(boxes[0]?.checked).toBe(true);
   expect(boxes[1]?.checked).toBe(false);
+  expect(boxes[1]?.disabled).toBe(true);
   await act(async () => boxes[1]!.click());
   await act(async () => button("Save channel selection").click());
   expect(mocks.calls["buffer:selectChannels"]).toHaveBeenCalledExactlyOnceWith({
     channelIds: [channelId],
-    dailyReports: true,
+    dailyReports: false,
   });
+});
+
+test("engagement controls explain the provider restriction and never request a report", async () => {
+  await act(async () => root.render(<BufferMarketing />));
+  expect(host.textContent).toContain("Buffer does not currently allow engagement reports");
+  expect(button("Refresh engagement report").disabled).toBe(true);
+  await act(async () => button("Refresh engagement report").click());
+  expect(mocks.calls["bufferActions:refreshReport"]).not.toHaveBeenCalled();
 });

@@ -1,11 +1,11 @@
 # Playbook: Buffer social marketing
 
-> Last verified: 2026-10-19 against the local Buffer implementation; hosted Pikar acceptance remains pending.
-> Authority: owner request to add Buffer OAuth/MCP publishing and engagement reporting; [ADR-058](../decisions/058-buffer-mcp-social-marketing.md).
+> Last verified: 2026-10-19 — registered app OAuth replaces rejected hosted MCP registration; regression tests cover callback, API reads, refresh and approved writes. Full hosted account consent/publication remains a separate acceptance check.
+> Authority: owner request to repair production; [ADR-059](../decisions/059-buffer-registered-app-oauth.md) supersedes ADR-058's hosted MCP/report path.
 
 ## Purpose
 
-Users connect their own Buffer account, choose an organization and channels, prepare campaign posts, approve scheduling, and retrieve real engagement data. Buffer remains an optional provider alongside future direct social integrations. Existing direct-provider blockers are unchanged.
+Users connect their own Buffer account, choose an organization and channels, prepare campaign posts and approve scheduling. Engagement reports are unavailable for registered third-party app connections. Buffer remains an optional publishing provider alongside future direct social integrations. Existing direct-provider blockers are unchanged.
 
 ## Key files
 
@@ -22,26 +22,26 @@ Users connect their own Buffer account, choose an organization and channels, pre
 
 Use `graphify query "Buffer OAuth marketing"` when graphify is installed. This environment has the graph artifact but no graphify executable.
 
-Requires Convex Auth, `SITE_URL` (canonical HTTPS app origin), automatic `CONVEX_SITE_URL` (HTTPS Convex HTTP origin), and existing `CONNECTOR_CREDENTIAL_KEY_V1`. Optional V2 envelopes use the existing credential-key resolver. No Buffer personal API key, client secret or frontend token is required. Credentials reuse the existing AES-256-GCM envelope with Buffer provider, tenant and connection bound as authenticated data; PKCE material uses a separate purpose suffix.
+Requires Convex Auth, `SITE_URL`, automatic `CONVEX_SITE_URL`, existing `CONNECTOR_CREDENTIAL_KEY_V1`, and `BUFFER_OAUTH_CLIENT_ID` from a registered **public** Buffer app client. The production release pins its public app ID using the existing protected Convex deployment step. Other deployments need their own registered callback/client configuration. Optional V2 envelopes use the existing credential-key resolver. No personal API key, client secret or frontend token is used. Credentials reuse AES-256-GCM with Buffer provider, tenant and connection bound as authenticated data; PKCE material uses a separate purpose suffix.
 
-The callback is `${CONVEX_SITE_URL}/buffer/callback`. Buffer's public dynamic registration registers this exact redirect with PKCE S256 and token endpoint authentication `none`. Scopes are `account:read posts:read posts:write insights:read offline_access`; no account write/delete scope is requested.
+Register `${CONVEX_SITE_URL}/buffer/callback` exactly in Buffer Settings → API → App Clients. PKCE S256 authenticates the public client. Scopes are `account:read posts:read posts:write offline_access`; no MCP resource, insights or account-write scope is requested. Missing app identity fails readiness before starting OAuth. Never register a fresh client for each connection attempt.
 
 ## Data flow
 
-1. Authenticated `startConnect` registers the public client and stores an encrypted PKCE verifier with a domain-separated state hash, tenant and ten-minute expiry.
+1. Authenticated `startConnect` uses the configured public app client and stores an encrypted PKCE verifier with a domain-separated state hash, tenant and ten-minute expiry. No network registration occurs.
 2. The Convex HTTP callback claims the request into `exchanging` before token exchange. It cannot replay. The request remains a cancellation fence: disconnect or a new connection removes it, so an in-flight exchange cannot restore access.
 3. Tokens are encrypted into a ten-minute pending grant. Only its opaque one-use receipt crosses back to the app. Authenticated `completeConnect` requires the initiating tenant and atomically activates the grant. A different signed-in Pikar account cannot activate it. The frontend immediately removes the receipt from browser history.
-4. The user loads their organizations; `get_account` verifies membership before a fixed channels query. Only selected available channels may be used. Switching organizations clears selection; locked/disconnected channels cannot be selected.
+4. Fixed GraphQL queries read organizations and verify membership before loading channels. Only selected available channels may be used. Switching organizations clears selection; locked/disconnected channels cannot be selected.
 5. Manual entry or executive `stageBufferPost` saves a local draft. Neither calls the publishing API. Tenant `approvePost` checks ownership, revision, selection and schedule and schedules the outbound action atomically.
-6. Publishing claims the approved draft once, rechecks the current connection/selection and calls `create_post`. Provider post ID and status are recorded. Replays cannot write twice. Ambiguous responses/crashes remain held as unknown/submitting and require checking Buffer before replacement; there is no automatic publication retry.
-7. Report refresh calls `get_aggregated_post_metrics` for exactly the selected channels over the last thirty days. Normalized values, source refresh timestamp, period and channel scope are stored. Missing metrics remain unavailable; returned zero remains zero. Old-selection reports are labeled.
-8. Opt-in daily reports are claimed in batches of 25 by a fifteen-minute cron; each tenant is checked against the erasure fence. Status reads run even if the metric read fails. The same cron deletes up to 100 expired OAuth records. Manual status refresh checks up to 20 pending posts among the latest 100 local posts, matching native ID and channel before updating status.
+6. Publishing claims the approved draft once, rechecks connection/selection and calls GraphQL `createPost`. Typed success records the provider ID/status. Typed rejection fails; partial GraphQL errors and ambiguous responses remain unknown and require checking Buffer before replacement. There is no automatic publication retry.
+7. Engagement actions and agent tools return a specific unavailable result without provider calls. UI controls are disabled and new daily-report opt-ins are rejected. Existing saved reports remain historical data; this connection grants no analytics access.
+8. The fifteen-minute cron retains bounded cleanup (100 expired OAuth records) and checks publishing status for any legacy daily opt-ins in batches of 25. Manual status refresh checks up to 20 pending posts among the latest 100 local posts, matching native ID and channel before updating status.
 
 ## Invariants
 
 - Public database functions use tenant wrappers; internal callbacks/schedulers have explicit bounded index exceptions. Tokens, verifiers and raw provider error text never enter UI, audit, tool results or application logs.
 - Refresh uses a revision and single-use lease. Only one caller can exchange a rotating refresh token. An abandoned lease or failed exchange requires reconnection; stale completion cannot resurrect a disconnected/replaced grant.
-- The model cannot supply provider URLs, arbitrary GraphQL, OAuth identity, organization selection, credentials, approval or publish operations. `execute_query` strings are code-owned. Buffer tools are added only to the executive grant with request lineage and outside eval contexts.
+- The model cannot supply provider URLs, arbitrary GraphQL, OAuth identity, organization selection, credentials, approval or publish operations. Queries are code-owned and use the fixed API origin. Buffer tools are added only to the executive grant with request lineage and outside eval contexts.
 - Exact content, media URL, destination and schedule are visible for human approval. Draft content is not editable after approval. Duplicate approval is rejected. Due times are validated again before outbound submission.
 - A successful queue submission is not delivery. `scheduled`, `sent`, `buffer_review`, `failed` and uncertain outcomes remain distinct.
 - Media is one public HTTPS image or video; Pikar does not fetch it. Instagram/TikTok/Pinterest require media; YouTube requires video, title/category and explicit public visibility; Pinterest board must belong to the loaded channel. Advanced formats, carousels and threaded posts are deliberately deferred.
@@ -55,10 +55,12 @@ Native CLI codegen requires an authenticated development deployment. This enviro
 
 Live evidence is narrower than release acceptance: the separately consented read-only OAuth/MCP probe returned 3 posts, 18 reactions, 0 comments, 349 views and a 5.16% engagement rate for its thirty-day period. It used no personal API key and wrote no provider posts. This confirms that the tested MCP OAuth grant can read insights; it does not establish Buffer's commercial embedding policy, every plan/platform's metric availability, production Pikar callback acceptance, rotating refresh success or publishing acceptance.
 
-For hosted acceptance, connect a disposable tenant through Pikar, choose channels, verify a report, test reconnect/refresh/disconnect, and approve one explicitly authorized disposable scheduled post. Check the actual Buffer queue and platform result. Do not auto-publish a live post merely to qualify the connector. Do not capture tokens, OAuth codes or account response bodies in screenshots/traces/files.
+Production diagnosis additionally proved registered clients reject insights (`invalid_scope`) and MCP resources (`invalid_target`), while the corrected request reaches Buffer authorization. The standalone MCP transport remains a historical probe seam, unused by hosted actions.
+
+For hosted acceptance, connect a disposable tenant through Pikar, choose channels, verify the reporting restriction, test reconnect/refresh/disconnect, and approve a disposable scheduled post only with explicit publication authorization. Check the actual Buffer queue/platform result. Do not auto-publish merely to qualify the connector. Do not capture tokens, OAuth codes or account response bodies in screenshots/traces/files.
 
 ## Operations and ceilings
 
 Disconnect stops future local access/daily reads. Remove the Pikar app in Buffer API settings to revoke upstream access; already scheduled posts must be managed in Buffer. Lost/expired consent requires reconnecting, never editing stored credentials. Provider or quota errors surface a fixed UI failure and retain the previous report with its old timestamp; background action failures are visible in Convex logs without raw provider bodies.
 
-`ponytail:` use Buffer's existing queue for publication timing and the existing executive agent for campaign planning. No second agent loop, scheduler, media hosting service or direct social OAuth stack is introduced. Reports are rolling thirty-day snapshots, not real-time monitoring, comments management, campaign attribution or a complete analytics warehouse. Current bounded post lists/status reconciliation cover the latest 100 local posts; a larger operating volume requires indexed pagination. Buffer's embedding/commercial suitability and hosted full-consent/write acceptance remain independent release checks.
+`ponytail:` use Buffer's existing queue for timing and existing executive agent for planning. No second agent loop, media host or direct social OAuth stack is introduced. Reporting remains unavailable until Buffer supports it for third-party app clients; do not substitute privileged MCP credentials. Current bounded post lists/status reconciliation cover the latest 100 local posts; larger volumes require pagination. Hosted consent/write acceptance and commercial suitability remain independent checks.

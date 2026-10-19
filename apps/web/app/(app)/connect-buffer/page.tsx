@@ -41,10 +41,11 @@ export default function ConnectBufferPage() {
   const [notice, setNotice] = useState("");
   const selectedKey = status?.selectedChannelIds.join(",");
   const dailySaved = status?.dailyReports;
+  const reportsAvailable = status?.reportsAvailable;
   useEffect(() => {
     setSelected(selectedKey ? selectedKey.split(",") : []);
-    setDaily(dailySaved ?? false);
-  }, [selectedKey, dailySaved]);
+    setDaily(!!reportsAvailable && !!dailySaved);
+  }, [selectedKey, dailySaved, reportsAvailable]);
   useEffect(() => {
     if (completed.current) return;
     completed.current = true;
@@ -85,12 +86,16 @@ export default function ConnectBufferPage() {
     <section style={{ maxWidth: 760, display: "grid", gap: 20, padding: 24 }}>
       <h1>Connect your social accounts through Buffer</h1>
       <p>
-        Pikar can prepare and schedule approved posts, track publishing, and read engagement reports
-        for the channels you select.
+        Pikar can prepare and schedule approved posts and track publishing for the channels you
+        select.
       </p>
       <p>
-        Buffer asks for account, post publishing and insights access, plus background access to keep
-        your connection current. You approve each post in Pikar before it is submitted.
+        Buffer asks for account and post publishing access, plus background access to keep your
+        connection current. You approve each post in Pikar before it is submitted.
+      </p>
+      <p>
+        Buffer does not currently allow engagement reports through third-party app connections. You
+        can view analytics in Buffer.
       </p>
       {status === undefined ? (
         <p>Checking connection…</p>
@@ -200,10 +205,10 @@ export default function ConnectBufferPage() {
                     <input
                       type="checkbox"
                       checked={daily}
-                      disabled={busy}
+                      disabled={busy || !status.reportsAvailable}
                       onChange={(event) => setDaily(event.target.checked)}
                     />{" "}
-                    Save a daily engagement report for my selected channels
+                    Daily engagement reports (unavailable for Buffer app connections)
                   </label>
                   <button
                     type="button"

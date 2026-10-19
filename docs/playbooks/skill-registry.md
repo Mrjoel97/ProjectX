@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Refreshed the evaluator revision and golden manifest after the Buffer hosted OAuth/API repair. Existing corpus cases are unchanged. Old exact-source evidence is retired; no provider evaluation or activation is claimed.
+
 > Last verified: 2026-10-19 — Regenerated the exact golden evaluator revision and manifest after adding Buffer runtime/schema behavior. The 46-case corpus and casesHash remain unchanged. Older live evidence does not qualify this source revision; no paid evaluation, passing receipt, prompt activation or rollback is implied.
 
 > Last verified: 2026-10-17 — regenerated the golden evaluator revision after generated-file lifecycle ownership changed. All 46 cases and their case hashes remain unchanged. Prior live receipts do not qualify this revision; no provider evaluation ran.
