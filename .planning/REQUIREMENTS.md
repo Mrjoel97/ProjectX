@@ -254,6 +254,25 @@ BLOCKER section of `ROADMAP.md`.*
 - [ ] **MKTG-05** *(gated on the legal entity)*: Publishing and scheduling to a channel stage into the existing plan gate and reuse the shipped deferred-send machinery; no new unattended authority is minted and approve-once-for-many remains deferred per ADR-004
 - [ ] **MKTG-06** *(gated on the legal entity)*: Per-post engagement metrics store provider-issued ids, counts and timestamps only — never post text or recipient identity — under the same refs-and-counts contract that governs audit, and the table arrives with a connected channel rather than empty and ahead of one
 
+## Managed business services — owner-approved 2026-10-19
+
+Implementation and live qualification are separate. Existing SKILL-01/PACK acceptance is preserved; stronger unfinished protocols remain explicit. See .planning/design/managed-services-programme.md.
+
+- [x] **MSVC-01**: The current capability inventory distinguishes implementation, historical acceptance, current qualification and unverified live state, with source/evidence refs and reconciled planning records.
+- [ ] **MSVC-02**: The original Phase 23 lifecycle chain and Phase 27 per-workflow behavioral browser protocols are completed at their stated scope before service admission; accepted Phase 21 limits remain explicit and unqualified verticals stay unavailable.
+- [ ] **MSVC-03**: Tenant-owned, revisioned managed-service setup has one governed boundary and bounded readiness/status views, with privacy-safe export and erasure.
+- [ ] **MSVC-04**: Agent-composed services contain only validated approved operations and qualified skill refs; capabilities derive from code and cannot be widened by prompt text.
+- [ ] **MSVC-05**: Idempotent starts and effective pause/stop/recovery controls reuse governed execution, fence stale callbacks and distinguish local work from provider-owned queued posts.
+- [ ] **MSVC-06**: A nontechnical user configures an attended service through a short agent-led setup and supervises results without assembling prompts or manually dispatching agents; skill adaptations remain candidates pending independent approval.
+- [ ] **MSVC-07**: General recurrence is admitted only by a new evidence-backed decision passing the existing validator, including real DST and the specified OAuth reconnect evidence.
+- [ ] **MSVC-08**: Unattended read/prepare runs have stable occurrence identity, bounded retries, missed-run skip semantics, one active run and material-change reapproval; external writes remain unavailable.
+- [ ] **MSVC-09**: Whole-run budget reservation, known-cost settlement, retained unknown holds, idempotent unused-allowance release and immediate pause/version fences hold across all recurring terminal paths.
+- [ ] **MSVC-10**: Goals, services, runs, artifacts and observations are linked, while execution completion, user usefulness and measured business movement remain distinct and source-backed.
+- [ ] **MSVC-11**: The Business Ledger and Executive proposals preserve source authorship, confirmation/observation time, uncertainty, history and withdrawal; agents cannot silently confirm facts, goals or active skill changes.
+- [ ] **MSVC-12**: One supported social service can be configured with explicit goals, selected accounts/channels, intended media, confirmed brand sources, preparation cadence, budget and separate preparation/publication/report readiness.
+- [ ] **MSVC-13**: The Executive prepares local social drafts and exact human-approved revisions reach Buffer scheduling once; editing, rejection, disconnect, unknown writes and provider-owned queued posts have truthful recovery behavior.
+- [ ] **MSVC-14**: Multiple browser-closed social-service cycles produce supported Zernio evidence and next-action proposals while preserving lifetime/sampling/freshness/attribution limits and demonstrating budget, auth and pause behavior.
+
 ## v2 Requirements
 
 Deferred to post-beta releases. Tracked but not in the current roadmap.
@@ -384,10 +403,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RPRT-01 | Phase 26 | Complete (2026-09-06, Phase 37 repair) — 26-14/15/16 (`requirements: [RPRT-01]`), deployed 2026-08-23 |
 | PIPE-01 | Phase 19 (consumed by Phase 26 nav/integration gate) | Complete (2026-08-10) |
 | HOME-01 | Phase 26 | Complete (2026-09-06, Phase 37 repair) — 26 summaries claim it (`[HOME-01 backend]`, `[HOME-01]`), deployed 2026-08-23 |
-| PACK-01 | Phase 27 | Complete (2026-09-06, Phase 37 repair) — 27 summaries (`requirements-completed: [PACK-01, …]`), 9/9 closed; live on dev, candidate on prod |
-| PACK-02 | Phase 27 | Complete (2026-09-06, Phase 37 repair) — 27 summaries (`[PACK-02, PACK-03]`), 9/9 closed |
-| PACK-03 | Phase 27 | Complete (2026-09-06, Phase 37 repair) — 27 summaries (`[PACK-02, PACK-03]`), 9/9 closed |
-| PACK-04 | Phase 27 | Complete (2026-09-06, Phase 37 repair) — 27 summaries (`[PACK-04]`), 9/9 closed |
+| PACK-01 | Phase 27 | Complete (accepted2026-09-06) — pinned provenance and reviewed-update requirement accepted. Historical activations remain evidence at their scope;Phase27 remains8/9; plan27-09 stronger exact-candidate browser protocol remains partial. |
+| PACK-02 | Phase 27 | Complete (accepted2026-09-06) — native runtime/integration accepted;27-09 still requires per-candidate useful/partial/refused browser journeys and explicit owner decisions. |
+| PACK-03 | Phase 27 | Complete (accepted2026-09-06) — code-owned grants and candidate/activation boundaries accepted; per-candidate injection, approval edit/reject, privacy and recovery observations remain open in27-09. New versions need their own evidence. |
+| PACK-04 | Phase 27 | Complete (accepted2026-09-06) — privacy-safe telemetry implementation accepted; per-workflow authenticated decision/outcome and privacy observations remain in27-09 stronger protocol. |
 | BILL-01 | Phase 28.1 | Pending |
 | BILL-02 | Phase 28.1 | Pending |
 | BILL-03 | Phase 28.1 | Pending |
@@ -416,6 +435,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MKTG-05 | Phase 32 | **BLOCKED** (legal entity) |
 | MKTG-06 | Phase 32 | **BLOCKED** (legal entity) |
 
+| MSVC-01 | Phase 48 | Complete — source inventory/reconciliation only;48-01-SUMMARY.md |
+| MSVC-02 | Phase 48 | Pending |
+| MSVC-03 | Phase 49 | Pending |
+| MSVC-04 | Phase 49 | Pending |
+| MSVC-05 | Phase 49 | Pending |
+| MSVC-06 | Phase 49 | Pending |
+| MSVC-07 | Phase 50 | Pending |
+| MSVC-08 | Phase 50 | Pending |
+| MSVC-09 | Phase 50 | Pending |
+| MSVC-10 | Phase 51 | Pending |
+| MSVC-11 | Phase 51 | Pending |
+| MSVC-12 | Phase 52 | Pending |
+| MSVC-13 | Phase 52 | Pending |
+| MSVC-14 | Phase 52 | Pending |
+
+
 **Marketing coverage (minted 2026-08-07, pulled pre-beta per ADR-015):**
 - Requirements: **6 total** (MKTG-01..06)
 - Mapped to phases 31-32: 6
@@ -441,3 +476,6 @@ Which phases cover which requirements. Updated during roadmap creation.
 ---
 *Requirements defined: 2026-07-09*
 *Last updated: 2026-07-19 — re-baselined: REVW-01 redefined to plan-level approval; CKPT-01..03 minted (Email Cockpit); count 40→43; SCHD-01 minted (deferred send, Phase 3.5); count 43→44; EVAL-01/02 minted (agent eval gate, Phase 3.6, 2026-07-14), count 44→46; CKPT-04 minted (inbox briefing, Phase 3.7, 2026-07-14), count 46→47; CKPT-05 minted (agent activity streaming, Phase 3.9, 2026-07-17), count 47→48; RPLY-01 minted (inbox reply, Phase 3.11, 2026-07-19), count 48→49*
+
+
+**Managed-service coverage (2026-10-19):**14 requirements mapped to Phases48–52; MSVC-01 inventory only is complete. Implementation and live qualification remain open.
