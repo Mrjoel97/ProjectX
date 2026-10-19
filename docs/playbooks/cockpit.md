@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Production inspection at a narrow split found that the individual input tools still wrapped into several rows. Native Message tools disclosure now holds thought-process, file, folder and dictation controls; the default toolbar shows only Tools and Send. Staged-intake reminders stay outside the disclosure. The mandatory accuracy disclaimer remains visible; the newline hint moves to the input title. No intake, send or job behavior changes.
+
 > Last verified: 2026-10-19 — Workflow packs and skill authoring moved out of the chat pane to /dashboard/skills-workflows. Chat options links there for compact-screen discovery. The one-line composer omits the page-attempt selector and uses the unchanged bounded server default. Intake and the trusted clock hook remain unchanged. Existing browser acceptance entry points follow the new location; no paid qualification or lifecycle evidence is claimed.
 
 > Last verified: 2026-10-19 — The closed HTTP route inventory now includes POST/OPTIONS Zernio credential intake (17 routes total), while the Microsoft OAuth callback remains unique.
