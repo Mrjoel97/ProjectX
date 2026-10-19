@@ -61,6 +61,11 @@ const NAV: Array<{ label: string; icon: ReactNode; href: string }> = [
   // Remove this entry and its compact href to hide discovery without altering links or contacts.
   { label: "Marketing", href: "/dashboard/marketing", icon: <GlobeIcon /> },
   { label: "My Workspace", href: "/dashboard/workspace", icon: <BoltIcon size={18} /> },
+  {
+    label: "Skills and Workflows",
+    href: "/dashboard/skills-workflows",
+    icon: <BrainIcon size={18} />,
+  },
   { label: "Live Voice", href: "/dashboard/voice", icon: <MicIcon size={18} /> },
   // 26-17 Task 3: LIVE on the owner UAT verdict, 2026-08-22 ("The report interface is okay").
   // The branch keys off `href`, so ROLLBACK IS DELETING IT — and rollback touches no data: a

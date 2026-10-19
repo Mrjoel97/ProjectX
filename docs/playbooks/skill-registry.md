@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Skills and Workflows displays tenant-scoped user/agent draft history. Draft entry retains the existing owner-only UI boundary; publishing still creates candidates only, with no activation or evaluation control. Phase 23 plans 06–09 authenticated lifecycle evidence remains outstanding; this interface does not close those gates.
+
 > Last verified: 2026-10-19 — Refreshed the golden exact-source revision after final reporting metadata changes; the 46-case corpus and its hash are unchanged. This is not new evaluation evidence.
 
 > Last verified: 2026-10-19 — Golden evaluator source identity and manifest are refreshed for Zernio runtime/schema/envelope changes. All 46 cases and casesHash are unchanged; no paid evaluation or prompt activation is claimed.

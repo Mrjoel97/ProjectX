@@ -203,6 +203,7 @@
   ],
   "cockpit.md": [
     "scripts/check-phase23-probe-controls",
+    "scripts/check-phase23-mutation-proofs.mjs",
     "apps/web/app/(app)/dashboard/workspace/",
     "apps/web/app/(app)/connect-gmail/",
     "apps/web/app/(app)/_components/DisconnectGoogle.tsx",
@@ -443,6 +444,7 @@
     "scripts/check-release-auth.mjs"
   ],
   "workflow-packs.md": [
+    "apps/web/app/(app)/dashboard/skills-workflows/",
     "packages/core/src/workflowPack",
     "packages/backend/convex/workflowPack",
     "packages/backend/scripts/run-workflow-pack-evals.mjs",

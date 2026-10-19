@@ -23,8 +23,8 @@ import { useState } from "react";
 //    and prompt text is not a capability grant.
 //  - no eval-fixture content: the golden corpus is held out from the authoring actor.
 //
-// Rendered inline in the chat pane from the existing "Chat options" menu — no new route and no nav
-// entry (BRAND §4: the cockpit is two panes, and this is a card on one of them).
+// Mounted in Skills and Workflows. Draft entry keeps its existing owner-only UI boundary;
+// tenant-scoped history includes agent-authored drafts without granting activation.
 
 const card = {
   background: "var(--card)",
@@ -59,7 +59,7 @@ export function skillAuthorLabel(author: "user" | "agent"): string {
 /** UTF-8 bytes, matching the server's cap exactly — a character count would under-report a paste. */
 export const adaptationBytes = (text: string) => new TextEncoder().encode(text.trim()).length;
 
-export function SkillAuthoringPanel({ onClose }: { onClose: () => void }) {
+export function SkillAuthoringPanel({ canAuthor }: { canAuthor: boolean }) {
   const mine = useQuery(api.skills.myUserSkills);
   const publish = useMutation(api.skills.publishUserCandidate);
   const [name, setName] = useState<string>(USER_AUTHORABLE_SKILLS[0]);
@@ -73,6 +73,7 @@ export function SkillAuthoringPanel({ onClose }: { onClose: () => void }) {
   const empty = bytes === 0;
 
   const submit = async () => {
+    if (!canAuthor) return;
     setError(null);
     setSaved(null);
     setBusy(true);
@@ -106,99 +107,99 @@ export function SkillAuthoringPanel({ onClose }: { onClose: () => void }) {
             before it can go live, so saving one changes nothing straight away.
           </p>
         </div>
-        <button
-          type="button"
-          className="icon-btn"
-          aria-label="Close skill authoring"
-          onClick={onClose}
-        >
-          ×
-        </button>
       </div>
-
-      <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-        <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Which skill</span>
-        <select
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          disabled={busy}
-          style={{
-            padding: "0.5rem",
-            borderRadius: "0.375rem",
-            border: "1px solid var(--rule)",
-            background: "var(--card)",
-            color: "var(--ink)",
-            fontFamily: "inherit",
-            fontSize: "0.9rem",
-          }}
-        >
-          {USER_AUTHORABLE_SKILLS.map((n) => (
-            <option key={n} value={n}>
-              {USER_AUTHORABLE_SKILL_METADATA[n].label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <p style={dim}>
-        {
-          USER_AUTHORABLE_SKILL_METADATA[name as keyof typeof USER_AUTHORABLE_SKILL_METADATA]
-            ?.description
-        }
-      </p>
-
-      <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-        <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>
-          What should it do differently for your business?
-        </span>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          disabled={busy}
-          rows={6}
-          placeholder="e.g. Always quote in AUD, and never propose a discount over 20%."
-          style={{
-            padding: "0.5rem",
-            borderRadius: "0.375rem",
-            border: `1px solid ${overCap ? "var(--ink)" : "var(--rule)"}`,
-            background: "var(--card)",
-            color: "var(--ink)",
-            fontFamily: "inherit",
-            fontSize: "0.9rem",
-            resize: "vertical",
-          }}
-        />
-      </label>
-      {/* The count is stated in words as well as numbers, and the over-cap case says what to do. */}
-      <p style={dim}>
-        {bytes} of {USER_SKILL_ADAPTATION_MAX_BYTES} characters used
-        {overCap ? " — too long to save. Shorten it and try again." : ""}
-      </p>
-
-      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-        <button
-          type="button"
-          className="cta-dark"
-          style={{
-            margin: 0,
-            padding: "0.55rem 1rem",
-            fontSize: "0.85rem",
-            border: "none",
-            cursor: busy || empty || overCap ? "not-allowed" : "pointer",
-            fontFamily: "inherit",
-            opacity: busy || empty || overCap ? 0.5 : 1,
-          }}
-          disabled={busy || empty || overCap}
-          onClick={() => void submit()}
-        >
-          {busy ? "Saving…" : "Save as draft"}
-        </button>
-        {saved !== null && <p style={dim}>{saved}</p>}
-        {error !== null && (
-          <p role="alert" style={{ ...dim, color: "var(--ink)" }}>
-            {error}
+      {canAuthor ? (
+        <>
+          <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+            <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Which skill</span>
+            <select
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={busy}
+              style={{
+                padding: "0.5rem",
+                borderRadius: "0.375rem",
+                border: "1px solid var(--rule)",
+                background: "var(--card)",
+                color: "var(--ink)",
+                fontFamily: "inherit",
+                fontSize: "0.9rem",
+              }}
+            >
+              {USER_AUTHORABLE_SKILLS.map((n) => (
+                <option key={n} value={n}>
+                  {USER_AUTHORABLE_SKILL_METADATA[n].label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p style={dim}>
+            {
+              USER_AUTHORABLE_SKILL_METADATA[name as keyof typeof USER_AUTHORABLE_SKILL_METADATA]
+                ?.description
+            }
           </p>
-        )}
-      </div>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+            <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>
+              What should it do differently for your business?
+            </span>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              disabled={busy}
+              rows={6}
+              placeholder="e.g. Always quote in AUD, and never propose a discount over 20%."
+              style={{
+                padding: "0.5rem",
+                borderRadius: "0.375rem",
+                border: `1px solid ${overCap ? "var(--ink)" : "var(--rule)"}`,
+                background: "var(--card)",
+                color: "var(--ink)",
+                fontFamily: "inherit",
+                fontSize: "0.9rem",
+                resize: "vertical",
+              }}
+            />
+          </label>
+          {/* The count is stated in words as well as numbers, and the over-cap case says what to do. */}
+          <p style={dim}>
+            {bytes} of {USER_SKILL_ADAPTATION_MAX_BYTES} characters used
+            {overCap ? " — too long to save. Shorten it and try again." : ""}
+          </p>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <button
+              type="button"
+              className="cta-dark"
+              style={{
+                margin: 0,
+                padding: "0.55rem 1rem",
+                fontSize: "0.85rem",
+                border: "none",
+                cursor: busy || empty || overCap ? "not-allowed" : "pointer",
+                fontFamily: "inherit",
+                opacity: busy || empty || overCap ? 0.5 : 1,
+              }}
+              disabled={busy || empty || overCap}
+              onClick={() => void submit()}
+            >
+              {busy ? "Saving…" : "Save as draft"}
+            </button>
+            {saved !== null && <p style={dim}>{saved}</p>}
+            {error !== null && (
+              <p role="alert" style={{ ...dim, color: "var(--ink)" }}>
+                {error}
+              </p>
+            )}
+          </div>
+        </>
+      ) : (
+        <p style={dim}>
+          Your skill drafts and their review status appear below. New adaptations are currently
+          available through Pikar review.
+        </p>
+      )}
 
       <div>
         <p className="caps-label" style={{ margin: "0.4rem 0 0.3rem" }}>

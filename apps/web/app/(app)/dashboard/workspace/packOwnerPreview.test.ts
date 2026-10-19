@@ -26,7 +26,7 @@ const spec = readFileSync(join(here, "../../../../e2e/workflow-pack-pilot.spec.t
 const strip = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const previewSource = readFileSync(join(here, "WorkflowPackOwnerPreview.tsx"), "utf8");
 const preview = strip(previewSource);
-const page = strip(readFileSync(join(here, "page.tsx"), "utf8"));
+const page = strip(readFileSync(join(here, "..", "skills-workflows", "page.tsx"), "utf8"));
 
 describe("the browser evidence plane's title map matches the registry", () => {
   test("the scan read a real spec file", () => {

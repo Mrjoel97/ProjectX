@@ -14,7 +14,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string) => readFileSync(join(here, rel), "utf8");
 const layout = read("layout.tsx");
 const chatPane = read("dashboard/workspace/ChatPane.tsx");
-const workspacePage = read("dashboard/workspace/page.tsx");
+const skillsPage = read("dashboard/skills-workflows/page.tsx");
 const connectionsPanel = read("dashboard/profile/ConnectionsPanel.tsx");
 const segmentAnatomy = read("dashboard/profile/SegmentAnatomy.tsx");
 const approvals = read("dashboard/approvals/ApprovalsView.tsx");
@@ -87,11 +87,8 @@ describe("25.2 item 6 — no dead model pill in the composer", () => {
   });
 });
 
-describe("25.2 item 7 — skill authoring is an owner entry", () => {
-  test("the menu item renders only inside the owner check", () => {
-    const at = workspacePage.indexOf("Adapt a business skill");
-    expect(at).toBeGreaterThan(-1);
-    const before = workspacePage.slice(Math.max(0, at - 600), at);
-    expect(before).toContain("viewer?.isOwner === true &&");
+describe("skill authoring keeps its owner entry in the library", () => {
+  test("draft entry uses the existing owner check", () => {
+    expect(skillsPage).toContain("canAuthor={viewer?.isOwner === true}");
   });
 });

@@ -28,6 +28,7 @@ const pageSource = readFileSync(join(here, "page.tsx"), "utf8");
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const chat = strip(chatSource);
 const page = strip(pageSource);
+const library = strip(readFileSync(join(here, "..", "skills-workflows", "page.tsx"), "utf8"));
 
 describe("the scan actually read the two files", () => {
   test("stripping comments removed prose and kept code", () => {
@@ -170,12 +171,12 @@ describe("page.tsx — the Pinned prompts menu and the fresh-thread Run", () => 
     if (startPack.includes("clientContext")) {
       // It can carry a clock now. The page must stop constructing it raw.
       expect(
-        page,
+        library,
         "startWorkflowPack now takes clientContext — route it through a hook like useSendCockpitMessage",
       ).not.toContain("useAction(api.cockpit.startWorkflowPack)");
     } else {
       // It cannot. The raw construction is the honest option, and this is the only one allowed.
-      const rawActions = [...page.matchAll(/useAction\((api\.[\w.]+)\)/g)].map((m) => m[1]);
+      const rawActions = [...library.matchAll(/useAction\((api\.[\w.]+)\)/g)].map((m) => m[1]);
       expect(rawActions).toEqual(["api.cockpit.startWorkflowPack"]);
     }
   });
@@ -190,13 +191,13 @@ describe("page.tsx — the Pinned prompts menu and the fresh-thread Run", () => 
   // never "the word does not appear" — it is that the ACTIVE quick-start path cannot pin a dark
   // row. Both halves are asserted so this cannot pass by the string simply vanishing.
   test("the quick starts never send an owner preview pin", () => {
-    const onStart = page.slice(
-      page.indexOf("const onStartPack = "),
-      page.indexOf("const onPreviewPack = "),
+    const onStart = library.slice(
+      library.indexOf("const onStartPack = "),
+      library.indexOf("const onPreviewPack = "),
     );
     // A slice that failed to find either anchor would be empty or the whole file; both are caught.
     expect(onStart.length).toBeGreaterThan(200);
-    expect(onStart.length).toBeLessThan(page.length / 2);
+    expect(onStart.length).toBeLessThan(library.length / 2);
     expect(onStart).toContain("startPack({ packId, text: pack.opener })");
     expect(onStart).not.toContain("previewVersion");
   });
@@ -205,9 +206,9 @@ describe("page.tsx — the Pinned prompts menu and the fresh-thread Run", () => 
   // re-deriving one. A preview that ran "the newest candidate" would record browser evidence
   // naming a version nobody actually watched.
   test("the owner preview pins the exact candidate version it was shown", () => {
-    const onPreview = page.slice(
-      page.indexOf("const onPreviewPack = "),
-      page.indexOf("const newChat = "),
+    const onPreview = library.slice(
+      library.indexOf("const onPreviewPack = "),
+      library.indexOf("const deactivatePack ="),
     );
     expect(onPreview.length).toBeGreaterThan(200);
     expect(onPreview).toContain("previewVersion: pack.version");
@@ -218,8 +219,8 @@ describe("page.tsx — the Pinned prompts menu and the fresh-thread Run", () => 
   // The owner-only query must be skipped for everyone else — it is an `ownerQuery` and would throw,
   // taking the whole workspace with it for every non-owner.
   test("the candidate query is skipped for a non-owner", () => {
-    expect(page).toContain("api.workflowPackDiscovery.listPackCandidates");
-    expect(page).toContain('viewer?.isOwner === true ? {} : "skip"');
+    expect(library).toContain("api.workflowPackDiscovery.listPackCandidates");
+    expect(library).toContain('viewer?.isOwner === true ? {} : "skip"');
   });
 
   test("the menu has honest Loading, empty, running, deleting and error states", () => {

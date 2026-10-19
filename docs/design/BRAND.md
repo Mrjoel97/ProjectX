@@ -78,7 +78,7 @@ Tokens live in `globals.css` — use the CSS variables, never hardcode hex. Two 
 
 - **App shell:** a **dark teal (`--teal-900`) left nav rail** + a **light (`--canvas`) content area**.
   The rail has the brain-logo wordmark ("Pikar AI"), a vertical nav (Command Center, Approval and
-  Compliance, Finance, Content, Sales Pipeline, Marketing, My Workspace, Live Voice, Reports,
+  Compliance, Finance, Content, Sales Pipeline, Marketing, My Workspace, Skills and Workflows, Live Voice, Reports,
   Knowledge Vault), and Settings / Collapse / Sign Out at the bottom. Settings contains the
   Business Profile, Connections and Settings tabs. The rail **collapses to an icon-only strip**.
 - **Cockpit (`/dashboard/workspace`):** a **two-pane** layout — a chat pane (left) and a live
@@ -138,3 +138,5 @@ Open the file to see the real thing. Viewed & described above: Command Center da
    library** yet — see the `globals.css` header note; don't add one without asking).
 4. Keep the voice from §1 in all UI copy.
 5. Honor §6 accessibility rules — they are requirements, not suggestions.
+
+2026-10-19: Skills and Workflows holds guided workflow cards and user/agent skill draft history. Keep the workspace composer compact; research limits remain server-owned. The work-status X hides the notice and explicitly leaves jobs running.

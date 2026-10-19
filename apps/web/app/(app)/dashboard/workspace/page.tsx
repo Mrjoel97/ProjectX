@@ -3,7 +3,8 @@
 import { api } from "@pikar/backend/api";
 // BEVL-03: the ONE deterministic thread the weekly review writes to, per tenant.
 import { REVIEW_THREAD_ID } from "@pikar/core";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
+import Link from "next/link";
 import { type ReactNode, Suspense, useCallback, useEffect, useState } from "react";
 import { BrainIcon, ClockIcon, DotsIcon, StarIcon, TrashIcon } from "../../../(auth)/icons";
 import { ChatPane } from "./ChatPane";
@@ -11,12 +12,8 @@ import { CardList } from "./cards";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { KnowledgeSearchPanel } from "./KnowledgeSearchPanel";
 import { CanvasPane } from "./MediaCanvas";
-import { SkillAuthoringPanel } from "./SkillAuthoringPanel";
 import { SplitPane } from "./SplitPane";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
-import { WorkflowPackOwnerControls } from "./WorkflowPackOwnerControls";
-import { WorkflowPackOwnerPreview } from "./WorkflowPackOwnerPreview";
-import { WorkflowPackQuickStarts } from "./WorkflowPackQuickStarts";
 import { WorkspaceRoute } from "./WorkspaceRoute";
 import { conversationUrl, workspaceView, workspaceViewUrl } from "./workspaceNavigation";
 
@@ -388,9 +385,6 @@ export default function WorkspacePage() {
     if (next === "work") setSelectedPlanId(undefined);
     window.history.replaceState(null, "", workspaceViewUrl(window.location.href, next));
   };
-  // SKILL-01: the skill-authoring card, opened from the existing Chat options menu. Session state,
-  // not a route — the thread, the tabs and every open subscription survive the toggle.
-  const [authoring, setAuthoring] = useState(false);
   // KNOW-01: unified knowledge search, opened from the same menu and on the same terms —
   // session state, not a route, so the thread and every open subscription survive the toggle.
   const [searching, setSearching] = useState(false);
@@ -420,111 +414,11 @@ export default function WorkspacePage() {
     }
   };
 
-  // 27-09 (PACK-02/PACK-04): the curated workflow quick starts.
-  //
-  // `listPacks` is ACTIVE-ONLY on the server, so during the dark pilot this list is empty and the
-  // section renders nothing at all. There is no client-side filter to get wrong.
-  //
-  // It goes through `cockpit.startWorkflowPack`, NOT `useSendCockpitMessage`: a pack turn is a
-  // different agent — allow-listed, structurally unable to dispatch a specialist — and folding it
-  // into the conversation action would put that distinction behind an argument a caller can forget.
-  // No `previewVersion` is ever sent from here; the owner's candidate preview is a separate,
-  // server-checked path and this surface must never be able to reach a dark row.
-  //
-  // The opener is code-owned in `@pikar/core` and sent as the USER's first message, because pressing
-  // Start IS the request. The conversation continues normally afterwards.
-  const packs = useQuery(api.workflowPackDiscovery.listPacks);
-  const startPack = useAction(api.cockpit.startWorkflowPack);
-  const [startingPack, setStartingPack] = useState<string | null>(null);
-  const [packNotice, setPackNotice] = useState<string | null>(null);
-  const onStartPack = (packId: string) => {
-    const pack = packs?.find((p) => p.packId === packId);
-    if (pack === undefined || sending || startingPack !== null) return;
-    setPackNotice(null);
-    setSending(true);
-    setStartingPack(packId);
-    void startPack({ packId, text: pack.opener })
-      .then((res) => registerThread(res.threadId, pack.title))
-      // The notice lands next to the control the user pressed. It never names the pack id — an id
-      // the server refused is an id this surface must not echo back.
-      .catch(() => setPackNotice("That workflow could not be started. Nothing ran — try again."))
-      .finally(() => {
-        setSending(false);
-        setStartingPack(null);
-      });
-  };
-
-  // 27-11: THE OWNER'S CANDIDATE PREVIEW, and the only surface that may send `previewVersion`.
-  //
-  // Skipped entirely for a non-owner — `listPackCandidates` is an `ownerQuery` and would throw, so
-  // the `isOwner ? {} : "skip"` idiom (the same one `FinanceView` uses for its owner-only reads) is
-  // what keeps the workspace working for everybody else. The server check is the real one; this is
-  // only about not asking a question the caller is not allowed to ask.
-  //
-  // The version comes FROM THE CARD the owner is looking at, so the run pins the exact row that was
-  // shown. Without that pin a preview would run whatever the newest candidate happened to be by the
-  // time the click landed — and the browser evidence would name a version nobody watched.
-  const viewer = useQuery(api.owner.viewer, {});
-  const packCandidates = useQuery(
-    api.workflowPackDiscovery.listPackCandidates,
-    viewer?.isOwner === true ? {} : "skip",
-  );
-  const onPreviewPack = (packId: string) => {
-    const pack = packCandidates?.find((p) => p.packId === packId);
-    if (pack === undefined || sending || startingPack !== null) return;
-    setPackNotice(null);
-    setSending(true);
-    setStartingPack(packId);
-    void startPack({ packId, text: pack.opener, previewVersion: pack.version })
-      .then((res) => registerThread(res.threadId, pack.title))
-      .catch(() => setPackNotice("That workflow could not be started. Nothing ran — try again."))
-      .finally(() => {
-        setSending(false);
-        setStartingPack(null);
-      });
-  };
-
-  // 27-11: THE UNDO PATH. `skills.deactivatePack` is an `ownerMutation` and the CLI cannot call it
-  // (`convex run` carries no identity, and on this stack it also destroys the browser session), so
-  // until there was a control here rollback-to-dark was proven by nothing. Owner-only by the same
-  // rule as the preview: the mutation is the real check, the conditional render is only about not
-  // showing a button that would refuse.
-  const deactivatePack = useMutation(api.skills.deactivatePack);
-  // ROLLBACK TO A PRIOR VERSION. `activateCandidate` is the same owner mutation the ops panel uses;
-  // `planGlobalActivation` gates on `status === "candidate"`, so an ARCHIVED row — one that was live
-  // before — goes back without re-running the evidence planes. That exemption is deliberate:
-  // rollback must work mid-incident and must never be blocked by a broken eval or browser harness.
-  const activatePackVersion = useMutation(api.skills.activateCandidate);
-  const packPriorVersions = useQuery(
-    api.workflowPackDiscovery.listPackPriorVersions,
-    viewer?.isOwner === true ? {} : "skip",
-  );
-  const onRollBackPack = (packId: string, title: string, version: number) => {
-    if (sending || turningOff !== null) return;
-    setPackNotice(null);
-    setTurningOff(packId);
-    void activatePackVersion({ name: `pack-${packId}`, version })
-      .then(() => setPackNotice(`${title} is back on v${version}.`))
-      .catch(() => setPackNotice("That workflow could not be rolled back. Nothing changed."))
-      .finally(() => setTurningOff(null));
-  };
-  const [turningOff, setTurningOff] = useState<string | null>(null);
-  const onTurnOffPack = (packId: string, title: string) => {
-    if (sending || turningOff !== null) return;
-    setPackNotice(null);
-    setTurningOff(packId);
-    void deactivatePack({ name: `pack-${packId}` })
-      .then(() => setPackNotice(`${title} is off. Nobody is offered it now.`))
-      .catch(() => setPackNotice("That workflow could not be turned off. Nothing changed."))
-      .finally(() => setTurningOff(null));
-  };
-
   const newChat = () => selectThread(undefined);
   const clearWorkspace = () => {
     window.sessionStorage.removeItem(WORKSPACE_SESSION_KEY);
     setTabs([REVIEW_TAB]);
     selectThread(undefined);
-    setAuthoring(false);
     selectView("work");
   };
   const clearChatHistory = async (): Promise<boolean> => {
@@ -639,20 +533,13 @@ export default function WorkspacePage() {
                       >
                         + New chat
                       </button>
-                      {/* 25.2 (G14): skill authoring ends in an owner review; the entry is owner-only. */}
-                      {viewer?.isOwner === true && (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="head-menu-item"
-                          onClick={() => {
-                            setAuthoring((a) => !a);
-                            close();
-                          }}
-                        >
-                          Adapt a business skill
-                        </button>
-                      )}
+                      <Link
+                        role="menuitem"
+                        className="head-menu-item"
+                        href="/dashboard/skills-workflows"
+                      >
+                        Skills and Workflows
+                      </Link>
                       <button
                         type="button"
                         role="menuitem"
@@ -734,14 +621,6 @@ export default function WorkspacePage() {
               </button>
             </div>
 
-            {/* SKILL-01. Above the conversation and inside the SAME pane: the card is part of the
-                cockpit, not a destination. It renders regardless of mailbox state — adapting a
-                skill has nothing to do with a connected inbox. */}
-            {authoring && <SkillAuthoringPanel onClose={() => setAuthoring(false)} />}
-
-            {/* KNOW-01. Same place, same reasoning as the card above. `threadId` is passed so a
-                search files itself under the conversation it was asked in; the panel mints its
-                own handle when the workspace has no thread yet. */}
             {searching && (
               <ErrorBoundary label="knowledge-search" fallback={null}>
                 <KnowledgeSearchPanel threadId={threadId} onClose={() => setSearching(false)} />
@@ -754,42 +633,6 @@ export default function WorkspacePage() {
                 suppressed. Do NOT loosen that backend guard instead — it protects the real cockpit.
                 Gmail is deliberately absent from this gate: the cockpit is useful before any
                 delivery channel is connected. */}
-            {/* Discovery belongs to a FRESH workspace: once a conversation is open, six cards above
-                it are clutter competing with the thread the user is already in. The section renders
-                nothing at all when no pack is active, which is every deployment until 27-09's gate
-                passes — so this is invisible rather than empty during the pilot. */}
-            {threadId === undefined && (
-              <ErrorBoundary label="workflow-packs" fallback={null}>
-                <WorkflowPackQuickStarts
-                  packs={packs}
-                  onStart={onStartPack}
-                  busy={sending}
-                  starting={startingPack}
-                />
-                {/* Renders nothing for a non-owner (the query is skipped, so it stays `undefined`)
-                    and nothing once every pack is active. It is a preview, not a second menu. */}
-                <WorkflowPackOwnerPreview
-                  candidates={packCandidates}
-                  onPreview={onPreviewPack}
-                  busy={sending}
-                  starting={startingPack}
-                />
-                {/* Owner-only, and passed `undefined` for everyone else so it renders nothing. */}
-                <WorkflowPackOwnerControls
-                  packs={viewer?.isOwner === true ? packs : undefined}
-                  priorVersions={packPriorVersions}
-                  onTurnOff={onTurnOffPack}
-                  onRollBack={onRollBackPack}
-                  busy={sending}
-                  turningOff={turningOff}
-                />
-                {packNotice !== null && (
-                  <p role="status" style={{ color: "var(--ink-soft)", fontSize: "0.85rem" }}>
-                    {packNotice}
-                  </p>
-                )}
-              </ErrorBoundary>
-            )}
             {threadId === REVIEW_THREAD_ID ? (
               <p style={{ color: "var(--ink-soft)", margin: 0, fontSize: "0.9rem" }}>
                 This is your weekly business review. Start a new chat to act on anything here.
