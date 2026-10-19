@@ -160,6 +160,10 @@ function indexesOf(table: string): { indexDescriptor: string; fields: string[] }
  * Adding an index without adding it here fails the suite. That is the whole mechanism.
  */
 const NON_TENANT_LEADING: Record<string, string> = {
+  "zernioConnections.by_ticket":
+    "one-use HTTP credential intake; the authenticated beginConnect mutation binds tenant and profile before minting the capability",
+  "zernioConnections.by_report_due":
+    "bounded internal daily opt-in dispatcher; workers recheck tenant erasure, generation and selection",
   "bufferOAuthStates.by_state_hash":
     "internal one-use OAuth callback/receipt lookup; activation requires the initiating authenticated tenant",
   "bufferOAuthStates.by_expiry":

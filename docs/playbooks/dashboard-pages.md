@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Marketing adds Zernio report management and per-post lifetime metrics, with explicit account selection, daily opt-in and stale/unavailable states. Buffer remains the publishing provider.
+
 > Last verified: 2026-10-19 — Buffer connection/publishing uses registered app OAuth. Engagement refresh and daily opt-in controls explain the third-party-app restriction and stay disabled; channel selection and human publishing approval remain available. Historical metrics retain their source dates. See buffer.md and ADR-059.
 
 > Last verified: 2026-10-19 — Marketing includes Buffer drafts, explicit approval, queue status refresh and provider-timestamped engagement reports. Settings deletion includes the Buffer local-credential outcome and manual upstream revocation disclosure. Missing metrics remain unavailable and uncertain submissions cannot be automatically retried. See buffer.md; hosted acceptance pending.

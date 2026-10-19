@@ -58,6 +58,8 @@ export const TENANT_TABLE_CLASSIFICATION = {
   notifications: "tenant_owned",
   gmailTokens: "tenant_credential",
   bufferConnections: "tenant_credential",
+  zernioConnections: "tenant_credential",
+  zernioReports: "tenant_owned",
   bufferOAuthStates: "tenant_credential",
   bufferPosts: "tenant_owned",
   bufferReports: "tenant_owned",

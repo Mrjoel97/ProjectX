@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — the executive tool builder also exposes cached Zernio report reads, with separate provider attribution and no provider refresh or publishing capability. Buffer third-party insights remain unavailable; Zernio reports do not imply Buffer publisher provenance.
+
 # Playbook: Buffer social marketing
 
 > Last verified: 2026-10-19 — registered app OAuth replaces rejected hosted MCP registration; regression tests cover callback, API reads, refresh and approved writes. Full hosted account consent/publication remains a separate acceptance check.

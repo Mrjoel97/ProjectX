@@ -2302,6 +2302,7 @@ const VERB: Record<string, [running: string, done: string]> = {
   readRevenueCrm: ["Reading your CRM…", "Read your CRM"],
   readBufferChannels: ["Reading your Buffer channels…", "Read your Buffer channels"],
   readBufferEngagement: ["Reading social engagement…", "Read social engagement"],
+  readZernioEngagement: ["Reading your social report…", "Read your social report"],
   stageBufferPost: ["Preparing a campaign post…", "Campaign post ready for review"],
   readBusinessFinance: ["Reading your business finances…", "Read your business finances"],
   // STAGES a draft and sends nothing. REVN-06 stops at the existing human Approve gate, so this

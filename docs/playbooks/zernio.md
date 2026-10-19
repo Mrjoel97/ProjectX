@@ -1,3 +1,17 @@
+> Last verified: 2026-10-19 — production connector implemented under ADR-060; offline boundary tests pass. Hosted release and persistent customer activation are tracked separately from the revoked pilot grant.
+
+# Production reporting
+
+Customers bring their own profile-scoped, read-only Accounts/Analytics key at /connect-zernio. An authenticated beginConnect mutation issues a ten-minute one-use HTTP capability bound to the tenant/profile/generation. The Origin-checked, 2KiB HTTP intake encrypts the key with the existing deployment credential key and provider=zernio authenticated data before passing any function arguments. Never place plaintext credentials in Convex actions, URLs, logs, fixtures, screenshots or chat. API key permission metadata cannot be fully attested by auth/verify; Pikar enforces fixed-origin GET-only behavior and requests restricted read-only keys.
+
+Select at most two Instagram/TikTok accounts, then refresh from Marketing. Daily refresh is off until explicitly selected. The hourly cron claims up to 25 due tenants and advances them one day; workers recheck erasure/generation/revision and use a ten-minute lease plus a five-minute minimum refresh interval. No provider publication or account provisioning occurs. API/provider failures retain the previous complete cached report with a visible failure notice; a genuine empty window is distinct from absent metrics. Pagination is capped at five pages of 100 posts per account and fails explicitly beyond that ceiling.
+
+Reports cover ninety inclusive UTC publication dates and contain per-post lifetime metric snapshots. Fetched time is not upstream freshness; provider update strings are retained without assigning an unspecified timezone. No sums of overlapping reach or engagement rates are produced. External posts do not establish Buffer publisher provenance. The executive readZernioEngagement tool reads only the tenant's cached evidence (up to 20 sample posts per account); it cannot connect, alter selection, refresh or publish. Samples include a total post count; they are not the entire report.
+
+Connections are tenant credentials (summary-only export); the latest report is tenant-owned export/erasure data. Local disconnect removes both and fences late work. Revoke the key in Zernio API Keys to end upstream access as well. Erasure records local deletion without claiming upstream revocation. The temporary pilot key was verified deleted on 2026-10-19; existing keys were untouched.
+
+Key files: packages/core/src/zernio.ts, convex/zernio.ts and zernioActions.ts, Marketing/ZernioPanel.tsx, and connect-zernio/page.tsx. Run core zernio, backend zernio/isolation/routines/toolRegistrySnapshot/tenantExport/tenantDelete/privacyLifecycle, web zernioPanel/marketingView and existing Buffer regressions. Run the full release gate before deploying. The crypto envelope uses the existing CONNECTOR_CREDENTIAL_KEY_V1/V2, SITE_URL and CONVEX_SITE_URL configuration; no operator-level Zernio key is added to deployment configuration.
+
 # Playbook: Zernio analytics pilot
 
 > Last verified: 2026-10-19 — live read-only pilot returned Instagram and TikTok metrics and matched a native TikTok post also shown in Buffer. Buffer-published provenance remains unqualified; this is not a deployed Pikar reporting connector.

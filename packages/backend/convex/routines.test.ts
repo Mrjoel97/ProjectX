@@ -269,6 +269,8 @@ const CONVEX_MODULES = [
   "workflowPackOutcomes.ts",
   "worm.ts",
   "wormCursor.ts",
+  "zernio.ts",
+  "zernioActions.ts",
 ];
 
 // ═══ CLOSED SET 2: THE SCHEDULING PRIMITIVES' CALL SITES ═════════════════════════════════════
@@ -318,6 +320,8 @@ const SCHEDULER_CALL_SITES = [
   "voice.ts",
   // Server-owned voice control starts once per explicitly admitted browser session.
   "voiceToken.ts",
+  // ADR-060: bounded daily read-only reports explicitly enabled by the tenant.
+  "zernio.ts",
 ];
 const CRON_REGISTRARS = ["crons.ts"];
 
@@ -414,6 +418,7 @@ describe("the scheduling primitives have a CLOSED, PINNED call-site set", () => 
       "voice-transient-retention",
       // Owner-authorized, selected-channel reporting; it never approves or repeats posts.
       "buffer-engagement-reports",
+      "zernio-engagement-reports",
     ]);
   });
 });

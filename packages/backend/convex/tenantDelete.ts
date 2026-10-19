@@ -36,7 +36,8 @@ type ProviderDeletionResult = {
     | "quickbooks"
     | "stripe"
     | "paypal"
-    | "buffer";
+    | "buffer"
+    | "zernio";
   localRowDeleted: boolean;
   revokedAtProvider: boolean;
   failure: boolean;
@@ -87,6 +88,7 @@ const providerResultValidator = v.object({
     v.literal("stripe"),
     v.literal("paypal"),
     v.literal("buffer"),
+    v.literal("zernio"),
   ),
   localRowDeleted: v.boolean(),
   revokedAtProvider: v.boolean(),
@@ -238,8 +240,13 @@ export const authorizeTenantDeletion = internalMutation({
       .query("bufferConnections")
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
       .unique();
+    const zernio = await ctx.db
+      .query("zernioConnections")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .unique();
     return {
       bufferHadRow: !!buffer,
+      zernioHadRow: !!zernio,
       googleConnected: !!google,
       microsoftConnected: !!microsoft,
       billingActive: !!billing,
@@ -477,6 +484,7 @@ const authorizeTenantDeletionRef = makeFunctionReference<
   {
     googleConnected: boolean;
     bufferHadRow: boolean;
+    zernioHadRow: boolean;
     microsoftConnected: boolean;
     billingActive: boolean;
     /** A THIRD copy of a shape that has to move together — the hand-written reference type does
@@ -705,6 +713,17 @@ export const deleteTenantData = tenantErasureAction({
         ? [
             {
               provider: "buffer" as const,
+              localRowDeleted: true,
+              revokedAtProvider: false,
+              failure: false,
+              revokeUpstream: "unsupported" as const,
+            },
+          ]
+        : []),
+      ...(connected.zernioHadRow
+        ? [
+            {
+              provider: "zernio" as const,
               localRowDeleted: true,
               revokedAtProvider: false,
               failure: false,

@@ -53,7 +53,8 @@ describe("tenant table classification registry", () => {
     // + researchControls (2026-09-12 request controls): tenant-owned bounded attempt state = 62.
     // + three foundation tables and expiring auth revocations = 67 with owned upload receipts.
     // + Buffer connections, transient OAuth, campaign posts and reports = 71.
-    expect(schemaTables).toHaveLength(71);
+    // + Zernio connection credentials and cached reports = 73.
+    expect(schemaTables).toHaveLength(73);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -74,6 +75,7 @@ describe("tenant table classification registry", () => {
       "connectorOAuthStates",
       "gmailTokens",
       "microsoftCalendarTokens",
+      "zernioConnections",
     ]);
   });
 

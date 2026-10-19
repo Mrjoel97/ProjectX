@@ -1,5 +1,12 @@
 {
-  "zernio.md": ["packages/core/src/zernioPilot", "packages/backend/scripts/zernioPilot"],
+  "zernio.md": [
+    "packages/core/src/zernio",
+    "packages/backend/scripts/zernioPilot",
+    "packages/backend/convex/zernio",
+    "apps/web/app/(app)/connect-zernio/",
+    "apps/web/app/(app)/dashboard/marketing/ZernioPanel",
+    "apps/web/app/(app)/dashboard/marketing/zernioPanel"
+  ],
   "buffer.md": [
     "packages/core/src/buffer",
     "packages/backend/convex/buffer",

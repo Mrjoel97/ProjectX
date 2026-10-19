@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — ADR-060 adds two explicitly inventoried Zernio modules, one bounded opt-in daily-read scheduler caller and one hourly system dispatcher. No generic recurrence engine, standing publish approval or business-write loop is introduced.
+
 > Last verified: 2026-10-19 — ADR-058 adds four explicitly inventoried Buffer modules, buffer.ts as a scheduler caller and one fixed Buffer snapshot/retention cron. The owner requested this selected-channel reporting workflow. The daily driver reads opt-in metrics and reconciles already-approved post status; it never approves or republishes posts. This is a narrow exception to the historical system-jobs-only inventory, not release of the deferred generic recurrence engine. Existing DST/standing-approval gates remain unchanged.
 
 > Last verified: 2026-10-17 — the closed module and scheduler inventories now explicitly include ragErasure.ts. Its internal native-erasure continuation observes existing deletion work, stops at 60 pending polls, and adds no user routine or recurring business action.

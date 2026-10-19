@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Golden evaluator source identity and manifest are refreshed for Zernio runtime/schema/envelope changes. All 46 cases and casesHash are unchanged; no paid evaluation or prompt activation is claimed.
+
 > Last verified: 2026-10-19 — Refreshed the evaluator revision and golden manifest after the Buffer hosted OAuth/API repair. Existing corpus cases are unchanged. Old exact-source evidence is retired; no provider evaluation or activation is claimed.
 
 > Last verified: 2026-10-19 — Regenerated the exact golden evaluator revision and manifest after adding Buffer runtime/schema behavior. The 46-case corpus and casesHash remain unchanged. Older live evidence does not qualify this source revision; no paid evaluation, passing receipt, prompt activation or rollback is implied.

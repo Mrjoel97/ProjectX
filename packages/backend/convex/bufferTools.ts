@@ -6,6 +6,22 @@ import type { ActionCtx } from "./_generated/server";
 /** The agent can read selected evidence and stage drafts. Approval/publishing are absent. */
 export function buildBufferTools(ctx: ActionCtx, tenantId: string): ToolSet {
   return {
+    readZernioEngagement: tool({
+      description:
+        "Read this user's latest cached Zernio Instagram/TikTok report. Check freshness and availability. Metrics are lifetime snapshots of posts in the stated publication window; external posts are not necessarily Buffer-published. Never invent missing metrics or sum reach or engagement rates.",
+      inputSchema: jsonSchema<Record<string, never>>({
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      }),
+      execute: async () => {
+        try {
+          return await ctx.runQuery(internal.zernio.agentReport, { tenantId });
+        } catch {
+          return { state: "unavailable", settingsPath: "/connect-zernio" };
+        }
+      },
+    }),
     readBufferChannels: tool({
       description:
         "Read the social channels this user selected in their Buffer connection. Returns channel IDs, names, platform and availability; never chooses another organization or connects an account.",

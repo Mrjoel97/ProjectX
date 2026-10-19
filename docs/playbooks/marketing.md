@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Marketing mounts optional Zernio Instagram/TikTok reporting beside Buffer publishing, with explicit selection/daily consent, lifetime publication-window labels, unavailable metrics and stale-report retention.
+
 > Last verified: 2026-10-19 — Buffer uses registered app OAuth and its fixed GraphQL API for account/channel reads and approved publishing. Engagement controls and daily opt-ins are disabled because Buffer rejects insights and MCP access for third-party app clients. Existing saved metrics remain historical; no reconnect or personal-key workaround is offered.
 
 > Last verified: 2026-10-19 — Owner-authorized Buffer integration adds account OAuth, selected-channel campaign drafts, explicit human scheduling approval and thirty-day engagement snapshots. This supersedes the historical no-social-publishing ceiling only for the Buffer path. Direct channel blockers, funnels and Gmail controls remain unchanged. See buffer.md and ADR-058; hosted Pikar acceptance is pending.
