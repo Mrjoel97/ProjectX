@@ -23,7 +23,7 @@ import { adaptationBytes, skillAuthorLabel, skillStateLabel } from "./SkillAutho
 
 const here = dirname(fileURLToPath(import.meta.url));
 const panelSource = readFileSync(join(here, "SkillAuthoringPanel.tsx"), "utf8");
-const page = readFileSync(join(here, "page.tsx"), "utf8");
+const page = readFileSync(join(here, "..", "skills-workflows", "page.tsx"), "utf8");
 
 // Comments stripped: every scan below is about the SHIPPED SURFACE, not about prose. Without this
 // the file's own note explaining that there is no Activate control fails the no-Activate scan,
@@ -45,20 +45,12 @@ describe("SkillAuthoringPanel — the publish path exists and is candidate-only"
   // A tested component with no call site is invisible to every green suite in this repo — the
   // whole panel could be dead code and every assertion below would still pass. THIS is the
   // assertion that the surface is reachable.
-  test("the panel is mounted from the workspace, from the EXISTING Chat options menu", () => {
-    expect(page).toContain('import { SkillAuthoringPanel } from "./SkillAuthoringPanel"');
+  test("the library mounts the panel with the existing authoring restriction", () => {
     expect(page).toContain("<SkillAuthoringPanel");
-    expect(page).toContain("Adapt a business skill");
-    // Inside the menu that already exists — not a new route and not a new nav entry. The end
-    // marker is searched FROM the menu's start: `PastChats` closes a HeaderMenu earlier in the
-    // file, so a plain indexOf returns an empty slice and this whole assertion passes vacuously.
-    const menuStart = page.indexOf('aria-label="Chat options"');
-    expect(menuStart).toBeGreaterThan(-1);
-    const menu = page.slice(menuStart, page.indexOf("</HeaderMenu>", menuStart));
-    expect(menu.length).toBeGreaterThan(100);
-    expect(menu).toContain("Adapt a business skill");
-    expect(menu).toContain("+ New chat"); // the pre-existing item is still there
-    expect(page).not.toContain('href="/dashboard/skills"');
+    expect(page).toContain("canAuthor={viewer?.isOwner === true}");
+    const workspace = readFileSync(join(here, "page.tsx"), "utf8");
+    expect(workspace).not.toContain("<SkillAuthoringPanel");
+    expect(workspace).toContain('href="/dashboard/skills-workflows"');
   });
 
   test("publish sends the two allowed fields and NOTHING else", () => {

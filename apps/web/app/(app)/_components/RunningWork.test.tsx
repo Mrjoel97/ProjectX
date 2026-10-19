@@ -1,5 +1,7 @@
+// @vitest-environment jsdom
 import { useQuery } from "convex/react";
-import { createElement } from "react";
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { RunningWork } from "./RunningWork";
@@ -68,4 +70,32 @@ describe("RunningWork", () => {
     expect(html).toContain("Open Approvals or the Vault to see more.");
     expect(html).toContain('href="/dashboard/vault"');
   });
+});
+
+test("closing hides the current jobs across updates but shows a new job", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  const item = { id: "one", threadId: null, stage: "queued", createdAt: 1 };
+  try {
+    vi.mocked(useQuery).mockReturnValue({ items: [item], partial: false });
+    await act(async () => root.render(createElement(RunningWork)));
+    const close = host.querySelector<HTMLButtonElement>('button[aria-label="Hide work status"]');
+    expect(close).not.toBeNull();
+    expect(host.textContent).toContain("Jobs continue running");
+    await act(async () => close?.click());
+    expect(host.innerHTML).toBe("");
+    vi.mocked(useQuery).mockReturnValue({
+      items: [{ ...item, stage: "processing" }],
+      partial: false,
+    });
+    await act(async () => root.render(createElement(RunningWork)));
+    expect(host.innerHTML).toBe("");
+    vi.mocked(useQuery).mockReturnValue({ items: [item, { ...item, id: "two" }], partial: false });
+    await act(async () => root.render(createElement(RunningWork)));
+    expect(host.textContent).toContain("Work in progress · 2");
+  } finally {
+    await act(async () => root.unmount());
+    vi.unstubAllGlobals();
+  }
 });

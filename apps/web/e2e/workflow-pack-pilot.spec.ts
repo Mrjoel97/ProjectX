@@ -101,8 +101,12 @@ function convexRun<T>(fn: string, args: Record<string, unknown>): T {
 }
 
 const openWorkspace = async (page: Page) => {
-  await page.goto(`${appOrigin}/dashboard/workspace`);
-  await expect(page.getByTestId("workspace-pane")).toBeVisible();
+  await page.goto(`${appOrigin}/dashboard/skills-workflows`);
+  await expect(
+    page.getByRole("heading", { name: "Skills and Workflows", exact: true }),
+  ).toBeVisible();
+  const manage = page.getByText("Review and manage workflows", { exact: true });
+  if (await manage.count()) await manage.click();
 };
 
 /**

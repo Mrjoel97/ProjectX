@@ -205,18 +205,9 @@ test("candidate-only authoring and pinned prompt run use exact response and a fr
   });
 
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/dashboard/workspace");
+  await page.goto("/dashboard/skills-workflows");
   const auth = await authFor(page);
-
-  const composer = page.getByPlaceholder("What business outcome should we work on?");
-  await expect(composer).toBeVisible({ timeout: 15_000 });
-
-  // Open the one authoring surface. Empty and over-cap states are honest, keyboard-reachable and
-  // cause no write; the one valid click below is the only publication in this entire spec.
-  const options = page.getByRole("button", { name: "Chat options" });
-  await options.focus();
-  await options.press("Enter");
-  await page.getByRole("menuitem", { name: "Adapt a business skill" }).click();
+  await page.getByRole("tab", { name: "Skills", exact: true }).click();
   const panel = page.getByRole("region", { name: "Adapt a business skill" });
   await expect(panel).toBeVisible();
   await panel.getByLabel("Which skill").selectOption("offer-architect");
@@ -268,7 +259,9 @@ test("candidate-only authoring and pinned prompt run use exact response and a fr
   await expect(myRow.getByText(/Draft saved — waiting to be evaluated/i)).toBeVisible();
   await expect(panel.getByRole("button", { name: /activate/i })).toHaveCount(0);
   await expect(panel).not.toContainText("## Tenant-authored business adaptation");
-  await panel.getByRole("button", { name: "Close skill authoring" }).click();
+  await page.goto("/dashboard/workspace");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
+  await expect(composer).toBeVisible({ timeout: 15_000 });
 
   // A real user turn, but an OFFLINE SMOKE operation: it follows the ordinary cockpit/activity/
   // plan path while making no provider/model call. Its high-entropy content must stay out of all

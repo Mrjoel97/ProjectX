@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Added Skills and Workflows to the desktop sidebar, with a Chat options link on compact screens. RunningWork has a keyboard-accessible X that hides the current job selection across shell navigation; new job IDs show the notice again. It explicitly says jobs continue: hiding is not cancellation, completion or provider rollback. No job or approval state changes.
+
 > Last verified: 2026-10-19 — The sidebar has one “Approval and Compliance” entry for the existing approvals/compliance tabs, preserving approval counts and the owner-only dead-letter badge. Settings is the sole sidebar entry for Business Profile, Connections and Settings; it remains active across all three tabs. Long navigation labels wrap, and collapsed badges remain grouped. Existing routes and page authorization are unchanged.
 
 > Last verified: 2026-10-19 — Zernio TikTok post links require the supplied account handle and a numeric platform post ID; absent/invalid handles remain plain post references. No placeholder publisher handle is invented.

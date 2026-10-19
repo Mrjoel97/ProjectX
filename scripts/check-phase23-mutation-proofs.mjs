@@ -24,7 +24,6 @@ const writer = "packages/backend/convex/skills.ts";
 const writerTest = "packages/backend/convex/skills.test.ts";
 const llm = "packages/backend/convex/llm.ts";
 const runner = "packages/backend/scripts/run-eval-golden.mjs";
-const ui = "apps/web/app/(app)/dashboard/workspace/";
 const edit = (path, from, to, after) => ({ path, from, to, after });
 const vitest = (workspace, file, test) => ({ kind: "vitest", workspace, file, test });
 const contracts = (test) => vitest("packages/contracts", "src/skillAuthoring.test.ts", test);
@@ -281,13 +280,13 @@ const cases = [
     command: vitest(
       "apps/web",
       "app/(app)/dashboard/workspace/skillAuthoring.test.ts",
-      "the panel is mounted from the workspace",
+      "the library mounts the panel with the existing authoring restriction",
     ),
     edits: [
       edit(
-        `${ui}page.tsx`,
-        "{authoring && <SkillAuthoringPanel onClose={() => setAuthoring(false)} />}",
-        "{authoring && null}",
+        "apps/web/app/(app)/dashboard/skills-workflows/page.tsx",
+        "<SkillAuthoringPanel canAuthor={viewer?.isOwner === true} />",
+        "{null}",
       ),
     ],
   },

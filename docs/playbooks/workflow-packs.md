@@ -1,3 +1,5 @@
+> Last verified: 2026-10-19 — Skills and Workflows is the sidebar library for existing active-only workflow offers. Starts open the returned thread in My Workspace. Owner candidate preview pins the displayed version; prior-version rollback and deactivation retain server owner checks. Phase 29 customization remains on its separate undiscoverable route. Existing browser spec entry points moved, but per-workflow positive/refusal/edit/reject/recovery acceptance is not certified by this relocation.
+
 > Last verified: 2026-10-15 — Owner candidate and rollback selectors read the highest version directly from the new name/status/version index. Skill publication reads the maximum immutable version rather than loading its full history. No activation evidence gate changes; local skills and discovery suites pass.
 
 # Playbook: Workflow Packs (curated knowledge-work pilot)

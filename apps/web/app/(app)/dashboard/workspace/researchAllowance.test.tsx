@@ -32,32 +32,14 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
   return element;
 }
 
-test.each([
-  6, 2, 0,
-])("typed submit carries allowance %i through the real clock hook", async (limit) => {
+test("typed submit uses the bounded server default without a research selector", async () => {
   const host = document.createElement("div");
   const root = createRoot(host);
   try {
     await act(async () => root.render(<Composer />));
-    const select = requireElement<HTMLSelectElement>(host, "select");
-    expect(select.value).toBe("6");
-    expect(Array.from(select.options, (option) => option.value)).toEqual([
-      "0",
-      "1",
-      "2",
-      "3",
-      "4",
-      "5",
-      "6",
-    ]);
-    expect(select.options[0]?.textContent).toContain("no page reads");
-    expect(select.options[6]?.textContent).toContain("default");
-    expect(host.textContent).toContain("including failed reads");
-    expect(host.textContent).toContain("separate turns");
-    await act(async () => {
-      select.value = String(limit);
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    expect(host.querySelector("select")).toBeNull();
+    expect(host.textContent).not.toContain("Research page attempts");
+    expect(requireElement<HTMLTextAreaElement>(host, "textarea").rows).toBe(1);
     // A real starter fills the controlled composer; the send hook itself stays unmocked.
     const starter = requireElement<HTMLButtonElement>(host, "fieldset button");
     await act(async () => starter.click());
@@ -66,10 +48,8 @@ test.each([
     expect(state.send).toHaveBeenCalledExactlyOnceWith({
       threadId: "thread",
       text: starter.textContent,
-      maxPageReadAttempts: limit,
       clientContext: { nowMs: expect.any(Number), tz: expect.any(String) },
     });
-    expect(select.value).toBe(String(limit));
     expect(requireElement<HTMLTextAreaElement>(host, "textarea").value).toBe("");
   } finally {
     await act(async () => root.unmount());

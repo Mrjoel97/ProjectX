@@ -312,9 +312,8 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
       await diff.press("Enter");
       await expect(card.locator("details[open]")).toBeVisible();
     }
-    await page.goto(`/dashboard/workspace?thread=${encodeURIComponent(thread)}`);
-    await page.getByRole("button", { name: "Chat options", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Adapt a business skill", exact: true }).click();
+    await page.goto("/dashboard/skills-workflows");
+    await page.getByRole("tab", { name: "Skills", exact: true }).click();
     const adaptations = page.getByRole("region", { name: "Adapt a business skill" });
     await expect(adaptations).toContainText("Authored with Executive");
     await expect(adaptations).toContainText(
