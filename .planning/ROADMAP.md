@@ -102,6 +102,71 @@ Plans:
 - [x] 26-19-PLAN.md — Deterministic home priority, health, briefing and source-summary composition (Wave 15) — **closed 2026-08-23**
 - [x] 26-20-PLAN.md — Command Center v2, full repository gates and blocking owner UAT (Wave 16) — **closed 2026-08-23, owner-approved (HOME-01)**; `/dashboard` renders `CommandCenter.tsx`. **A FOLLOW-UP FIX SHIPPED THE SAME DAY:** the priority order put `connection-failure` FIRST, so the live hero told owners to "Connect your mailbox" above every pending approval and imminent send. Business work now outranks the email channel (`85daa4b`), pinned by a mutation-verified unit gate AND a browser gate
 
+## Managed-service programme — owner-approved 2026-10-19
+
+The current execution priority is the five-stage sequence below. [Programme scope and safeguards](design/managed-services-programme.md) govern this lane; historical build-order notes remain history. This programme does not reopen accepted SKILL-01, certify unqualified verticals or authorize unattended publishing.
+
+### Phase 48: Readiness and qualification closure
+
+**Goal:** Reconcile current capabilities and close the existing skill and curated-pack qualification gaps without reopening accepted Phase 21 criteria.
+**Requirements:** MSVC-01, MSVC-02.
+**Depends on:** Existing Phase 21 acceptance; consumes Phase 23 plans 06–09 and Phase 27 plan 09.
+**Plans:** 1/4 executed; 4/4 authored. Inventory/reconciliation only; qualification remains open.
+
+- [x] 48-01-PLAN.md — Reconcile capability and evidence inventory
+- [ ] 48-02-PLAN.md — Resume the existing agent-authored skill lifecycle safely
+- [ ] 48-03-PLAN.md — Complete per-workflow browser acceptance
+- [ ] 48-04-PLAN.md — Seal readiness for service implementation
+
+### Phase 49: Shared managed-service boundary
+
+**Goal:** One tenant-scoped service boundary reuses existing governed execution and gives users setup and supervision instead of manual orchestration.
+**Requirements:** MSVC-03, MSVC-04, MSVC-05, MSVC-06.
+**Depends on:** Phase 48 readiness seal. No general recurrence is enabled here.
+**Plans:** 0/5 executed; 5/5 authored. Not executed.
+
+- [ ] 49-01-PLAN.md — Define service ownership and policy
+- [ ] 49-02-PLAN.md — Persist tenant setup and bounded service views
+- [ ] 49-03-PLAN.md — Add the trusted start, pause and stop boundary
+- [ ] 49-04-PLAN.md — Validate agent-composed service operations
+- [ ] 49-05-PLAN.md — Deliver conversational setup and supervision
+
+### Phase 50: Recurring read-and-prepare services
+
+**Goal:** Earn the existing recurrence gate and deliver reliable bounded unattended preparation while preserving current reporting exceptions.
+**Requirements:** MSVC-07, MSVC-08, MSVC-09.
+**Depends on:** Phase 49 verified boundary; consumes Phase 29 defer record, ADR-046 and Phase 47 research. No future-content publishing grant.
+**Plans:** 0/4 executed; 4/4 authored. Not executed.
+
+- [ ] 50-01-PLAN.md — Reconcile and collect the actual recurrence evidence
+- [ ] 50-02-PLAN.md — Prove the closed unattended policy before admission
+- [ ] 50-03-PLAN.md — Admit and implement the recurring execution adapter
+- [ ] 50-04-PLAN.md — Qualify browser-closed recurring preparation
+
+### Phase 51: Brain and service outcomes
+
+**Goal:** Connect goals, service runs and evidence-backed business outcomes while preserving provenance and user authority over business facts.
+**Requirements:** MSVC-10, MSVC-11.
+**Depends on:** Phase 50 unattended qualification and existing Phase 34 agenda. No autonomous goal writes or self-activation.
+**Plans:** 0/4 executed; 4/4 authored. Not executed.
+
+- [ ] 51-01-PLAN.md — Link goals, service runs and measured outcomes
+- [ ] 51-02-PLAN.md — Render the Business Ledger from confirmed knowledge
+- [ ] 51-03-PLAN.md — Feed outcomes into Executive orientation and proposals
+- [ ] 51-04-PLAN.md — Verify goal-to-outcome behavior end to end
+
+### Phase 52: Social marketing service pilot
+
+**Goal:** Prove configure once → agent preparation → required review → Buffer scheduling → Zernio evidence → next proposed cycle before expanding.
+**Requirements:** MSVC-12, MSVC-13, MSVC-14.
+**Depends on:** Phases 48–51 verified; ADR-059/060 provider boundaries. Read/prepare-only standing permission remains binding.
+**Plans:** 0/3 executed; 3/3 authored. Not executed.
+
+- [ ] 52-01-PLAN.md — Configure the first social service and readiness
+- [ ] 52-02-PLAN.md — Prepare, review and schedule exact approved content
+- [ ] 52-03-PLAN.md — Measure repeated cycles and seal the pilot
+
+
 ## Post-Beta Knowledge-Work Expansion (Phases 27-30)
 
 These phases are the reviewed expansion queue after Phase 25 opens the private beta. They do not
@@ -275,6 +340,8 @@ Plans:
 **Depends on:** Phase 41 (ADR-037, closed).
 **Plans:** 3/3 — all complete 2026-09-07 (see the 42-0N-SUMMARY files). The envelope defect that blocked 42-03 is resolved by **ADR-038** (owner decision: narrow to fewer workers), which supersedes ADR-037 Decision 6. **G6 closed in code**; the fan-out tool is unreachable until the owner activates the `cockpit-agent` candidate that teaches it, and `RELIABILITY_SWEEP_ARMED=1` is still owed on production.
 ### Phase 47: The schedule row that re-arms (INSERTED 2026-09-09)
+
+**2026-10-19 continuation:** the unbuilt recurrence deliverable is consumed by Phase50 after Phases48–49; preserve historical evidence and the existing defer gate. The original research is not a current inventory.
 
 **Goal:** The G25 CONSUMING phase, in G25's stated order — a schedule row that re-arms, a per-run budget reservation, and a DLQ. First phase permitted to write a table: ADR-046 built nothing and G25's “do not build the table first” is now satisfied.
 **Source:** rev 5 audit §5 Track C step 13 (G25); **ADR-046** (D1-D9). Research: `.planning/phases/47-the-schedule-row-that-re-arms/47-RESEARCH.md` (measured 2026-09-09 at `dd13f77`).
@@ -1595,6 +1662,11 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
+| 48. Readiness and qualification closure | 1/4 | In progress — inventory reconciled; original Phase 23 and Phase 27 qualification gates remain open | - |
+| 49. Shared managed-service boundary | 0/5 | Not started — sequential programme dependency | - |
+| 50. Recurring read-and-prepare services | 0/4 | Not started — sequential programme dependency | - |
+| 51. Brain and service outcomes | 0/4 | Not started — sequential programme dependency | - |
+| 52. Social marketing service pilot | 0/3 | Not started — sequential programme dependency | - |
 | 1. Foundation & Governance Substrate | 8/9 | Partial — open: 01-09 | - |
 | 2. Thin End-to-End Slice | 7/9 | Complete — spine live since 2026-07; 02-08, 02-09 superseded by Phase 3.1 (the cockpit replaced the UI slice) | 2026-07-11 |
 | 3. Guardrails | 5/5 | Complete (VERIFICATION present) | 2026-07-12 |
