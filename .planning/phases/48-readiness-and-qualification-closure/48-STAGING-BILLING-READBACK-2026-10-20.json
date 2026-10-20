@@ -1,0 +1,19 @@
+{
+  "schema": "phase48-staging-billing-readback.v1",
+  "observedAt": "2026-10-20T11:54:13.040Z",
+  "target": "woozy-wren-368",
+  "releaseRunId": 39416580614,
+  "releaseAuthorizationSha256": "a1772ce8b78d8d34e4a88fb54d6e5c7fd41e84d2f355adcd927c848d0bb18f47",
+  "expected": {
+    "GOLDEN_OPENROUTER_BILLING": "standard",
+    "GOLDEN_TAVILY_BILLING": "free",
+    "GOLDEN_TAVILY_CREDIT_USD": "0"
+  },
+  "matches": {
+    "GOLDEN_OPENROUTER_BILLING": true,
+    "GOLDEN_TAVILY_BILLING": true,
+    "GOLDEN_TAVILY_CREDIT_USD": true
+  },
+  "allMatched": true,
+  "mutationRequested": false
+}
