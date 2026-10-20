@@ -856,6 +856,7 @@ export const __seedOnboardedTenant = internalMutation({
     if (existingRow) {
       await ctx.db.patch(existingRow._id, {
         ...facts,
+        qualificationFixture: "onboarding-harness-v1",
         tier,
         tierSource: "derived",
         derivedAt: Date.now(),
@@ -865,6 +866,7 @@ export const __seedOnboardedTenant = internalMutation({
       await ctx.db.insert("tenantProfiles", {
         tenantId,
         ...facts,
+        qualificationFixture: "onboarding-harness-v1",
         tier,
         tierSource: "derived",
         derivedAt: Date.now(),

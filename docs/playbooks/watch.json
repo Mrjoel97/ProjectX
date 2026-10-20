@@ -30,6 +30,8 @@
   "ci-gate.md": [
     ".github/scripts/phase48-staging-parity",
     ".github/workflows/phase48-staging-parity.yml",
+    ".github/scripts/phase48-staging-release",
+    ".github/workflows/phase48-staging-release.yml",
     "scripts/observe-staging-retention",
     ".github/workflows/observe-staging-retention.yml",
     "scripts/rehearse-release-local.mjs",

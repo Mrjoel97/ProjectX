@@ -107,6 +107,57 @@ const COMPLETE_FACTS = {
   yearsOperating: 3,
 } as const;
 
+test("onboarding harness marks a newly inserted tenant profile without arming ingestion", async () => {
+  const t = setup();
+  const result = await t.mutation(internal.onboarding.__seedOnboardedTenant, { tenantId: TENANT });
+  const row = await t.run((ctx) =>
+    ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", TENANT))
+      .unique(),
+  );
+  expect(row?.qualificationFixture).toBe("onboarding-harness-v1");
+  expect(await t.run((ctx) => ctx.db.get(result.vaultDocId))).toMatchObject({
+    kind: "business_profile",
+    status: "ready",
+  });
+  expect(await asTenant(t).query(api.onboarding.status, {})).toEqual({ needsOnboarding: false });
+  expect(await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).toEqual([]);
+});
+
+test("onboarding harness marks existing profiles and ordinary fact edits preserve the exclusion", async () => {
+  const t = setup();
+  const profileId = await seedTierRow(t, TENANT, {
+    ...COMPLETE_FACTS,
+    tier: "sme",
+    tierSource: "derived",
+    postalAddress: "Existing business address",
+  });
+  await t.mutation(internal.onboarding.__seedOnboardedTenant, { tenantId: TENANT });
+  await asTenant(t).mutation(api.tenantProfile.saveFacts, { headcount: 2 });
+  const rows = await t.run((ctx) => ctx.db.query("tenantProfiles").collect());
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({
+    _id: profileId,
+    qualificationFixture: "onboarding-harness-v1",
+    postalAddress: "Existing business address",
+    headcount: 2,
+  });
+});
+
+test("ordinary profile fact input cannot claim onboarding fixture provenance", async () => {
+  const t = setup();
+  await expect(
+    asTenant(t).mutation(api.tenantProfile.saveFacts, {
+      ...COMPLETE_FACTS,
+      qualificationFixture: "onboarding-harness-v1",
+    } as typeof COMPLETE_FACTS),
+  ).rejects.toThrow();
+  await asTenant(t).mutation(api.tenantProfile.saveFacts, COMPLETE_FACTS);
+  const row = await asTenant(t).query(api.tenantProfile.get, {});
+  expect(row?.qualificationFixture).toBeUndefined();
+});
+
 /** The ordinary starting state: a tenant who finished the facts conversation and derived to `sme`. */
 const seedDerivedSme = (t: TestConvex<typeof schema>, tenantId = TENANT) =>
   seedTierRow(t, tenantId, { tier: "sme", tierSource: "derived", ...COMPLETE_FACTS });

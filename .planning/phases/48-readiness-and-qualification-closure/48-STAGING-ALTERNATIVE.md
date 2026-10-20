@@ -12,7 +12,8 @@ Prepared and conditionally approved 2026-10-20. The user explicitly replied **‚Ä
 alternative.‚Äù** The immutable approval hash is
 `50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19`; its private scope
 receipt is dated2026-10-20. This records permission, not execution or readiness. **Staging billing
-configuration, source parity and exact target admission remain blocked. No new accounts or probe exist.**
+labels remain unwritten and the successful read-only check found a source difference; parity is
+false. The separate release is prepared but unauthorized. No new accounts or probe exist.**
 
 This is the approved conditional replacement scope for the unavailable controlled-account credentials,
 not a continuation receipt or an assertion that Phase23/48-02 passed. The original production
@@ -47,9 +48,35 @@ before executing this proposal. No deployment or code push is included here.
 
 Current CLI inspection shows that even `CONVEX_DEPLOYMENT=dev:...` can leave a deploy command
 selecting production by default. That variable alone is therefore insufficient evidence.
-The parent is preparing a strict staging-key CI dry-run/parity operator, with **no apply**.
+The strict staging-key CI dry-run/parity operator completed a successful **no-apply** inspection.
 No deploy, push, registry repair or configuration change is authorized by the staging approval;
 preparation must fail closed before egress if exact staging selection cannot be proved.
+
+## Latest readiness observation and separate release boundary
+
+PR74 source `d40a7f08a2da2b8730d5df2cc8437ce2e9b9c190` passed CI `39407950620`
+and merged as `bc43f80531c060faab9f86e7015ff4514fd57170` without production promotion.
+Second staging inspection `39409301452`/job`118582833599` passed, preserving configuration,
+registry and the protected retention fixture. The result is `diffStatus=changes`,
+`changedItemCount=1`, `parityEstablished=false`; see `48-STAGING-PREFLIGHT-2026-10-20.json`.
+Five global registry references/hashes are snapshot observations only, not semantic proof.
+Intermittent local Windows UV failures did not justify mutation or replacing the CI evidence.
+
+The narrow new-profile qualification marker now prevents ordinary weekly-review spending at
+both enumeration and already queued execution. Legacy ordinary profiles are unchanged and
+there is no backfill. Its46focused backend tests/typecheck and existing evaluator identity
+checks pass; golden/vertical cases are unchanged. This is source preparation, not deployment.
+
+A separate manual release workflow/operator is prepared but **not authorized or dispatched**.
+It requires exact-source successful CI and a fresh release-authorization hash. Its only proposed
+configuration writes are the3attested labels `GOLDEN_OPENROUTER_BILLING=standard`,
+`GOLDEN_TAVILY_BILLING=free`, `GOLDEN_TAVILY_CREDIT_USD=0`; protected hashes must survive
+and post-release source diff must be zero. Unknown outcomes stop without automatic apply retry
+or rollback. Its51operator tests pass; full CI for the new combined release/fixture branch is
+pending. Only after that exact CI and a fresh read-only comparison can a concrete release be
+presented for explicit human approval. The approval hash at the top remains the conditional
+account/fixture/$1scope, not release permission. No apply, labels, accounts, probe or model work
+has occurred. Phase48 remains partial and Phase49 has not started.
 
 ## Approved narrow authorization
 

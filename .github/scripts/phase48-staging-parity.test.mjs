@@ -30,6 +30,13 @@ const diff = () => ({
 });
 const output = (value = diff()) =>
   `Remote config would be overwritten with the following changes:\n  \n${JSON.stringify(value, null, 2)}\nWould have deployed Convex functions`;
+const selectedKeys = [
+  "cockpit-agent",
+  "offer-architect",
+  "money-model-designer",
+  "lead-engine",
+  "executive-router",
+];
 
 function mock(options = {}) {
   const calls = [];
@@ -83,10 +90,29 @@ function mock(options = {}) {
           }),
         );
       }
+      assert.match(args[3], /ctx\.db\.query\("skills"\)\.take\(1001\)/);
+      const selected = selectedKeys.map((key, index) => ({
+        key,
+        activeCount: 1,
+        active: [
+          { id: `skill${index}`, version: 1, bodyHash: options.bodyHashes?.[key] ?? digest },
+        ],
+      }));
+      if (options.missingActive) {
+        selected[1].activeCount = 0;
+        selected[1].active = [];
+      }
+      if (options.multipleActive) {
+        selected[1].activeCount = 2;
+        selected[1].active.push({ id: "anotherSkill", version: 2, bodyHash: digest });
+      }
+      if (options.selectionChanged && dry) selected[1].active[0].bodyHash = "c".repeat(64);
+      options.alterSelection?.(selected);
       return ok(
         JSON.stringify({
           sha256: dry && options.registryChanged ? "c".repeat(64) : digest,
-          count: 2,
+          count: 10,
+          selected,
         }),
       );
     }
@@ -188,6 +214,98 @@ test("dry-run reads preserve exact source, origins, registry and retention; no s
 test("successful dry-run without structured evidence reports unknown, not source parity", async () => {
   const { execute } = mock({ unknownDiff: true });
   assert.equal((await runParity(env, execute)).diffStatus, "unknown");
+});
+
+test("selected global prerequisites expose exact refs and source matches separately from semantic proof", async () => {
+  const initial = await runParity(env, mock().execute);
+  const observed = initial.globalSkillPrerequisites;
+  assert.equal(observed.allSelectedHaveExactlyOneActive, true);
+  assert.equal(observed.allSelectedActiveBodiesMatchSource, false);
+  assert.equal(observed.semanticProof, false);
+  assert.deepEqual(
+    observed.selected.map((s) => s.key),
+    selectedKeys,
+  );
+  const bodyHashes = Object.fromEntries(observed.selected.map((s) => [s.key, s.sourceBodyHash]));
+  const matched = (await runParity(env, mock({ bodyHashes }).execute)).globalSkillPrerequisites;
+  assert.equal(matched.allSelectedActiveBodiesMatchSource, true);
+  assert.equal(matched.semanticProof, false);
+  for (const selected of matched.selected) {
+    assert.deepEqual(Object.keys(selected).sort(), [
+      "active",
+      "activeCount",
+      "key",
+      "sourceBodyHash",
+    ]);
+    assert.deepEqual(Object.keys(selected.active[0]).sort(), [
+      "bodyHash",
+      "id",
+      "matchesSource",
+      "version",
+    ]);
+    assert.equal(selected.active[0].matchesSource, true);
+  }
+});
+
+test("missing or ambiguous active prerequisites are observations, never a qualification claim", async () => {
+  for (const option of ["missingActive", "multipleActive"]) {
+    const report = (await runParity(env, mock({ [option]: true }).execute))
+      .globalSkillPrerequisites;
+    assert.equal(report.allSelectedHaveExactlyOneActive, false);
+    assert.equal(report.allSelectedActiveBodiesMatchSource, false);
+    assert.equal(report.semanticProof, false);
+  }
+});
+
+test("selected metadata changes fail preservation even with an unchanged registry hash", async () => {
+  const phases = [];
+  await assert.rejects(
+    runParity(env, mock({ selectionChanged: true }).execute, (p) => phases.push(p)),
+    /PHASE48_STAGING_PARITY_REFUSED/,
+  );
+  assert.equal(phases.at(-1), "preservation");
+});
+
+test("malformed or extended selected refs refuse before dry-run without exposing bodies", async () => {
+  for (const alterSelection of [
+    (s) => s.pop(),
+    (s) => {
+      s[0].key = "unselected-private-key";
+    },
+    (s) => {
+      s[0].body = "private prompt body";
+    },
+    (s) => {
+      s[0].activeCount = 2;
+    },
+    (s) => {
+      s[0].activeCount = -1;
+    },
+    (s) => {
+      s[0].active[0].body = "private prompt body";
+    },
+    (s) => {
+      s[0].active[0].bodyHash = "private prompt body";
+    },
+    (s) => {
+      s[0].active[0].version = 0;
+    },
+    (s) => {
+      s[0].active[0].id = "private prompt body";
+    },
+    (s) => {
+      s[1].active[0].id = s[0].active[0].id;
+    },
+  ]) {
+    const { execute, calls } = mock({ alterSelection });
+    const phases = [];
+    await assert.rejects(
+      runParity(env, execute, (p) => phases.push(p)),
+      /^Error: PHASE48_STAGING_PARITY_REFUSED$/,
+    );
+    assert.equal(phases.at(-1), "before_registry");
+    assert.equal(calls.filter((c) => c.args[1] === "deploy").length, 0);
+  }
 });
 for (const field of [
   "wrongSha",
