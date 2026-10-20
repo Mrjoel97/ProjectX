@@ -1,0 +1,103 @@
+{
+  "schema": "phase23-live-handoff.v1",
+  "deploymentHash": "1b4ca7c2bdfccb0fb4c242a9e54069c44ee2adce098014acb64dbed12490c933",
+  "suite": {
+    "revision": "2026-09-11.budgeted-evaluator.1724732bc7d73e8f907ce53184186129e7e6a93e71d5fa3de7201f79fefb7cd3",
+    "sha256": "5794b8b0a9716d76bb3cab9f513f251994ad832eaf87d443cef4b3787db6f4fa",
+    "caseCount": 46
+  },
+  "candidate": {
+    "id": "qn73f3q6zcs1fsjpm9x2vwykc58gm09j",
+    "tenantId": "pn70yzs016xgrvzd6bqkaedj098gmytz",
+    "name": "offer-architect",
+    "version": 2,
+    "bodyHash": "4ec9235c1d0ccce418e54e2adcc2393aa2e778fb8d0968047053f6e5473c12e0",
+    "author": "agent",
+    "authorAgentId": "executive-agent",
+    "sourceThreadId": "m57egf5rjkbqhbyzdknjhmvybn8gnh4r",
+    "sourceTurnId": "ef216dab-8702-4201-a328-68881f3c86fa",
+    "lineage": {
+      "basedOnGlobalSkillId": "nx77rsw6ktkpqt7dknmexyfnsx8c7bj6",
+      "basedOnName": "offer-architect",
+      "basedOnScope": "global",
+      "basedOnTenantSkillId": null,
+      "basedOnVersion": 1
+    },
+    "status": "candidate",
+    "rollbackEligible": false,
+    "evidenceState": "absent",
+    "gatePassed": false,
+    "ownerApproval": null
+  },
+  "rollbackBaseline": {
+    "author": "system",
+    "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+    "id": "qn7d7y1cwza0wntbvccmw4689x8gmcaa",
+    "name": "offer-architect",
+    "rollbackEligible": true,
+    "scope": "tenant",
+    "status": "archived",
+    "tenantId": "pn70yzs016xgrvzd6bqkaedj098gmytz",
+    "version": 1
+  },
+  "effectiveBefore": {
+    "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+    "id": "nx77rsw6ktkpqt7dknmexyfnsx8c7bj6",
+    "name": "offer-architect",
+    "scope": "global",
+    "status": "active",
+    "version": 1
+  },
+  "globalBefore": {
+    "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+    "id": "nx77rsw6ktkpqt7dknmexyfnsx8c7bj6",
+    "name": "offer-architect",
+    "scope": "global",
+    "status": "active",
+    "version": 1
+  },
+  "foreignBefore": {
+    "candidateIdVisible": false,
+    "effective": {
+      "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+      "id": "nx77rsw6ktkpqt7dknmexyfnsx8c7bj6",
+      "name": "offer-architect",
+      "scope": "global",
+      "status": "active",
+      "version": 1
+    },
+    "tenantId": "pn72x2hv0nct3mzdkcjtn6rrex8gn92j"
+  },
+  "authRefs": {
+    "primaryNativeOrigin": "http://127.0.0.1:3111",
+    "foreignNativeOrigin": "http://localhost:3111",
+    "primaryUserId": "pn70yzs016xgrvzd6bqkaedj098gmytz",
+    "foreignUserId": "pn72x2hv0nct3mzdkcjtn6rrex8gn92j"
+  },
+  "browser": {
+    "sourceThreadId": "m57egf5rjkbqhbyzdknjhmvybn8gnh4r",
+    "observedAt": 1792502359110,
+    "activityTool": "authorSkillCandidate",
+    "candidateCount": 1,
+    "authoringToolCalls": 1,
+    "authenticated": true,
+    "viewportCount": 2,
+    "nonOwnerBeforeBootstrap": true,
+    "foreignRemainedNonOwner": true,
+    "preEvalActivationDisabled": true,
+    "refusalBefore": {
+      "approvedPlanCount": 0,
+      "auditCount": 0,
+      "requestCount": 0,
+      "sha256": "7e435198852e0cdd9a940fbe0b0c2fbf7d50a487d23171826295e6dcac85dd90",
+      "toolGrantSha256": "7f8472093be0c056125c884efd44689a8aa133729624986daa063646f3ed92b1"
+    },
+    "refusalAfter": {
+      "approvedPlanCount": 0,
+      "auditCount": 0,
+      "requestCount": 0,
+      "sha256": "7e435198852e0cdd9a940fbe0b0c2fbf7d50a487d23171826295e6dcac85dd90",
+      "toolGrantSha256": "7f8472093be0c056125c884efd44689a8aa133729624986daa063646f3ed92b1"
+    }
+  }
+}

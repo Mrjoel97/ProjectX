@@ -58,14 +58,14 @@ created: 2026-08-12
 | 23-05-02 | 05 | 5 | SKILL-02 | truth table/rollback | backend `skills.test.ts` | ✅ | ⬜ pending |
 | 23-05-03 | 05 | 5 | SKILL-02 | tenant/owner UI | web `skillAuthoring.test.ts` + `tenantSkillReview.test.ts` + web typecheck | ✅ | ⬜ pending |
 | 23-05-04 | 05 | 5 | SKILL-02 | separation/mutation | backend + web focused + playbooks | ✅ | ⬜ pending |
-| 23-06-01 | 06 | 6 | SKILL-02 | two-auth/artifact/free gate | artifact-validator self-test + focused/full clean gates | ❌ W0/mixed | ⬜ pending |
-| 23-06-02 | 06 | 6 | SKILL-02 | browser-spend authorization | blocking exact-turn/model/budget checkpoint | manual | ⬜ pending |
-| 23-06-03 | 06 | 6 | SKILL-02 | authenticated browser | `playwright test e2e/agent-skill-authoring.spec.ts` | ❌ W0 | ⬜ pending |
-| 23-06-04 | 06 | 6 | SKILL-02 | artifact schema | Node validation of `23-LIVE-HANDOFF.json` | ❌ W0 | ⬜ pending |
+| 23-06-01 | 06 | 6 | SKILL-02 | two-auth/artifact/free gate | native exact A/B identity witnesses + validator controls + full exact-source CI39430449721 | ✅ | ✅ green2026-10-20 |
+| 23-06-02 | 06 | 6 | SKILL-02 | browser-spend authorization | verbatim “Approve staging alternative”;100cent/two-turn envelope closed with actual budget receipt | manual | ✅ green2026-10-20 |
+| 23-06-03 | 06 | 6 | SKILL-02 | authenticated browser | actual native A/B + measured1440x900/390x900 signed-in iframes, keyboard review and candidate-only turns; manual-native proof | ✅/manual | ✅ green2026-10-20 |
+| 23-06-04 | 06 | 6 | SKILL-02 | artifact schema | existing immutable writer/private-needle validation; exact23-LIVE-HANDOFF SHA112ce264…dc45 | ✅ | ✅ green2026-10-20 |
 | 23-07-01 | 07 | 7 | SKILL-02 | zero-spend recheck | exact handoff/auth inspectors + focused free gates | ✅/❌ W0 | ⬜ pending |
-| 23-07-02 | 07 | 7 | SKILL-02 | spend authorization | blocking exact eval+two-runtime-turn combined-cap checkpoint | manual | ⬜ pending |
-| 23-07-03 | 07 | 7 | SKILL-02 | paid held-out gate | exact full runner + candidate inspector | ✅ | ⬜ pending |
-| 23-07-04 | 07 | 7 | SKILL-02 | public non-owner refusal | B JWT public mutation + exact eval-result validation | ❌ W0 | ⬜ pending |
+| 23-07-02 | 07 | 7 | SKILL-02 | spend authorization | fresh exact-row full unfiltered eval cap checkpoint only; no additional runtime-attribution turn | manual | ⬜ pending |
+| 23-07-03 | 07 | 7 | SKILL-02 | paid held-out gate | exact full unfiltered runner on literal handoff candidate id + candidate inspector | ✅ | ⬜ pending |
+| 23-07-04 | 07 | 7 | SKILL-02 | public non-owner refusal | fresh native authenticated B app/client public mutation without token extraction + exact eval-result validation | ✅/manual | ⬜ pending |
 | 23-08-01 | 08 | 8 | SKILL-02 | immutable recheck | handoff+eval validators, state/auth/cap comparison | ✅/❌ W0 | ⬜ pending |
 | 23-08-02 | 08 | 8 | SKILL-02 | owner UI activation | blocking owner human-action + exact readback | manual | ⬜ pending |
 | 23-08-03 | 08 | 8 | SKILL-02 | paid runtime/isolation | exactly one A + one B turn under remaining cap | ✅ | ⬜ pending |
@@ -80,10 +80,10 @@ created: 2026-08-12
 
 - [ ] `packages/backend/scripts/eval-suite-manifest.json` — exact current suite revision/id/hash/count identity (23-04).
 - [ ] `packages/backend/scripts/eval-cases/40-agent-author-happy.json` through `44-agent-author-retry.json` — held-out authoring corpus (23-04; use next stable ids if prerequisite numbering differs).
-- [ ] `apps/web/e2e/agent-skill-authoring.spec.ts` — authenticated explicit-authoring/adversarial/owner/non-owner proof (23-06).
-- [ ] `e2e/.auth/foreign.json` — second controlled non-owner storage state, gitignored and created only by auth setup (23-06).
-- [ ] `.planning/phases/23-agent-authored-skills/validate-live-artifact.mjs` + self-test — phase-local exact recursive closed schemas and value/privacy scan (23-06).
-- [ ] `.planning/phases/23-agent-authored-skills/23-LIVE-HANDOFF.json` — generated only after browser/free gates (23-06).
+- [x] `apps/web/e2e/agent-skill-authoring.spec.ts` — freely qualified harness; actual23-06 used recorded native sessions/two turns/manual responsive proof, not an invented Playwright run.
+- [x] Closed native-origin authRefs alternative — actual distinct A127.0.0.1:3111/Blocalhost:3111 witnesses; legacy storage-file refs remain supported only with actual exports. No export was invented for23-06.
+- [x] `.planning/phases/23-agent-authored-skills/validate-live-artifact.mjs` + self-test — exact closed schemas/value/privacy scan qualified; root validated actual handoff with private needle.
+- [x] `.planning/phases/23-agent-authored-skills/23-LIVE-HANDOFF.json` — written once after actual browser/full free gates; SHA112ce264…dc45.
 - [ ] `.planning/phases/23-agent-authored-skills/23-EVAL-RESULT.json` — generated only after the exact full eval and B refusal (23-07).
 - [ ] `.planning/phases/23-agent-authored-skills/23-LIVE-RESULT.json` — generated only after owner activation/runtime/rollback (23-08).
 
@@ -168,5 +168,13 @@ record the red, restore byte-identically, rerun green.
 - [x] Paid work is isolated behind fresh authorization after immutable handoff revalidation.
 - [x] `nyquist_compliant: true` set in frontmatter.
 
-**Approval:** ready for plan-checker verification; execution remains blocked until Phase 21 is
-live-closed and Phase 22 verification is passed with GOVN-01 closed.
+**Current disposition2026-10-20:** Phase21 remains accepted and Phase22/GOVN-01 closed.
+Only23-06rows above are newly green: fullCI39430449721 and immutable handoff
+`112ce2643ae15d4b2c39961b09506223bf0d6fe9978993dfe9536cee2dcbdc45` bind the actual
+native pair, two bounded turns, measured responsive/keyboard proof and closed budget observation.
+See23-06-SUMMARY and Phase48's23-06completion receipt. Desktop-browser responsive evidence
+is not touch/mobile-device testing; snapshots are not actual prompt-load attribution.
+23-07/08/09 and SKILL-02/Phase23/48 remain open; Phase49 has not started.23-07 follows the
+October19native-session reconciliation: fresh exact-row full unfiltered eval authorization,
+no extra runtime-attribution probe, then real native B public OWNER_REQUIRED refusal without JWT
+extraction/replay. No evaluation, activation or final closure is certified by23-06 completion.

@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { probeReadback, requestedCap } from "../apps/web/e2e/phase23ProbeControls.ts";
+import { runInNewContext } from "node:vm";
+import {
+  candidateInspectionArgs,
+  inspectionTarget,
+  probeReadback,
+  requestedCap,
+} from "../apps/web/e2e/phase23ProbeControls.ts";
 
 const expected = {
   tenantId: "tenant-a",
@@ -32,6 +38,104 @@ const budget = {
   actualUsd: 0.01,
 };
 const read = (p = probe, b = budget) => probeReadback(p, b, expected, 2, false, 1000);
+
+test("the actual browser inspector argv satisfies the evaluator's equals-only expectation parser", () => {
+  const source = readFileSync(
+    new URL("../packages/backend/scripts/run-eval-golden.mjs", import.meta.url),
+    "utf8",
+  );
+  // Execute only existing pure parser definitions, never the evaluator entry point.
+  const definition = (name) => {
+    const begin = source.indexOf(`function ${name}(`);
+    const end = source.indexOf("\n}", begin);
+    assert.ok(begin >= 0 && end > begin);
+    return source.slice(begin, end + 2);
+  };
+  const constants = source.slice(
+    source.indexOf("const EXPECT_FLAGS ="),
+    source.indexOf("function parseInspectArgs("),
+  );
+  const parse = runInNewContext(
+    [
+      definition("parseTenantSkillId"),
+      definition("valueFlag"),
+      definition("spacedOrEqualsValue"),
+      constants,
+      definition("parseInspectArgs"),
+      "parseInspectArgs",
+    ].join("\n"),
+    {},
+    { timeout: 1000 },
+  );
+  const args = candidateInspectionArgs("candidate1", "foreign2");
+  const parsed = JSON.parse(JSON.stringify(parse(args)));
+  assert.deepEqual(parsed, {
+    candidateId: "candidate1",
+    foreignTenantId: "foreign2",
+    json: true,
+    expectations: {
+      status: "candidate",
+      evidenceState: "absent",
+      gatePassed: "false",
+      rollbackEligible: "false",
+    },
+  });
+  assert.throws(
+    () =>
+      parse([
+        ...args.filter((arg) => arg !== "--expect-status=candidate"),
+        "--expect-status",
+        "candidate",
+      ]),
+    /requires a value/,
+  );
+  assert.throws(
+    () =>
+      parse(
+        args.map((arg) =>
+          arg === "--expect-gate-passed=false" ? "--expect-gate-passed=invalid" : arg,
+        ),
+      ),
+    /true\|false/,
+  );
+  assert.throws(() => parse([...args, "--skill", "cockpit-agent@1"]), /read-only/);
+  const harness = readFileSync(
+    new URL("../apps/web/e2e/agent-skill-authoring.spec.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(harness, /const exactArgs = candidateInspectionArgs\(candidateId, foreignId\)/);
+});
+
+test("inspection metadata is explicit and canonical; no deployment-selector or disk fallback exists", () => {
+  const env = {
+    PIKAR_CONVEX_TARGET: "dev",
+    CONVEX_URL: "https://woozy-wren-368.convex.cloud",
+    CONVEX_DEPLOYMENT: "dev:conflicting-disk-target",
+  };
+  assert.deepEqual(inspectionTarget(env), {
+    url: env.CONVEX_URL,
+    dashboard: "https://dashboard.convex.dev/d/woozy-wren-368",
+  });
+  for (const url of [
+    undefined,
+    "",
+    "http://woozy-wren-368.convex.cloud",
+    "https://woozy-wren-368.convex.cloud/",
+    "https://user:private@woozy-wren-368.convex.cloud",
+    "https://woozy-wren-368.convex.cloud?private",
+    "https://woozy-wren-368.convex.cloud#private",
+    "https://woozy-wren-368.convex.site",
+  ])
+    assert.throws(
+      () => inspectionTarget({ ...env, CONVEX_URL: url }),
+      /EXPLICIT_INSPECTION_URL_REQUIRED/,
+    );
+  for (const target of [undefined, "", "preview", "DEV"])
+    assert.throws(
+      () => inspectionTarget({ ...env, PIKAR_CONVEX_TARGET: target }),
+      /INSPECTION_TARGET_REQUIRED/,
+    );
+});
 
 test("an explicit aggregate cap is required and native maximum remains 1000 cents", () => {
   assert.equal(requestedCap("100"), 100);
@@ -87,6 +191,21 @@ test("ordinary browser turns use the registered thread and close its budget befo
   assert.equal((source.match(/await say\(/g) ?? []).length, 2);
   assert.equal((source.match(/query\("authoringProbe:prepare"/g) ?? []).length, 1);
   assert.equal((source.match(/await openProbe\(page, probe\)/g) ?? []).length, 2);
+  const openProbe = source.slice(
+    source.indexOf("async function openProbe("),
+    source.indexOf("async function say("),
+  );
+  assert.ok(openProbe.indexOf("verifyInspectionTarget();") >= 0);
+  assert.ok(openProbe.indexOf("verifyInspectionTarget();") < openProbe.indexOf("await page.goto("));
+  const ownerGuard = source.indexOf(
+    "verifyInspectionTarget();",
+    source.indexOf("let previousAttempt:"),
+  );
+  assert.ok(ownerGuard >= 0 && ownerGuard < source.indexOf('query("owner:bootstrapOwner"'));
+  assert.match(
+    source,
+    /verifyInspectionTarget\(\);\s+const prepared = query\("authoringProbe:prepare"/,
+  );
   assert.ok(
     source.indexOf("readProbe(probe, 2, true)") <
       source.indexOf("validator.writeImmutableArtifact"),

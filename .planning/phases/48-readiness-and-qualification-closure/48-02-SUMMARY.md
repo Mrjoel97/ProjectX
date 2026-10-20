@@ -258,4 +258,71 @@ occurred. Registry provenance and prompt-load attribution limits remain unchange
 release/parity or current-suite semantic pass is claimed. Phase23/48-02 stay partial, Phase21
 remains accepted and Phase49 has not started.
 
-New authoring requires its own exact fresh authorization, a new bounded envelope and fresh native controlled sessions; no old envelope or undocumented receipt grants that work. The prepared scope is one inert `offer-architect` adaptation plus one escalation/refusal turn, maximum100cents aggregate and no full evaluation or activation. Exact-row paid evaluation and actual owner activation/rollback remain separate later checkpoints. Missing configuration/credentials and historical private receipts must not be replaced by fabricated readiness. Phase23 and48-02 remain open; Phase49 has not started.
+### October20 corrected parity, native pair and bounded authoring observation
+
+Final corrected read-only run`39420426683`, job`118619711072`, used source
+`f382c7316b63e118e7080c49681e61853d9712d3` and successful CI`39419822599`. It returned
+zero structured changes and parity=true after recognizing only the exact empty Node advisory.
+Configuration/registry/protected-retention hashes and standard/free/0 billing remain verified.
+`48-STAGING-PREFLIGHT-FINAL-2026-10-20.json` preserves its exact sanitized bytes, SHA256
+`12c96727cd556b2555111ee4ddf32a6cea5f44386caa45cd5127b005e7ae6eca`. This later read-only
+proof does not overwrite the historical failed release or imply another apply.
+
+Both new native password accounts are verified. A is`pn70yzs016xgrvzd6bqkaedj098gmytz`;
+B is`pn72x2hv0nct3mzdkcjtn6rrex8gn92j`. Initial profile receipts show exactly one synthetic
+`onboarding-harness-v1` profile and ready business-profile document each, no RAG entry and no
+rows in the six checked connector/plan/request/spend/skill tables. Setup requested zero model
+calls and does not certify real onboarding/grounding. Native A_NON_OWNER_MATCH/B_IDENTITY_MATCH
+preceded the one-time A grant; actual grant result changed=true and post-reads show A owner,
+B non-owner. `48-STAGING-NATIVE-PAIR-2026-10-20.json` binds these refs and private-source hashes.
+
+The approved two-turn probe ran on thread`m57egf5rjkbqhbyzdknjhmvybn8gnh4r`, envelope
+`p571bfke7xwxw9hsmxcpbw0khs8gn1jk`. One agent-authored offer-architect v2 candidate was created:
+`qn73f3q6zcs1fsjpm9x2vwykc58gm09j`, body hash
+`4ec9235c1d0ccce418e54e2adcc2393aa2e778fb8d0968047053f6e5473c12e0`.
+It remains candidate-only, with absent evaluation evidence/owner approval and rollbackEligible=false.
+The second escalation/refusal turn did not create another candidate or change activation/grants.
+Native B excludes the candidate; A's review control was disabled and keyboard-observed.
+
+Actual closed budget: two started/two finished turns, zero failed/containment refusals,
+three settled provider calls, total`$0.00322965`, zero unsettled calls/unresolved cents or breach,
+closed=true under the100cent cap. `48-STAGING-AUTHORING-PROBE-2026-10-20.json` binds exact
+candidate/source/budget refs and all named turn/closure/global-baseline receipt hashes. Registry
+and protected retention match their actual pre/post hashes. This is an observation, not a
+certified Phase23 artifact; counters alone do not establish policy acceptance or actual loaded body.
+
+The initial CUA requested1440/390viewports left the top window at1280. Those requested-label
+witnesses are excluded from responsive acceptance; originals remain preserved and private
+viewport-attempt-invalidation.json explicitly names their actual replacements. Subsequent actual-desktop-review-witness.json and
+actual-mobile-review-witness.json use a local read-only port3112 harness with the real signed-in
+`http://127.0.0.1:3111/ops` app in fixed-size iframes. Frame DOM measured1440x900 and390x900;
+keyboard Enter review open/close, the exact candidate, executive provenance and disabled
+pre-evaluation activation were observed at both sizes; compact navigation was observed at390.
+`48-STAGING-RESPONSIVE-2026-10-20.json` binds only these two actual witness hashes.
+This completes free desktop-browser responsive layout proof, not actual mobile-device/touch
+testing. The historical probe observation's earlier responsive=false flag remains unchanged.
+Root subsequently completed full CI and wrote/validated the immutable23-LIVE-HANDOFF;23-06
+completion is recorded below. This documentation pass never overwrites handoff bytes. Exact-row paid evaluation, actual owner
+activation/rollback and23-09 closure remain separate checkpoints. Production's original $1scope
+is unused; SKILL-02/Phase23/48-02 remain open and Phase49 has not started.
+
+### October20 plan23-06 complete; next exact-row evaluation checkpoint
+
+Full exact-source CI`39430449721`, job`118653817153`, passed Typecheck/Lint/Free gates/Test/
+Operator controls/Planning/Build for`79c07bd595500a7043719ecd4bfc34123095cb93`.
+Root then wrote the immutable`../23-agent-authored-skills/23-LIVE-HANDOFF.json` once through
+the existing writer and private-needle validator. Exact bytes SHA256:
+`112ce2643ae15d4b2c39961b09506223bf0d6fe9978993dfe9536cee2dcbdc45`.
+It freezes the actual parked candidate/native origins/IDs, suite/source/lineage, rollback and
+effective/global/foreign/refusal state. The separate actual closed-budget observation remains
+`48-STAGING-AUTHORING-PROBE-2026-10-20.json`, whose hashes bind private`probe-closed.json`;
+no fictional Playwright budget attachment or auth-state export is created.
+
+`48-STAGING-23-06-COMPLETION-2026-10-20.json` binds that handoff, new full CI, exact closed
+budget receipt, public observation hashes and the private viewport invalidation hash. Earlier
+partial receipts remain unchanged, including their then-pending flags. Plan23-06 is complete;
+421of477plans are complete and Phase23 is6/9.23-07/08/09 remain open. The next23-07checkpoint
+is fresh authorization for the literal handoff candidate's full unfiltered46-case evaluation
+only, followed by actual native B public OWNER_REQUIRED refusal without credential extraction.
+It adds no runtime-attribution turn. Activation/runtime/rollback retain23-08's separate checkpoint.
+No evaluation or activation occurred; SKILL-02/Phase23/48-02 remain open and Phase49 has not started.

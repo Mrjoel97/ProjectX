@@ -7,6 +7,31 @@ export type ProbeExpectation = {
   capCents: number;
 };
 type NativeRecord = Record<string, unknown>;
+/** The evaluator deliberately accepts equals syntax for small-vocabulary expectations. */
+export function candidateInspectionArgs(candidateId: string, foreignId: string): string[] {
+  return [
+    "--inspect-tenant-skill",
+    candidateId,
+    "--foreign-tenant",
+    foreignId,
+    "--expect-status=candidate",
+    "--expect-evidence=absent",
+    "--expect-gate-passed=false",
+    "--expect-rollback-eligible=false",
+    "--json",
+  ];
+}
+
+/** Explicit metadata only: routing must additionally match the actual read-only CLI dashboard. */
+export function inspectionTarget(env: Record<string, string | undefined>) {
+  demand(["dev", "prod"].includes(env.PIKAR_CONVEX_TARGET ?? ""), "INSPECTION_TARGET_REQUIRED");
+  const match = /^https:\/\/([a-z][a-z0-9]*(?:-[a-z0-9]+)*)\.convex\.cloud$/.exec(
+    env.CONVEX_URL ?? "",
+  );
+  demand(match, "EXPLICIT_INSPECTION_URL_REQUIRED");
+  return { url: env.CONVEX_URL as string, dashboard: `https://dashboard.convex.dev/d/${match[1]}` };
+}
+
 function demand(condition: unknown, code: string): asserts condition {
   if (!condition) throw new Error(`PHASE23_${code}`);
 }

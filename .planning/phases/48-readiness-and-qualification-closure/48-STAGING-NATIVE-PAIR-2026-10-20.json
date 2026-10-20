@@ -1,0 +1,93 @@
+{
+  "schema": "phase48-staging-native-pair-readiness.v1",
+  "phase23CertifiedArtifact": false,
+  "target": "woozy-wren-368",
+  "sourceSha": "f382c7316b63e118e7080c49681e61853d9712d3",
+  "ciRunId": "39419822599",
+  "authorizationSha256": "50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19",
+  "primary": {
+    "tenantId": "pn70yzs016xgrvzd6bqkaedj098gmytz",
+    "origin": "http://127.0.0.1:3111",
+    "verificationObserved": true,
+    "before": "A_NON_OWNER_MATCH",
+    "after": "A_IDENTITY_MATCH"
+  },
+  "foreign": {
+    "tenantId": "pn72x2hv0nct3mzdkcjtn6rrex8gn92j",
+    "origin": "http://localhost:3111",
+    "verificationObserved": true,
+    "before": "B_IDENTITY_MATCH",
+    "after": "B_IDENTITY_MATCH"
+  },
+  "nonOwnerBeforeBootstrap": true,
+  "aOnlyGrantChanged": true,
+  "initialSyntheticProfiles": [
+    {
+      "role": "A",
+      "observedAt": "2026-10-20T12:50:33.518Z",
+      "tenantId": "pn70yzs016xgrvzd6bqkaedj098gmytz",
+      "profileId": "ph7esb3xdqmxscegpf32ke0ct18gmpvz",
+      "qualificationFixture": "onboarding-harness-v1",
+      "documentId": "ps7dspr4trar00sa0zvvpjc7698gmvez",
+      "hasRagEntry": false,
+      "otherTableRowsPresent": {
+        "bufferConnections": false,
+        "plans": false,
+        "requests": false,
+        "spendEvents": false,
+        "tenantSkills": false,
+        "zernioConnections": false
+      }
+    },
+    {
+      "role": "B",
+      "observedAt": "2026-10-20T12:50:39.355Z",
+      "tenantId": "pn72x2hv0nct3mzdkcjtn6rrex8gn92j",
+      "profileId": "ph778f4187qrfzv22b8yffxqk98gn010",
+      "qualificationFixture": "onboarding-harness-v1",
+      "documentId": "ps71gky2k499kx8gdm7y8h2zj18gms2y",
+      "hasRagEntry": false,
+      "otherTableRowsPresent": {
+        "bufferConnections": false,
+        "plans": false,
+        "requests": false,
+        "spendEvents": false,
+        "tenantSkills": false,
+        "zernioConnections": false
+      }
+    }
+  ],
+  "setupModelCallsRequested": 0,
+  "nativeOnboardingCertified": false,
+  "initialAuthoringRowCount": 0,
+  "sources": [
+    {
+      "file": "profile-A-result.json",
+      "sha256": "50af0de6497df36c5da035724665fd35de9ac0d41bf4eece31a83c6721558567"
+    },
+    {
+      "file": "profile-B-result.json",
+      "sha256": "b69d0a832b8cf10030606ac9331d0c36245a9abe8f9d8d441bd8df6e511e4b92"
+    },
+    {
+      "file": "native-nonowner-witnesses.json",
+      "sha256": "efcae5547a2a3951f2ce5d18ec1a652b45f61017cd702033804046fdd0251f91"
+    },
+    {
+      "file": "native-owner-witnesses.json",
+      "sha256": "c31db80a221f0e943b2ee9bee8bc19ff84e5d6d54d68df0fc5a68d75c30bfee7"
+    },
+    {
+      "file": "owner-A-result.json",
+      "sha256": "eecd76ce1a720c2682965becbd319e120865fe66ae4ce7856aa592869d091d67"
+    },
+    {
+      "file": "authoring-prior.json",
+      "sha256": "1586882e5e1ccc5544a8a44acb92e278d4884c9baf407c8df28308a651bba20b"
+    },
+    {
+      "file": "executive-global-before.json",
+      "sha256": "1d795c38f827eeb570b81d3ce4ebd6d3c7c20701c78079492b447bd5a883935c"
+    }
+  ]
+}

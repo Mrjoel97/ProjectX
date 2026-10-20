@@ -1,0 +1,107 @@
+{
+  "schema": "phase48-staging-authoring-observation.v1",
+  "phase23CertifiedArtifact": false,
+  "observedAt": "2026-10-20T13:13:22.883Z",
+  "target": "woozy-wren-368",
+  "sourceSha": "f382c7316b63e118e7080c49681e61853d9712d3",
+  "ciRunId": "39419822599",
+  "tenantId": "pn70yzs016xgrvzd6bqkaedj098gmytz",
+  "foreignTenantId": "pn72x2hv0nct3mzdkcjtn6rrex8gn92j",
+  "threadId": "m57egf5rjkbqhbyzdknjhmvybn8gnh4r",
+  "budgetId": "p571bfke7xwxw9hsmxcpbw0khs8gn1jk",
+  "authorizationSha256": "50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19",
+  "capCents": 100,
+  "started": 2,
+  "finished": 2,
+  "failed": 0,
+  "containmentRefusals": 0,
+  "actualUsd": 0.00322965,
+  "callCount": 3,
+  "settledCount": 3,
+  "unsettledCount": 0,
+  "unresolvedCents": 0,
+  "breached": false,
+  "closed": true,
+  "candidate": {
+    "author": "agent",
+    "authorUserId": null,
+    "bodyHash": "4ec9235c1d0ccce418e54e2adcc2393aa2e778fb8d0968047053f6e5473c12e0",
+    "evidenceState": "absent",
+    "evidenceSummary": null,
+    "evidenceTarget": null,
+    "gatePassed": false,
+    "id": "qn73f3q6zcs1fsjpm9x2vwykc58gm09j",
+    "lineage": {
+      "basedOnGlobalSkillId": "nx77rsw6ktkpqt7dknmexyfnsx8c7bj6",
+      "basedOnName": "offer-architect",
+      "basedOnScope": "global",
+      "basedOnTenantSkillId": null,
+      "basedOnVersion": 1
+    },
+    "name": "offer-architect",
+    "packGateMissing": null,
+    "packGatePassed": null,
+    "rollbackEligible": false,
+    "status": "candidate",
+    "tenantId": "pn70yzs016xgrvzd6bqkaedj098gmytz",
+    "version": 2
+  },
+  "globalCurrent": {
+    "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+    "id": "nx77rsw6ktkpqt7dknmexyfnsx8c7bj6",
+    "name": "offer-architect",
+    "scope": "global",
+    "status": "active",
+    "version": 1
+  },
+  "foreignCandidateVisible": false,
+  "foreignEffective": {
+    "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+    "id": "nx77rsw6ktkpqt7dknmexyfnsx8c7bj6",
+    "name": "offer-architect",
+    "scope": "global",
+    "status": "active",
+    "version": 1
+  },
+  "rollbackBaseline": {
+    "author": "system",
+    "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+    "id": "qn7d7y1cwza0wntbvccmw4689x8gmcaa",
+    "name": "offer-architect",
+    "rollbackEligible": true,
+    "scope": "tenant",
+    "status": "archived",
+    "tenantId": "pn70yzs016xgrvzd6bqkaedj098gmytz",
+    "version": 1
+  },
+  "registryPreserved": true,
+  "registrySha256": "faac155d8c90d9205f2aa95072a520e50e727964974e64a6f62676bea73480e3",
+  "protectedRetentionPreserved": true,
+  "protectedRetentionSha256": "2ecc1945e018a9af66614a2dfceb8a71209f8b480c8015e73eed9b08d9590163",
+  "actualLoadedBodyAttributionEstablished": false,
+  "policyAcceptanceEstablished": false,
+  "responsiveBrowserAcceptanceCertified": false,
+  "immutableHandoffWritten": false,
+  "sources": [
+    {
+      "file": "probe-turn1-inspection.json",
+      "sha256": "a630c1c403419b61aa311e31f783750b2f80cda681ba763f38318d566a50be92"
+    },
+    {
+      "file": "probe-turn2-inspection.json",
+      "sha256": "614570fa579a2421e28ee952b6590d0cce942ca4d29f80b2b4d89ce60ed5010c"
+    },
+    {
+      "file": "probe-closed.json",
+      "sha256": "a3ff8d6fef7ad87cef99e763d94441a15bb8b7bd3ad1f6f9e11dd6e0d0dd7873"
+    },
+    {
+      "file": "executive-global-before.json",
+      "sha256": "1d795c38f827eeb570b81d3ce4ebd6d3c7c20701c78079492b447bd5a883935c"
+    },
+    {
+      "file": "executive-global-after.json",
+      "sha256": "38afae7c683af3697f016e4df24ee8353ffdb1e69671e4cadec6eec79a58e44b"
+    }
+  ]
+}

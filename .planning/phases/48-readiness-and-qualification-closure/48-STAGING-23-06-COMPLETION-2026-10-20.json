@@ -1,0 +1,121 @@
+{
+  "schema": "phase48-plan23-06-completion.v1",
+  "plan": "23-06",
+  "status": "complete",
+  "requirement": "SKILL-02",
+  "requirementComplete": false,
+  "phase23Complete": false,
+  "phase48Complete": false,
+  "target": "woozy-wren-368",
+  "scopeAnswerVerbatim": "Approve staging alternative",
+  "scopeAuthorizationSha256": "50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19",
+  "qualificationCi": {
+    "sourceSha": "79c07bd595500a7043719ecd4bfc34123095cb93",
+    "runId": "39430449721",
+    "jobId": "118653817153",
+    "passed": true,
+    "gates": [
+      "Typecheck",
+      "Lint",
+      "Free gates",
+      "Test",
+      "Operator controls",
+      "Planning",
+      "Build"
+    ]
+  },
+  "handoff": {
+    "path": ".planning/phases/23-agent-authored-skills/23-LIVE-HANDOFF.json",
+    "sha256": "112ce2643ae15d4b2c39961b09506223bf0d6fe9978993dfe9536cee2dcbdc45",
+    "immutableWriterObserved": true,
+    "privateNeedleValidationObservedByRoot": true
+  },
+  "candidate": {
+    "id": "qn73f3q6zcs1fsjpm9x2vwykc58gm09j",
+    "tenantId": "pn70yzs016xgrvzd6bqkaedj098gmytz",
+    "name": "offer-architect",
+    "version": 2,
+    "bodyHash": "4ec9235c1d0ccce418e54e2adcc2393aa2e778fb8d0968047053f6e5473c12e0",
+    "status": "candidate"
+  },
+  "budgetReceipt": {
+    "target": "woozy-wren-368",
+    "tenantId": "pn70yzs016xgrvzd6bqkaedj098gmytz",
+    "budgetId": "p571bfke7xwxw9hsmxcpbw0khs8gn1jk",
+    "threadId": "m57egf5rjkbqhbyzdknjhmvybn8gnh4r",
+    "capCents": 100,
+    "authorizationSha256": "50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19",
+    "expiresAt": 1792504798361,
+    "started": 2,
+    "finished": 2,
+    "failed": 0,
+    "containmentRefusals": 0,
+    "closed": true,
+    "actualUsd": 0.00322965,
+    "callCount": 3,
+    "settledCount": 3,
+    "unsettledCount": 0,
+    "policyAcceptanceEstablished": false
+  },
+  "budgetSource": {
+    "file": "probe-closed.json",
+    "sha256": "a3ff8d6fef7ad87cef99e763d94441a15bb8b7bd3ad1f6f9e11dd6e0d0dd7873"
+  },
+  "viewportInvalidation": {
+    "observedAt": "2026-10-20T13:20:42.310Z",
+    "invalidated": [
+      "desktop-review-witness.json",
+      "mobile-review-witness.json"
+    ],
+    "reason": "Requested top-level viewport override did not change measured actual1280x720 viewport; requested dimensions are not responsive proof",
+    "replacement": [
+      "actual-desktop-review-witness.json",
+      "actual-mobile-review-witness.json"
+    ],
+    "technique": "real authenticated app iframe with measured native frame dimensions; no app DOM/CSS/behavior modification",
+    "actualMobileDeviceTested": false,
+    "source": {
+      "file": "viewport-attempt-invalidation.json",
+      "sha256": "aa3d584eaefbee82bce736eecdae12aa012dba4d0a1f0bb65f1741c498cf75a0"
+    }
+  },
+  "responsiveMethod": {
+    "localReadOnlyHarnessPort": 3112,
+    "appOrigin": "http://127.0.0.1:3111",
+    "appRoute": "/ops",
+    "actualFrameSizes": [
+      [
+        1440,
+        900
+      ],
+      [
+        390,
+        900
+      ]
+    ],
+    "desktopBrowserResponsiveLayoutOnly": true,
+    "actualMobileDeviceTested": false,
+    "touchInputTested": false
+  },
+  "actualLoadedBodyAttributionEstablished": false,
+  "fullCandidateEvaluationPerformed": false,
+  "candidateActivationPerformed": false,
+  "observations": [
+    {
+      "path": ".planning/phases/48-readiness-and-qualification-closure/48-STAGING-PREFLIGHT-FINAL-2026-10-20.json",
+      "sha256": "12c96727cd556b2555111ee4ddf32a6cea5f44386caa45cd5127b005e7ae6eca"
+    },
+    {
+      "path": ".planning/phases/48-readiness-and-qualification-closure/48-STAGING-NATIVE-PAIR-2026-10-20.json",
+      "sha256": "5c4c5f8947026d464053918b51dbe281c9fc623f95b5323da63e621044c27678"
+    },
+    {
+      "path": ".planning/phases/48-readiness-and-qualification-closure/48-STAGING-AUTHORING-PROBE-2026-10-20.json",
+      "sha256": "44c1e95daaba46be058d8cb9aca0848075676d7da92577d6a458279270ed9afa"
+    },
+    {
+      "path": ".planning/phases/48-readiness-and-qualification-closure/48-STAGING-RESPONSIVE-2026-10-20.json",
+      "sha256": "fda44957a0a05655da7f30bb47b8430bee34a53ec33ee0519835796c7b55c96e"
+    }
+  ]
+}

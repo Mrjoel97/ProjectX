@@ -1,0 +1,47 @@
+{
+  "schema": "phase48-staging-responsive-observation.v1",
+  "phase23CertifiedArtifact": false,
+  "target": "woozy-wren-368",
+  "candidateId": "qn73f3q6zcs1fsjpm9x2vwykc58gm09j",
+  "localReadOnlyHarnessPort": 3112,
+  "appRoute": "/ops",
+  "measuredFixedSizeIframe": true,
+  "desktopBrowserResponsiveLayoutOnly": true,
+  "actualMobileDeviceTested": false,
+  "touchInputTested": false,
+  "desktop": {
+    "observedAt": "2026-10-20T13:18:35.739Z",
+    "technique": "native signed-in app in fixed-size iframe; desktop browser responsive layout only",
+    "width": 1440,
+    "height": 900,
+    "appOrigin": "http://127.0.0.1:3111",
+    "keyboardExpanded": true,
+    "candidateVisible": true,
+    "activationDisabled": true,
+    "provenanceVisible": true
+  },
+  "compact": {
+    "observedAt": "2026-10-20T13:19:19.110Z",
+    "technique": "native signed-in app in fixed-size iframe; desktop browser responsive layout only",
+    "width": 390,
+    "height": 900,
+    "appOrigin": "http://127.0.0.1:3111",
+    "keyboardExpanded": true,
+    "candidateVisible": true,
+    "activationDisabled": true,
+    "provenanceVisible": true,
+    "compactNavigation": true
+  },
+  "earlierRequestedViewportLabelsAccepted": false,
+  "immutableHandoffWritten": false,
+  "sources": [
+    {
+      "file": "actual-desktop-review-witness.json",
+      "sha256": "840379ea65b8197abe4001a7c58bcb79ee0c23ddb1d08c71a29480ecbc23ad07"
+    },
+    {
+      "file": "actual-mobile-review-witness.json",
+      "sha256": "f61161f654b15a6d77150d206d71ec8ee15f7931cff95d216b6d0ea887c03e02"
+    }
+  ]
+}
