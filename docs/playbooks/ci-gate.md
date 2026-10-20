@@ -433,3 +433,5 @@ provider acceptance still require verification.
 - **A local pass is not the merge verdict.** The four gate commands were verified locally on
   2026-08-04, but every pushed change still requires its own successful GitHub Actions run before
   the gate can be called green for that commit.
+> Last verified: 2026-10-20 — The exact PR79 handoff refresh observation is exempt from text normalization because its immutable SHA-256 was computed over its original Windows line endings. The path-specific Git attribute preserves those bytes across commit/checkout; other text normalization is unchanged. Its committed bytes must match the recorded `6b86ddbe2ad61dc4f331024a0e08b3fdb3420c0771bdbb28a5a38c3161cc31c8` hash. The handoff itself remains canonical LF. This evidence-storage correction changes no evaluator, runtime, deployment or paid authorization.
+
