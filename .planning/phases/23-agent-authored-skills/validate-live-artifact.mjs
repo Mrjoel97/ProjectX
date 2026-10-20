@@ -11,6 +11,12 @@ const literal = (expected) => (v) => check(v === expected);
 const oneOf = (...values) => (v) => check(values.includes(v));
 const string = (pattern) => (v) => check(typeof v === "string" && pattern.test(v));
 const ref = string(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/);
+// Preserve legacy model refs and the actual code-owned OpenRouter route verbatim. This is
+// model metadata only: general refs must not start accepting paths or arbitrary URLs.
+const modelId = (v) => {
+  check(typeof v === "string" && v.length <= 160 && !/\s/.test(v));
+  check(/^(?:[A-Za-z0-9][A-Za-z0-9_.:-]*|or\/[a-z0-9][a-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9_.:-]*)$/.test(v));
+};
 const hash = string(/^[a-f0-9]{64}$/);
 const count = (v) => check(Number.isSafeInteger(v) && v >= 0);
 const positive = (v) => { count(v); check(v > 0); };
@@ -49,7 +55,7 @@ const candidate = (stage) => exact({ ...candidateFields,
   ownerApproval: stage === "active" || stage === "rollback" ? approval : literal(null),
 });
 const state = exact({ sha256: hash, auditCount: count, requestCount: count, approvedPlanCount: count, toolGrantSha256: hash });
-const evalRun = exact({ runId: ref, passed: positive, total: positive, retries: count, model: ref, costUsd: money, costCapUsd: money, authorizationSha256: hash });
+const evalRun = exact({ runId: ref, passed: positive, total: positive, retries: count, model: modelId, costUsd: money, costCapUsd: money, authorizationSha256: hash });
 // A manual native journey may use two independent local origins without exporting auth state.
 // Keep the old exact file-label shape and this exact origin pair mutually exclusive; arbitrary
 // URLs, mixed witnesses and claimed storage files that were never produced are not admitted.

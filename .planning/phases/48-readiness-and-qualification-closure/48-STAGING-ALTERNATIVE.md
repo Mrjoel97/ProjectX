@@ -1,7 +1,7 @@
 ---
 phase: 48-readiness-and-qualification-closure
 plan: "02"
-status: authoring-complete-evaluation-pending
+status: authoring-complete-evaluation-partial
 completed: false
 requirements-completed: []
 ---
@@ -155,6 +155,41 @@ and prior observation/invalidation hashes; earlier partial receipts are unchange
 while23-07full unfiltered exact-row evaluation/native B public refusal,23-08activation/runtime/
 rollback and23-09closure remain open. No full evaluation, activation, rollback, extra attribution
 turn or requirement closure is authorized by this completion. Phase48 stays partial;49 not started.
+
+### Later separate 23-07 scope and interrupted attempt
+
+The user answered **“Approve scoped $2 evaluation”** for a separate one-attempt $2/full 46-case scope, hash
+`bbe9dea3b15d832fc474c7beb211a25ca6fbbc85ff92798a3155d4077efd2e64`; this does not
+expand the original authoring approval. Run`0b8d825d`/root`eval-0b8d825d`, budget
+`p57067hpjwen71yc4vhx5txav98gmnat`, stopped exit 2 at `14:37:32.660Z` after 7 reported passes/
+0 fails; case 08 returned 3 submissions/no verdict. Its generic unresolved-call cause is unproven.
+At `14:38:57.281Z`,89 settled/0 unsettled calls cost `$0.06160618`, cap 200 cents/124 remaining;
+the budget was open/unexpired/unbreached. Later reconciliation found 1 outstanding at
+local exit/5 settlements after exit, but exact guard-time state is unknown. Native guarded closure
+was called once and passed at `14:48:43.529Z`: closed,89 settled/0 holds/no breach, cost unchanged.
+Remaining balance is unavailable, and retained spend/fixtures are not cleaned up. No passing
+evidence, eval-result, B mutation, activation or rerun followed. Exact-root synthetic cleanup was
+authorized only on success, preserving spend; that condition was not reached. See23-07-SUMMARY; financial
+closure supplies no semantic pass or automatic retry permission. The immutable refs-only
+`../23-agent-authored-skills/23-07-PARTIAL-2026-10-20.json` records 7 passes, case 08 unjudged,
+38 unattempted, timing uncertainty and normal closure; it is not23-EVAL-RESULT. All later
+lifecycle gates stay open.
+
+A separately reproduced malformed-recipient email-routing defect has a narrow implemented
+offline repair: 39 routing and four diagnostic tests pass. It does not establish the exact
+generic error branch. The later emailOnly oracle correction changes fixture 08's expectation
+and evaluator identity, retaining 46 cases, so fresh source qualification, an explicit handoff disposition and new
+paid approval are required before another attempt. Preserve the original handoff/partial
+observation bytes; do not treat the corrected source as already qualified.
+
+The free intent-oracle gap is corrected offline: emailOnly requires absent plan.kind and no
+attempts, including refusals, at seven closed unrelated operations via the existing exact
+tenant/thread read. Missing or malformed observations fail closed; original status/recipient
+positives remain. Scoped-query tests pass 25/25 and the 57-fixture/12-skill golden self-check
+passes. New corpus/revision pins are in 23-07-SUMMARY, separately from historical evidence;
+no live semantic pass, grants, waits or retries are claimed.
+The 14:58:53.908Z read-only postcheck preserved candidate provenance, global
+registry, protected retention and the closed 89-call budget; see 23-07-SUMMARY.
 
 ## Approved narrow authorization
 

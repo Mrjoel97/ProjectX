@@ -325,4 +325,57 @@ partial receipts remain unchanged, including their then-pending flags. Plan23-06
 is fresh authorization for the literal handoff candidate's full unfiltered46-case evaluation
 only, followed by actual native B public OWNER_REQUIRED refusal without credential extraction.
 It adds no runtime-attribution turn. Activation/runtime/rollback retain23-08's separate checkpoint.
-No evaluation or activation occurred; SKILL-02/Phase23/48-02 remain open and Phase49 has not started.
+No evaluation or activation had occurred at the23-06completion boundary; the later separate
+23-07attempt is recorded below. SKILL-02/Phase23/48-02 remain open and Phase49 has not started.
+
+### October 20 separately approved 23-07 full-suite attempt — interrupted/partial
+
+The user answered **“Approve scoped $2 evaluation”** for one full unfiltered 46-case evaluation
+under 200 cents ($2), approval hash `bbe9dea3b15d832fc474c7beb211a25ca6fbbc85ff92798a3155d4077efd2e64`.
+Source `06060d2bc51b1c4b985bb3a8296f03aad0513b86`/full CI `39432731681` was used with
+the unchanged handoff/candidate v2. Runner `0b8d825d`, synthetic root `eval-0b8d825d`, budget
+`p57067hpjwen71yc4vhx5txav98gmnat`, started once and exited 2 at `14:37:32.660Z`.
+Seven passes/zero failures were reported; case 08 returned all 3 submissions but no verdict.
+The run is incomplete, not a full-suite pass or inferred semantic failure. Exposed error
+`GOLDEN_PAID_CALL_UNRESOLVED` conflates guard/receipt failures; its exact cause is unproven.
+
+At `14:38:57.281Z`, native budget controls reported 89 settled/0 unsettled calls,
+`$0.06160618` actual cost,200-cent cap/124 remaining, open/unexpired/unbreached. Preserve that
+historical open snapshot. Later `14:48:03.773Z` reconciliation reconstructs 1 outstanding reservation
+at local process exit and 5 settlements after exit; exact guard-time state remains unknown.
+This is compatible with asynchronous guard stop, not a certified cause. Normal
+`guardrails:closeEvalBudget` was invoked once after native transactional workflow/document guards
+passed. At `14:48:43.529Z`, budget-close result is closed=true,89 settled/0 holds/0 breach,
+cost unchanged; remaining 124 cents are unavailable because closed. No force-close or cleanup.
+
+See [23-07 summary](../23-agent-authored-skills/23-07-SUMMARY.md) and immutable
+[partial observation](../23-agent-authored-skills/23-07-PARTIAL-2026-10-20.json), SHA256
+`14ca4569bf8ae82e7254372106a8e7f0435fe4ea08459745a50020b2ee12a87b`.
+Case 08 is unjudged and 38 cases are unattempted; this receipt certifies no passing eval gate.
+No passing candidate evidence,
+23-EVAL-RESULT, B mutation, activation, cleanup or rerun followed. Approved cleanup was
+success-only for the exact synthetic root, preserving spend; that condition was not reached. Fixtures
+remain retained. No automatic retry or inferred success follows from financial closure.
+23-06 remains complete/Phase 23 six of nine;23-07/08/09, SKILL-02 and48-02 remain open/partial,
+Phase 49 not started. Existing immutable artifacts are unchanged.
+
+Separate offline qualification reproduced case 08's email-routing defect: malformed lowercase
+recipient intent falls through to general/gmailRequired=false. Actual synthetic first-turn
+observations include media/team dispatch and CRM writes, with email tools later added to a
+media-kind plan. This is separate from the uncertain generic exception branch. The narrow
+runtime fix and playbook update are implemented, with 39 routing and four diagnostic tests
+passing offline. The later emailOnly oracle correction changes fixture 08's expectation and
+evaluator identity, retaining 46 cases; neither the old
+handoff nor this interrupted attempt qualifies that new source. Next gate: fresh source
+qualification, explicit handoff disposition and new paid approval. No retry or new handoff is
+ready by inference; all original artifact bytes remain unchanged.
+
+The free intent-oracle gap is corrected offline by emailOnly: absent plan.kind and no attempts,
+including refusals, at seven closed unrelated operations, using the existing exact tenant/thread
+read; missing or malformed observations fail closed. Original status/recipient positives remain.
+Scoped-query tests pass 25/25 and the golden self-check passes 57 fixtures/12 gated skills;
+23-07-SUMMARY records the new corpus hash and revision separately from historical pins.
+No live semantic pass, grants, waits or retries follow from this correction.
+A separate 14:58:53.908Z read-only postcheck confirmed unchanged candidate
+provenance, global registry and protected retention, with the budget still closed at 89 settled
+calls and the same cost; see 23-07-SUMMARY for the exact private receipt hash.

@@ -164,6 +164,32 @@ for (const mutate of [
   (v) => { v.rollback.foreign.effective.bodyHash = hash(9); },
   (v) => { v.evalResultSha256 = hash(9); },
 ]) reject("live", live, mutate);
+// A real runner model route must survive unchanged through both immutable artifact stages.
+// This widens only model metadata, never the generic reference alphabet or the hash chain.
+const routedModel = "or/openai/gpt-4o-mini";
+for (const model of [routedModel, "or/openai/gpt-4.1-mini", "or/openai/gpt-4o-mini:free", "model-v1", "m".repeat(160), `or/openai/${"m".repeat(150)}`]) {
+  const modelEval = { ...e, eval: { ...e.eval, model } };
+  const modelBytes = JSON.stringify(modelEval);
+  const modelLive = { ...live, evalResultSha256: sha256(modelBytes), eval: modelEval.eval };
+  const modelContext = { ...context, evalBytes: modelBytes };
+  assert.equal(validateArtifact("eval", modelEval, modelContext).eval.model, model);
+  assert.equal(validateArtifact("live", modelLive, modelContext).eval.model, model);
+  reject("eval", modelEval, (v) => { v.eval.runId = routedModel; });
+  assert.throws(() => validateArtifact("live", { ...modelLive, eval: { ...modelLive.eval, model: "other-model" } }, modelContext), /PHASE23_ARTIFACT_INVALID/);
+}
+for (const model of [
+  "", null, 1, {}, [], "m".repeat(161), `or/openai/${"m".repeat(151)}`,
+  "https://openrouter.ai/model", "https:/openrouter.ai/model", "or//gpt-4o-mini",
+  "/or/openai/gpt-4o-mini", "or/openai/gpt-4o-mini/", "or/openai/a/b",
+  "other/openai/gpt-4o-mini", "or/OpenAI/gpt-4o-mini", "or/openai/../gpt-4o-mini",
+  "or/openai/gpt-4o-mini?key=value", "or/openai/gpt-4o-mini#fragment",
+  "or/openai/user@example.com", "or/openai/sk-abcdefghijklmnop", "Bearer token",
+  "or/openai/api_key=value", `or/openai/${privateNeedle}`, " or/openai/gpt-4o-mini",
+  "or/openai/gpt 4o-mini", "or/openai/gpt-4o-mini\n", "or/openai/gpt-4o-mini\r",
+  "or/openai/gpt-4o-mini\u00a0", "or/openai/gpt-4o-mini\u200b", "model-v1\n",
+]) reject("eval", e, (v) => { v.eval.model = model; });
+assert.equal(JSON.stringify(h), handoffBytes, "model-route support never rewrites handoff bytes");
+assert.equal(JSON.stringify(e), evalBytes, "model-route support preserves legacy eval bytes");
 assert.throws(() => validateArtifact("handoff", h, {}));
 assert.throws(() => validateArtifact("eval", e, { privateNeedle }));
 assert.throws(() => validateArtifact("eval", e, { ...context, handoffBytes: `${handoffBytes}\n` }));
@@ -179,6 +205,10 @@ try {
   const original = readFileSync(path);
   assert.throws(() => writeImmutableArtifact(path, "handoff", h, context), /EEXIST/);
   assert.deepEqual(readFileSync(path), original);
+  const modelEval = { ...e, eval: { ...e.eval, model: routedModel } };
+  const modelPath = join(dir, "23-EVAL-RESULT.json");
+  writeImmutableArtifact(modelPath, "eval", modelEval, context);
+  assert.equal(parseArtifactBytes(readFileSync(modelPath), privateNeedle).eval.model, routedModel);
   const bad = structuredClone(h);
   bad.candidate.id = privateNeedle;
   writeFileSync(path, JSON.stringify(bad));
@@ -187,4 +217,4 @@ try {
   assert.equal(result.stderr, "PHASE23_ARTIFACT_INVALID\n");
   assert.equal(result.stdout, "");
 } finally { rmSync(dir, { recursive: true, force: true }); }
-console.log(`Phase 23 offline validator: ${cases} closed-schema/secret probes plus native-origin witness, identity, lifecycle, immutable-write and CLI checks passed.`);
+console.log(`Phase 23 offline validator: ${cases} closed-schema/secret probes plus native-origin witness, model-route, identity, lifecycle, immutable-write and CLI checks passed.`);

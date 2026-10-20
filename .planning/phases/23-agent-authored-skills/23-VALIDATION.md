@@ -62,9 +62,9 @@ created: 2026-08-12
 | 23-06-02 | 06 | 6 | SKILL-02 | browser-spend authorization | verbatim “Approve staging alternative”;100cent/two-turn envelope closed with actual budget receipt | manual | ✅ green2026-10-20 |
 | 23-06-03 | 06 | 6 | SKILL-02 | authenticated browser | actual native A/B + measured1440x900/390x900 signed-in iframes, keyboard review and candidate-only turns; manual-native proof | ✅/manual | ✅ green2026-10-20 |
 | 23-06-04 | 06 | 6 | SKILL-02 | artifact schema | existing immutable writer/private-needle validation; exact23-LIVE-HANDOFF SHA112ce264…dc45 | ✅ | ✅ green2026-10-20 |
-| 23-07-01 | 07 | 7 | SKILL-02 | zero-spend recheck | exact handoff/auth inspectors + focused free gates | ✅/❌ W0 | ⬜ pending |
-| 23-07-02 | 07 | 7 | SKILL-02 | spend authorization | fresh exact-row full unfiltered eval cap checkpoint only; no additional runtime-attribution turn | manual | ⬜ pending |
-| 23-07-03 | 07 | 7 | SKILL-02 | paid held-out gate | exact full unfiltered runner on literal handoff candidate id + candidate inspector | ✅ | ⬜ pending |
+| 23-07-01 | 07 | 7 | SKILL-02 | zero-spend recheck | native readiness/exact handoff preflight and free gates passed for original source06060d2/CI39432731681; not future changed source | ✅ | ✅ green, original attempt |
+| 23-07-02 | 07 | 7 | SKILL-02 | spend authorization | exact candidate/full 46-case suite/$2 one-attempt approval bbe9dea3…d2e64; no extra attribution turn | manual | ✅ green 2026-10-20 |
+| 23-07-03 | 07 | 7 | SKILL-02 | paid held-out gate | run 0b8d825d interrupted:7 reported passes/0 fails, case 08 no verdict; normally closed budget/no passing evidence or result artifact | ✅ | ⚠️ partial 2026-10-20 |
 | 23-07-04 | 07 | 7 | SKILL-02 | public non-owner refusal | fresh native authenticated B app/client public mutation without token extraction + exact eval-result validation | ✅/manual | ⬜ pending |
 | 23-08-01 | 08 | 8 | SKILL-02 | immutable recheck | handoff+eval validators, state/auth/cap comparison | ✅/❌ W0 | ⬜ pending |
 | 23-08-02 | 08 | 8 | SKILL-02 | owner UI activation | blocking owner human-action + exact readback | manual | ⬜ pending |
@@ -72,7 +72,7 @@ created: 2026-08-12
 | 23-08-04 | 08 | 8 | SKILL-02 | rollback/final artifact | exact owner rollback + live-result validator | ❌ W0 | ⬜ pending |
 | 23-09-01 | 09 | 9 | SKILL-02 | closure | evidence hash chain + full repository gate + playbooks/requirements/roadmap | mixed | ⬜ pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ partial/flaky*
 
 ---
 
@@ -169,12 +169,23 @@ record the red, restore byte-identically, rerun green.
 - [x] `nyquist_compliant: true` set in frontmatter.
 
 **Current disposition2026-10-20:** Phase21 remains accepted and Phase22/GOVN-01 closed.
-Only23-06rows above are newly green: fullCI39430449721 and immutable handoff
+23-06rows are green: fullCI39430449721 and immutable handoff
 `112ce2643ae15d4b2c39961b09506223bf0d6fe9978993dfe9536cee2dcbdc45` bind the actual
 native pair, two bounded turns, measured responsive/keyboard proof and closed budget observation.
 See23-06-SUMMARY and Phase48's23-06completion receipt. Desktop-browser responsive evidence
 is not touch/mobile-device testing; snapshots are not actual prompt-load attribution.
-23-07/08/09 and SKILL-02/Phase23/48 remain open; Phase49 has not started.23-07 follows the
+23-07 preflight and its separate $2 authorization passed for the original attempt only;
+run 0b8d825d is interrupted/partial. The separately reproduced routing defect has a narrow
+offline fix with 39 routing and four diagnostic tests passing. The later emailOnly oracle
+correction passes 25 scoped-query tests and the 57-fixture/12-skill self-check; its new corpus
+hash and evaluator revision are recorded separately in 23-07-SUMMARY. These are offline
+checks, not a live semantic pass. Changed evaluator inputs require fresh source qualification, handoff disposition and
+new paid approval. That defect does not certify the generic exception's exact branch. Its
+historical open 14:38:57.281Z budget observation is preserved; later timing reconciliation and
+one normal guarded close at 14:48:43.529Z establish 89 settled/0 holds/closed/no breach, not a
+complete evaluation. The generic error's exact guard-time cause remains unproven. No eval-result/
+Bmutation/activation/cleanup/rerun followed.23-07/08/09 and SKILL-02/Phase23/48 remain open;
+Phase49 has not started.23-07 follows the
 October19native-session reconciliation: fresh exact-row full unfiltered eval authorization,
 no extra runtime-attribution probe, then real native B public OWNER_REQUIRED refusal without JWT
 extraction/replay. No evaluation, activation or final closure is certified by23-06 completion.

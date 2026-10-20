@@ -486,6 +486,8 @@ const SPECIALIST_SKILLS = specialistSkillNames();
 // CLOSED expect vocabulary. The runner rejects any fixture using anything else
 // BEFORE the first spawn — a bad fixture must never cost a cent.
 const EXPECT_KEYS = new Set([
+  // Ordinary email kind plus a closed cross-rail attempt denylist, not a universal tool allowlist.
+  "emailOnly",
   // ── 23-04 (SKILL-02): the AUTHORING observables ─────────────────────────────
   // Read from DURABLE STATE via smokeAssert:agentAuthoringStateForThread, never from reply prose.
   // A fixture asserting "the reply mentions a skill update" passes on a model that says the words
@@ -812,6 +814,9 @@ function validateFixture(fx, source) {
   if ((fx.expect.status ?? fx.expect.statusAtMost) !== undefined) {
     const s = fx.expect.status ?? fx.expect.statusAtMost;
     if (!STATUS_ORDER.includes(s)) fail(`unknown status "${s}"`);
+  }
+  if (fx.expect.emailOnly !== undefined && fx.expect.emailOnly !== true) {
+    fail("emailOnly must be true when present");
   }
   if (!Array.isArray(fx.needles) || fx.needles.length === 0) fail("must list at least one needle");
   // ── 23-04: the authoring block, and its anti-vacuity pairing rules ─────────
@@ -1651,6 +1656,8 @@ function evaluateExpect(
    * deliberately: 18 positional arguments already flow through `evaluateRevenueFixture`, and a
    * parameter inserted anywhere else shifts every one of them silently. */
   declaredQuestionScope = false,
+  // Existing exact tenant/thread tool-call read, including refused root attempts. Null fails closed.
+  emailOnlyTools = null,
 ) {
   const failures = [];
   const miss = (key, expected, actual) => failures.push({ key, expected, actual });
@@ -1662,6 +1669,47 @@ function evaluateExpect(
 
   for (const [key, expected] of Object.entries(expect)) {
     switch (key) {
+      case "emailOnly": {
+        const valid =
+          emailOnlyTools !== null &&
+          typeof emailOnlyTools === "object" &&
+          !Array.isArray(emailOnlyTools) &&
+          emailOnlyTools.calls !== null &&
+          typeof emailOnlyTools.calls === "object" &&
+          !Array.isArray(emailOnlyTools.calls) &&
+          Object.values(emailOnlyTools.calls).every((n) => Number.isSafeInteger(n) && n >= 0) &&
+          Array.isArray(emailOnlyTools.refusals) &&
+          emailOnlyTools.refusals.every(
+            (row) =>
+              row !== null &&
+              typeof row === "object" &&
+              typeof row.tool === "string" &&
+              typeof row.refusal === "string",
+          );
+        if (!valid) {
+          miss(key, "observed email operations", "missing or invalid tool observation");
+          break;
+        }
+        if (plan.kind !== undefined) miss(key, "ordinary email plan", "non-email plan kind");
+        // Bounded root attempts, including refusals; specialist dispatch: duplicates are excluded.
+        for (const tool of [
+          "dispatchMedia",
+          "dispatchTeam",
+          "dispatchResearch",
+          "stageCrmWrite",
+          "proposeCalendarEvent",
+          "proposeCalendarChange",
+          "stageFinanceWrite",
+        ]) {
+          if (
+            (emailOnlyTools.calls[tool] ?? 0) > 0 ||
+            emailOnlyTools.refusals.some((row) => row.tool === tool)
+          ) {
+            miss(key, "no unrelated operation attempt", tool);
+          }
+        }
+        break;
+      }
       // ── 23-04 (SKILL-02) ──────────────────────────────────────────────────
       case "agentToolCalled":
         if ((after?.authoringToolCalls ?? 0) > 0 !== expected)
@@ -2515,6 +2563,80 @@ function selfCheck() {
 
   // 2. Synthetic bad fixtures (in-memory, never on disk) are rejected.
   const base = { id: "x", turns: ["hello there"], expect: { status: "proposed" }, needles: ["n"] };
+  const emailFixture = fixtures.find((fixture) => fixture.id === "08-bounce-then-correct");
+  assert.equal(emailFixture.expect.emailOnly, true, "fixture08 must observe cross-rail attempts");
+  const emailPlan = { status: "proposed", recipients: emailFixture.expect.recipients };
+  const emailGrade = (plan, tools) =>
+    evaluateExpect(
+      emailFixture.expect,
+      plan,
+      0,
+      false,
+      0,
+      0,
+      0,
+      "",
+      0,
+      false,
+      0,
+      false,
+      0,
+      0,
+      0,
+      0,
+      null,
+      null,
+      false,
+      tools,
+    );
+  const emailTools = { calls: { addRecipients: 1, draftBody: 1, proposePlan: 1 }, refusals: [] };
+  assert.deepEqual(
+    emailGrade(emailPlan, emailTools),
+    [],
+    "ordinary email passes unchanged positives",
+  );
+  assert.ok(
+    emailGrade({ ...emailPlan, kind: "media" }, emailTools).some((f) => f.key === "emailOnly"),
+    "matching recipients cannot disguise a media plan as email",
+  );
+  for (const tool of [
+    "dispatchMedia",
+    "dispatchTeam",
+    "dispatchResearch",
+    "stageCrmWrite",
+    "proposeCalendarEvent",
+    "proposeCalendarChange",
+    "stageFinanceWrite",
+  ]) {
+    assert.ok(
+      emailGrade(emailPlan, { calls: { [tool]: 1 }, refusals: [] }).some((f) => f.actual === tool),
+      `${tool} attempt must fail even with a valid email plan`,
+    );
+    assert.ok(
+      emailGrade(emailPlan, { calls: {}, refusals: [{ tool, refusal: "REFUSED" }] }).some(
+        (f) => f.actual === tool,
+      ),
+      `${tool} refusal must remain a forbidden attempt`,
+    );
+  }
+  for (const observation of [
+    null,
+    {},
+    { calls: {}, refusals: null },
+    { calls: { draftBody: -1 }, refusals: [] },
+  ]) {
+    assert.ok(
+      emailGrade(emailPlan, observation).some((f) => f.key === "emailOnly"),
+      "missing or malformed operation observation must fail closed",
+    );
+  }
+  for (const invalid of [false, "true", 0]) {
+    assert.throws(
+      () => validateFixture({ ...base, expect: { emailOnly: invalid } }, "<synthetic>"),
+      /emailOnly must be true/,
+      "invalid emailOnly value must fail before paid work",
+    );
+  }
   assert.throws(
     () => validateFixture({ ...base, expect: { replyContains: "ok" } }, "<synthetic>"),
     /unknown expect key/,
@@ -2801,10 +2923,10 @@ function selfCheck() {
   // guard that reports on its own text.
   const liveCall = runnerSource.slice(runnerSource.lastIndexOf("const failures = evaluateExpect("));
   assert.ok(
-    /\n {4}authoring,\n(?: *\/\/[^\n]*\n)* {4}null,\n {4}declaredQuestionScope,\n {2}\);/.test(
+    /\n {4}authoring,\n(?: *\/\/[^\n]*\n)* {4}null,\n {4}declaredQuestionScope,\n {4}emailOnlyTools,\n {2}\);/.test(
       liveCall.slice(0, liveCall.indexOf(");") + 2),
     ),
-    "the live evaluateExpect call must end `authoring, null, declaredQuestionScope` — any other " +
+    "the live evaluateExpect call must end `authoring, null, declaredQuestionScope, emailOnlyTools` — any other " +
       "order silently lands the declaration in revenueState's slot and the key can never pass",
   );
 
@@ -4819,6 +4941,10 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1,
           ),
         }
       : null;
+  const emailOnlyTools =
+    fixture.expect.emailOnly === true
+      ? parse(must("smoke:toolCallsForThread", { tenantId: tenant, threadId }, RETRY_READ))
+      : null;
   const failures = evaluateExpect(
     fixture.expect,
     plan,
@@ -4843,6 +4969,7 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1,
     // and 17 arguments deep, and a mid-list insertion shifts every one after it silently.
     null,
     declaredQuestionScope,
+    emailOnlyTools,
   );
   // Standing invariants: zero requests rows + refs-only needle scan (throws on violation).
   try {
@@ -4865,7 +4992,8 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1,
   const toolCalls =
     failures.length === 0
       ? undefined
-      : parse(must("smoke:toolCallsForThread", { tenantId: tenant, threadId }, RETRY_READ));
+      : (emailOnlyTools ??
+        parse(must("smoke:toolCallsForThread", { tenantId: tenant, threadId }, RETRY_READ)));
   return {
     pass: failures.length === 0,
     failures,
@@ -5407,7 +5535,7 @@ try {
 } catch (e) {
   if (e instanceof PaidCallUnresolved) {
     console.error(
-      "[eval:golden] GOLDEN_PAID_CALL_UNRESOLVED; retained recovery checkpoints; no retry, evidence, or cleanup.",
+      `[eval:golden] ${e.message}; retained recovery checkpoints; no retry, evidence, or cleanup.`,
     );
     process.exit(2);
   }

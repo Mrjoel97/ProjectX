@@ -4,6 +4,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import test from "node:test";
 import { computeEvaluatorRevision, EVALUATOR_FILES } from "./goldenEvaluatorIdentity.mjs";
+import {
+  CORPUS_IDS,
+  renderCorpus,
+  EVALUATOR_FILES as VERTICAL_EVALUATOR_FILES,
+} from "./vertical-eval-corpus.mjs";
 
 function fixtureRoot(t) {
   const scratchParent = resolve(tmpdir());
@@ -13,7 +18,7 @@ function fixtureRoot(t) {
     assert.ok(child.startsWith("pikar-golden-identity-") && !child.includes(sep));
     rmSync(root, { recursive: true, force: true });
   });
-  for (const path of EVALUATOR_FILES) {
+  for (const path of new Set([...EVALUATOR_FILES, ...VERTICAL_EVALUATOR_FILES])) {
     const target = join(root, path);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, `// Isolated evaluator file: ${path}\nconst value = 1;\n`);
@@ -68,4 +73,34 @@ test("extracted research, PDF and media-query behavior remains part of evaluator
     writeFileSync(path, original);
   }
   assert.equal(computeEvaluatorRevision(root), before);
+});
+
+test("capability routing edits retire both live evaluator identities without changing corpus bytes", (t) => {
+  const relativePath = "packages/backend/convex/cockpitCapabilities.ts";
+  assert.ok(EVALUATOR_FILES.includes(relativePath));
+  assert.ok(VERTICAL_EVALUATOR_FILES.includes(relativePath));
+  const root = fixtureRoot(t);
+  const fixtureBytes = CORPUS_IDS.map((id) => {
+    const path = `packages/backend/scripts/vertical-eval-cases/${id}.json`;
+    const bytes = readFileSync(new URL(`./vertical-eval-cases/${id}.json`, import.meta.url));
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), bytes);
+    return { path, bytes };
+  });
+  const goldenBefore = computeEvaluatorRevision(root);
+  const verticalBefore = renderCorpus(root);
+  const sourcePath = join(root, relativePath);
+  const original = readFileSync(sourcePath, "utf8");
+  writeFileSync(sourcePath, original.replace("value = 1", "value = 2"));
+  assert.notEqual(computeEvaluatorRevision(root), goldenBefore);
+  const verticalAfter = renderCorpus(root);
+  assert.notEqual(verticalAfter, verticalBefore);
+  const withoutRevision = (value) =>
+    value.replace(/(VERTICAL_EVALUATOR_REVISION =\n  ")[a-f0-9]{64}(";)/, "$1$2");
+  assert.equal(withoutRevision(verticalAfter), withoutRevision(verticalBefore));
+  for (const { path, bytes } of fixtureBytes)
+    assert.deepEqual(readFileSync(join(root, path)), bytes);
+  writeFileSync(sourcePath, original);
+  assert.equal(computeEvaluatorRevision(root), goldenBefore);
+  assert.equal(renderCorpus(root), verticalBefore);
 });
