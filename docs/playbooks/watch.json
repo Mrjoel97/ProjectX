@@ -28,6 +28,8 @@
     "packages/backend/convex/foglamp.test.ts"
   ],
   "ci-gate.md": [
+    ".github/scripts/phase48-staging-parity",
+    ".github/workflows/phase48-staging-parity.yml",
     "scripts/observe-staging-retention",
     ".github/workflows/observe-staging-retention.yml",
     "scripts/rehearse-release-local.mjs",

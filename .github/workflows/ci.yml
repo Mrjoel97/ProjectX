@@ -80,7 +80,8 @@ jobs:
         run: pnpm test
 
       - name: Operator control regressions
-        run: node --test packages/backend/scripts/goldenPaidAttempt.test.mjs packages/backend/scripts/goldenEvaluatorIdentity.test.mjs packages/backend/scripts/foundationEvidence.test.mjs packages/backend/scripts/foundationApiScenario.test.mjs packages/backend/scripts/nativeSignupProbe.test.mjs packages/backend/scripts/nativePrivacyScenario.test.mjs packages/backend/scripts/privacyStaging.test.mjs packages/backend/scripts/zernioPilot.test.mjs .planning/phases/23-agent-authored-skills/phase23-operator.test.mjs scripts/smoke-quickbooks-read.test.mjs scripts/observe-staging-retention.test.mjs
+        # Read-only staging parity controls are tested without deployment credentials.
+        run: node --test .github/scripts/phase48-staging-parity.test.mjs packages/backend/scripts/goldenPaidAttempt.test.mjs packages/backend/scripts/goldenEvaluatorIdentity.test.mjs packages/backend/scripts/foundationEvidence.test.mjs packages/backend/scripts/foundationApiScenario.test.mjs packages/backend/scripts/nativeSignupProbe.test.mjs packages/backend/scripts/nativePrivacyScenario.test.mjs packages/backend/scripts/privacyStaging.test.mjs packages/backend/scripts/zernioPilot.test.mjs .planning/phases/23-agent-authored-skills/phase23-operator.test.mjs scripts/smoke-quickbooks-read.test.mjs scripts/observe-staging-retention.test.mjs
 
       - name: Planning evidence
         run: |

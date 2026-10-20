@@ -1,0 +1,102 @@
+# Manual read-only staging inspection. No deployment, configuration write or fixture creation.
+name: phase48-staging-parity
+
+"on":
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact full source commit SHA that passed ci
+        required: true
+        type: string
+      ci_run_id:
+        description: Exact successful ci workflow run ID for that commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'Mrjoel97/ProjectX'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: staging
+    concurrency:
+      group: staging-qualification
+      cancel-in-progress: false
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Require successful exact-source CI in this repository
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+        shell: bash
+        run: |
+          node <<'NODE'
+          (async () => {
+            const sha = process.env.SOURCE_SHA;
+            const runId = process.env.CI_RUN_ID;
+            if (!/^[a-f0-9]{40}$/.test(sha ?? '') || !/^[1-9]\d*$/.test(runId ?? '')) throw Error();
+            if (!Number.isSafeInteger(Number(runId))) throw Error();
+            const repository = 'Mrjoel97/ProjectX';
+            const response = await fetch(`https://api.github.com/repos/${repository}/actions/runs/${runId}`, {
+              headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: 'application/vnd.github+json' },
+              redirect: 'error',
+              signal: AbortSignal.timeout(15000),
+            });
+            if (!response.ok) throw Error();
+            const run = await response.json();
+            if (run.id !== Number(runId) || run.workflow_id !== 325088000 ||
+                run.path !== '.github/workflows/ci.yml' || run.head_sha !== sha ||
+                run.repository?.full_name !== repository || run.head_repository?.full_name !== repository ||
+                run.status !== 'completed' || run.conclusion !== 'success') throw Error();
+            console.log(JSON.stringify({ exactSourceCiPassed: true }));
+          })().catch(() => {
+            console.error('PHASE48_SOURCE_CI_MISMATCH');
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Check out the exact verified source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          clean: true
+          persist-credentials: false
+
+      - name: Verify fresh clean checkout
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain --untracked-files=normal)"
+
+      - name: Enable pinned pnpm
+        run: corepack enable
+
+      - name: Install frozen workspace without deployment credentials
+        run: pnpm install --frozen-lockfile
+
+      - name: Recheck operator source before allowing staging access
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain --untracked-files=normal)"
+
+      - name: Inspect staging parity without applying changes
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          EXPECTED_CI_RUN_ID: ${{ inputs.ci_run_id }}
+          STAGING_CONVEX_DEPLOY_KEY: ${{ secrets.STAGING_CONVEX_DEPLOY_KEY }}
+        run: node .github/scripts/phase48-staging-parity.mjs

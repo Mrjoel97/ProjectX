@@ -75,13 +75,44 @@ prefilled addresses alone cannot pass. Missing profiles remain a blocker. No fab
 or native witness is written. The new local view performs no mutation and production remains404.
 The user confirmed the controlled password is unavailable. The old account remains untouched;
 no password reset, new envelope/model/candidate or repeat login is attempted. The concrete
-`48-STAGING-ALTERNATIVE.md` proposal requires a separate decision before new accounts, fixture
-writes or an A-only owner grant. Staging billing labels are absent and source parity is unproven;
+`48-STAGING-ALTERNATIVE.md` proposal was initially prepared pending a separate decision before
+new accounts, fixture writes or an A-only owner grant. Staging billing labels are absent and source parity is unproven;
 configuration presence is not paid readiness. Its explicit fixture exception does not prove real
 onboarding and staging evidence cannot certify the old production identities.
 
 The read-only identity view distinguishes exact A/non-owner (`A_NON_OWNER_MATCH`) before a
 separately approved fresh grant from A/owner (`A_IDENTITY_MATCH`) required for paid readiness.
 Only exact B/non-owner produces `B_IDENTITY_MATCH`; B/owner and absent profiles remain NOT_READY.
+
+### October20 conditional staging approval
+
+PR72 exact head `a2f07b31ba35ed3a462f95e91427f8a5e53e0e7a` passed full CI run
+`39402077280` and merged as `f6330e70772b984c3fc4bf5e4158ee21b72c4a6d` without
+production promotion. This qualifies the free native identity/evidence changes, not a live test.
+
+The user's explicit reply “Approve staging alternative” approves only the replacement staging
+scope in `48-STAGING-ALTERNATIVE.md`. The private scope receipt is dated2026-10-20; immutable
+approval hash: `50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19`.
+It covers two new native-verified private Gmail aliases, Pikar-OTP-only inbox reads, locally
+DPAPI-encrypted generated credentials, the expressly approved synthetic-profile fixture
+exception, an A-only staging owner grant after fresh A/B non-owner witnesses, and at most
+100cents aggregate across two authoring turns after all free admission gates pass. It does not
+authorize deploy/apply, registry repair, evaluation, activation, cleanup or production changes.
+No new accounts, owner grant, envelope, model call or probe have started under this approval.
+The original production $1 scope remains unused and its recovered controls remain untouched.
+
+Exact staging CLI observations identify `woozy-wren-368`, configured staging SITE_URL, email
+and OpenRouter configuration presence, and enabled foundation onboarding. The user subsequently
+attested “Standard OpenRouter; free Tavily.” A separate private immutable
+`billing-attestation.json` preserves that factual answer without changing the approval hash.
+No configuration write or model call followed. Billing labels remain null: the supported exact
+staging configuration must still be recorded through a separately approved write; the current
+no-apply scope does not authorize it. Configuration presence does not establish paid readiness.
+Source parity is unproven.
+CLI inspection also shows that even a dev-labeled CONVEX_DEPLOYMENT can default a deploy command
+to production. A strict staging-key CI dry-run/parity operator is being prepared without apply;
+no account or paid work may rely on the ambiguous default. These remain execution blockers.
+Real onboarding/grounding are not certified by the fixture exception, and staging evidence
+cannot certify the old production identities. Phase23/48-02 remain partial; Phase49 stays blocked.
 
 New authoring requires its own exact fresh authorization, a new bounded envelope and fresh native controlled sessions; no old envelope or undocumented receipt grants that work. The prepared scope is one inert `offer-architect` adaptation plus one escalation/refusal turn, maximum100cents aggregate and no full evaluation or activation. Exact-row paid evaluation and actual owner activation/rollback remain separate later checkpoints. Missing configuration/credentials and historical private receipts must not be replaced by fabricated readiness. Phase23 and48-02 remain open; Phase49 has not started.

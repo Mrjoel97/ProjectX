@@ -1,16 +1,20 @@
 ---
 phase: 48-readiness-and-qualification-closure
 plan: "02"
-status: proposed-not-approved
+status: approved-conditional-preflight-blocked
 completed: false
 requirements-completed: []
 ---
 
-# Staging alternative — replacement scope requiring new approval
+# Staging alternative — approved scope awaiting free preflight
 
-Prepared 2026-10-20. **NOT YET APPROVED. No action is authorized by this document.**
+Prepared and conditionally approved 2026-10-20. The user explicitly replied **“Approve staging
+alternative.”** The immutable approval hash is
+`50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19`; its private scope
+receipt is dated2026-10-20. This records permission, not execution or readiness. **Staging billing
+configuration, source parity and exact target admission remain blocked. No new accounts or probe exist.**
 
-This is a concrete replacement proposal for the unavailable controlled-account credentials,
+This is the approved conditional replacement scope for the unavailable controlled-account credentials,
 not a continuation receipt or an assertion that Phase23/48-02 passed. The original production
 accounts, historical once-lock identity, recovered closed/expired unused budget and zero-use
 probe remain untouched. No new production probe was created. The old scope remains unused;
@@ -25,12 +29,14 @@ The parent operator's exact-deployment read-only CLI observation identifies stag
 These are configuration-presence observations, not proof of successful mail delivery, provider
 billing, current deployed-source parity, or authenticated A/B readiness.
 
-`GOLDEN_OPENROUTER_BILLING` and `GOLDEN_TAVILY_BILLING` are currently null. **Paid preflight
-is blocked.** Production billing attestations must not be copied or inferred for staging.
-Do not set a billing label merely to satisfy a guard. Obtain truthful provider/account
-attestations and any required credit price, validate their supported configuration, and record
-the separately approved exact staging configuration change before paid admission. Unknown
-pricing, billing mode or usage stops the attempt; no guessed cost or automatic retry.
+The user subsequently attested **Standard OpenRouter; free Tavily** for staging. This factual
+attestation is preserved in a separate private immutable `billing-attestation.json`; it does not
+change the approval hash above and is not a configuration-write or paid-execution receipt.
+`GOLDEN_OPENROUTER_BILLING` and `GOLDEN_TAVILY_BILLING` remain null. **Paid preflight is
+still blocked on recording the supported exact staging billing configuration.** Validate the
+attested mode and any required credit price, then record the separately approved exact-target
+configuration change before paid admission. The current no-apply scope does not authorize that
+write. Unknown pricing or usage stops the attempt; no guessed cost or automatic retry.
 
 Use an explicitly selected `woozy-wren-368` deployment for every proposed administrative call.
 Do not use `--prod`, infer the target from an unset/default dev configuration, or treat a
@@ -39,9 +45,16 @@ branch uses configured dev selection; independently prove that it resolves to th
 before any mutation. If that cannot be established, stop and repair/qualify target selection
 before executing this proposal. No deployment or code push is included here.
 
-## Proposed narrow authorization
+Current CLI inspection shows that even `CONVEX_DEPLOYMENT=dev:...` can leave a deploy command
+selecting production by default. That variable alone is therefore insufficient evidence.
+The parent is preparing a strict staging-key CI dry-run/parity operator, with **no apply**.
+No deploy, push, registry repair or configuration change is authorized by the staging approval;
+preparation must fail closed before egress if exact staging selection cannot be proved.
 
-The proposed human approval must expressly cover all of the following together, on staging only:
+## Approved narrow authorization
+
+The explicit approval covers the following together, on staging only and only after their
+prerequisites pass. It does not waive any free gate below:
 
 1. Create two new disposable, unique plus-address aliases of the already connected Gmail
    account, labeled A and B only in Git. Use normal Pikar password signup and real verification
@@ -77,9 +90,10 @@ The proposed human approval must expressly cover all of the following together, 
    supported descendants, not $1 per turn. Two submissions may involve multiple provider
    calls. Apply the native expiry and supported-call ceilings; unknown-cost holds remain held.
 
-**The fixture exception is a change from the original qualification preparation and requires
-new human approval.** The seeded profile is browsable but not retrievable: it has no RAG entry.
-This is native signup/authentication plus fixture-backed skill-authoring qualification, **not
+**The user expressly approved the fixture exception as part of this replacement scope.**
+It changes the original qualification preparation. The seeded profile is browsable but not
+retrievable: it has no RAG entry.
+This permits native signup/authentication plus fixture-backed skill-authoring qualification, **not
 proof of real onboarding, business-profile grounding, foundation publication or ingestion**.
 Do not submit a foundation interview answer, use voice onboarding, upload a document, call
 `foundation.publish`, or run `onboarding.commitProfile` under this $1 proposal. Those routes
