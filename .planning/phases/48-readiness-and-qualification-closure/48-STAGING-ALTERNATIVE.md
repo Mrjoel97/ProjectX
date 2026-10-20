@@ -191,6 +191,33 @@ no live semantic pass, grants, waits or retries are claimed.
 The 14:58:53.908Z read-only postcheck preserved candidate provenance, global
 registry, protected retention and the closed 89-call budget; see 23-07-SUMMARY.
 
+The later explicit **“Approve staging release”** checkpoint, hash
+`53269cc546d1e7b6be1ba17a49f310591e5c6a564513f343bf1a0a41cd102371`, authorized
+PR79 merge/staging-only release and current existing A/B checks/new versioned handoff.
+PR79 merged `2314691a6fd34f85b3b0fd8febdbf43bf500ee45`; run 39460078883/
+job 118756953910 succeeded for source b10740d6466db155c48519aba6323d5b0c27c406 and
+CI 39446162910. The separate [release observation](48-STAGING-PR79-RELEASE-2026-10-20.json)
+records completed apply, passing postflight/zero parity/preservation/billing verification,
+unchanged configuration/registry/protected retention and no billing-label change.
+At 16:48:53.219Z current read-only candidate/provenance/source/baseline/effective/global/
+foreign, A owner/B non-owner and closed-budget checks passed, followed by native identity
+matches. Fresh responsive proof and the versioned handoff subsequently completed as below;
+historical proofs and accepted Phase20-20 cockpit variance remain preserved. This approval does not cover
+paid evaluation, activation or production release. Phase 23/48 remain partial, 49 not started.
+
+At `17:01:27.296Z`, immutable writer/scanner/live matching passed for the new
+[current handoff](../23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json),
+SHA256 `ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61`, with
+[refresh observation](../23-agent-authored-skills/handoffs/2026-10-20-pr79/23-HANDOFF-REFRESH.json)
+SHA256 `6b86ddbe2ad61dc4f331024a0e08b3fdb3420c0771bdbb28a5a38c3161cc31c8`.
+Six stable current post-UI reads, native existing A owner/B non-owner, actual measured
+1440x900/390x900 iframes and direct native keyboard draft/diff review are recorded. Embedded
+controls were not exercised; initial desktop AX-presence-only proof is excluded. No touch/
+physical-device testing or new authoring/refusal replay is claimed. This is a new current
+next-input directory, not an overwrite or requalification of old historical bytes.
+PaidReady/paidAuthorized remain false; no new paid run, eval-result, public B mutation,
+activation or production release. Phase 23 stays 6/9, Phase 48 partial and 49 not started.
+
 ## Approved narrow authorization
 
 The explicit approval covers the following together, on staging only and only after their
