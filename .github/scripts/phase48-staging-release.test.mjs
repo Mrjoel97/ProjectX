@@ -202,7 +202,7 @@ test("matching billing labels are read back without rewriting; any unexpected va
     const m = mock({ labels: { [name]: "unexpected" } });
     const result = await runRelease(env, m.execute);
     assert.equal(result.success, false);
-    assert.equal(result.phase, "billing_inspection");
+    assert.equal(result.phase, "preflight_before_configuration");
     assert.equal(sets(m.calls).length, 0);
     assert.equal(applies(m.calls).length, 0);
   }

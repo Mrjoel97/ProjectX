@@ -1,7 +1,7 @@
 ---
 phase: 48-readiness-and-qualification-closure
 plan: "02"
-status: approved-conditional-preflight-blocked
+status: approved-conditional-release-failed
 completed: false
 requirements-completed: []
 ---
@@ -11,9 +11,9 @@ requirements-completed: []
 Prepared and conditionally approved 2026-10-20. The user explicitly replied **“Approve staging
 alternative.”** The immutable approval hash is
 `50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19`; its private scope
-receipt is dated2026-10-20. This records permission, not execution or readiness. **Staging billing
-labels remain unwritten and the successful read-only check found a source difference; parity is
-false. The separate release is prepared but unauthorized. No new accounts or probe exist.**
+receipt is dated2026-10-20. This conditional scope remains separate from the later release
+approval. **The separately approved staging apply completed, but final release acceptance failed;
+parity-zero is false and final billing-label readback was not reached. No new accounts or probe exist.**
 
 This is the approved conditional replacement scope for the unavailable controlled-account credentials,
 not a continuation receipt or an assertion that Phase23/48-02 passed. The original production
@@ -33,11 +33,12 @@ billing, current deployed-source parity, or authenticated A/B readiness.
 The user subsequently attested **Standard OpenRouter; free Tavily** for staging. This factual
 attestation is preserved in a separate private immutable `billing-attestation.json`; it does not
 change the approval hash above and is not a configuration-write or paid-execution receipt.
-`GOLDEN_OPENROUTER_BILLING` and `GOLDEN_TAVILY_BILLING` remain null. **Paid preflight is
-still blocked on recording the supported exact staging billing configuration.** Validate the
-attested mode and any required credit price, then record the separately approved exact-target
-configuration change before paid admission. The current no-apply scope does not authorize that
-write. Unknown pricing or usage stops the attempt; no guessed cost or automatic retry.
+The pre-release observation returned null billing labels. The later separately approved release
+may have changed them, but its final readback was not reached. **Paid readiness remains blocked
+until supported exact staging configuration and source parity are verified.** The conditional
+scope itself did not authorize configuration writes; the separate limited release approval and
+its failed acceptance are recorded below. Unknown pricing or usage stops work; no guessed cost
+or automatic retry.
 
 Use an explicitly selected `woozy-wren-368` deployment for every proposed administrative call.
 Do not use `--prod`, infer the target from an unset/default dev configuration, or treat a
@@ -78,16 +79,25 @@ both enumeration and already queued execution. Legacy ordinary profiles are unch
 there is no backfill. Its46focused backend tests/typecheck and existing evaluator identity
 checks pass; golden/vertical cases are unchanged. This is source preparation, not deployment.
 
-A separate manual release workflow/operator is prepared but **not authorized or dispatched**.
-It requires exact-source successful CI and a fresh release-authorization hash. Its only proposed
+A separate manual release workflow/operator was prepared with exact-source successful CI
+and a fresh release-authorization hash. Its only scoped
 configuration writes are the3attested labels `GOLDEN_OPENROUTER_BILLING=standard`,
 `GOLDEN_TAVILY_BILLING=free`, `GOLDEN_TAVILY_CREDIT_USD=0`; protected hashes must survive
 and post-release source diff must be zero. Unknown outcomes stop without automatic apply retry
 or rollback. Its51operator tests and exact PR75 full CI pass, and the fresh read-only comparison
-above is recorded. The concrete release checkpoint for that source plus only those3labels is
-now pending explicit human approval; no answer or write is recorded. The approval hash at the top remains the conditional
-account/fixture/$1scope, not release permission. No apply, labels, accounts, probe or model work
-has occurred. Phase48 remains partial and Phase49 has not started.
+above is recorded. The user then explicitly approved that source and only those3labels, with
+separate release hash`a1772ce8b78d8d34e4a88fb54d6e5c7fd41e84d2f355adcd927c848d0bb18f47`.
+The approval hash at the top remains the conditional account/fixture/$1scope.
+
+Actual release run`39416580614`/job`118606976651` completed apply but returned `success=false`
+at`postflight_preservation`. All3protected before/after hashes match and the read-only postflight
+ran successfully; `postflightParityZero=false` still prevents release acceptance. Final billing
+verification was not reached. Its false verification flag does not establish incorrect labels,
+and the sanitized result provides no remaining change count or cause. See the separate exact
+`48-STAGING-RELEASE-2026-10-20.json` observation. Keep this attempt closed failed pending
+separate read-only diagnosis, with no automatic apply retry, rollback or weakened gate. No
+accounts, owner grant, probe or model work occurred. Phase48 remains partial and Phase49 has
+not started.
 
 Before any later authoring, preserve the actual five-global baseline using separate pre/post
 redaction-safe supplemental receipts. The fixed Phase23 handoff binds only offer-architect;

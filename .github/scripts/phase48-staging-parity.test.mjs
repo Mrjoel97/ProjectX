@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { childEnvironment, runParity, summarizeDiff } from "./phase48-staging-parity.mjs";
 
@@ -30,6 +31,14 @@ const diff = () => ({
 });
 const output = (value = diff()) =>
   `Remote config would be overwritten with the following changes:\n  \n${JSON.stringify(value, null, 2)}\nWould have deployed Convex functions`;
+const configOutput = (block, value = diff()) =>
+  `Remote config would be overwritten with the following changes:\n${block}\nFinalizing push...\n${JSON.stringify(value, null, 2)}\nWould have deployed Convex functions`;
+const blockHash = (block) => createHash("sha256").update(block.trim()).digest("hex");
+const billingDeclarations = {
+  GOLDEN_OPENROUTER_BILLING: "standard",
+  GOLDEN_TAVILY_BILLING: "free",
+  GOLDEN_TAVILY_CREDIT_USD: "0",
+};
 const selectedKeys = [
   "cockpit-agent",
   "offer-architect",
@@ -56,7 +65,14 @@ function mock(options = {}) {
       );
     if (command === "env") {
       if (args[2] === "list")
-        return ok("SITE_URL\nFOUNDATION_ONBOARDING_ENABLED\nOPENROUTER_API_KEY");
+        return ok(
+          [
+            "SITE_URL",
+            "FOUNDATION_ONBOARDING_ENABLED",
+            "OPENROUTER_API_KEY",
+            ...Object.keys(options.billingDeclarations ?? {}),
+          ].join("\n"),
+        );
       if (args[3] === "SITE_URL")
         return ok(
           options.wrongOrigin
@@ -65,6 +81,11 @@ function mock(options = {}) {
         );
       if (args[3] === "CONVEX_SITE_URL") return ok("https://woozy-wren-368.convex.site");
       if (args[3] === "FOUNDATION_ONBOARDING_ENABLED") return ok("1");
+      if (Object.hasOwn(billingDeclarations, args[3])) {
+        assert.equal(args[2], "get");
+        assert.ok(Object.hasOwn(options.billingDeclarations ?? {}, args[3]));
+        return ok(options.billingDeclarations[args[3]]);
+      }
       throw Error("Unreviewed environment read");
     }
     if (command === "run") {
@@ -173,6 +194,123 @@ test("structured zero diff establishes parity only with the observed empty confi
   assert.equal(summarizeDiff(output()).parityEstablished, true);
   assert.equal(summarizeDiff(JSON.stringify(diff())).parityEstablished, false);
 });
+
+test("empty config diagnostics exclude CLI progress and hash only the trimmed config block", () => {
+  const report = summarizeDiff(configOutput("  "));
+  assert.equal(report.diffStatus, "zero");
+  assert.equal(report.parityEstablished, true);
+  assert.equal(report.structuredChangedItemCount, 0);
+  assert.equal(report.remoteConfigChanged, false);
+  assert.equal(report.remoteConfigCategory, "none");
+  assert.equal(report.remoteConfigAddedVersionCount, 0);
+  assert.equal(report.remoteConfigRemovedVersionCount, 0);
+  assert.equal(report.remoteConfigBlockSha256, blockHash(""));
+});
+
+test("heading-only Node warnings remain changes while separating structured zero from prose", () => {
+  const block = "  Change the server's version for Node.js actions:";
+  const report = summarizeDiff(configOutput(block));
+  assert.equal(report.diffStatus, "changes");
+  assert.equal(report.parityEstablished, false);
+  assert.equal(report.changedItemCount, 1);
+  assert.equal(report.structuredChangedItemCount, 0);
+  assert.equal(report.remoteConfigChanged, true);
+  assert.equal(report.remoteConfigCategory, "node_version");
+  assert.equal(report.remoteConfigAddedVersionCount, 0);
+  assert.equal(report.remoteConfigRemovedVersionCount, 0);
+  assert.equal(report.remoteConfigBlockSha256, blockHash(block));
+});
+
+test("an unexpected unindented first line remains a change without hashing progress text", () => {
+  const report = summarizeDiff(configOutput("Unexpected private progress"));
+  assert.equal(report.diffStatus, "changes");
+  assert.equal(report.parityEstablished, false);
+  assert.equal(report.structuredChangedItemCount, 0);
+  assert.equal(report.changedItemCount, 1);
+  assert.equal(report.remoteConfigChanged, true);
+  assert.equal(report.remoteConfigCategory, "unknown");
+  assert.equal(report.remoteConfigAddedVersionCount, 0);
+  assert.equal(report.remoteConfigRemovedVersionCount, 0);
+  assert.equal(report.remoteConfigBlockSha256, blockHash(""));
+  assert.doesNotMatch(JSON.stringify(report), /Unexpected|private|progress/);
+});
+
+test("UDF and combined version warnings expose only category, counts and a block hash", () => {
+  const udf = [
+    "  Change the server's function version:",
+    "  [-] private-previous-function-version",
+    "  [+] private-next-function-version",
+  ].join("\n");
+  const node = [
+    "  Change the server's version for Node.js actions:",
+    "  [-] private-previous-node-version",
+    "  [+] private-next-node-version",
+  ].join("\n");
+  for (const [block, category, count] of [
+    [udf, "udf_version", 1],
+    [`${udf}\n${node}`, "both", 2],
+  ]) {
+    const report = summarizeDiff(configOutput(block));
+    assert.equal(report.diffStatus, "changes");
+    assert.equal(report.parityEstablished, false);
+    assert.equal(report.changedItemCount, 1);
+    assert.equal(report.structuredChangedItemCount, 0);
+    assert.equal(report.remoteConfigCategory, category);
+    assert.equal(report.remoteConfigAddedVersionCount, count);
+    assert.equal(report.remoteConfigRemovedVersionCount, count);
+    assert.equal(report.remoteConfigBlockSha256, blockHash(block));
+    assert.doesNotMatch(JSON.stringify(report), /private-|Finalizing push/);
+  }
+});
+
+test("unrecognized config prose stays a change and counts only trimmed version-line prefixes", () => {
+  const block = [
+    "  Unrecognized private configuration warning:",
+    "  [+] private-added-value",
+    "  [-] private-removed-value",
+    "  detail [+] not-a-version-line",
+    "  detail [-] not-a-version-line",
+  ].join("\n");
+  const report = summarizeDiff(configOutput(block));
+  assert.equal(report.diffStatus, "changes");
+  assert.equal(report.parityEstablished, false);
+  assert.equal(report.remoteConfigChanged, true);
+  assert.equal(report.remoteConfigCategory, "unknown");
+  assert.equal(report.remoteConfigAddedVersionCount, 1);
+  assert.equal(report.remoteConfigRemovedVersionCount, 1);
+  assert.equal(report.remoteConfigBlockSha256, blockHash(block));
+  assert.doesNotMatch(JSON.stringify(report), /private|Unrecognized|not-a-version-line/);
+});
+
+test("structured changes remain distinct from the single config warning increment", () => {
+  const changed = diff();
+  changed.componentDiffs[""].moduleDiff.added.push("private-module.js");
+  changed.componentDiffs[""].schemaDiff = {
+    previous_schema: "private-previous-schema",
+    next_schema: "private-next-schema",
+  };
+  const report = summarizeDiff(
+    configOutput("  Change the server's version for Node.js actions:", changed),
+  );
+  assert.equal(report.structuredChangedItemCount, 2);
+  assert.equal(report.changedItemCount, 3);
+  assert.equal(report.remoteConfigChanged, true);
+  assert.equal(report.remoteConfigCategory, "node_version");
+  assert.doesNotMatch(JSON.stringify(report), /private/);
+  const withoutWarning = summarizeDiff(configOutput("  ", changed));
+  assert.equal(withoutWarning.structuredChangedItemCount, 2);
+  assert.equal(withoutWarning.changedItemCount, 2);
+  assert.equal(withoutWarning.remoteConfigCategory, "none");
+  assert.equal(withoutWarning.remoteConfigChanged, false);
+});
+
+test("ambiguous config headers keep the exact unknown result without speculative diagnostics", () => {
+  const header = "Remote config would be overwritten with the following changes:";
+  assert.deepEqual(summarizeDiff(`${header}\n  \n${configOutput("  ")}`), {
+    diffStatus: "unknown",
+    parityEstablished: false,
+  });
+});
 test("module and config changes are reported without returning paths or source", () => {
   const changed = diff();
   changed.componentDiffs[""].moduleDiff.added.push("private-module.js");
@@ -211,6 +349,47 @@ test("dry-run reads preserve exact source, origins, registry and retention; no s
   assert.ok(!calls.some((x) => x.args.includes("OPENROUTER_API_KEY")));
   assert.ok(!calls.some((x) => x.args[1] === "env" && x.args.includes("CONVEX_SITE_URL")));
 });
+
+test("absent billing declarations are observed as null without reading or setting them", async () => {
+  const { execute, calls } = mock();
+  const report = await runParity(env, execute);
+  assert.deepEqual(report.billingDeclarations, {
+    GOLDEN_OPENROUTER_BILLING: null,
+    GOLDEN_TAVILY_BILLING: null,
+    GOLDEN_TAVILY_CREDIT_USD: null,
+  });
+  assert.ok(
+    !calls.some((call) => call.args.some((arg) => Object.hasOwn(billingDeclarations, arg))),
+  );
+  assert.ok(!calls.some((call) => call.args[1] === "env" && call.args[2] === "set"));
+});
+
+test("only the three supported nonsecret billing declarations are returned", async () => {
+  const { execute, calls } = mock({ billingDeclarations });
+  assert.deepEqual((await runParity(env, execute)).billingDeclarations, billingDeclarations);
+  for (const name of Object.keys(billingDeclarations))
+    assert.equal(
+      calls.filter(
+        (call) => call.args[1] === "env" && call.args[2] === "get" && call.args[3] === name,
+      ).length,
+      2,
+    );
+  assert.ok(!calls.some((call) => call.args[1] === "env" && call.args[2] === "set"));
+  assert.ok(!calls.some((call) => call.args.includes("OPENROUTER_API_KEY")));
+});
+
+for (const name of Object.keys(billingDeclarations)) {
+  test(`unexpected ${name} declaration refuses without leaking its value`, async () => {
+    const { execute, calls } = mock({
+      billingDeclarations: { ...billingDeclarations, [name]: "private-unsupported-value" },
+    });
+    await assert.rejects(runParity(env, execute), {
+      message: "PHASE48_STAGING_PARITY_REFUSED",
+    });
+    assert.equal(calls.filter((call) => call.args[1] === "deploy").length, 0);
+    assert.ok(!calls.some((call) => call.args[1] === "env" && call.args[2] === "set"));
+  });
+}
 test("successful dry-run without structured evidence reports unknown, not source parity", async () => {
   const { execute } = mock({ unknownDiff: true });
   assert.equal((await runParity(env, execute)).diffStatus, "unknown");

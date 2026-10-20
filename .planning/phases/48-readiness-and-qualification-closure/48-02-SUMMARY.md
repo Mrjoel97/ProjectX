@@ -198,11 +198,36 @@ made to imply all five globals were bound. An ordinary unpinned native turn does
 explicit-pin-load witness; baseline snapshots alone cannot prove which body actually loaded.
 Keep this attribution limit explicit in any later acceptance disposition.
 
-The separate exact-PR75 staging release checkpoint is pending: only the approved source plus
+At the read-only comparison, the separate exact-PR75 staging release checkpoint was pending: only the approved source plus
 the3attested billing labels are proposed. The earlier conditional account/fixture/$1approval
 hash is unchanged and does not authorize this release. No apply, label write, new account,
 owner grant, probe or model call occurred. Source parity remains false, production's original
 $1scope remains unused, Phase21 stays accepted, and Phase23/48-02 remain partial with Phase49
 not started.
+
+### October20 separately approved staging apply and failed final acceptance
+
+The user subsequently approved only the exact PR75 staging release and3attested billing
+labels. This separate approval hash is
+`a1772ce8b78d8d34e4a88fb54d6e5c7fd41e84d2f355adcd927c848d0bb18f47`; the earlier
+conditional account/fixture/$1scope hash is unchanged. Source remains
+`50289ed15db4e20547b5a5e5b9ff5cd8fb80bb71`, qualified by CI`39412119620`.
+
+Release run`39416580614`, job`118606976651`, returned `success=false` at
+`postflight_preservation` after `applyAttempted=true` and `applyCompleted=true`.
+`postflightPassed=true` means the read-only postflight ran, not that release acceptance passed.
+`preservationVerified=true` and all3before/after hashes match. `postflightParityZero=false`;
+the result does not expose a remaining change count or cause. Final billing-label verification
+was not reached, so `billingLabelsVerified=false` means unverified, not proof the labels are
+wrong; `billingLabelsMayHaveChanged=true` remains explicit.
+
+The exact sanitized result is preserved separately as `48-STAGING-RELEASE-2026-10-20.json`,
+byte-identical SHA256`c5f7f35f5aa102aab813bae64ae2682c325014194671ba2bea5f1aeeb3b10b89`.
+Earlier read-only observations remain unchanged. The release attempt is closed failed pending
+separate read-only difference-category and billing readback diagnosis. No automatic apply retry,
+rollback, gate weakening or app-code change follows. No new accounts, owner grant, probe or
+model call occurred. No overall release/parity, current46-case semantic pass or actual loaded-body
+witness is claimed. Production's original $1scope is unused; Phase21 remains accepted,
+Phase23/48-02 remain partial and Phase49 has not started.
 
 New authoring requires its own exact fresh authorization, a new bounded envelope and fresh native controlled sessions; no old envelope or undocumented receipt grants that work. The prepared scope is one inert `offer-architect` adaptation plus one escalation/refusal turn, maximum100cents aggregate and no full evaluation or activation. Exact-row paid evaluation and actual owner activation/rollback remain separate later checkpoints. Missing configuration/credentials and historical private receipts must not be replaced by fabricated readiness. Phase23 and48-02 remain open; Phase49 has not started.
