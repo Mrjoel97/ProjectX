@@ -1,3 +1,5 @@
+> Last verified: 2026-10-20 — Refreshed the native evaluator revision after the additive tenant-profile fixture marker changed the existing schema source pin. The closed inventory, six lanes, forty cases and corpus hash remain unchanged. Offline corpus/fixture checks pass; this is no new live evaluation, semantic qualification, activation or rollback evidence.
+
 > Last verified: 2026-10-19 — Refreshed native evaluator source identity after workspace intake gained metadata-only thread preparation, batched uploads and review-first voice transcription. The six-lane forty-case corpus is unchanged. This bookkeeping does not claim a live evaluation, qualification or activation.
 
 > Last verified: 2026-10-19 — Refreshed native exact-source pins after final reporting metadata changes; the six-lane forty-case corpus is unchanged. No live evaluation or activation is claimed.

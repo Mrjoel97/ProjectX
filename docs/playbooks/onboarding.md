@@ -1,3 +1,5 @@
+> Last verified: 2026-10-20 — `__seedOnboardedTenant` marks both inserted and patched synthetic tenant profiles with the closed `qualificationFixture: "onboarding-harness-v1"` provenance field. Ordinary native onboarding does not create this marker. Weekly review skips explicit fixtures both when enumerating and when executing an already-queued review; explicit qualification authoring still follows its own scope and budget. The helper performs database-only fixture preparation, not approved native foundation publication, retrieval grounding or onboarding acceptance. Existing users are not backfilled or relabeled.
+
 > Last verified: 2026-10-19 — Settings is the only profile-related sidebar entry. The existing Business Profile, Connections and Settings tabs, URL-derived selection and legacy deep links remain available; onboarding and account identity behavior are unchanged.
 
 > Last verified: 2026-10-19 — Connections now exposes optional Zernio reporting beside Buffer. The profile onboarding and account identity flows are unchanged.

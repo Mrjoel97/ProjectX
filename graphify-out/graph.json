@@ -306035,6 +306035,17 @@
       "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_intakecontrols",
       "target": "packages_backend_convex_cockpit"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.ts",
+      "source_location": "L107",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_proactivereview",
+      "target": "packages_backend_convex_tenantprofile_fortenant"
     }
   ],
   "hyperedges": [],

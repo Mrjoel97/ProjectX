@@ -134,4 +134,42 @@ but their staging billing labels have not been written. The conditional staging 
 and exclusions above remain unchanged. Production's original $1 scope is unused, and
 Phase23/48-02 remain partial with Phase49 blocked.
 
+### October20 successful read-only staging inspection and release preparation
+
+PR74 source `d40a7f08a2da2b8730d5df2cc8437ce2e9b9c190` passed green CI run
+`39407950620` and merged as `bc43f80531c060faab9f86e7015ff4514fd57170` without
+production promotion. Second staging workflow `39409301452`, job`118582833599`, completed
+successfully. Its exact-target read-only comparison preserved configuration, registry and the
+protected retention fixture. It returned `diffStatus: changes`, `changedItemCount: 1`, and
+`parityEstablished: false`. This is successful inspection with an outstanding deployment difference,
+not a parity pass or deployment receipt. The redaction-safe observation is
+`48-STAGING-PREFLIGHT-2026-10-20.json`; it is not a certified Phase23 lifecycle artifact.
+
+Local exact-stage CLI registry reads also encountered intermittent Windows UV crashes. The
+The prepared CI operator will report five global registry references/hashes without raw bodies. Those snapshots
+do not certify skill semantics or replace exact candidate/evaluation/activation evidence.
+
+A narrow qualification-fixture marker is now implemented on new tenant profiles: both weekly
+enumeration and already queued review execution skip marked fixtures. Existing ordinary
+profiles remain unchanged; no backfill was performed. The36onboarding and10proactive-review
+tests and backend typecheck pass. Golden and vertical identities were refreshed using their
+existing closed inventories; the46golden and40vertical cases/hashes remain unchanged and their
+offline checks pass. These source changes are not yet a staging deployment or new accounts.
+
+The separate manual-only staging release workflow/operator is prepared, **not authorized or
+dispatched**. It binds an exact approved source, successful CI and a fresh release-authorization
+hash, admits only the strict staging selector, and limits billing writes to the3attested labels
+`GOLDEN_OPENROUTER_BILLING=standard`, `GOLDEN_TAVILY_BILLING=free`, and
+`GOLDEN_TAVILY_CREDIT_USD=0`. It preserves protected snapshot hashes and requires a zero-change
+post-release diff; unknown results stop without automatic apply retry or rollback. The51combined
+operator tests pass. Full CI for the new combined release/fixture branch remains pending;
+fresh exact-source read-only comparison and the user's explicit release approval are still
+required. The existing no-apply staging approval does not authorize this release.
+
+No apply, configuration-label write, account creation, owner grant, probe or model call occurred.
+The conditional scope approval hash remains
+`50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19`; the original
+production $1scope is unused. Phase21 stays accepted, Phase23/48-02 remain partial, and
+Phase49 has not started.
+
 New authoring requires its own exact fresh authorization, a new bounded envelope and fresh native controlled sessions; no old envelope or undocumented receipt grants that work. The prepared scope is one inert `offer-architect` adaptation plus one escalation/refusal turn, maximum100cents aggregate and no full evaluation or activation. Exact-row paid evaluation and actual owner activation/rollback remain separate later checkpoints. Missing configuration/credentials and historical private receipts must not be replaced by fabricated readiness. Phase23 and48-02 remain open; Phase49 has not started.

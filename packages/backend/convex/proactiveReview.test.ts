@@ -90,7 +90,10 @@ async function seedDoc(
  * Draining everything also starts dispatchRun's unregistered workflow, outside this suite's scope,
  * and made the first cold module import exhaust convex-test's timer-pump limit under suite load.
  */
-async function runCron(t: ReturnType<typeof convexTest>): Promise<void> {
+async function runCron(
+  t: ReturnType<typeof convexTest>,
+  expectedTenantIds?: string[],
+): Promise<void> {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   try {
     await t.mutation(internal.proactiveReview.enumerateWeeklyReview, {
@@ -116,6 +119,7 @@ async function runCron(t: ReturnType<typeof convexTest>): Promise<void> {
       tenantIds.add(args.tenantId);
       await t.run((ctx) => ctx.scheduler.cancel(row._id));
     }
+    if (expectedTenantIds) expect([...tenantIds].sort()).toEqual([...expectedTenantIds].sort());
     for (const row of reviews)
       await t.action(internal.proactiveReview.reviewOne, row.args[0] as { tenantId: string });
 
@@ -162,6 +166,65 @@ async function notifications(t: ReturnType<typeof convexTest>, tenantId: string)
 }
 
 describe("proactive weekly review (BEVL-03 — cron → per-tenant review → in-app card)", () => {
+  test("fixture-backed native tenants are excluded while ordinary profiles still receive reviews", async () => {
+    const t = newTest();
+    const ordinary = await newTenant(t);
+    const fixture = await newTenant(t);
+    await t.mutation(internal.skills.seedSkills, {});
+    await seedDoc(t, ordinary, "business_profile", profileText("Acme Dog Training"));
+    await t.mutation(internal.onboarding.__seedOnboardedTenant, { tenantId: fixture });
+
+    await runCron(t, [ordinary]);
+
+    expect(await reviewRows(t, ordinary)).toHaveLength(1);
+    expect(await reviewRows(t, fixture)).toEqual([]);
+    expect(await notifications(t, fixture)).toEqual([]);
+  });
+
+  test("a job queued before fixture seeding stops without evaluation, agenda or notification effects", async () => {
+    const t = newTest();
+    const tenantId = await newTenant(t);
+    await seedDoc(t, tenantId, "business_profile", profileText("Acme Dog Training"));
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      await t.mutation(internal.proactiveReview.enumerateWeeklyReview, {
+        cursor: null,
+        batchSize: 100,
+        dryRun: false,
+        oneBatchOnly: true,
+      });
+      const queued = await t.run(async (ctx) =>
+        (await ctx.db.system.query("_scheduled_functions").collect()).filter(
+          (row) => row.state.kind === "pending",
+        ),
+      );
+      expect(queued).toHaveLength(1);
+      const job = queued[0];
+      if (!job) throw new Error("Expected the ordinary tenant's queued review");
+      expect(job.name.replace(/\.js:/, ":")).toBe(
+        getFunctionName(internal.proactiveReview.reviewOne),
+      );
+      await t.mutation(internal.onboarding.__seedOnboardedTenant, { tenantId });
+      await t.run((ctx) => ctx.scheduler.cancel(job._id));
+      await t.action(internal.proactiveReview.reviewOne, job.args[0] as { tenantId: string });
+
+      expect(await reviewRows(t, tenantId)).toEqual([]);
+      expect(await notifications(t, tenantId)).toEqual([]);
+      expect(await t.run((ctx) => ctx.db.query("agenda").collect())).toEqual([]);
+      expect(await t.run((ctx) => ctx.db.query("plans").collect())).toEqual([]);
+      expect(await t.run((ctx) => ctx.db.query("spendEvents").collect())).toEqual([]);
+      expect(
+        await t.run(async (ctx) =>
+          (await ctx.db.system.query("_scheduled_functions").collect()).filter(
+            (row) => row.state.kind === "pending",
+          ),
+        ),
+      ).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("enumerates only tenants with a business_profile doc (deduped, one review each)", async () => {
     const t = newTest();
     const A = await newTenant(t);

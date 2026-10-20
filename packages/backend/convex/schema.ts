@@ -2822,6 +2822,9 @@ export default defineSchema({
   // by_tenant. New table ⇒ no migration (prior-phase discipline).
   tenantProfiles: defineTable({
     tenantId: v.string(),
+    // Written only by the internal onboarding harness. Synthetic profiles must not arm
+    // unattended weekly model work; absence preserves ordinary and legacy eligibility.
+    qualificationFixture: v.optional(v.literal("onboarding-harness-v1")),
     // Tier facts (@pikar/core `TierFacts`). ALL optional: a `legacy` backfill row has none by
     // definition and design §10 forbids forced re-onboarding, so the "narrow" half of
     // widen-migrate-narrow is deliberately NEVER taken. Completeness is enforced at the WRITE

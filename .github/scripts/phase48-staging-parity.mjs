@@ -168,7 +168,14 @@ if(await digest([fixtures[0]._id,fixtures[0].tenantId,fixtures[0]._creationTime]
 const rows=await ctx.db.query("foundationTranscripts").withIndex("by_tenant",q=>q.eq("tenantId",fixtures[0].tenantId)).take(2);
 if(rows.length!==1||rows[0].eventId!=="retention-clock-probe"||Math.abs(rows[0]._creationTime-Date.parse("2026-10-17T10:18:29.493Z"))>1||rows[0].expiresAt!==Date.parse("2026-10-24T10:18:29.493Z")||Date.now()>=rows[0].expiresAt)throw Error("CLOCK");
 return {sha256:await digest([fixtures[0],rows[0]]),checkpointCount:1};`;
-const registryQuery = `const rows=await ctx.db.query("skills").take(1001);if(rows.length>1000)throw Error("BOUND");const bytes=new TextEncoder().encode(JSON.stringify(rows));return {count:rows.length,sha256:Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))).map(b=>b.toString(16).padStart(2,"0")).join("")};`;
+const registrySelection = [
+  ["cockpit-agent", "cockpitAgent", "cockpitAgentSkillBody"],
+  ["offer-architect", "offerArchitect", "offerArchitectSkillBody"],
+  ["money-model-designer", "moneyModelDesigner", "moneyModelDesignerSkillBody"],
+  ["lead-engine", "leadEngine", "leadEngineSkillBody"],
+  ["executive-router", "executiveRouter", "executiveRouterSkillBody"],
+];
+const registryQuery = `const rows=await ctx.db.query("skills").take(1001);if(rows.length>1000)throw Error("BOUND");const digest=async value=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value)))).map(b=>b.toString(16).padStart(2,"0")).join("");const selected=[];for(const key of ${JSON.stringify(registrySelection.map(([key]) => key))}){const active=rows.filter(r=>r.name===key&&r.status==="active");selected.push({key,activeCount:active.length,active:await Promise.all(active.map(async r=>({id:String(r._id),version:r.version,bodyHash:await digest(r.body)})))});}return {count:rows.length,sha256:await digest(JSON.stringify(rows)),selected};`;
 
 export async function runParity(env = process.env, execute = spawnSync, onPhase = () => {}) {
   onPhase("admission");
@@ -206,6 +213,14 @@ export async function runParity(env = process.env, execute = spawnSync, onPhase 
   const { ENV_MANIFEST, ORIGIN_ENV } = await import(
     new URL("../../packages/backend/convex/lib/env.ts", import.meta.url)
   );
+  const sourceHashes = new Map();
+  for (const [key, file, field] of registrySelection) {
+    const source = await import(
+      new URL(`../../packages/contracts/src/skills/${file}.ts`, import.meta.url)
+    );
+    demand(typeof source[field] === "string");
+    sourceHashes.set(key, hash(source[field]));
+  }
   const names = [
     ...new Set([
       ...ORIGIN_ENV.filter((name) => name !== "CONVEX_SITE_URL"),
@@ -246,12 +261,40 @@ export async function runParity(env = process.env, execute = spawnSync, onPhase 
     onPhase(when === "before" ? "before_registry" : "after_registry");
     const registry = query(registryQuery);
     demand(
-      keys(registry, ["sha256", "count"]) &&
+      keys(registry, ["sha256", "count", "selected"]) &&
         Number.isSafeInteger(registry.count) &&
         registry.count > 0 &&
         registry.count <= 1000 &&
         /^[a-f0-9]{64}$/.test(registry.sha256),
     );
+    demand(
+      Array.isArray(registry.selected) && registry.selected.length === registrySelection.length,
+    );
+    const ids = new Set();
+    for (const [index, selected] of registry.selected.entries()) {
+      demand(
+        keys(selected, ["key", "activeCount", "active"]) &&
+          selected.key === registrySelection[index][0] &&
+          Number.isSafeInteger(selected.activeCount) &&
+          selected.activeCount >= 0 &&
+          selected.activeCount <= registry.count &&
+          Array.isArray(selected.active) &&
+          selected.active.length === selected.activeCount,
+      );
+      for (const row of selected.active) {
+        demand(
+          keys(row, ["id", "version", "bodyHash"]) &&
+            typeof row.id === "string" &&
+            /^[a-zA-Z0-9]{1,128}$/.test(row.id) &&
+            !ids.has(row.id) &&
+            Number.isSafeInteger(row.version) &&
+            row.version > 0 &&
+            typeof row.bodyHash === "string" &&
+            /^[a-f0-9]{64}$/.test(row.bodyHash),
+        );
+        ids.add(row.id);
+      }
+    }
     return { configuration, runtimeOrigins, retention, registry };
   };
   onPhase("source");
@@ -290,6 +333,24 @@ export async function runParity(env = process.env, execute = spawnSync, onPhase 
     configurationUnchanged: true,
     registryUnchanged: true,
     protectedRetentionUnchanged: true,
+    watchedConfigurationSha256: hash(JSON.stringify(before.configuration)),
+    registrySha256: before.registry.sha256,
+    protectedRetentionSha256: before.retention.sha256,
+    globalSkillPrerequisites: {
+      allSelectedHaveExactlyOneActive: before.registry.selected.every((s) => s.activeCount === 1),
+      allSelectedActiveBodiesMatchSource: before.registry.selected.every(
+        (s) => s.activeCount === 1 && s.active[0].bodyHash === sourceHashes.get(s.key),
+      ),
+      semanticProof: false,
+      selected: before.registry.selected.map((s) => ({
+        ...s,
+        sourceBodyHash: sourceHashes.get(s.key),
+        active: s.active.map((row) => ({
+          ...row,
+          matchesSource: row.bodyHash === sourceHashes.get(s.key),
+        })),
+      })),
+    },
     ...diff,
   };
 }

@@ -1,3 +1,5 @@
+> Last verified: 2026-10-20 — Explicit internal onboarding fixtures carry the closed tenant-profile marker `qualificationFixture: "onboarding-harness-v1"`. Weekly enumeration excludes that exact marker, and reviewOne rechecks it through the existing internal profile query before evaluation, agenda work or notifications. The second check also stops already-queued fixture reviews. Missing markers preserve ordinary and legacy behavior; this is no global recurrence switch. Only the internal fixture helper sets the marker. It prevents an ordinary weekly review from spending outside a separately bounded qualification probe, without certifying onboarding or model behavior.
+
 > Last verified: 2026-10-15 — Agenda goal lookup now uses the tenant/status/segment index and reads one active goal per displayed gap. Agenda rows themselves retain the closed route/playbook-key vocabulary; no tenant goal history is loaded for a weekly agenda. Local agenda regression suite passes.
 
 # Playbook: Business Evaluation Engine

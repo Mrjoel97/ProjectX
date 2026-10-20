@@ -58,6 +58,11 @@ export const enumerateWeeklyReview = migrations.define({
   batchSize: 100,
   migrateOne: async (ctx, user) => {
     const tenantId = String(user._id);
+    const tenantProfile = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .unique();
+    if (tenantProfile?.qualificationFixture === "onboarding-harness-v1") return;
     const profile = await ctx.db
       .query("vaultDocuments")
       .withIndex("by_tenant_kind", (q) => q.eq("tenantId", tenantId).eq("kind", "business_profile"))
@@ -96,6 +101,13 @@ export const reviewOne = internalAction({
   // ponytail note at gmailAuth.ts:164). Do not let these be inferred.
   handler: async (ctx, { tenantId }): Promise<void> => {
     try {
+      // Recheck at execution: an ordinary tenant may have been fixture-seeded after
+      // this job was queued. The harness authorizes no unattended model spend.
+      const tenantProfile: Doc<"tenantProfiles"> | null = await ctx.runQuery(
+        internal.tenantProfile.forTenant,
+        { tenantId },
+      );
+      if (tenantProfile?.qualificationFixture === "onboarding-harness-v1") return;
       // ONE read serves both jobs: carry last week's framework forward (compare like with like)
       // and supply the previous verdict for the notify-on-change decision.
       const last: Doc<"evaluations"> | null = await ctx.runQuery(
