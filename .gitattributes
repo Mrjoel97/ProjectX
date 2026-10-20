@@ -7,4 +7,4 @@
 *.sh text eol=lf
 
 # This immutable observation was hashed before Git text normalization. Preserve its exact bytes.
-.planning/phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-HANDOFF-REFRESH.json -text
+.planning/phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-HANDOFF-REFRESH.json -text whitespace=trailing-space,space-before-tab,cr-at-eol
