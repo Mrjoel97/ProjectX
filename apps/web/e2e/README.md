@@ -181,6 +181,20 @@ All three schemas are recursively closed. The handoff records candidate identity
 baseline/effective/global/foreign snapshots, fixed auth path labels and browser witness counters.
 The owner witness is exactly one of legacy `nonOwnerBeforeBootstrap:true` or truthful recovered
 `existingOwnerAtStart:true`; neither branch manufactures the other observation.
+
+A manual native journey may instead use the exact independent origins
+`http://127.0.0.1:3111` for A and `http://localhost:3111` for B, both bound to the same intended
+backend. The closed `authRefs` alternative has `primaryNativeOrigin`, `foreignNativeOrigin` and
+the same exact primary/foreign IDs; it cannot mix in storage-file labels or claim absent exports.
+Before any model work, observe each actual authenticated session at `/ops/qualification-identity`
+with `PHASE23_ACCESS_CHECK_ENABLED=1` and fixed server-only
+`PHASE23_ACCESS_CHECK_EXPECTED_A_ID/B_ID` pins. Only the matching A-owner/B-nonowner DOM code
+qualifies for paid readiness. `A_NON_OWNER_MATCH` observes fresh A before a separately approved
+grant; it never substitutes for A-owner readiness. Missing profiles stop readiness; no seeding
+or token extraction is a substitute. Any explicit staging fixture exception must be approved
+and labeled as fixture-backed qualification rather than native onboarding proof.
+This development-only route is404 in production and performs no mutation. All original budget,
+source-to-candidate, governance, viewport, isolation and later owner checkpoints still apply.
 Eval/live artifacts bind the exact prior bytes, same candidate/deployment/suite, non-owner refusal
 state and owner activation/rollback. Browser fields are observations supplied by the operator, not
 facts a JSON validator can independently certify. No live artifact is created by the self-test.

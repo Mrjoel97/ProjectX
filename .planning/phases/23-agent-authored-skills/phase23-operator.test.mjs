@@ -16,7 +16,14 @@ test("exact handoff compares source, immutable candidate, governance, baseline a
   assertLiveMatches("handoff", artifact, snapshot, provenance, source);
   // Both validated witness shapes retain the exact same read-only state/hash comparisons.
   for (const witness of [{nonOwnerBeforeBootstrap: true}, {existingOwnerAtStart: true}])
-    assertLiveMatches("handoff", {...artifact, browser: {...artifact.browser, ...witness}}, snapshot, provenance, source);
+    for (const authRefs of [
+      {primaryStorageStateRef: "e2e/.auth/user.json", foreignStorageStateRef: "e2e/.auth/foreign.json", primaryUserId: "tenantA", foreignUserId: "tenantB"},
+      {primaryNativeOrigin: "http://127.0.0.1:3111", foreignNativeOrigin: "http://localhost:3111", primaryUserId: "tenantA", foreignUserId: "tenantB"},
+    ]) {
+      const witnessed = {...artifact, authRefs, browser: {...artifact.browser, ...witness}};
+      assertLiveMatches("handoff", witnessed, snapshot, provenance, source);
+      assert.throws(() => assertLiveMatches("handoff", witnessed, {...snapshot, foreignCurrent: {id: "changed"}}, provenance, source));
+    }
   for (const key of ["deploymentHash", "currentEffective", "globalCurrent", "foreignCurrent", "rollbackBaseline"])
     assert.throws(() => assertLiveMatches("handoff", artifact, {...snapshot, [key]: "changed"}, provenance, source));
   assert.throws(() => assertLiveMatches("handoff", artifact, snapshot, {...provenance, sourceTurnId: "other"}, source));

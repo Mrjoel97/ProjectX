@@ -50,7 +50,14 @@ const candidate = (stage) => exact({ ...candidateFields,
 });
 const state = exact({ sha256: hash, auditCount: count, requestCount: count, approvedPlanCount: count, toolGrantSha256: hash });
 const evalRun = exact({ runId: ref, passed: positive, total: positive, retries: count, model: ref, costUsd: money, costCapUsd: money, authorizationSha256: hash });
-const authRefs = exact({ primaryStorageStateRef: literal("e2e/.auth/user.json"), foreignStorageStateRef: literal("e2e/.auth/foreign.json"), primaryUserId: ref, foreignUserId: ref });
+// A manual native journey may use two independent local origins without exporting auth state.
+// Keep the old exact file-label shape and this exact origin pair mutually exclusive; arbitrary
+// URLs, mixed witnesses and claimed storage files that were never produced are not admitted.
+const authRefs = (v) => exact({
+  ...(Object.hasOwn(v ?? {}, "primaryNativeOrigin") || Object.hasOwn(v ?? {}, "foreignNativeOrigin")
+    ? { primaryNativeOrigin: literal("http://127.0.0.1:3111"), foreignNativeOrigin: literal("http://localhost:3111") }
+    : { primaryStorageStateRef: literal("e2e/.auth/user.json"), foreignStorageStateRef: literal("e2e/.auth/foreign.json") }),
+  primaryUserId: ref, foreignUserId: ref })(v);
 // Preserve every legacy artifact. A continuation names the actually observed existing owner;
 // it cannot also claim a fresh non-owner/bootstrap witness. Both branches remain exactly closed.
 const browser = (v) => exact({ sourceThreadId: ref, observedAt: positive, activityTool: literal("authorSkillCandidate"), candidateCount: literal(1), authoringToolCalls: literal(1), authenticated: literal(true), viewportCount: positive,
