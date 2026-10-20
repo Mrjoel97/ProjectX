@@ -16,7 +16,7 @@ vi.mock("@playwright/test", () => ({
   }),
 }));
 
-import { existingOwner, nonOwner } from "../../../../e2e/phase23NativeAuth";
+import { existingOwner, nonOwner, verifyInspectionTarget } from "../../../../e2e/phase23NativeAuth";
 
 const primaryId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const foreignId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -51,11 +51,54 @@ beforeEach(() => {
   vi.stubEnv("PIKAR_PHASE23_PRIMARY_USER_ID", primaryId);
   vi.stubEnv("PIKAR_PHASE23_FOREIGN_USER_ID", foreignId);
   vi.stubEnv("PIKAR_CONVEX_TARGET", "dev");
+  vi.stubEnv("CONVEX_URL", "https://woozy-wren-368.convex.cloud");
   vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 });
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
+});
+
+test("native inspection guard checks the exact dashboard without authentication or mutation", () => {
+  state.read.mockReturnValue({
+    status: 0,
+    stdout: "https://dashboard.convex.dev/d/woozy-wren-368\n",
+  });
+  expect(() => verifyInspectionTarget()).not.toThrow();
+  expect(state.read).toHaveBeenCalledTimes(1);
+  const args = state.read.mock.calls[0]?.[1];
+  expect(args?.slice(1)).toEqual(["dashboard", "--no-open"]);
+  vi.stubEnv("PIKAR_CONVEX_TARGET", "prod");
+  vi.stubEnv("CONVEX_URL", "https://opulent-octopus-494.convex.cloud");
+  state.read.mockReturnValue({
+    status: 0,
+    stdout: "https://dashboard.convex.dev/d/opulent-octopus-494",
+  });
+  verifyInspectionTarget();
+  expect(state.read.mock.calls[1]?.[1].slice(1)).toEqual(["dashboard", "--prod", "--no-open"]);
+});
+
+test("missing or credential-bearing inspection URL refuses before any CLI or auth operation", () => {
+  for (const url of [
+    "",
+    "https://private@woozy-wren-368.convex.cloud",
+    "https://woozy-wren-368.convex.cloud?private",
+  ]) {
+    vi.stubEnv("CONVEX_URL", url);
+    expect(() => verifyInspectionTarget()).toThrow("PHASE23_EXPLICIT_INSPECTION_URL_REQUIRED");
+  }
+  expect(state.read).not.toHaveBeenCalled();
+});
+
+test.each([
+  { status: 0, stdout: "https://dashboard.convex.dev/d/opulent-octopus-494" },
+  { status: 1, stdout: "private diagnostic", stderr: "private-token" },
+  { status: null, error: { code: "ETIMEDOUT" }, stdout: "private diagnostic" },
+  { status: 0 },
+])("wrong target or uncertain dashboard read fails with a fixed diagnostic", (result) => {
+  state.read.mockReturnValue(result);
+  expect(() => verifyInspectionTarget()).toThrow(/^PHASE23_INSPECTION_TARGET_FAILED$/);
+  expect(state.read).toHaveBeenCalledTimes(1);
 });
 
 test("shared existing-owner helper signs in natively and checks exact identity and role before and after", async () => {

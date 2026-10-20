@@ -5,9 +5,14 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AGENT_AUTHORABLE_SKILLS, AGENT_EVAL_SUITE } from "@pikar/contracts/skill";
 import { expect, type Page, test } from "@playwright/test";
-import { authenticate, existingOwner, nonOwner } from "./phase23NativeAuth";
+import { authenticate, existingOwner, nonOwner, verifyInspectionTarget } from "./phase23NativeAuth";
 import { assertPhase23PriorAttempt, phase23OwnerMode } from "./phase23OwnerContinuation";
-import { type ProbeExpectation, probeReadback, requestedCap } from "./phase23ProbeControls";
+import {
+  candidateInspectionArgs,
+  type ProbeExpectation,
+  probeReadback,
+  requestedCap,
+} from "./phase23ProbeControls";
 
 // Opt-in paid browser proof. Listing/default E2E runs never author a candidate or grant owner.
 // All subprocess output stays private; failures expose a step label, never model text or tokens.
@@ -89,6 +94,7 @@ function readProbe(expected: ProbeExpectation, turns: 0 | 1 | 2, closed = false)
   );
 }
 async function openProbe(page: Page, expected: ProbeExpectation) {
+  verifyInspectionTarget();
   await page.goto(`/dashboard/workspace?thread=${encodeURIComponent(expected.threadId)}`);
   await expect
     .poll(() =>
@@ -140,6 +146,7 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
   demand(needle && needle.length >= 24, "PHASE23_PRIVATE_NEEDLE_REQUIRED");
   demand(!existsSync(handoffPath), "PHASE23_HANDOFF_ALREADY_EXISTS");
   const validator = await import(pathToFileURL(resolve(phase, "validate-live-artifact.mjs")).href);
+  verifyInspectionTarget();
 
   // These are actual free gates, not an operator-supplied boolean. No seed/model/evidence path.
   process.stdout.write("PHASE23_STAGE_FREE_GATES_STARTED\n");
@@ -201,6 +208,7 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
     );
 
     let previousAttempt: ReturnType<typeof assertPhase23PriorAttempt> | undefined;
+    verifyInspectionTarget();
     if (ownerMode.kind === "fresh-bootstrap") {
       const grant = query("owner:bootstrapOwner", { userId: primaryId });
       demand(grant.changed === true, "PHASE23_OWNER_BOOTSTRAP_NOT_FRESH");
@@ -218,6 +226,7 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
         },
       );
     }
+    verifyInspectionTarget();
     const prepared = query("authoringProbe:prepare", {
       userId: primaryId,
       capCents,
@@ -261,21 +270,7 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
     );
     const candidateId = created.candidates[0]?.tenantSkillId;
     demand(typeof candidateId === "string", "PHASE23_CANDIDATE_UNRESOLVED");
-    const exactArgs = [
-      "--inspect-tenant-skill",
-      candidateId,
-      "--foreign-tenant",
-      foreignId,
-      "--expect-status",
-      "candidate",
-      "--expect-evidence",
-      "absent",
-      "--expect-gate-passed",
-      "false",
-      "--expect-rollback-eligible",
-      "false",
-      "--json",
-    ];
+    const exactArgs = candidateInspectionArgs(candidateId, foreignId);
     const before = stable(() => inspect(exactArgs));
     demand(
       created.governance.requestCount === prior.governance.requestCount &&

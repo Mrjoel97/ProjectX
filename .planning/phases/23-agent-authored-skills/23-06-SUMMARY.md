@@ -7,7 +7,7 @@ requirements-addressed: [SKILL-02]
 requirements-completed: []
 ---
 
-# Phase 23-06 — authorized bounded browser probe, execution pending
+# Phase 23-06 — staging turns and responsive proof observed, CI/handoff pending
 
 ## Recorded authorization — 2026-09-12
 
@@ -106,3 +106,49 @@ The single runner exited `1` at `2026-09-12T14:15:14.785Z` with `PHASE23_BROWSER
 Read-only native checks after the failure returned `isOwner:false` for both exact A/B identities. A's existing authoring projection still had zero total skill rows, candidates, active rows, authoring tool calls for the pre-authoring thread, requests, approved plans and governance activation/rollback audit events. The final private browser snapshot showed the sign-in UI with disabled `Signing in…` and `Connecting…` controls. This establishes a pending authentication/connection boundary, not invalid credentials or a semantic model failure. No probe was assigned in the harness and no recovery attachment was emitted. Together with the verified non-owner state and source order (owner bootstrap precedes registration and both submissions), this supports that this attempt never registered its budget or submitted either model turn. No independent tenant-wide provider-ledger count is claimed from the narrower authoring projection.
 
 The once-lock, immutable start/result records, encrypted canary and failed private browser evidence remain preserved. No passing handoff, owner grant, candidate creation, paid retry, evaluation or activation was certified or attempted after this failure. Any free authentication-harness repair must first receive root review and qualification before resuming the still-unconsumed authorized model scope.
+
+## Separate approved staging replacement — 2026-10-20, partial
+
+The production attempt above remains historical and its model scope unused; its identities, receipts and once-lock
+are not rewritten. The user separately approved the staging replacement with immutable scope hash
+`50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19`. Later release
+approval/failed acceptance, corrected read-only parity and diagnostic observations are recorded
+in Phase48 without changing this plan's immutable handoff requirements.
+
+Corrected inspection`39420426683`/job`118619711072` on source
+`f382c7316b63e118e7080c49681e61853d9712d3`, CI`39419822599`, passes exact staging parity
+and preserves registry/protected retention. See
+`../48-readiness-and-qualification-closure/48-STAGING-PREFLIGHT-FINAL-2026-10-20.json`.
+The refs/hash-only native pair receipt in that directory identifies fresh verified A
+`pn70yzs016xgrvzd6bqkaedj098gmytz` and B`pn72x2hv0nct3mzdkcjtn6rrex8gn92j`.
+Both synthetic fixtures are explicitly marked`onboarding-harness-v1`, ready but not RAG-grounded;
+setup requested zero model calls and is not real onboarding proof. Actual non-owner witnesses
+preceded one-time A-only owner grant; B remains non-owner.
+
+The two authorized native Executive turns completed on thread
+`m57egf5rjkbqhbyzdknjhmvybn8gnh4r`, budget`p571bfke7xwxw9hsmxcpbw0khs8gn1jk`.
+Actual observation receipt
+`../48-readiness-and-qualification-closure/48-STAGING-AUTHORING-PROBE-2026-10-20.json`
+binds turn1/turn2/closure and actual global pre/post snapshot hashes. One agent-authored
+offer-architect v2 candidate exists: `qn73f3q6zcs1fsjpm9x2vwykc58gm09j`, body hash
+`4ec9235c1d0ccce418e54e2adcc2393aa2e778fb8d0968047053f6e5473c12e0`. It has no evaluation
+evidence, owner approval or activation; the second escalation turn left only that candidate.
+Global/foreign effective skill refs, registry and protected retention remain unchanged.
+
+The100cent envelope is closed: two started/two finished turns, zero failed/containment refusals,
+three settled calls,`$0.00322965`actual cost, zero unresolved cents/unsettled calls or breach.
+These counters do not independently establish policy acceptance or actual prompt-load attribution.
+Native B exclusion and A disabled-review keyboard behavior were observed. Initial requested1440/390
+CUA labels did not resize the1280top window: those earlier witnesses are excluded, preserved,
+and awaiting root's explicit invalidation. Subsequent actual-desktop-review-witness.json and
+actual-mobile-review-witness.json alone establish measured1440x900/390x900 iframe DOM sizes
+in a local read-only port3112 harness around the native signed-in`http://127.0.0.1:3111/ops`
+app. Real keyboard Enter review open/close, exact candidate/provenance and disabled activation
+were observed at both sizes; compact navigation was observed at390. The separate
+`../48-readiness-and-qualification-closure/48-STAGING-RESPONSIVE-2026-10-20.json` binds only
+these two actual witness hashes. Free desktop-browser responsive layout proof is complete;
+no actual mobile-device or touch test is claimed. CI and root's immutable23-LIVE-HANDOFF
+writer/validation remain pending. This pass writes no handoff and leaves23-06 partial.
+Paid exact-row evaluation,
+owner activation/rollback and23-09 closure remain separate checkpoints. SKILL-02/Phase23/48-02
+stay open and Phase49 has not started.

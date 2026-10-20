@@ -1,0 +1,78 @@
+{
+  "schema": "phase48-executive-baseline-preservation.v1",
+  "target": "woozy-wren-368",
+  "sourceSha": "f382c7316b63e118e7080c49681e61853d9712d3",
+  "ciRunId": "39419822599",
+  "authorizationSha256": "50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19",
+  "threadId": "m57egf5rjkbqhbyzdknjhmvybn8gnh4r",
+  "budgetId": "p571bfke7xwxw9hsmxcpbw0khs8gn1jk",
+  "beforeObservedAt": "2026-10-20T12:59:52.763Z",
+  "afterObservedAt": "2026-10-20T13:13:15.711Z",
+  "registry": {
+    "count": 36,
+    "selected": [
+      {
+        "active": [
+          {
+            "bodyHash": "b765d7422d5e0d5d0d6beaa58b1310fbba02ced028a613cdc38aef01c3fec7e7",
+            "id": "nx724emgc6yxm3q50ce37cz8198c7qjg",
+            "version": 1
+          }
+        ],
+        "activeCount": 1,
+        "key": "cockpit-agent"
+      },
+      {
+        "active": [
+          {
+            "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+            "id": "nx77rsw6ktkpqt7dknmexyfnsx8c7bj6",
+            "version": 1
+          }
+        ],
+        "activeCount": 1,
+        "key": "offer-architect"
+      },
+      {
+        "active": [
+          {
+            "bodyHash": "05ca2aa8fd540a51ff4d04b8588a0b20dd78b3758a6f808875e7aa520b9bde46",
+            "id": "nx746fr0aejhxr5gcb7czy7ags8c77wb",
+            "version": 1
+          }
+        ],
+        "activeCount": 1,
+        "key": "money-model-designer"
+      },
+      {
+        "active": [
+          {
+            "bodyHash": "b5e79ddf021c5d423196ddf3e8782e2ae2c5845dbefa5b85f4e3269041695162",
+            "id": "nx79kyh9ajdkb87y9vhzjvay0s8c72bp",
+            "version": 1
+          }
+        ],
+        "activeCount": 1,
+        "key": "lead-engine"
+      },
+      {
+        "active": [
+          {
+            "bodyHash": "bf7dca991855283485dd9d2e720d17de196f5b21093af4b0d83961cc395fe55b",
+            "id": "nx7c53ya9za3qvwn5n3wf1dww18c6td7",
+            "version": 1
+          }
+        ],
+        "activeCount": 1,
+        "key": "executive-router"
+      }
+    ],
+    "sha256": "faac155d8c90d9205f2aa95072a520e50e727964974e64a6f62676bea73480e3"
+  },
+  "protectedRetentionSha256": "2ecc1945e018a9af66614a2dfceb8a71209f8b480c8015e73eed9b08d9590163",
+  "registryPreserved": true,
+  "protectedRetentionPreserved": true,
+  "cockpitSourceBodyHash": "d1fc43eb3423d8da9c4ba8113cf786aba1818324dcd8485b6e1dba0d4c2f180b",
+  "cockpitActiveMatchesCurrentSource": false,
+  "actualLoadedBodyAttributionEstablished": false
+}

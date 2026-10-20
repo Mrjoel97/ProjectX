@@ -2,8 +2,35 @@ import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page } from "@playwright/test";
+import { inspectionTarget } from "./phase23ProbeControls";
 
 const backend = resolve(dirname(fileURLToPath(import.meta.url)), "../../../packages/backend");
+
+/** No role, auth or provider action: require the inspector URL to identify the CLI's exact target. */
+export function verifyInspectionTarget() {
+  const expected = inspectionTarget(process.env);
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [
+        resolve(backend, "node_modules/convex/bin/main.js"),
+        "dashboard",
+        ...(process.env.PIKAR_CONVEX_TARGET === "prod" ? ["--prod"] : []),
+        "--no-open",
+      ],
+      { cwd: backend, encoding: "utf8", timeout: 60_000, maxBuffer: 1024 * 1024 },
+    );
+    if (
+      result.error ||
+      result.status !== 0 ||
+      typeof result.stdout !== "string" ||
+      result.stdout.trim() !== expected.dashboard
+    )
+      throw new Error("mismatch");
+  } catch {
+    throw new Error("PHASE23_INSPECTION_TARGET_FAILED");
+  }
+}
 type AuthStage =
   | "NAVIGATE"
   | "SIGN_OUT"

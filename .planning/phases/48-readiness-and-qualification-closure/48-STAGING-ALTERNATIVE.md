@@ -1,20 +1,21 @@
 ---
 phase: 48-readiness-and-qualification-closure
 plan: "02"
-status: approved-conditional-release-failed
+status: authoring-observed-handoff-pending
 completed: false
 requirements-completed: []
 ---
 
-# Staging alternative — approved scope awaiting free preflight
+# Staging alternative — bounded authoring observed, acceptance partial
 
 Prepared and conditionally approved 2026-10-20. The user explicitly replied **“Approve staging
 alternative.”** The immutable approval hash is
 `50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19`; its private scope
 receipt is dated2026-10-20. This conditional scope remains separate from the later release
-approval. **The separately approved staging apply completed, but final release acceptance failed;
-later independent readbacks verify standard/free/0. The raw diagnostic still reports parityfalse;
-the Node-advisory checker correction awaits CI and fresh read-only proof. No accounts or probe exist.**
+approval. **The historical release failure remains preserved. Corrected read-only parity now
+passes; the verified synthetic pair/A-only grant and two-turn probe completed within scope.
+Actual desktop-browser responsive proof is complete; CI/immutable handoff writer remain pending;
+no evaluation/activation pass or touch-device claim.**
 
 This is the approved conditional replacement scope for the unavailable controlled-account credentials,
 not a continuation receipt or an assertion that Phase23/48-02 passed. The original production
@@ -36,8 +37,8 @@ attestation is preserved in a separate private immutable `billing-attestation.js
 change the approval hash above and is not a configuration-write or paid-execution receipt.
 The pre-release observation returned null billing labels. The release's final readback was not
 reached, but the subsequent read-only diagnostic and independent billing receipt both verify
-standard/free/0. **Paid readiness remains blocked on the corrected checker's CI/read-only proof
-and the remaining native prerequisites.** The conditional
+standard/free/0. Corrected CI/read-only parity and native readiness were subsequently established,
+and only the approved bounded authoring probe ran. The conditional
 scope itself did not authorize configuration writes; the separate limited release approval and
 its failed acceptance are recorded below. Unknown pricing or usage stops work; no guessed cost
 or automatic retry.
@@ -113,12 +114,41 @@ The diagnostic and separate `48-STAGING-BILLING-READBACK-2026-10-20.json` both c
 3billing labels. This new evidence does not alter the immutable failed release result or either
 approval hash. No accounts, owner grant, probe or model work followed.
 
-Before any later authoring, preserve the actual five-global baseline using separate pre/post
-redaction-safe supplemental receipts. The fixed Phase23 handoff binds only offer-architect;
+Actual five-global pre/post snapshots are now bound by the authoring observation receipt;
+their registry/retention hashes match. The fixed Phase23 handoff binds only offer-architect;
 do not change its shape or claim it pins all five globals. These snapshots do not establish
 actual loaded-body attribution: ordinary unpinned native turns do not emit the explicit-pin
 load witness. No baseline supplement, historical evidence or source comparison alone grants
 semantic qualification, activation or a current46-case pass.
+
+### Actual bounded staging execution — acceptance still partial
+
+Final corrected inspection`39420426683`/job`118619711072`, source
+`f382c7316b63e118e7080c49681e61853d9712d3`, CI`39419822599`, establishes parity=true,
+structured changes0 and preserved protected state while recognizing only the exact empty Node
+advisory. Its exact result is `48-STAGING-PREFLIGHT-FINAL-2026-10-20.json`; the historical failed
+release is unchanged and no redeploy occurred.
+
+`48-STAGING-NATIVE-PAIR-2026-10-20.json` records the actual verified A/B IDs/origins, synthetic
+`onboarding-harness-v1` no-RAG fixtures, initial empty checked tables, fresh non-owner witnesses
+and one-time A-only owner grant. This setup requested zero model calls and certifies no real
+onboarding. `48-STAGING-AUTHORING-PROBE-2026-10-20.json` records two finished turns and exactly
+one offer-architect v2 candidate`qn73f3q6zcs1fsjpm9x2vwykc58gm09j`, body hash
+`4ec9235c1d0ccce418e54e2adcc2393aa2e778fb8d0968047053f6e5473c12e0`, on thread
+`m57egf5rjkbqhbyzdknjhmvybn8gnh4r`/budget`p571bfke7xwxw9hsmxcpbw0khs8gn1jk`.
+The100cent envelope is closed at`$0.00322965`, three settled calls, zero holds/failed turns/
+containment refusals. Candidate evidence/approval remain absent; global/foreign effective skill,
+registry and protected-retention state are unchanged. Native B exclusion and A disabled-review
+keyboard behavior were observed. Earlier requested1440/390labels actually stayed1280 and are
+excluded from responsive acceptance; originals are preserved and root's invalidation is pending.
+Only actual-desktop-review-witness.json and actual-mobile-review-witness.json now qualify the
+responsive observation: local read-only port3112 harness, real signed-in app at
+`http://127.0.0.1:3111/ops`, measured fixed-size iframe DOM1440x900/390x900, keyboard Enter
+review open/close, exact candidate/provenance and disabled activation at both; compact navigation
+at390. See `48-STAGING-RESPONSIVE-2026-10-20.json` for refs/hashes. This is desktop-browser
+responsive layout proof, not a mobile-device/touch test. CI and root's immutable handoff
+writer/validation remain pending;23-06 stays partial.
+No handoff, full evaluation, activation, rollback or requirement closure is created here.
 
 ## Approved narrow authorization
 

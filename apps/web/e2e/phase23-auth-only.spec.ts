@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { test } from "@playwright/test";
-import { existingOwner, nonOwner } from "./phase23NativeAuth";
+import { existingOwner, nonOwner, verifyInspectionTarget } from "./phase23NativeAuth";
 
 test.describe.configure({ mode: "serial", retries: 0 });
 test.use({
@@ -32,6 +32,7 @@ test("fresh A/B native sign-in and explicit owner-state readiness only @phase23-
   const existingOwnerAtStart = continuation === "1";
   const runId = process.env.PHASE23_RUN_ID;
   if (!runId || !/^[a-f0-9-]{36}$/.test(runId)) throw new Error("PHASE23_AUTH_ONLY_RUN_REQUIRED");
+  verifyInspectionTarget();
   const receiptDirectory = resolve("../../output/playwright/phase23-acceptance");
   mkdirSync(receiptDirectory, { recursive: true });
   const foreignContext = await browser.newContext({
