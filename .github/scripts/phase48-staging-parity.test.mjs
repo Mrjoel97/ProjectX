@@ -49,7 +49,7 @@ function mock(options = {}) {
       );
     if (command === "env") {
       if (args[2] === "list")
-        return ok("SITE_URL\nCONVEX_SITE_URL\nFOUNDATION_ONBOARDING_ENABLED\nOPENROUTER_API_KEY");
+        return ok("SITE_URL\nFOUNDATION_ONBOARDING_ENABLED\nOPENROUTER_API_KEY");
       if (args[3] === "SITE_URL")
         return ok(
           options.wrongOrigin
@@ -63,6 +63,16 @@ function mock(options = {}) {
     if (command === "run") {
       assert.equal(args[2], "--inline-query");
       assert.doesNotMatch(args[3], /ctx\.db\.(insert|patch|replace|delete)|runMutation|runAction/);
+      if (args[3].includes("process.env.CONVEX_SITE_URL")) {
+        const origins = {
+          site: "https://woozy-wren-368.convex.site",
+          cloud: "https://woozy-wren-368.convex.cloud",
+        };
+        if (options.runtimeMismatch) origins[options.runtimeMismatch] = "https://wrong.example";
+        if (options.runtimeChanged && dry) origins.site = "https://changed.example";
+        if (options.runtimeExtra) origins.unexpected = "private diagnostic secret";
+        return ok(JSON.stringify(origins));
+      }
       if (args[3].includes("foundationInterviews")) {
         assert.match(args[3], /b389a2014e514c7a35e08480dcef446aeb46b360861e2b8b72f9e67fc61f412e/);
         assert.match(args[3], /2026-10-24T10:18:29.493Z/);
@@ -171,8 +181,9 @@ test("dry-run reads preserve exact source, origins, registry and retention; no s
   assert.equal(result.parityEstablished, true);
   assert.equal(result.applyRequested, false);
   assert.equal(calls.filter((x) => x.args[1] === "deploy").length, 1);
-  assert.equal(calls.filter((x) => x.args[1] === "run").length, 4);
+  assert.equal(calls.filter((x) => x.args[1] === "run").length, 6);
   assert.ok(!calls.some((x) => x.args.includes("OPENROUTER_API_KEY")));
+  assert.ok(!calls.some((x) => x.args[1] === "env" && x.args.includes("CONVEX_SITE_URL")));
 });
 test("successful dry-run without structured evidence reports unknown, not source parity", async () => {
   const { execute } = mock({ unknownDiff: true });
@@ -193,8 +204,58 @@ for (const field of [
     assert.ok(
       calls.filter((x) => x.args[1] === "deploy").every((x) => x.args.includes("--dry-run")),
     );
-    if (field === "dryFailure") assert.equal(calls.filter((x) => x.args[1] === "run").length, 4);
+    if (field === "dryFailure") assert.equal(calls.filter((x) => x.args[1] === "run").length, 6);
   });
+test("built-in runtime origins need not be listed as stored variables", async () => {
+  const { execute, calls } = mock();
+  assert.equal((await runParity(env, execute)).preservedStateVerified, true);
+  assert.equal(
+    calls.filter((x) => x.args[1] === "run" && x.args[3].includes("process.env.CONVEX_SITE_URL"))
+      .length,
+    2,
+  );
+});
+for (const field of ["site", "cloud"]) {
+  test(`runtime ${field} mismatch fails at a fixed phase before dry-run`, async () => {
+    const { execute, calls } = mock({ runtimeMismatch: field });
+    const phases = [];
+    await assert.rejects(
+      runParity(env, execute, (phase) => phases.push(phase)),
+      /PHASE48_STAGING_PARITY_REFUSED/,
+    );
+    assert.equal(phases.at(-1), "before_runtime_origins");
+    assert.equal(calls.filter((x) => x.args[1] === "deploy").length, 0);
+  });
+}
+test("changed runtime origins and extended runtime shapes remain fail-closed", async () => {
+  for (const [option, expectedPhase] of [
+    ["runtimeChanged", "after_runtime_origins"],
+    ["runtimeExtra", "before_runtime_origins"],
+  ]) {
+    const { execute } = mock({ [option]: true });
+    const phases = [];
+    await assert.rejects(
+      runParity(env, execute, (phase) => phases.push(phase)),
+      /PHASE48_STAGING_PARITY_REFUSED/,
+    );
+    assert.equal(phases.at(-1), expectedPhase);
+    assert.ok(!JSON.stringify(phases).includes("private diagnostic"));
+  }
+});
+test("private CLI failure exposes only a fixed dry-run phase after preserved-state reads", async () => {
+  const { execute, calls } = mock({ dryFailure: true });
+  const phases = [];
+  await assert.rejects(
+    runParity(env, execute, (phase) => phases.push(phase)),
+    (error) => {
+      assert.equal(error.message, "PHASE48_STAGING_PARITY_REFUSED");
+      return true;
+    },
+  );
+  assert.equal(phases.at(-1), "dry_run");
+  assert.ok(phases.includes("after_registry"));
+  assert.equal(calls.filter((x) => x.args[1] === "run").length, 6);
+});
 test("missing CI/scope/key refuses before any command", async () => {
   for (const field of [
     "CI",

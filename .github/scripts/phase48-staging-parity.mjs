@@ -170,7 +170,8 @@ if(rows.length!==1||rows[0].eventId!=="retention-clock-probe"||Math.abs(rows[0].
 return {sha256:await digest([fixtures[0],rows[0]]),checkpointCount:1};`;
 const registryQuery = `const rows=await ctx.db.query("skills").take(1001);if(rows.length>1000)throw Error("BOUND");const bytes=new TextEncoder().encode(JSON.stringify(rows));return {count:rows.length,sha256:Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))).map(b=>b.toString(16).padStart(2,"0")).join("")};`;
 
-export async function runParity(env = process.env, execute = spawnSync) {
+export async function runParity(env = process.env, execute = spawnSync, onPhase = () => {}) {
+  onPhase("admission");
   demand(
     env.GITHUB_ACTIONS === "true" &&
       env.CI === "true" &&
@@ -207,12 +208,14 @@ export async function runParity(env = process.env, execute = spawnSync) {
   );
   const names = [
     ...new Set([
-      ...ORIGIN_ENV,
+      ...ORIGIN_ENV.filter((name) => name !== "CONVEX_SITE_URL"),
       ...ENV_MANIFEST.filter((x) => /_(ENABLED|VERIFIED)$/.test(x.name)).map((x) => x.name),
     ]),
   ].sort();
-  const snapshot = () => {
+  const snapshot = (when) => {
+    onPhase(when === "before" ? "before_target" : "after_target");
     target();
+    onPhase(when === "before" ? "before_configuration" : "after_configuration");
     const existing = new Set(cli(["env", "list", "--names-only"]).stdout.trim().split(/\r?\n/));
     const configuration = Object.fromEntries(
       names.map((name) => [
@@ -220,20 +223,28 @@ export async function runParity(env = process.env, execute = spawnSync) {
         existing.has(name) ? cli(["env", "get", name]).stdout.trim() : null,
       ]),
     );
-    demand(
-      configuration.SITE_URL === origin &&
-        configuration.CONVEX_SITE_URL === "https://woozy-wren-368.convex.site",
-    );
+    demand(configuration.SITE_URL === origin);
     for (const [name, value] of Object.entries(configuration))
       if (value !== null && /_(ENABLED|VERIFIED)$/.test(name))
         demand(["0", "1", "false", "true"].includes(value));
-    const retention = query(retentionQuery),
-      registry = query(registryQuery);
+    onPhase(when === "before" ? "before_runtime_origins" : "after_runtime_origins");
+    const runtimeOrigins = query(
+      "return {site:process.env.CONVEX_SITE_URL,cloud:process.env.CONVEX_CLOUD_URL};",
+    );
+    demand(
+      keys(runtimeOrigins, ["site", "cloud"]) &&
+        runtimeOrigins.site === "https://woozy-wren-368.convex.site" &&
+        runtimeOrigins.cloud === "https://woozy-wren-368.convex.cloud",
+    );
+    onPhase(when === "before" ? "before_retention" : "after_retention");
+    const retention = query(retentionQuery);
     demand(
       keys(retention, ["sha256", "checkpointCount"]) &&
         retention.checkpointCount === 1 &&
         /^[a-f0-9]{64}$/.test(retention.sha256),
     );
+    onPhase(when === "before" ? "before_registry" : "after_registry");
+    const registry = query(registryQuery);
     demand(
       keys(registry, ["sha256", "count"]) &&
         Number.isSafeInteger(registry.count) &&
@@ -241,12 +252,14 @@ export async function runParity(env = process.env, execute = spawnSync) {
         registry.count <= 1000 &&
         /^[a-f0-9]{64}$/.test(registry.sha256),
     );
-    return { configuration, retention, registry };
+    return { configuration, runtimeOrigins, retention, registry };
   };
+  onPhase("source");
   const tracked = clean(),
-    before = snapshot();
+    before = snapshot("before");
   let diff, dryError;
   try {
+    onPhase("dry_run");
     const result = cli([
       "deploy",
       "--dry-run",
@@ -261,8 +274,10 @@ export async function runParity(env = process.env, execute = spawnSync) {
   } catch {
     dryError = true;
   }
-  const after = snapshot();
+  const after = snapshot("after");
+  onPhase("preservation");
   demand(clean() === tracked && JSON.stringify(after) === JSON.stringify(before));
+  if (dryError) onPhase("dry_run");
   demand(!dryError);
   return {
     schema: "phase48-staging-parity.v1",
@@ -280,11 +295,20 @@ export async function runParity(env = process.env, execute = spawnSync) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  let lastPhase = "entry";
   try {
     demand(process.argv.length === 2);
-    console.log(JSON.stringify(await runParity()));
+    console.log(
+      JSON.stringify(
+        await runParity(process.env, spawnSync, (phase) => {
+          lastPhase = phase;
+        }),
+      ),
+    );
   } catch {
-    console.error("PHASE48_STAGING_PARITY_FAILED_PRIVATE_DIAGNOSTICS_SUPPRESSED");
+    console.error(
+      JSON.stringify({ success: false, phase: lastPhase, privateDiagnosticsSuppressed: true }),
+    );
     process.exitCode = 1;
   }
 }
