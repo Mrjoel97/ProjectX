@@ -149,7 +149,7 @@ function mock(options = {}) {
       ]);
       dry = true;
       if (options.dryFailure) return { status: 1, stdout: "", stderr: "private diagnostic secret" };
-      return ok(options.unknownDiff ? "Would have deployed" : output());
+      return ok(options.unknownDiff ? "Would have deployed" : (options.diffOutput ?? output()));
     }
     throw Error("Unexpected command");
   };
@@ -219,6 +219,78 @@ test("heading-only Node warnings remain changes while separating structured zero
   assert.equal(report.remoteConfigAddedVersionCount, 0);
   assert.equal(report.remoteConfigRemovedVersionCount, 0);
   assert.equal(report.remoteConfigBlockSha256, blockHash(block));
+  assert.equal(report.unspecifiedNodeVersionWarning, false);
+});
+
+test("only explicit unspecified-node context excludes the exact known heading-only warning", () => {
+  const block = "  Change the server's version for Node.js actions:";
+  const report = summarizeDiff(configOutput(block), { nodeVersionUnspecified: true });
+  assert.equal(report.diffStatus, "zero");
+  assert.equal(report.parityEstablished, true);
+  assert.equal(report.structuredChangedItemCount, 0);
+  assert.equal(report.changedItemCount, 0);
+  assert.equal(report.remoteConfigChanged, true);
+  assert.equal(report.remoteConfigCategory, "node_version");
+  assert.equal(report.remoteConfigAddedVersionCount, 0);
+  assert.equal(report.remoteConfigRemovedVersionCount, 0);
+  assert.equal(report.remoteConfigBlockSha256, blockHash(block));
+  assert.equal(report.unspecifiedNodeVersionWarning, true);
+  for (const nodeVersionUnspecified of [false, undefined, 0, 1, "true"]) {
+    const refused = summarizeDiff(configOutput(block), { nodeVersionUnspecified });
+    assert.equal(refused.diffStatus, "changes");
+    assert.equal(refused.parityEstablished, false);
+    assert.equal(refused.unspecifiedNodeVersionWarning, false);
+  }
+});
+
+for (const [name, block] of [
+  ["additional prose", "  Change the server's version for Node.js actions: additional detail"],
+  ["embedded newline", "  Change the server's version for\n  Node.js actions:"],
+  [
+    "another indented line",
+    "  Change the server's version for Node.js actions:\n  Additional detail",
+  ],
+  ["Unicode colon", "  Change the server's version for Node.js actions："],
+  ["embedded zero-width character", "  Change the server's version for Node.js\u200b actions:"],
+  [
+    "added version",
+    "  Change the server's version for Node.js actions:\n  [+] private-new-version",
+  ],
+  [
+    "removed version",
+    "  Change the server's version for Node.js actions:\n  [-] private-old-version",
+  ],
+  [
+    "function-version warning",
+    "  Change the server's version for Node.js actions:\n  Change the server's function version:",
+  ],
+]) {
+  test(`unspecified-node context does not waive ${name}`, () => {
+    const report = summarizeDiff(configOutput(block), { nodeVersionUnspecified: true });
+    assert.equal(report.diffStatus, "changes");
+    assert.equal(report.parityEstablished, false);
+    assert.equal(report.changedItemCount, 1);
+    assert.equal(report.remoteConfigChanged, true);
+    assert.equal(report.unspecifiedNodeVersionWarning, false);
+    assert.equal(report.remoteConfigBlockSha256, blockHash(block));
+    assert.doesNotMatch(JSON.stringify(report), /private-new-version|private-old-version/);
+  });
+}
+
+test("excluding the exact unspecified-node warning never excludes structured changes", () => {
+  const changed = diff();
+  changed.componentDiffs[""].moduleDiff.added.push("private-module.js");
+  const report = summarizeDiff(
+    configOutput("  Change the server's version for Node.js actions:", changed),
+    { nodeVersionUnspecified: true },
+  );
+  assert.equal(report.diffStatus, "changes");
+  assert.equal(report.parityEstablished, false);
+  assert.equal(report.changedItemCount, 1);
+  assert.equal(report.structuredChangedItemCount, 1);
+  assert.equal(report.remoteConfigChanged, true);
+  assert.equal(report.unspecifiedNodeVersionWarning, true);
+  assert.doesNotMatch(JSON.stringify(report), /private-module/);
 });
 
 test("an unexpected unindented first line remains a change without hashing progress text", () => {
@@ -336,8 +408,13 @@ test("success prose, duplicate JSON and unknown or malformed fields never imply 
     output(extended),
     output(definitions),
     output(malformed),
-  ])
+  ]) {
     assert.deepEqual(summarizeDiff(text), { diffStatus: "unknown", parityEstablished: false });
+    assert.deepEqual(summarizeDiff(text, { nodeVersionUnspecified: true }), {
+      diffStatus: "unknown",
+      parityEstablished: false,
+    });
+  }
 });
 test("dry-run reads preserve exact source, origins, registry and retention; no secret value read", async () => {
   const { execute, calls } = mock();
@@ -348,6 +425,25 @@ test("dry-run reads preserve exact source, origins, registry and retention; no s
   assert.equal(calls.filter((x) => x.args[1] === "run").length, 6);
   assert.ok(!calls.some((x) => x.args.includes("OPENROUTER_API_KEY")));
   assert.ok(!calls.some((x) => x.args[1] === "env" && x.args.includes("CONVEX_SITE_URL")));
+});
+
+test("runParity derives the narrow unspecified-node context from the pinned local CLI configuration", async () => {
+  const { execute, calls } = mock({
+    diffOutput: configOutput("  Change the server's version for Node.js actions:"),
+  });
+  const report = await runParity(env, execute);
+  assert.equal(report.unspecifiedNodeVersionWarning, true);
+  assert.equal(report.diffStatus, "zero");
+  assert.equal(report.parityEstablished, true);
+  assert.equal(report.remoteConfigChanged, true);
+  assert.equal(report.structuredChangedItemCount, 0);
+  assert.equal(report.changedItemCount, 0);
+  assert.equal(calls.filter((call) => call.args[1] === "deploy").length, 1);
+  assert.ok(
+    calls
+      .filter((call) => call.args[1] === "deploy")
+      .every((call) => call.args.includes("--dry-run")),
+  );
 });
 
 test("absent billing declarations are observed as null without reading or setting them", async () => {

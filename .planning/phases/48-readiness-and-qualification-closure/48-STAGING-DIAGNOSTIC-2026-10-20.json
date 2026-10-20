@@ -1,0 +1,102 @@
+{
+  "schema": "phase48-staging-parity.v1",
+  "sourceSha": "adda7a4c4ae6d1fe5790654ee3a7e0e13e93dfed",
+  "ciRunId": "39418008690",
+  "target": "woozy-wren-368",
+  "dryRunPassed": true,
+  "applyRequested": false,
+  "preservedStateVerified": true,
+  "configurationUnchanged": true,
+  "registryUnchanged": true,
+  "protectedRetentionUnchanged": true,
+  "watchedConfigurationSha256": "3e6655cf6ff6c1bff7e603a8122065de8f21cdc754ed87962ca731dc42698b89",
+  "registrySha256": "faac155d8c90d9205f2aa95072a520e50e727964974e64a6f62676bea73480e3",
+  "protectedRetentionSha256": "2ecc1945e018a9af66614a2dfceb8a71209f8b480c8015e73eed9b08d9590163",
+  "billingDeclarations": {
+    "GOLDEN_OPENROUTER_BILLING": "standard",
+    "GOLDEN_TAVILY_BILLING": "free",
+    "GOLDEN_TAVILY_CREDIT_USD": "0"
+  },
+  "globalSkillPrerequisites": {
+    "allSelectedHaveExactlyOneActive": true,
+    "allSelectedActiveBodiesMatchSource": false,
+    "semanticProof": false,
+    "selected": [
+      {
+        "active": [
+          {
+            "bodyHash": "b765d7422d5e0d5d0d6beaa58b1310fbba02ced028a613cdc38aef01c3fec7e7",
+            "id": "nx724emgc6yxm3q50ce37cz8198c7qjg",
+            "version": 1,
+            "matchesSource": false
+          }
+        ],
+        "activeCount": 1,
+        "key": "cockpit-agent",
+        "sourceBodyHash": "d1fc43eb3423d8da9c4ba8113cf786aba1818324dcd8485b6e1dba0d4c2f180b"
+      },
+      {
+        "active": [
+          {
+            "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+            "id": "nx77rsw6ktkpqt7dknmexyfnsx8c7bj6",
+            "version": 1,
+            "matchesSource": true
+          }
+        ],
+        "activeCount": 1,
+        "key": "offer-architect",
+        "sourceBodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7"
+      },
+      {
+        "active": [
+          {
+            "bodyHash": "05ca2aa8fd540a51ff4d04b8588a0b20dd78b3758a6f808875e7aa520b9bde46",
+            "id": "nx746fr0aejhxr5gcb7czy7ags8c77wb",
+            "version": 1,
+            "matchesSource": true
+          }
+        ],
+        "activeCount": 1,
+        "key": "money-model-designer",
+        "sourceBodyHash": "05ca2aa8fd540a51ff4d04b8588a0b20dd78b3758a6f808875e7aa520b9bde46"
+      },
+      {
+        "active": [
+          {
+            "bodyHash": "b5e79ddf021c5d423196ddf3e8782e2ae2c5845dbefa5b85f4e3269041695162",
+            "id": "nx79kyh9ajdkb87y9vhzjvay0s8c72bp",
+            "version": 1,
+            "matchesSource": true
+          }
+        ],
+        "activeCount": 1,
+        "key": "lead-engine",
+        "sourceBodyHash": "b5e79ddf021c5d423196ddf3e8782e2ae2c5845dbefa5b85f4e3269041695162"
+      },
+      {
+        "active": [
+          {
+            "bodyHash": "bf7dca991855283485dd9d2e720d17de196f5b21093af4b0d83961cc395fe55b",
+            "id": "nx7c53ya9za3qvwn5n3wf1dww18c6td7",
+            "version": 1,
+            "matchesSource": true
+          }
+        ],
+        "activeCount": 1,
+        "key": "executive-router",
+        "sourceBodyHash": "bf7dca991855283485dd9d2e720d17de196f5b21093af4b0d83961cc395fe55b"
+      }
+    ]
+  },
+  "diffStatus": "changes",
+  "parityEstablished": false,
+  "changedItemCount": 1,
+  "structuredDiffSha256": "0d815f34e7503367eec80fd89920cf1ff1265396c8990359bb8a48800be902d5",
+  "structuredChangedItemCount": 0,
+  "remoteConfigChanged": true,
+  "remoteConfigCategory": "node_version",
+  "remoteConfigAddedVersionCount": 0,
+  "remoteConfigRemovedVersionCount": 0,
+  "remoteConfigBlockSha256": "35827a9b605b25399584bbea15f3d88aa020df15eeb5cdafa17bdd55819982b6"
+}

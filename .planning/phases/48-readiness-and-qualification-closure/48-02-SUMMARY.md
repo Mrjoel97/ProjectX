@@ -230,4 +230,32 @@ model call occurred. No overall release/parity, current46-case semantic pass or 
 witness is claimed. Production's original $1scope is unused; Phase21 remains accepted,
 Phase23/48-02 remain partial and Phase49 has not started.
 
+### October20 read-only post-release diagnostic and independent billing readback
+
+PR76 source`adda7a4c4ae6d1fe5790654ee3a7e0e13e93dfed` passed CI`39418008690` and
+squash-merged as`40598640e13a9b2669b5c11f820f7c538070c471`. Read-only workflow
+`39418700527`, job`118613983360`, passed without apply. The exact sanitized result is preserved
+separately in `48-STAGING-DIAGNOSTIC-2026-10-20.json`, byte-identical SHA256
+`7f88e071e628f4a2bce5cfcbdee83b092809acd563ef40e055c4ec43671d9421`.
+
+Configuration, registry and protected retention hashes are unchanged. The diagnostic reports
+`structuredChangedItemCount=0`, but its then-current raw classifier still reports changes=1
+and parity=false, classifying a block as `node_version` with zero added/removed versions.
+The parent's focused source diagnosis identifies that block as a CLI Node-version advisory
+heading, not an application configuration delta. The narrow checker correction is awaiting
+its own CI and fresh read-only proof; this diagnostic does not itself establish zero parity.
+
+Both this workflow and the independent exact-stage local readback confirm billing declarations
+`standard`, `free`, and`0`. The independent receipt, observed at`2026-10-20T11:54:13.040Z`,
+is `48-STAGING-BILLING-READBACK-2026-10-20.json`, byte-identical SHA256
+`42a20271a6099c13f0bc618674e8fdc077f41a2ecebbf43ffd2cba6ce36d4382`;
+all3matches are true and mutationRequested=false. This resolves the billing-readback uncertainty
+through new evidence, without rewriting the earlier release result's unverified flag.
+
+The original apply/final-acceptance failure and every prior observation remain preserved.
+No automatic retry, rollback, gate weakening, new accounts, owner grant, probe or model call
+occurred. Registry provenance and prompt-load attribution limits remain unchanged. No overall
+release/parity or current-suite semantic pass is claimed. Phase23/48-02 stay partial, Phase21
+remains accepted and Phase49 has not started.
+
 New authoring requires its own exact fresh authorization, a new bounded envelope and fresh native controlled sessions; no old envelope or undocumented receipt grants that work. The prepared scope is one inert `offer-architect` adaptation plus one escalation/refusal turn, maximum100cents aggregate and no full evaluation or activation. Exact-row paid evaluation and actual owner activation/rollback remain separate later checkpoints. Missing configuration/credentials and historical private receipts must not be replaced by fabricated readiness. Phase23 and48-02 remain open; Phase49 has not started.

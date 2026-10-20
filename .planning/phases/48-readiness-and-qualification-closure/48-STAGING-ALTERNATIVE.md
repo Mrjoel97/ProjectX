@@ -13,7 +13,8 @@ alternative.”** The immutable approval hash is
 `50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19`; its private scope
 receipt is dated2026-10-20. This conditional scope remains separate from the later release
 approval. **The separately approved staging apply completed, but final release acceptance failed;
-parity-zero is false and final billing-label readback was not reached. No new accounts or probe exist.**
+later independent readbacks verify standard/free/0. The raw diagnostic still reports parityfalse;
+the Node-advisory checker correction awaits CI and fresh read-only proof. No accounts or probe exist.**
 
 This is the approved conditional replacement scope for the unavailable controlled-account credentials,
 not a continuation receipt or an assertion that Phase23/48-02 passed. The original production
@@ -33,9 +34,10 @@ billing, current deployed-source parity, or authenticated A/B readiness.
 The user subsequently attested **Standard OpenRouter; free Tavily** for staging. This factual
 attestation is preserved in a separate private immutable `billing-attestation.json`; it does not
 change the approval hash above and is not a configuration-write or paid-execution receipt.
-The pre-release observation returned null billing labels. The later separately approved release
-may have changed them, but its final readback was not reached. **Paid readiness remains blocked
-until supported exact staging configuration and source parity are verified.** The conditional
+The pre-release observation returned null billing labels. The release's final readback was not
+reached, but the subsequent read-only diagnostic and independent billing receipt both verify
+standard/free/0. **Paid readiness remains blocked on the corrected checker's CI/read-only proof
+and the remaining native prerequisites.** The conditional
 scope itself did not authorize configuration writes; the separate limited release approval and
 its failed acceptance are recorded below. Unknown pricing or usage stops work; no guessed cost
 or automatic retry.
@@ -98,6 +100,18 @@ and the sanitized result provides no remaining change count or cause. See the se
 separate read-only diagnosis, with no automatic apply retry, rollback or weakened gate. No
 accounts, owner grant, probe or model work occurred. Phase48 remains partial and Phase49 has
 not started.
+
+Subsequent PR76 source`adda7a4c4ae6d1fe5790654ee3a7e0e13e93dfed` passed
+CI`39418008690`, squash`40598640e13a9b2669b5c11f820f7c538070c471`. Read-only
+diagnostic`39418700527`/job`118613983360` passed and preserved configuration, registry and
+retention hashes; see the separate `48-STAGING-DIAGNOSTIC-2026-10-20.json`. It reports
+zero structured changes while its raw classifier still reports parityfalse and a node_version
+block with no added/removed versions. Focused source diagnosis confirms a CLI Node advisory
+heading was counted as configuration. The narrow checker fix still awaits CI and a fresh
+read-only run; do not treat the diagnostic as a parity pass or apply again to clear the warning.
+The diagnostic and separate `48-STAGING-BILLING-READBACK-2026-10-20.json` both confirm the
+3billing labels. This new evidence does not alter the immutable failed release result or either
+approval hash. No accounts, owner grant, probe or model work followed.
 
 Before any later authoring, preserve the actual five-global baseline using separate pre/post
 redaction-safe supplemental receipts. The fixed Phase23 handoff binds only offer-architect;

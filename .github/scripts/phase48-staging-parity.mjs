@@ -1,6 +1,7 @@
 // Dry-run only. Never apply, seed, change configuration or read provider credentials.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stripVTControlCharacters } from "node:util";
@@ -51,7 +52,7 @@ export function childEnvironment(env) {
 
 // Installed CLI components.ts emits FinishPushDiff JSON only with --verbose. Missing,
 // ambiguous or extended shapes cannot establish parity. No raw diff text is printed.
-export function summarizeDiff(output) {
+export function summarizeDiff(output, context = {}) {
   const text = stripVTControlCharacters(output);
   const found = [];
   for (const match of text.matchAll(/^\{/gm)) {
@@ -163,7 +164,13 @@ export function summarizeDiff(output) {
   const hasUdf = lines.includes("Change the server's function version:");
   const hasNode = lines.includes("Change the server's version for Node.js actions:");
   const remoteConfigChanged = headers[0][1].trim() !== "";
-  if (remoteConfigChanged) changes++;
+  // Convex 1.42.1 compares the server's unset Node version with local undefined
+  // using !==, producing this heading with no +/- versions. Normalize only that
+  // exact observed warning, and only when the caller proved local config is absent.
+  const unspecifiedNodeVersionWarning =
+    context.nodeVersionUnspecified === true &&
+    configBlock === "Change the server's version for Node.js actions:";
+  if (remoteConfigChanged && !unspecifiedNodeVersionWarning) changes++;
   const remoteConfigCategory = !remoteConfigChanged
     ? "none"
     : hasUdf && hasNode
@@ -180,6 +187,7 @@ export function summarizeDiff(output) {
     structuredDiffSha256: hash(JSON.stringify(diff)),
     structuredChangedItemCount,
     remoteConfigChanged,
+    unspecifiedNodeVersionWarning,
     remoteConfigCategory,
     remoteConfigAddedVersionCount: lines.filter((line) => line.startsWith("[+] ")).length,
     remoteConfigRemovedVersionCount: lines.filter((line) => line.startsWith("[-] ")).length,
@@ -352,7 +360,11 @@ export async function runParity(env = process.env, execute = spawnSync, onPhase 
       "--verbose",
       "--skip-workos-check",
     ]);
-    diff = summarizeDiff(`${result.stdout}\n${result.stderr}`);
+    const nodeVersionUnspecified =
+      !existsSync(resolve(backend, "convex.json")) &&
+      JSON.parse(readFileSync(resolve(backend, "node_modules/convex/package.json"), "utf8"))
+        .version === "1.42.1";
+    diff = summarizeDiff(`${result.stdout}\n${result.stderr}`, { nodeVersionUnspecified });
   } catch {
     dryError = true;
   }
