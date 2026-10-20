@@ -1599,7 +1599,7 @@ Plans:
   1. An agent-reachable authoring tool can only ever produce a `status:"candidate"` skill - it is physically incapable of calling `activateCandidate` (capability minimization, not instruction-policing).
   2. An agent-authored candidate reaches `active` only through a passing held-out eval (including adversarial cases the authoring agent never sees) PLUS `requireOwner` approval.
   3. Every agent-authored skill row records author = agent and is immutable-versioned with one-write rollback; an `active` skill whose author is `agent` without recorded owner + eval evidence is impossible by construction.
-**Plans**: TBD
+**Plans**: 9 plans;6/9 complete.23-06 completed2026-10-20 after bounded staging authoring, exact-source CI and immutable validated handoff.23-07 full exact-row evaluation/native public B refusal,23-08 owner activation/runtime/rollback and23-09 closure remain open; SKILL-02 remains pending.
 
 ### Phase 24: ISO 9001 Conformance Map
 **Goal**: An ISO 9001:2015 conformance foundation that maps the existing audit / skill-versioning / GSD-playbook change-control to the relevant clauses and fills only genuine gaps - a conformance map that makes the compliance/trust moat real, not process theater.
@@ -1709,7 +1709,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 21. User-Authored Skills & Routines | 7/8 | Partial plan execution; SKILL-01 criteria verified, runtime protocol open | 2026-09-10 |
 | 22. Owner Authorization Primitive | 3/3 | Complete (VERIFICATION present) — owner UAT: server boundary proven live 2026-08; the DOM half was folded into 22.1 | 2026-08-16 |
 | 22.1. Beta Admission Readiness - legal deployment CI typechecking and identity-boundary hardening (INSERTED) | 5/5 | Complete (VERIFICATION present) | 2026-08-16 |
-| 23. Agent-Authored Skills | 5/9 | Partial — open: 23-06, 23-07, 23-08, 23-09 | - |
+| 23. Agent-Authored Skills | 6/9 | Partial —23-06 complete; open: 23-07, 23-08, 23-09 | - |
 | 24. ISO 9001 Conformance Map | 1/2 | Partial — open: 24-02 | - |
 | 25. Private Beta Productionization | 7/14 | Partial — open: 25-00, 25-07, 25-08, 25-09, 25-11, 25-12, 25-13 | - |
 | 25.1. Consistency and Reliability Hardening (INSERTED) | 7/7 | Complete (VERIFICATION present) | 2026-08-21 |

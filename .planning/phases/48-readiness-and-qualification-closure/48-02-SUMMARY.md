@@ -292,8 +292,8 @@ and protected retention match their actual pre/post hashes. This is an observati
 certified Phase23 artifact; counters alone do not establish policy acceptance or actual loaded body.
 
 The initial CUA requested1440/390viewports left the top window at1280. Those requested-label
-witnesses are excluded from responsive acceptance; originals remain preserved and root's
-explicit invalidation is pending. Subsequent actual-desktop-review-witness.json and
+witnesses are excluded from responsive acceptance; originals remain preserved and private
+viewport-attempt-invalidation.json explicitly names their actual replacements. Subsequent actual-desktop-review-witness.json and
 actual-mobile-review-witness.json use a local read-only port3112 harness with the real signed-in
 `http://127.0.0.1:3111/ops` app in fixed-size iframes. Frame DOM measured1440x900 and390x900;
 keyboard Enter review open/close, the exact candidate, executive provenance and disabled
@@ -301,7 +301,28 @@ pre-evaluation activation were observed at both sizes; compact navigation was ob
 `48-STAGING-RESPONSIVE-2026-10-20.json` binds only these two actual witness hashes.
 This completes free desktop-browser responsive layout proof, not actual mobile-device/touch
 testing. The historical probe observation's earlier responsive=false flag remains unchanged.
-CI and root's immutable23-LIVE-HANDOFF writer/validation remain pending;23-06 is still partial.
-No handoff is written by this documentation pass. Exact-row paid evaluation, actual owner
+Root subsequently completed full CI and wrote/validated the immutable23-LIVE-HANDOFF;23-06
+completion is recorded below. This documentation pass never overwrites handoff bytes. Exact-row paid evaluation, actual owner
 activation/rollback and23-09 closure remain separate checkpoints. Production's original $1scope
 is unused; SKILL-02/Phase23/48-02 remain open and Phase49 has not started.
+
+### October20 plan23-06 complete; next exact-row evaluation checkpoint
+
+Full exact-source CI`39430449721`, job`118653817153`, passed Typecheck/Lint/Free gates/Test/
+Operator controls/Planning/Build for`79c07bd595500a7043719ecd4bfc34123095cb93`.
+Root then wrote the immutable`../23-agent-authored-skills/23-LIVE-HANDOFF.json` once through
+the existing writer and private-needle validator. Exact bytes SHA256:
+`112ce2643ae15d4b2c39961b09506223bf0d6fe9978993dfe9536cee2dcbdc45`.
+It freezes the actual parked candidate/native origins/IDs, suite/source/lineage, rollback and
+effective/global/foreign/refusal state. The separate actual closed-budget observation remains
+`48-STAGING-AUTHORING-PROBE-2026-10-20.json`, whose hashes bind private`probe-closed.json`;
+no fictional Playwright budget attachment or auth-state export is created.
+
+`48-STAGING-23-06-COMPLETION-2026-10-20.json` binds that handoff, new full CI, exact closed
+budget receipt, public observation hashes and the private viewport invalidation hash. Earlier
+partial receipts remain unchanged, including their then-pending flags. Plan23-06 is complete;
+421of477plans are complete and Phase23 is6/9.23-07/08/09 remain open. The next23-07checkpoint
+is fresh authorization for the literal handoff candidate's full unfiltered46-case evaluation
+only, followed by actual native B public OWNER_REQUIRED refusal without credential extraction.
+It adds no runtime-attribution turn. Activation/runtime/rollback retain23-08's separate checkpoint.
+No evaluation or activation occurred; SKILL-02/Phase23/48-02 remain open and Phase49 has not started.

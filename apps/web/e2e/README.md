@@ -214,6 +214,13 @@ production `PIKAR_E2E_BASE_URL`. Auth preparation and all direct source/owner qu
 the same explicit target as the golden inspector. Keep the actual deployment URL privately in
 `CONVEX_URL` for consistent inspector fingerprints. No environment value belongs in evidence.
 
+For an explicitly approved staging probe, use `PIKAR_CONVEX_TARGET=dev` and its approved native
+browser origin instead. Both modes require a canonical `https://<deployment>.convex.cloud`
+`CONVEX_URL` that matches the CLI's actual dashboard target before authentication, owner/probe
+setup and each paid submission. Missing or conflicting metadata refuses the run; disk fallback
+cannot supply this qualification evidence. Inspector expectations use `--expect-status=candidate`
+and the corresponding equals spelling for evidence, gate and rollback expectations.
+
 After a real handoff exists, the read-only continuation check is
 `node .planning/phases/23-agent-authored-skills/phase23-operator.mjs preflight handoff
 .planning/phases/23-agent-authored-skills/23-LIVE-HANDOFF.json --forbid-env PHASE23_PRIVATE_NEEDLE`

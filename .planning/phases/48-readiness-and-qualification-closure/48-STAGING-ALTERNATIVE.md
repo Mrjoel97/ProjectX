@@ -1,12 +1,12 @@
 ---
 phase: 48-readiness-and-qualification-closure
 plan: "02"
-status: authoring-observed-handoff-pending
+status: authoring-complete-evaluation-pending
 completed: false
 requirements-completed: []
 ---
 
-# Staging alternative — bounded authoring observed, acceptance partial
+# Staging alternative — plan23-06 complete, lifecycle acceptance partial
 
 Prepared and conditionally approved 2026-10-20. The user explicitly replied **“Approve staging
 alternative.”** The immutable approval hash is
@@ -14,7 +14,7 @@ alternative.”** The immutable approval hash is
 receipt is dated2026-10-20. This conditional scope remains separate from the later release
 approval. **The historical release failure remains preserved. Corrected read-only parity now
 passes; the verified synthetic pair/A-only grant and two-turn probe completed within scope.
-Actual desktop-browser responsive proof is complete; CI/immutable handoff writer remain pending;
+Actual desktop-browser responsive proof, full CI and immutable handoff are complete;
 no evaluation/activation pass or touch-device claim.**
 
 This is the approved conditional replacement scope for the unavailable controlled-account credentials,
@@ -140,15 +140,21 @@ The100cent envelope is closed at`$0.00322965`, three settled calls, zero holds/f
 containment refusals. Candidate evidence/approval remain absent; global/foreign effective skill,
 registry and protected-retention state are unchanged. Native B exclusion and A disabled-review
 keyboard behavior were observed. Earlier requested1440/390labels actually stayed1280 and are
-excluded from responsive acceptance; originals are preserved and root's invalidation is pending.
+excluded from responsive acceptance; originals are preserved and private viewport-attempt-invalidation.json names their actual replacements.
 Only actual-desktop-review-witness.json and actual-mobile-review-witness.json now qualify the
 responsive observation: local read-only port3112 harness, real signed-in app at
 `http://127.0.0.1:3111/ops`, measured fixed-size iframe DOM1440x900/390x900, keyboard Enter
 review open/close, exact candidate/provenance and disabled activation at both; compact navigation
 at390. See `48-STAGING-RESPONSIVE-2026-10-20.json` for refs/hashes. This is desktop-browser
-responsive layout proof, not a mobile-device/touch test. CI and root's immutable handoff
-writer/validation remain pending;23-06 stays partial.
-No handoff, full evaluation, activation, rollback or requirement closure is created here.
+responsive layout proof, not a mobile-device/touch test. FullCI`39430449721`/job`118653817153`
+on source`79c07bd595500a7043719ecd4bfc34123095cb93` is green. Root wrote and validated
+the immutable23-LIVE-HANDOFF once, SHA256
+`112ce2643ae15d4b2c39961b09506223bf0d6fe9978993dfe9536cee2dcbdc45`.
+`48-STAGING-23-06-COMPLETION-2026-10-20.json` binds actual CI, handoff, closed budget receipt
+and prior observation/invalidation hashes; earlier partial receipts are unchanged.23-06 is complete,
+while23-07full unfiltered exact-row evaluation/native B public refusal,23-08activation/runtime/
+rollback and23-09closure remain open. No full evaluation, activation, rollback, extra attribution
+turn or requirement closure is authorized by this completion. Phase48 stays partial;49 not started.
 
 ## Approved narrow authorization
 
