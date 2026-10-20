@@ -143,18 +143,47 @@ export function summarizeDiff(output) {
   } catch {
     return unknown;
   }
+  const structuredChangedItemCount = changes;
   const headers = [
     ...text.matchAll(
       /Remote config would be overwritten with the following changes:\r?\n([^\r\n]*)/g,
     ),
   ];
   if (headers.length !== 1) return unknown;
-  if (headers[0][1].trim() !== "") changes++;
+  // Keep the existing refusal. Inspect only the CLI's indented config block;
+  // later unindented progress/JSON cannot enter its diagnostic fingerprint.
+  const headerStart = headers[0].index + headers[0][0].indexOf("\n") + 1;
+  const configLines = [];
+  for (const line of text.slice(headerStart).split(/\r?\n/)) {
+    if (!line.startsWith("  ")) break;
+    configLines.push(line);
+  }
+  const configBlock = configLines.join("\n").trim();
+  const lines = configBlock.split(/\r?\n/).map((line) => line.trim());
+  const hasUdf = lines.includes("Change the server's function version:");
+  const hasNode = lines.includes("Change the server's version for Node.js actions:");
+  const remoteConfigChanged = headers[0][1].trim() !== "";
+  if (remoteConfigChanged) changes++;
+  const remoteConfigCategory = !remoteConfigChanged
+    ? "none"
+    : hasUdf && hasNode
+      ? "both"
+      : hasUdf
+        ? "udf_version"
+        : hasNode
+          ? "node_version"
+          : "unknown";
   return {
     diffStatus: changes ? "changes" : "zero",
     parityEstablished: changes === 0,
     changedItemCount: changes,
     structuredDiffSha256: hash(JSON.stringify(diff)),
+    structuredChangedItemCount,
+    remoteConfigChanged,
+    remoteConfigCategory,
+    remoteConfigAddedVersionCount: lines.filter((line) => line.startsWith("[+] ")).length,
+    remoteConfigRemovedVersionCount: lines.filter((line) => line.startsWith("[-] ")).length,
+    remoteConfigBlockSha256: hash(configBlock),
   };
 }
 
@@ -238,6 +267,16 @@ export async function runParity(env = process.env, execute = spawnSync, onPhase 
         existing.has(name) ? cli(["env", "get", name]).stdout.trim() : null,
       ]),
     );
+    const billingDeclarations = {};
+    for (const [name, expected] of Object.entries({
+      GOLDEN_OPENROUTER_BILLING: "standard",
+      GOLDEN_TAVILY_BILLING: "free",
+      GOLDEN_TAVILY_CREDIT_USD: "0",
+    })) {
+      const value = existing.has(name) ? cli(["env", "get", name]).stdout.trim() : null;
+      demand(value === null || value === expected);
+      billingDeclarations[name] = value;
+    }
     demand(configuration.SITE_URL === origin);
     for (const [name, value] of Object.entries(configuration))
       if (value !== null && /_(ENABLED|VERIFIED)$/.test(name))
@@ -295,7 +334,7 @@ export async function runParity(env = process.env, execute = spawnSync, onPhase 
         ids.add(row.id);
       }
     }
-    return { configuration, runtimeOrigins, retention, registry };
+    return { configuration, billingDeclarations, runtimeOrigins, retention, registry };
   };
   onPhase("source");
   const tracked = clean(),
@@ -336,6 +375,7 @@ export async function runParity(env = process.env, execute = spawnSync, onPhase 
     watchedConfigurationSha256: hash(JSON.stringify(before.configuration)),
     registrySha256: before.registry.sha256,
     protectedRetentionSha256: before.retention.sha256,
+    billingDeclarations: before.billingDeclarations,
     globalSkillPrerequisites: {
       allSelectedHaveExactlyOneActive: before.registry.selected.every((s) => s.activeCount === 1),
       allSelectedActiveBodiesMatchSource: before.registry.selected.every(
