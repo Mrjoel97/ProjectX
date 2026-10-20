@@ -11,6 +11,14 @@ const args = {
   tenantId: "eval-abcd",
 };
 const fn = "llm:runCockpitAgent";
+test("budget stops are distinguishable without exposing arbitrary error content", () => {
+  const budgetStop = new PaidCallUnresolved("GOLDEN_BUDGET_UNRESOLVED");
+  assert.ok(budgetStop instanceof PaidCallUnresolved);
+  assert.equal(budgetStop.message, "GOLDEN_BUDGET_UNRESOLVED");
+  for (const code of [undefined, args.text, "arbitrary-provider-error", null, {}]) {
+    assert.equal(new PaidCallUnresolved(code).message, "GOLDEN_PAID_CALL_UNRESOLVED");
+  }
+});
 test("embedding seed is checkpointed once without forwarding a synthetic turn argument", () => {
   const directory = mkdtempSync(join(tmpdir(), "golden-paid-seed-"));
   try {

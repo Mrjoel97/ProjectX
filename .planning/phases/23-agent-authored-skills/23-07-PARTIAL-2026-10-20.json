@@ -1,0 +1,215 @@
+{
+  "schema": "phase23-evaluation-partial-observation.v1",
+  "status": "partial",
+  "recordedAt": "2026-10-20T14:50:27.975Z",
+  "target": "woozy-wren-368",
+  "sourceSha": "06060d2bc51b1c4b985bb3a8296f03aad0513b86",
+  "ciRunId": 39432731681,
+  "handoff": {
+    "path": ".planning/phases/23-agent-authored-skills/23-LIVE-HANDOFF.json",
+    "sha256": "112ce2643ae15d4b2c39961b09506223bf0d6fe9978993dfe9536cee2dcbdc45"
+  },
+  "authorization": {
+    "answerVerbatim": "Approve scoped $2 evaluation",
+    "sha256": "bbe9dea3b15d832fc474c7beb211a25ca6fbbc85ff92798a3155d4077efd2e64",
+    "capCents": 200,
+    "fullRunCount": 1,
+    "automaticFullRerunAuthorized": false,
+    "ownerActivationAuthorized": false,
+    "productionChangeAuthorized": false
+  },
+  "candidate": {
+    "id": "qn73f3q6zcs1fsjpm9x2vwykc58gm09j",
+    "tenantId": "pn70yzs016xgrvzd6bqkaedj098gmytz",
+    "name": "offer-architect",
+    "version": 2,
+    "bodyHash": "4ec9235c1d0ccce418e54e2adcc2393aa2e778fb8d0968047053f6e5473c12e0"
+  },
+  "suite": {
+    "revision": "2026-09-11.budgeted-evaluator.1724732bc7d73e8f907ce53184186129e7e6a93e71d5fa3de7201f79fefb7cd3",
+    "sha256": "5794b8b0a9716d76bb3cab9f513f251994ad832eaf87d443cef4b3787db6f4fa",
+    "caseCount": 46
+  },
+  "run": {
+    "id": "0b8d825d",
+    "syntheticRootTenantId": "eval-0b8d825d",
+    "budgetId": "p57067hpjwen71yc4vhx5txav98gmnat",
+    "exitCode": 2,
+    "finishedAt": "2026-10-20T14:37:32.660Z",
+    "completedCases": 7,
+    "reportedPassedCases": 7,
+    "reportedFailedCases": 0,
+    "retriedCases": [],
+    "caseWithoutVerdict": "08-bounce-then-correct",
+    "remainingUnattemptedCases": 38,
+    "errorCode": "GOLDEN_PAID_CALL_UNRESOLVED",
+    "fullSuitePassing": false,
+    "candidateRuntimeAttributionProven": false
+  },
+  "diagnosis": {
+    "exactFailureBranchProven": false,
+    "paidAttempts": 20,
+    "pairedStartedReturnedReceipts": 20,
+    "unresolvedAttemptReceipts": 0,
+    "case08TopLevelReturns": 3,
+    "stopTimeIsLocalProcessExit": true,
+    "exactGuardTimeUnknown": true,
+    "outstandingReservationsAtProcessExit": 1,
+    "settlementsAfterProcessExit": 5,
+    "asyncBudgetGuardStopCompatible": true,
+    "returnedReceiptFlushFailureExcluded": false
+  },
+  "budgetObservations": [
+    {
+      "observedAt": "2026-10-20T14:38:57.281Z",
+      "actualUsd": 0.06160618000000002,
+      "breached": false,
+      "budgetId": "p57067hpjwen71yc4vhx5txav98gmnat",
+      "callCount": 89,
+      "capCents": 200,
+      "closed": false,
+      "expired": false,
+      "remainingCents": 124,
+      "settledCount": 89,
+      "unresolvedCents": 0,
+      "unsettledCount": 0
+    },
+    {
+      "observedAt": "2026-10-20T14:48:03.773Z",
+      "actualUsd": 0.06160618000000002,
+      "breached": false,
+      "budgetId": "p57067hpjwen71yc4vhx5txav98gmnat",
+      "callCount": 89,
+      "capCents": 200,
+      "closed": false,
+      "expired": false,
+      "remainingCents": 124,
+      "settledCount": 89,
+      "unresolvedCents": 0,
+      "unsettledCount": 0
+    },
+    {
+      "observedAt": "2026-10-20T14:48:43.529Z",
+      "actualUsd": 0.06160618000000002,
+      "breached": false,
+      "budgetId": "p57067hpjwen71yc4vhx5txav98gmnat",
+      "callCount": 89,
+      "capCents": 200,
+      "closed": true,
+      "expired": false,
+      "remainingCents": 124,
+      "settledCount": 89,
+      "unresolvedCents": 0,
+      "unsettledCount": 0
+    }
+  ],
+  "closure": {
+    "nativeOperation": "guardrails:closeEvalBudget",
+    "once": true,
+    "nativeSettledLedgerAndDurableGraphGuardsPassed": true,
+    "closedAtObservation": "2026-10-20T14:48:43.529Z",
+    "spendRetained": true,
+    "remainingCentsSpendable": false,
+    "refundOrReset": false
+  },
+  "candidateObservation": {
+    "observedAt": "2026-10-20T14:38:57.281Z",
+    "deploymentHash": "1b4ca7c2bdfccb0fb4c242a9e54069c44ee2adce098014acb64dbed12490c933",
+    "candidate": {
+      "author": "agent",
+      "authorUserId": null,
+      "bodyHash": "4ec9235c1d0ccce418e54e2adcc2393aa2e778fb8d0968047053f6e5473c12e0",
+      "evidenceState": "absent",
+      "evidenceSummary": null,
+      "evidenceTarget": null,
+      "gatePassed": false,
+      "id": "qn73f3q6zcs1fsjpm9x2vwykc58gm09j",
+      "lineage": {
+        "basedOnGlobalSkillId": "nx77rsw6ktkpqt7dknmexyfnsx8c7bj6",
+        "basedOnName": "offer-architect",
+        "basedOnScope": "global",
+        "basedOnTenantSkillId": null,
+        "basedOnVersion": 1
+      },
+      "name": "offer-architect",
+      "packGateMissing": null,
+      "packGatePassed": null,
+      "rollbackEligible": false,
+      "status": "candidate",
+      "tenantId": "pn70yzs016xgrvzd6bqkaedj098gmytz",
+      "version": 2
+    },
+    "currentEffective": {
+      "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+      "id": "nx77rsw6ktkpqt7dknmexyfnsx8c7bj6",
+      "name": "offer-architect",
+      "scope": "global",
+      "status": "active",
+      "version": 1
+    },
+    "globalCurrent": {
+      "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+      "id": "nx77rsw6ktkpqt7dknmexyfnsx8c7bj6",
+      "name": "offer-architect",
+      "scope": "global",
+      "status": "active",
+      "version": 1
+    },
+    "foreignCurrent": {
+      "candidateIdVisible": false,
+      "effective": {
+        "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+        "id": "nx77rsw6ktkpqt7dknmexyfnsx8c7bj6",
+        "name": "offer-architect",
+        "scope": "global",
+        "status": "active",
+        "version": 1
+      },
+      "tenantId": "pn72x2hv0nct3mzdkcjtn6rrex8gn92j"
+    },
+    "rollbackBaseline": {
+      "author": "system",
+      "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+      "id": "qn7d7y1cwza0wntbvccmw4689x8gmcaa",
+      "name": "offer-architect",
+      "rollbackEligible": true,
+      "scope": "tenant",
+      "status": "archived",
+      "tenantId": "pn70yzs016xgrvzd6bqkaedj098gmytz",
+      "version": 1
+    }
+  },
+  "boundaries": {
+    "passingEvidenceWritten": false,
+    "evalResultArtifactWritten": false,
+    "nativeBPublicRefusalAttempted": false,
+    "ownerActivationAttempted": false,
+    "rootTenantCleanupAttempted": false,
+    "productionChanges": false,
+    "paidReplay": false,
+    "partialResultsSpliced": false
+  },
+  "privateSourceHashes": {
+    "authorization.json": "bbe9dea3b15d832fc474c7beb211a25ca6fbbc85ff92798a3155d4077efd2e64",
+    "native-readiness.json": "9cad62e8a23711cadfc6322bcec7a794793f3dd49a0524cf8c459729f2662328",
+    "preflight.json": "c566c67a89e64787854ea87895297c3607f7b8f1c04fe4f2c5a6e777de5d41c3",
+    "attempt.json": "255dde004d8c3a0b5c1660b49a3bdaf7488e381489659905787433a5d28daf8c",
+    "process-result.json": "082b7fec7f19a7af0b766c4fcb05c61d7db61d1d8b779c3ac6985617b046f053",
+    "stop-reconciliation.json": "e9d8173904e330277947b3347da9a95009bb5b1b32fa9527c04185a3def97368",
+    "timing-reconciliation.json": "8d62982c0b4da9f1d517580497bda67a4e5a9ae0c956345ca1614e580bebcd26",
+    "budget-close-attempt.json": "eb94b1b10aea9d1ec134fcb0a74c627c44dacd1b080977a530f365ac254bb9f2",
+    "budget-close-result.json": "f55b8ced6a1a1bf435dbc01bea9fee0668db8b29fa6b03e50a095ccda3931eff",
+    "stdout.log": "ddfd49bb099d4d39cb0862e71bbfe398536557482781e62baf2c226bc9a6ebc5",
+    "stderr.log": "f6fb6b2004eeabb2c4d7602f5db6f41fc03ab36954fc4d6cbb88640ce871d26b"
+  },
+  "nextGate": {
+    "phase23_07": "partial",
+    "phase23CompletedPlans": 6,
+    "phase23TotalPlans": 9,
+    "skill02": "open",
+    "phase48": "partial",
+    "phase49": "not_started",
+    "freshPaidRunRequiresNewAuthorization": true,
+    "evaluatorRevisionDecisionRequiredBeforeRunnerRepair": true
+  }
+}

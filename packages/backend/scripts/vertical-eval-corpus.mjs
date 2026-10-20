@@ -30,6 +30,7 @@ export const EVALUATOR_FILES = [
   "packages/backend/convex/guardrails.ts",
   "packages/backend/convex/authoringProbe.ts",
   "packages/backend/convex/cockpit.ts",
+  "packages/backend/convex/cockpitCapabilities.ts",
   "packages/backend/convex/intake.ts",
   "packages/backend/convex/index.ts",
   "packages/backend/convex/spendLedger.ts",

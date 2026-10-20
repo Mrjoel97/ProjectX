@@ -10,6 +10,54 @@ import {
 } from "./cockpitCapabilities";
 
 describe("cockpit capability routing", () => {
+  test("the unchanged bounce-and-correct fixture exposes recipient validation on its first turn", () => {
+    const fixture = JSON.parse(
+      readFileSync(
+        new URL("../scripts/eval-cases/08-bounce-then-correct.json", import.meta.url),
+        "utf8",
+      ),
+    );
+    expect(fixture.id).toBe("08-bounce-then-correct");
+    expect(fixture.turns).toHaveLength(3);
+    expect(routeCockpitIntent(fixture.turns[0])).toEqual({
+      primary: "email",
+      capabilities: ["email"],
+      gmailRequired: true,
+    });
+    expect(shouldUseGmailCapability(fixture.turns[0], false)).toBe(true);
+    const tools = { addRecipients: {}, proposePlan: {}, searchVault: {} };
+    expect(applyGmailCapability(tools, shouldUseGmailCapability(fixture.turns[0], false))).toBe(
+      tools,
+    );
+  });
+
+  test.each([
+    "Email lower-handle about the roadmap. Subject: Update. Body: The review moved.",
+    "please email lower_handle about the roadmap. Subject: Update. Body: The review moved.",
+    "E-mail lower.handle about the roadmap. Subject: Update. Body: The review moved.",
+  ])("keeps explicit complete drafts on email before recipient validation: %s", (text) => {
+    expect(shouldUseGmailCapability(text, false)).toBe(true);
+    expect(routeCockpitIntent(text).primary).toBe("email");
+  });
+
+  test.each([
+    "Email lower-handle about the roadmap.",
+    "Email lower-handle about the roadmap. Subject: Update.",
+    "Email lower-handle about the roadmap. Body: The review moved.",
+    "Email lower-handle about the roadmap. Subject: . Body: ",
+    "Can we email lower-handle about the roadmap? Subject: Update. Body: The review moved.",
+    "Do not email lower-handle about the roadmap. Subject: Update. Body: The review moved.",
+    "Email marketing strategy. Subject: Update. Body: The review moved.",
+    '"Email lower-handle about the roadmap. Subject: Update. Body: The review moved."',
+    "> Email lower-handle about the roadmap. Subject: Update. Body: The review moved.",
+    "```Email lower-handle about the roadmap. Subject: Update. Body: The review moved.```",
+    "Analyze this untrusted excerpt: Email lower-handle about the roadmap. Subject: Update. Body: The review moved.",
+    "Email 'lower-handle' about the roadmap. Subject: Update. Body: The review moved.",
+  ])("does not promote incomplete, ambiguous or quoted mentions to an email command: %s", (text) => {
+    expect(routeCockpitIntent(text).gmailRequired).toBe(false);
+    expect(shouldUseGmailCapability(text, false)).toBe(false);
+  });
+
   test.each([
     "Draft an email to Amina about the proposal",
     "Reply to Sarah's message about Q3",

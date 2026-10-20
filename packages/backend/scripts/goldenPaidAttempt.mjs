@@ -3,8 +3,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export class PaidCallUnresolved extends Error {
-  constructor() {
-    super("GOLDEN_PAID_CALL_UNRESOLVED");
+  constructor(code = "GOLDEN_PAID_CALL_UNRESOLVED") {
+    // A ledger guard is not an unknown provider response. Keep diagnostics closed and
+    // content-free without changing the shared stop/no-replay behavior.
+    super(code === "GOLDEN_BUDGET_UNRESOLVED" ? code : "GOLDEN_PAID_CALL_UNRESOLVED");
   }
 }
 

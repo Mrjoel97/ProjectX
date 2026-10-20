@@ -72,7 +72,17 @@ export function routeCockpitIntent(text: string): CockpitCapabilityRoute {
   ).map(({ capability }) => capability);
   // Preserve capitalization so "Email Amina" is recognized as a verb without turning lower-case
   // product topics such as "email onboarding sequence" into a Gmail request.
-  if (/\b[Ee]-?mail\s+[A-Z][\p{L}'-]+/u.test(normalized) && !matches.includes("email")) {
+  // A malformed handle is still an email instruction: expose recipient validation instead of
+  // sending a complete draft onto the general rail. Require a leading command and both fields;
+  // quoted examples, product topics and ambiguous bare mentions do not gain this fallback.
+  const explicitDraft =
+    /^(?:please\s+)?e-?mail\s+[a-z0-9][a-z0-9._+@%-]*\s+about\b.*?\bsubject\s*:\s*\S.*?\bbody\s*:\s*\S/i.test(
+      normalized,
+    );
+  if (
+    (/\b[Ee]-?mail\s+[A-Z][\p{L}'-]+/u.test(normalized) || explicitDraft) &&
+    !matches.includes("email")
+  ) {
     matches.unshift("email");
   }
   const capabilities: CockpitCapability[] =
