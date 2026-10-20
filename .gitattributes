@@ -5,3 +5,6 @@
 # Windows makes the shebang read `/usr/bin/env bash\r` and Linux answers "bad interpreter" —
 # and packages/backend/convex/render/assemble_final.sh is executed inside a Linux sandbox.
 *.sh text eol=lf
+
+# This immutable observation was hashed before Git text normalization. Preserve its exact bytes.
+.planning/phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-HANDOFF-REFRESH.json -text whitespace=trailing-space,space-before-tab,cr-at-eol

@@ -1,0 +1,41 @@
+{
+  "schema": "phase48-pr79-staging-release-observation.v1",
+  "authorizationAnswerVerbatim": "Approve staging release",
+  "authorizationSha256": "53269cc546d1e7b6be1ba17a49f310591e5c6a564513f343bf1a0a41cd102371",
+  "pullRequest": 79,
+  "mergedSha": "2314691a6fd34f85b3b0fd8febdbf43bf500ee45",
+  "runId": 39460078883,
+  "jobId": 118756953910,
+  "release": {
+    "schema": "phase48-staging-release.v1",
+    "target": "woozy-wren-368",
+    "success": true,
+    "phase": "complete",
+    "preflightPassed": true,
+    "billingLabelsMayHaveChanged": false,
+    "billingLabelsVerified": true,
+    "applyAttempted": true,
+    "applyCompleted": true,
+    "postflightAttempted": true,
+    "postflightPassed": true,
+    "preservationVerified": true,
+    "postflightParityZero": true,
+    "privateDiagnosticsSuppressed": true,
+    "sourceSha": "b10740d6466db155c48519aba6323d5b0c27c406",
+    "ciRunId": "39446162910",
+    "authorizationSha256": "53269cc546d1e7b6be1ba17a49f310591e5c6a564513f343bf1a0a41cd102371",
+    "before": {
+      "watchedConfigurationSha256": "3e6655cf6ff6c1bff7e603a8122065de8f21cdc754ed87962ca731dc42698b89",
+      "registrySha256": "faac155d8c90d9205f2aa95072a520e50e727964974e64a6f62676bea73480e3",
+      "protectedRetentionSha256": "2ecc1945e018a9af66614a2dfceb8a71209f8b480c8015e73eed9b08d9590163"
+    },
+    "after": {
+      "watchedConfigurationSha256": "3e6655cf6ff6c1bff7e603a8122065de8f21cdc754ed87962ca731dc42698b89",
+      "registrySha256": "faac155d8c90d9205f2aa95072a520e50e727964974e64a6f62676bea73480e3",
+      "protectedRetentionSha256": "2ecc1945e018a9af66614a2dfceb8a71209f8b480c8015e73eed9b08d9590163"
+    }
+  },
+  "paidEvaluationAuthorized": false,
+  "activationAuthorized": false,
+  "productionDeploymentAuthorized": false
+}

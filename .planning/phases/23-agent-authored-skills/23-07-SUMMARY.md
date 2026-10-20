@@ -61,8 +61,9 @@ distinguish the fixed budget-guard code without exposing arbitrary errors. No wa
 oracle changed in that routing/diagnostic repair. The later free oracle correction below changes
 the current corpus and evaluator identity. This interrupted attempt and
 the immutable handoff remain evidence for their original source, not qualification of the fix.
-The next gate is fresh source qualification, an explicit handoff disposition and new paid
-approval. No new-source handoff readiness, retry permission or passing evaluation is claimed.
+At this offline-repair boundary, fresh source qualification, an explicit handoff disposition
+and new paid approval were still outstanding. The later release/refresh below supplies a new
+current handoff, without retry permission or a passing evaluation.
 
 The free oracle gap is now corrected offline: fixture 08 adds `emailOnly: true` while retaining
 its original input turns, proposed-status and exact-recipient positives. Ordinary email requires absent
@@ -113,15 +114,63 @@ normal closure and inert candidate state. It is a partial observation, not the c
 `23-EVAL-RESULT` schema or a passing gate. Preserve its bytes; corrections require a separate
 versioned observation. Exact stop-branch and actual runtime prompt-load attribution remain unproven.
 
-## Disposition
+## Later approved staging release and current readiness
+
+The later verbatim approval **“Approve staging release”**, authorization SHA256
+`53269cc546d1e7b6be1ba17a49f310591e5c6a564513f343bf1a0a41cd102371`, covers PR79,
+staging-only release, existing A/B checks and a new versioned handoff. It authorizes no new
+paid evaluation, activation or production deployment. PR79 merged at
+`2314691a6fd34f85b3b0fd8febdbf43bf500ee45`; staging run `39460078883`, job
+`118756953910`, succeeded for source `b10740d6466db155c48519aba6323d5b0c27c406`
+and CI `39446162910`. The separate
+[release observation](../48-readiness-and-qualification-closure/48-STAGING-PR79-RELEASE-2026-10-20.json),
+SHA256 `731c7c7e67096c28d5dc230257864ca5f054bdedb1ee89a3f977d280887e38dd`,
+records completed apply, passing postflight/zero parity/preservation/billing verification and
+unchanged watched configuration, registry and protected retention. Billing labels did not change.
+
+Private `phase23-eval-approved-20261020/release-readiness.json`, observed at
+`16:48:53.219Z`, confirms the same exact candidate, provenance/source, baseline, effective,
+global and foreign state, A owner/B non-owner, closed old budget with no holds and unchanged
+cost, standard/free billing and the current d122/5dbe 46-case suite. Native
+`release-native-identities.json` records A_IDENTITY_MATCH, B_IDENTITY_MATCH and NOT_STARTED.
+Fresh responsive proof and a new versioned handoff were subsequently completed as below.
+Historical authoring, responsive and interrupted-evaluation records are not relabeled as
+current-source proof.
+The documented Phase20-20 cockpit body/source variance remains accepted and preserved;
+no registry repair or claim that every body matches source follows from this release.
+
+## Current versioned handoff, without paid authorization
+
+At `17:01:27.296Z`, the existing immutable writer, closed scanner and assertLiveMatches
+passed for [the new handoff](handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json), exact SHA256
+`ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61`.
+Its [refresh observation](handoffs/2026-10-20-pr79/23-HANDOFF-REFRESH.json), SHA256
+`6b86ddbe2ad61dc4f331024a0e08b3fdb3420c0771bdbb28a5a38c3161cc31c8`, binds the
+approved PR79 source/release/current d122/5dbe 46-case suite and six stable post-UI reads.
+Exact candidate/source/provenance/global/foreign/baseline and governance remained unchanged.
+Native existing A owner/B non-owner sessions were verified; existingOwnerAtStart is true.
+
+Measured iframes at 1440x900 and 390x900 showed the exact candidate and disabled activation
+gate. Draft/diff expansion by keyboard was verified in the direct native signed-in A view;
+embedded controls were not exercised. Initial desktop AX-presence-only proof was excluded;
+the recorded actual scrolled screenshots/new witnesses are used. This remains desktop-browser
+responsive evidence, with no touch or physical-mobile-device claim. Historical source-thread
+authoring/refusal was not replayed and no new agent turn was run.
+
+This directory supersedes only the current next-input reference. The original handoff and
+interrupted-run observation remain unchanged and retain their original source/corpus meaning.
+No new eval-result, paid run, public B mutation, activation or production release followed;
+paidReady and paidAuthorized remain false. This handoff refresh is not consent to spend.
+
+## Current disposition
 
 Plan 23-07 remains partial. Preserve the actual single attempt and its timing/cause uncertainty;
 do not retry automatically or substitute a partial result for the full gate. Only an actual
 complete passing full suite followed by native B public OWNER_REQUIRED with unchanged state
 can support the existing immutable eval-result writer. This attempt produced neither that
-result artifact nor permission to bypass the gate. A later attempt requires fresh source
-qualification, handoff disposition and its own concrete authorization, not reuse of this closed
-budget or silent rewriting of the original handoff.
+result artifact nor permission to bypass the gate. A later attempt must revalidate the new
+versioned handoff and receive its own concrete authorization, not reuse this closed budget or
+silently rewrite the original handoff. No paid-consent request is part of this release/refresh.
 
 Plan 23-06 stays complete; Phase 23 remains 6/9 with 23-07/08/09 open. SKILL-02 and Phase 48
 remain open/partial, Phase 21 stays accepted and Phase 49 has not started.

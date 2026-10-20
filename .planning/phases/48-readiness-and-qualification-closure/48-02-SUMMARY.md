@@ -366,9 +366,10 @@ media-kind plan. This is separate from the uncertain generic exception branch. T
 runtime fix and playbook update are implemented, with 39 routing and four diagnostic tests
 passing offline. The later emailOnly oracle correction changes fixture 08's expectation and
 evaluator identity, retaining 46 cases; neither the old
-handoff nor this interrupted attempt qualifies that new source. Next gate: fresh source
-qualification, explicit handoff disposition and new paid approval. No retry or new handoff is
-ready by inference; all original artifact bytes remain unchanged.
+handoff nor this interrupted attempt qualifies that new source. At the offline boundary, the
+next gates were fresh source qualification, handoff disposition and new paid approval. The
+later approved release/refresh below supplies a new current handoff without automatic retry
+or new spending consent; all original artifact bytes remain unchanged.
 
 The free intent-oracle gap is corrected offline by emailOnly: absent plan.kind and no attempts,
 including refusals, at seven closed unrelated operations, using the existing exact tenant/thread
@@ -379,3 +380,48 @@ No live semantic pass, grants, waits or retries follow from this correction.
 A separate 14:58:53.908Z read-only postcheck confirmed unchanged candidate
 provenance, global registry and protected retention, with the budget still closed at 89 settled
 calls and the same cost; see 23-07-SUMMARY for the exact private receipt hash.
+
+## PR79 approved staging release and current readiness
+
+The user's verbatim **“Approve staging release”** has authorization SHA256
+`53269cc546d1e7b6be1ba17a49f310591e5c6a564513f343bf1a0a41cd102371` and covers
+PR79 merge, staging release, current existing A/B checks and a new versioned handoff only.
+PR79 merged `2314691a6fd34f85b3b0fd8febdbf43bf500ee45`, without a production deploy
+marker. Staging run `39460078883`/job `118756953910` succeeded on source
+`b10740d6466db155c48519aba6323d5b0c27c406` with CI `39446162910`.
+[PR79 release observation](48-STAGING-PR79-RELEASE-2026-10-20.json), exact SHA256
+`731c7c7e67096c28d5dc230257864ca5f054bdedb1ee89a3f977d280887e38dd`, records
+applyCompleted, postflightPassed, postflightParityZero, preservationVerified and
+billingLabelsVerified true. Watched configuration, registry and protected retention hashes
+match before/after; billingLabelsMayHaveChanged is false. This later successful release
+does not rewrite the historical failed release or interrupted paid attempt.
+
+At `16:48:53.219Z`, private `phase23-eval-approved-20261020/release-readiness.json`
+verified unchanged exact candidate/provenance/source/baseline/effective/global/foreign,
+A owner/B non-owner, the closed old budget with no holds/same cost, standard/free billing,
+and current d122/5dbe 46-case suite. Native `release-native-identities.json` records
+A_IDENTITY_MATCH, B_IDENTITY_MATCH and NOT_STARTED. Fresh responsive proof and a new
+versioned handoff subsequently completed as below. Preserve the original handoff/partial bytes and do not
+relabel their source qualification. The documented owner-ratified Phase20-20 cockpit variance
+is preserved, not repaired or described as every body matching source. No new paid test,
+activation or production deployment is authorized; Phase 23/48 remain partial and 49 not started.
+
+## Current versioned handoff completed
+
+At `17:01:27.296Z`, the existing immutable writer, closed scanner and assertLiveMatches
+passed for [the PR79 handoff](../23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json),
+SHA256 `ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61`.
+The [refresh observation](../23-agent-authored-skills/handoffs/2026-10-20-pr79/23-HANDOFF-REFRESH.json),
+SHA256 `6b86ddbe2ad61dc4f331024a0e08b3fdb3420c0771bdbb28a5a38c3161cc31c8`, records
+six stable current post-UI reads: exact candidate/source/provenance/global/foreign/baseline
+and governance unchanged, native existing A owner/B non-owner and current d122/5dbe suite.
+The handoff truthfully uses existingOwnerAtStart; historical authoring/refusal was not replayed.
+
+Actual measured 1440x900/390x900 iframes show the candidate and disabled activation gate.
+Keyboard draft/diff expansion was verified in the direct native signed-in A view, not the
+embedded controls. Initial desktop AX-presence-only evidence is excluded in favor of actual
+scrolled screenshots/new witnesses. This is desktop-browser responsive proof, not touch or
+physical-device testing. The new directory is the current next input only; original handoff,
+partial observation and their source pins are unchanged. PaidReady/paidAuthorized remain
+false. No new eval-result, paid run, public B mutation, activation or production release
+occurred; Phase 23 stays 6/9, Phase 48 partial and Phase 49 not started.

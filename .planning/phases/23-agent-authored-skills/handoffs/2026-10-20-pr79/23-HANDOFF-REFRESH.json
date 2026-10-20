@@ -1,0 +1,54 @@
+{
+  "schema": "phase23-handoff-refresh-observation.v1",
+  "predecessorHandoffPath": ".planning/phases/23-agent-authored-skills/23-LIVE-HANDOFF.json",
+  "interruptedEvalObservationPath": ".planning/phases/23-agent-authored-skills/23-07-PARTIAL-2026-10-20.json",
+  "interruptedEvalObservationSha256": "14ca4569bf8ae82e7254372106a8e7f0435fe4ea08459745a50020b2ee12a87b",
+  "stagingReleaseObservationPath": ".planning/phases/48-readiness-and-qualification-closure/48-STAGING-PR79-RELEASE-2026-10-20.json",
+  "stagingReleaseObservationSha256": "731c7c7e67096c28d5dc230257864ca5f054bdedb1ee89a3f977d280887e38dd",
+  "mergedSha": "2314691a6fd34f85b3b0fd8febdbf43bf500ee45",
+  "refresh": {
+    "observedAt": "2026-10-20T17:01:27.296Z",
+    "path": ".planning/phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json",
+    "sha256": "ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61",
+    "oldHandoffSha256": "112ce2643ae15d4b2c39961b09506223bf0d6fe9978993dfe9536cee2dcbdc45",
+    "sourceSha": "b10740d6466db155c48519aba6323d5b0c27c406",
+    "ciRunId": 39446162910,
+    "releaseRunId": 39460078883,
+    "exactCurrentStateMatch": true,
+    "matchingReads": 6,
+    "nativeAuthVerified": true,
+    "actualResponsiveViewports": [
+      {
+        "width": 1440,
+        "height": 900
+      },
+      {
+        "width": 390,
+        "height": 900
+      }
+    ],
+    "keyboardWitnessScope": "direct native signed-in review only; embedded controls not exercised",
+    "authoringWitnessScope": "original source-thread authoring and refusal remain historical; no new agent turn",
+    "existingOwnerAtStart": true,
+    "paidReady": false,
+    "paidAuthorized": false,
+    "activationAuthorized": false,
+    "productionDeploymentAuthorized": false,
+    "privateSourceHashes": {
+      "staging-release-authorization.json": "53269cc546d1e7b6be1ba17a49f310591e5c6a564513f343bf1a0a41cd102371",
+      "release-observation.json": "ea2bed8f65b17d44120b49b38a95a54f11bf549e2f5707b0e95a21dfda35d68f",
+      "release-readiness.json": "be95d992bab254f81017f031273c71506f101007b101517c6c3ee8c332cc74e2",
+      "release-post-ui-readiness.json": "8ab65eaa449924b6dc207f53f56dcf9b1c374f188da2cf2b1cbe6f218ab6a452",
+      "release-native-identities.json": "07b870897e25f0177b4bd6467748f83f1b65eb589a1ccfe31f5f9cc703bb9ca6",
+      "release-native-review.json": "ef0593006b6110d9c3b1506a18db84c7599f992cfdb50e8877d9a805bf3e37a9",
+      "release-desktop-review-witness.json": "aba666ea3555ec934a73a53f106206fb8006162f3a1593922fd511c315b615d8",
+      "release-mobile-review-witness.json": "44224abb5169ed133f67fb160579a9ae016b83d2b090c2c40de404504398ca75",
+      "release-responsive-proof-selection.json": "d6d25f53e005fa4415c696a2b5b1d4e89161dba1fd967738d9d15dad29202fdd"
+    }
+  },
+  "sourceVariancePreserved": "Historical owner-ratified cockpit baseline remains unchanged; no registry repair or source-body alignment was performed.",
+  "fixturesRemainSynthetic": true,
+  "currentPaidEvaluationRecorded": false,
+  "currentPublicNonOwnerMutationAttempted": false,
+  "noTouchOrPhysicalDeviceTestingClaim": true
+}
