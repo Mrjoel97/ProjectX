@@ -5,8 +5,8 @@ milestone_name: "Platform -> Private Beta"
 current_phase: 48
 current_plan: "48-02 — reconcile the actual prior Phase 23 attempt read-only, then resume original plans 23-06 through 23-09 at their existing checkpoints."
 status: in_progress
-stopped_at: "2026-10-19 — 48-02 live read-only recovery found A already owner, no historical candidate/turns and closed unused probe. Native refusal seam and fail-closed pack evidence guards prepared offline. Certified Phase23 chain and Phase27 behavioral protocols remain open; no new paid call, activation or production write."
-last_updated: "2026-10-19"
+stopped_at: "2026-10-20 — PR71 passed CI and merged without production promotion. CLI login succeeded; user confirms the controlled test password is unavailable. Original production $1 scope remains unused. A separate staging alternative is prepared, not approved. No new budget/model/candidate or activation."
+last_updated: "2026-10-20"
 progress:
   total_phases: 79
   completed_phases: 54
@@ -48,4 +48,4 @@ The owner approved the managed-service programme on 2026-10-19: **48 readiness �
 
 ## Next execution boundary
 
-48-02 read-only recovery is recorded; finish free continuation checks before its fresh model checkpoint. Existing exact-scope evaluation and owner checkpoints remain in23-06–09. 48-03 preparation maps every pack/cell and blocks two card-only evidence writers; actual behavioral journeys remain pending. 48-04 seals readiness before Phase49 starts. No qualification is inferred from preparation.
+48-02 continuation passed free checks and CI. Developer login works, but the user confirms the old controlled password is unavailable; the approved production $1 scope remains unused. The [staging alternative](phases/48-readiness-and-qualification-closure/48-STAGING-ALTERNATIVE.md) needs a separate decision on new accounts, fixtures and A-only owner grant, plus billing/source preflight. Native witnesses require actual exact IDs/origins. Original evaluation/owner checkpoints remain in23-06–09. 48-03 browser journeys remain pending;48-04 seals readiness before Phase49.

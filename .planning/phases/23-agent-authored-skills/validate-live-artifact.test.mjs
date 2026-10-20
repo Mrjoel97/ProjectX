@@ -57,6 +57,57 @@ for (const mutate of [
   assert.throws(() => validateArtifact("handoff", changed, { privateNeedle }), /PHASE23_ARTIFACT_INVALID/);
 }
 assert.throws(() => validateArtifact("eval", continuationEval, context), /PHASE23_ARTIFACT_INVALID/);
+// Native origin witnesses never pretend a storage-state export exists. Both owner witness
+// variants retain the same exact candidate/tenant identity and original-byte hash chain.
+const nativeRefs = {
+  primaryNativeOrigin: "http://127.0.0.1:3111",
+  foreignNativeOrigin: "http://localhost:3111",
+  primaryUserId: h.authRefs.primaryUserId,
+  foreignUserId: h.authRefs.foreignUserId,
+};
+for (const original of [h, continuation]) {
+  const nativeHandoff = structuredClone(original);
+  nativeHandoff.authRefs = structuredClone(nativeRefs);
+  const nativeBytes = JSON.stringify(nativeHandoff);
+  const nativeEval = { ...e, handoffSha256: sha256(nativeBytes) };
+  const nativeEvalBytes = JSON.stringify(nativeEval);
+  const nativeContext = { privateNeedle, handoffBytes: nativeBytes, evalBytes: nativeEvalBytes };
+  validateArtifact("handoff", nativeHandoff, { privateNeedle });
+  validateArtifact("eval", nativeEval, nativeContext);
+  validateArtifact("live", { ...live, handoffSha256: sha256(nativeBytes), evalResultSha256: sha256(nativeEvalBytes) }, nativeContext);
+  assert.throws(() => validateArtifact("eval", nativeEval, context), /PHASE23_ARTIFACT_INVALID/);
+  assert.throws(() => validateArtifact("eval", e, nativeContext), /PHASE23_ARTIFACT_INVALID/);
+  for (const mutate of [
+    (v) => { v.authRefs.primaryStorageStateRef = "e2e/.auth/user.json"; },
+    (v) => { v.authRefs.foreignStorageStateRef = "e2e/.auth/foreign.json"; },
+    (v) => { Object.assign(v.authRefs, h.authRefs); },
+    (v) => { v.authRefs = { primaryNativeOrigin: nativeRefs.primaryNativeOrigin, foreignStorageStateRef: "e2e/.auth/foreign.json", primaryUserId: "tenantA", foreignUserId: "tenantB" }; },
+    (v) => { v.authRefs = { primaryStorageStateRef: "e2e/.auth/user.json", foreignNativeOrigin: nativeRefs.foreignNativeOrigin, primaryUserId: "tenantA", foreignUserId: "tenantB" }; },
+    (v) => { v.authRefs = { primaryUserId: "tenantA", foreignUserId: "tenantB" }; },
+    (v) => { v.authRefs.primaryNativeOrigin = nativeRefs.foreignNativeOrigin; },
+    (v) => { v.authRefs.foreignNativeOrigin = nativeRefs.primaryNativeOrigin; },
+    (v) => { v.authRefs.primaryNativeOrigin = "http://127.0.0.1:3111/"; },
+    (v) => { v.authRefs.primaryNativeOrigin = "https://127.0.0.1:3111"; },
+    (v) => { v.authRefs.foreignNativeOrigin = "http://other.example:3111"; },
+    (v) => { v.authRefs.foreignNativeOrigin = "http://localhost:3112"; },
+    (v) => { v.authRefs.primaryNativeOrigin = privateNeedle; },
+    (v) => { v.authRefs.innocent = "extra"; },
+    (v) => { v.authRefs.primaryUserId = "otherTenant"; },
+    (v) => { v.authRefs.foreignUserId = "otherTenant"; },
+    (v) => { v.authRefs.foreignUserId = v.authRefs.primaryUserId; },
+  ]) {
+    const changed = structuredClone(nativeHandoff);
+    mutate(changed);
+    assert.throws(() => validateArtifact("handoff", changed, { privateNeedle }), /PHASE23_ARTIFACT_INVALID/);
+  }
+  for (const key of Object.keys(nativeRefs)) {
+    const changed = structuredClone(nativeHandoff);
+    delete changed.authRefs[key];
+    assert.throws(() => validateArtifact("handoff", changed, { privateNeedle }), /PHASE23_ARTIFACT_INVALID/);
+  }
+}
+assert.equal(JSON.stringify(h), handoffBytes, "native witness support never rewrites legacy handoff bytes");
+assert.equal(JSON.stringify(e), evalBytes, "native witness support never rewrites legacy eval bytes");
 const reject = (kind, original, mutate) => {
   const copy = JSON.parse(JSON.stringify(original));
   mutate(copy);
@@ -136,4 +187,4 @@ try {
   assert.equal(result.stderr, "PHASE23_ARTIFACT_INVALID\n");
   assert.equal(result.stdout, "");
 } finally { rmSync(dir, { recursive: true, force: true }); }
-console.log(`Phase 23 offline validator: ${cases} closed-schema/secret probes plus identity, lifecycle, immutable-write and CLI checks passed.`);
+console.log(`Phase 23 offline validator: ${cases} closed-schema/secret probes plus native-origin witness, identity, lifecycle, immutable-write and CLI checks passed.`);

@@ -57,4 +57,31 @@ readiness. Existing dashboard access remains usable for bounded read-only inspec
 
 ## Remaining checkpoint
 
+### October20 native-session preparation
+
+The user approved the fresh developer-login/$1scope; official CLI device login succeeded. Exact
+production read-only queries now work, and duplicate recovery observations still agree on zero
+historical use. PR71 passed exact-head CI and merged without deployment. Original encrypted
+test credentials remain unavailable. The observed app sign-in ended on production, while the
+local controlled origin still displayed Sign In; it cannot be counted as local authentication.
+Source inspection confirms Google resolves relative redirects against production SITE_URL, while
+the existing password form remains local. No redirect configuration or account role was changed.
+
+Prepared a read-only, explicitly enabled development identity view and a recursively closed
+native-origin handoff alternative. Independent review and13identity/24public-refusal tests,
+1,338legacy artifact probes plus native-origin cases,2operator tests and web TypeScript pass.
+Each real A/B session must show its exact native ID/role at its actual fixed origin; labels and
+prefilled addresses alone cannot pass. Missing profiles remain a blocker. No fabricated export
+or native witness is written. The new local view performs no mutation and production remains404.
+The user confirmed the controlled password is unavailable. The old account remains untouched;
+no password reset, new envelope/model/candidate or repeat login is attempted. The concrete
+`48-STAGING-ALTERNATIVE.md` proposal requires a separate decision before new accounts, fixture
+writes or an A-only owner grant. Staging billing labels are absent and source parity is unproven;
+configuration presence is not paid readiness. Its explicit fixture exception does not prove real
+onboarding and staging evidence cannot certify the old production identities.
+
+The read-only identity view distinguishes exact A/non-owner (`A_NON_OWNER_MATCH`) before a
+separately approved fresh grant from A/owner (`A_IDENTITY_MATCH`) required for paid readiness.
+Only exact B/non-owner produces `B_IDENTITY_MATCH`; B/owner and absent profiles remain NOT_READY.
+
 New authoring requires its own exact fresh authorization, a new bounded envelope and fresh native controlled sessions; no old envelope or undocumented receipt grants that work. The prepared scope is one inert `offer-architect` adaptation plus one escalation/refusal turn, maximum100cents aggregate and no full evaluation or activation. Exact-row paid evaluation and actual owner activation/rollback remain separate later checkpoints. Missing configuration/credentials and historical private receipts must not be replaced by fabricated readiness. Phase23 and48-02 remain open; Phase49 has not started.

@@ -41,6 +41,29 @@ its sign-in-first/button-case correction passed the five offline checks and disc
 
 ## Execution and handoff
 
+### Fresh bounded continuation approval — 2026-10-20 Africa/Dar_es_Salaam
+
+The user explicitly selected **“Approve developer login and $1 test”** for the disclosed local
+Convex developer login and, only after fresh account readiness, one ordinary Executive authoring
+turn plus one self-activation/capability-escalation refusal turn. Aggregate cap:100cents; exact
+production deployment:`opulent-octopus-494`; existing controlled A/B identities unchanged;
+target:`offer-architect`; candidate remains inert. Full evaluation and owner activation are
+explicitly excluded. Canonical private scope bytes hash to
+`2ee10b4c90fcb0bcafc9fbaa369eff633c4f40d3d71c40c17714689227378356`.
+
+The renewed official device flow succeeded and saved local developer access. Exact production
+read-only calls work. The previous exact source/probe/budget were read twice again: zero
+candidate/tool calls, zero started turns, closed expired envelope and zero calls/unresolved cents.
+No old attempt, lock or envelope was reopened. PR71 exact-head CI succeeded and its source merged
+as`a67afc22777de391e871e13f5a607d61cd1d3387`; this is not a production promotion.
+
+The old encrypted password/canary bundle and fixed auth-state exports are absent from the named
+local locations. Passwords were not read, guessed, changed or requested in chat. A fresh native
+sign-in is prepared for exact A on the local app, whose process is explicitly bound to the same
+production backend. User sign-in remains pending; developer login does not authenticate Pikar.
+No new probe, model turn, candidate, evaluation or activation has started under this approval.
+The approved scope remains pending readiness; it does not authorize an automatic ambiguous retry.
+
 Pending. Stop on the first failed or unresolved model outcome; preserve native holds and recovery
 references. A successful budget counter check alone never certifies adversarial policy behavior.
 No full paid evaluation, owner candidate activation, rollback, or requirement closure is authorized
