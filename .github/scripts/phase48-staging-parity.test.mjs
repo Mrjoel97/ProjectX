@@ -1,0 +1,210 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { childEnvironment, runParity, summarizeDiff } from "./phase48-staging-parity.mjs";
+
+const sha = "a".repeat(40),
+  digest = "b".repeat(64);
+const env = {
+  GITHUB_ACTIONS: "true",
+  CI: "true",
+  EXPECTED_SOURCE_SHA: sha,
+  EXPECTED_CI_RUN_ID: "123",
+  STAGING_CONVEX_DEPLOY_KEY: "dev:woozy-wren-368|synthetic-stage-only",
+  GITHUB_TOKEN: "synthetic-token",
+  OPENROUTER_API_KEY: "synthetic-provider",
+  CONVEX_DEPLOYMENT: "prod:wrong",
+};
+const diff = () => ({
+  authDiff: { added: [], removed: [] },
+  definitionDiffs: {},
+  componentDiffs: {
+    "": {
+      diffType: { type: "modify" },
+      moduleDiff: { added: [], removed: [] },
+      udfConfigDiff: null,
+      cronDiff: { added: [], updated: [], deleted: [] },
+      indexDiff: { added_indexes: [], removed_indexes: [] },
+      schemaDiff: null,
+    },
+  },
+});
+const output = (value = diff()) =>
+  `Remote config would be overwritten with the following changes:\n  \n${JSON.stringify(value, null, 2)}\nWould have deployed Convex functions`;
+
+function mock(options = {}) {
+  const calls = [];
+  let dry = false;
+  const execute = (file, args, opts) => {
+    calls.push({ file, args, env: opts.env });
+    const ok = (stdout) => ({ status: 0, stdout, stderr: "" });
+    if (file === "git") {
+      if (args[0] === "rev-parse") return ok(options.wrongSha ? "c".repeat(40) : sha);
+      if (args[0] === "status") return ok(options.dirty ? " M source.ts" : "");
+      if (args[0] === "ls-files") return ok("immutable-index");
+    }
+    const command = args[1];
+    if (command === "dashboard")
+      return ok(
+        `https://dashboard.convex.dev/d/${options.production ? "opulent-octopus-494" : "woozy-wren-368"}`,
+      );
+    if (command === "env") {
+      if (args[2] === "list")
+        return ok("SITE_URL\nCONVEX_SITE_URL\nFOUNDATION_ONBOARDING_ENABLED\nOPENROUTER_API_KEY");
+      if (args[3] === "SITE_URL")
+        return ok(
+          options.wrongOrigin
+            ? "https://www.pikar-ai.com"
+            : "https://pikar-ai-staging-joelferuzi.vercel.app",
+        );
+      if (args[3] === "CONVEX_SITE_URL") return ok("https://woozy-wren-368.convex.site");
+      if (args[3] === "FOUNDATION_ONBOARDING_ENABLED") return ok("1");
+      throw Error("Unreviewed environment read");
+    }
+    if (command === "run") {
+      assert.equal(args[2], "--inline-query");
+      assert.doesNotMatch(args[3], /ctx\.db\.(insert|patch|replace|delete)|runMutation|runAction/);
+      if (args[3].includes("foundationInterviews")) {
+        assert.match(args[3], /b389a2014e514c7a35e08480dcef446aeb46b360861e2b8b72f9e67fc61f412e/);
+        assert.match(args[3], /2026-10-24T10:18:29.493Z/);
+        return ok(
+          JSON.stringify({
+            sha256: dry && options.retentionChanged ? "c".repeat(64) : digest,
+            checkpointCount: 1,
+          }),
+        );
+      }
+      return ok(
+        JSON.stringify({
+          sha256: dry && options.registryChanged ? "c".repeat(64) : digest,
+          count: 2,
+        }),
+      );
+    }
+    if (command === "deploy") {
+      assert.deepEqual(args.slice(2), [
+        "--dry-run",
+        "--typecheck",
+        "enable",
+        "--codegen",
+        "disable",
+        "--verbose",
+        "--skip-workos-check",
+      ]);
+      dry = true;
+      if (options.dryFailure) return { status: 1, stdout: "", stderr: "private diagnostic secret" };
+      return ok(options.unknownDiff ? "Would have deployed" : output());
+    }
+    throw Error("Unexpected command");
+  };
+  return { execute, calls };
+}
+
+test("only the selected staging key reaches children; tokens, provider secrets and other targets do not", () => {
+  const child = childEnvironment(env);
+  assert.equal(child.CONVEX_DEPLOY_KEY, env.STAGING_CONVEX_DEPLOY_KEY);
+  for (const name of [
+    "STAGING_CONVEX_DEPLOY_KEY",
+    "GITHUB_TOKEN",
+    "OPENROUTER_API_KEY",
+    "CONVEX_DEPLOYMENT",
+  ])
+    assert.equal(child[name], undefined);
+});
+for (const key of [
+  "project:team:project|synthetic",
+  "preview:team:project|synthetic",
+  "preview:woozy-wren-368|synthetic",
+  "prod:opulent-octopus-494|synthetic",
+  "prod:woozy-wren-368|synthetic",
+  "dev:another-stage-123|synthetic",
+  "",
+  " ",
+  "dev:woozy-wren-368",
+  "dev:woozy-wren-368|",
+  "dev:woozy-wren-368|synthetic|extra",
+  "dev:woozy-wren-368|synthetic\n",
+  " dev:woozy-wren-368|synthetic",
+  "dev:woozy-wren-368:extra|synthetic",
+]) {
+  test(`rejects unsafe key selector case ${key.split("|")[0].trim() || "blank"}`, async () => {
+    const { execute, calls } = mock();
+    await assert.rejects(runParity({ ...env, STAGING_CONVEX_DEPLOY_KEY: key }, execute));
+    assert.equal(calls.length, 0, "refusal precedes every child command");
+  });
+}
+test("structured zero diff establishes parity only with the observed empty config diff", () => {
+  assert.equal(summarizeDiff(output()).diffStatus, "zero");
+  assert.equal(summarizeDiff(output()).parityEstablished, true);
+  assert.equal(summarizeDiff(JSON.stringify(diff())).parityEstablished, false);
+});
+test("module and config changes are reported without returning paths or source", () => {
+  const changed = diff();
+  changed.componentDiffs[""].moduleDiff.added.push("private-module.js");
+  const result = summarizeDiff(output(changed));
+  assert.equal(result.diffStatus, "changes");
+  assert.equal(result.parityEstablished, false);
+  assert.ok(!JSON.stringify(result).includes("private-module"));
+  assert.equal(
+    summarizeDiff(output().replace("\n  \n", "\n  Change the server's version\n")).diffStatus,
+    "changes",
+  );
+});
+test("success prose, duplicate JSON and unknown or malformed fields never imply parity", () => {
+  const extended = diff();
+  extended.extra = true;
+  const definitions = diff();
+  definitions.definitionDiffs.x = {};
+  const malformed = diff();
+  malformed.componentDiffs[""].moduleDiff.added = null;
+  for (const text of [
+    "Would have deployed",
+    `${output()}\n${output()}`,
+    output(extended),
+    output(definitions),
+    output(malformed),
+  ])
+    assert.deepEqual(summarizeDiff(text), { diffStatus: "unknown", parityEstablished: false });
+});
+test("dry-run reads preserve exact source, origins, registry and retention; no secret value read", async () => {
+  const { execute, calls } = mock();
+  const result = await runParity(env, execute);
+  assert.equal(result.parityEstablished, true);
+  assert.equal(result.applyRequested, false);
+  assert.equal(calls.filter((x) => x.args[1] === "deploy").length, 1);
+  assert.equal(calls.filter((x) => x.args[1] === "run").length, 4);
+  assert.ok(!calls.some((x) => x.args.includes("OPENROUTER_API_KEY")));
+});
+test("successful dry-run without structured evidence reports unknown, not source parity", async () => {
+  const { execute } = mock({ unknownDiff: true });
+  assert.equal((await runParity(env, execute)).diffStatus, "unknown");
+});
+for (const field of [
+  "wrongSha",
+  "dirty",
+  "production",
+  "wrongOrigin",
+  "registryChanged",
+  "retentionChanged",
+  "dryFailure",
+])
+  test(`refuses ${field} without printing private diagnostics or applying`, async () => {
+    const { execute, calls } = mock({ [field]: true });
+    await assert.rejects(runParity(env, execute), /^Error: PHASE48_STAGING_PARITY_REFUSED$/);
+    assert.ok(
+      calls.filter((x) => x.args[1] === "deploy").every((x) => x.args.includes("--dry-run")),
+    );
+    if (field === "dryFailure") assert.equal(calls.filter((x) => x.args[1] === "run").length, 4);
+  });
+test("missing CI/scope/key refuses before any command", async () => {
+  for (const field of [
+    "CI",
+    "GITHUB_ACTIONS",
+    "EXPECTED_SOURCE_SHA",
+    "EXPECTED_CI_RUN_ID",
+    "STAGING_CONVEX_DEPLOY_KEY",
+  ]) {
+    const { execute, calls } = mock();
+    await assert.rejects(runParity({ ...env, [field]: undefined }, execute));
+    assert.equal(calls.length, 0);
+  }
+});
