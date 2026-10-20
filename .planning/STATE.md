@@ -5,7 +5,7 @@ milestone_name: "Platform -> Private Beta"
 current_phase: 48
 current_plan: "48-02 — reconcile the actual prior Phase 23 attempt read-only, then resume original plans 23-06 through 23-09 at their existing checkpoints."
 status: in_progress
-stopped_at: "2026-10-20 — PR72 passed CI and merged without deployment. Conditional staging approved; Standard OpenRouter/free Tavily separately attested. No new accounts/probe or config writes. Missing staging billing labels/source parity remain blockers. Original production $1 scope unused; Phase48 partial/49 blocked."
+stopped_at: "2026-10-20 — PR73 passed CI and merged without production promotion. First staging read-only workflow failed prerequisites before diff; focused checker repair underway, no parity claim/apply/model/accounts. Billing truth attested; labels unwritten. Original production $1 unused; Phase48 partial/49 blocked."
 last_updated: "2026-10-20"
 progress:
   total_phases: 79
@@ -49,3 +49,5 @@ The owner approved the managed-service programme on 2026-10-19: **48 readiness �
 ## Next execution boundary
 
 The user explicitly approved the [conditional staging alternative](phases/48-readiness-and-qualification-closure/48-STAGING-ALTERNATIVE.md): two native-verified aliases, OTP-only inbox reads, DPAPI credentials, synthetic-profile exception, A-only staging owner grant after fresh witnesses, and maximum100cents/two authoring turns. Private2026-10-20 receipt hash: `50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19`. Standard OpenRouter/free Tavily are now separately attested in private immutable `billing-attestation.json`; exact staging labels remain unset and require a separately approved configuration write. No new accounts/probe or config writes occurred. Source parity remains blocked; CLI dev labels can default deploy to production, so strict staging-key CI dry-run/parity preparation permits no apply. No deploy, registry repair, evaluation, activation or cleanup is approved. Original production $1scope remains unused. 48-02 stays partial;48-03 journeys and48-04 seal precede Phase49.
+
+PR73 source `37f58ab42b7b9e64346d2db815b338ad106ec348` passed CI `39405761515` and merged as `d68824b58f50dabf37e74da5e63e92a71777dc47` without production promotion. First read-only staging workflow `39406448185`/job`118573430518` failed operator prerequisites after4seconds before diff. Exact-stage CLI confirmed built-in CONVEX_SITE_URL is absent from the stored-env list while runtime site/cloud and configured SITE_URL are correct. Focused checker repair is underway; no source-parity pass, apply, model call or account creation is claimed.

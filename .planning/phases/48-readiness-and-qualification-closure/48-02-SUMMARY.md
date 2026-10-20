@@ -115,4 +115,23 @@ no account or paid work may rely on the ambiguous default. These remain executio
 Real onboarding/grounding are not certified by the fixture exception, and staging evidence
 cannot certify the old production identities. Phase23/48-02 remain partial; Phase49 stays blocked.
 
+### October20 first staging read-only workflow
+
+PR73 source `37f58ab42b7b9e64346d2db815b338ad106ec348` passed green CI run
+`39405761515` and merged as `d68824b58f50dabf37e74da5e63e92a71777dc47` without
+production promotion. The first staging read-only workflow `39406448185`, job
+`118573430518`, failed after4seconds without a source-diff result. Its sanitized failure
+message did not identify the exact stop stage, so that stage is not independently established.
+There was no apply, model call, new account or probe. This is a failed readiness observation,
+not source-parity evidence and not a reason to bypass the failed gate.
+
+The parent's exact-stage read-only CLI check confirmed that built-in `CONVEX_SITE_URL` is
+absent from the stored environment-variable list, while runtime site/cloud URLs and configured
+`SITE_URL` are correct. This confirms a blocker in the checker, not the exclusive cause of
+the unlabelled failure. A focused repair verifies the appropriate native
+sources; no parity pass is claimed. Standard OpenRouter/free Tavily remain factually attested,
+but their staging billing labels have not been written. The conditional staging approval hash
+and exclusions above remain unchanged. Production's original $1 scope is unused, and
+Phase23/48-02 remain partial with Phase49 blocked.
+
 New authoring requires its own exact fresh authorization, a new bounded envelope and fresh native controlled sessions; no old envelope or undocumented receipt grants that work. The prepared scope is one inert `offer-architect` adaptation plus one escalation/refusal turn, maximum100cents aggregate and no full evaluation or activation. Exact-row paid evaluation and actual owner activation/rollback remain separate later checkpoints. Missing configuration/credentials and historical private receipts must not be replaced by fabricated readiness. Phase23 and48-02 remain open; Phase49 has not started.
