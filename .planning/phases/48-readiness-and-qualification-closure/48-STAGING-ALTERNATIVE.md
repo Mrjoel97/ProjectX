@@ -62,6 +62,17 @@ registry and the protected retention fixture. The result is `diffStatus=changes`
 Five global registry references/hashes are snapshot observations only, not semantic proof.
 Intermittent local Windows UV failures did not justify mutation or replacing the CI evidence.
 
+The subsequent PR75 source `50289ed15db4e20547b5a5e5b9ff5cd8fb80bb71` passed full CI
+`39412119620` and squash-merged as `9e2ba0551736cab603c35e59a0d5202a1af28aed` without
+production promotion. Third read-only run`39412743386`/job`118594268238` passed with the same
+preservation guarantees and changes=1/parity=false. Its exact sanitized result is preserved
+separately as `48-STAGING-PREFLIGHT-RUN3-2026-10-20.json`; the prior run2 receipt is unchanged.
+All five selected globals have exactly one active row; four match current source. The
+`cockpit-agent v1` hash `b765d7422d5e0d5d0d6beaa58b1310fbba02ced028a613cdc38aef01c3fec7e7`
+is the documented Phase20-20 owner-ratified cloud-dev predecessor in the skill-registry and
+agent-runtime playbooks. Treat its variance as diagnostic provenance, not a registry repair
+instruction or current46-case semantic certification.
+
 The narrow new-profile qualification marker now prevents ordinary weekly-review spending at
 both enumeration and already queued execution. Legacy ordinary profiles are unchanged and
 there is no backfill. Its46focused backend tests/typecheck and existing evaluator identity
@@ -72,11 +83,18 @@ It requires exact-source successful CI and a fresh release-authorization hash. I
 configuration writes are the3attested labels `GOLDEN_OPENROUTER_BILLING=standard`,
 `GOLDEN_TAVILY_BILLING=free`, `GOLDEN_TAVILY_CREDIT_USD=0`; protected hashes must survive
 and post-release source diff must be zero. Unknown outcomes stop without automatic apply retry
-or rollback. Its51operator tests pass; full CI for the new combined release/fixture branch is
-pending. Only after that exact CI and a fresh read-only comparison can a concrete release be
-presented for explicit human approval. The approval hash at the top remains the conditional
+or rollback. Its51operator tests and exact PR75 full CI pass, and the fresh read-only comparison
+above is recorded. The concrete release checkpoint for that source plus only those3labels is
+now pending explicit human approval; no answer or write is recorded. The approval hash at the top remains the conditional
 account/fixture/$1scope, not release permission. No apply, labels, accounts, probe or model work
 has occurred. Phase48 remains partial and Phase49 has not started.
+
+Before any later authoring, preserve the actual five-global baseline using separate pre/post
+redaction-safe supplemental receipts. The fixed Phase23 handoff binds only offer-architect;
+do not change its shape or claim it pins all five globals. These snapshots do not establish
+actual loaded-body attribution: ordinary unpinned native turns do not emit the explicit-pin
+load witness. No baseline supplement, historical evidence or source comparison alone grants
+semantic qualification, activation or a current46-case pass.
 
 ## Approved narrow authorization
 

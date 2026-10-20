@@ -145,7 +145,7 @@ protected retention fixture. It returned `diffStatus: changes`, `changedItemCoun
 not a parity pass or deployment receipt. The redaction-safe observation is
 `48-STAGING-PREFLIGHT-2026-10-20.json`; it is not a certified Phase23 lifecycle artifact.
 
-Local exact-stage CLI registry reads also encountered intermittent Windows UV crashes. The
+Local exact-stage CLI registry reads also encountered intermittent Windows UV crashes.
 The prepared CI operator will report five global registry references/hashes without raw bodies. Those snapshots
 do not certify skill semantics or replace exact candidate/evaluation/activation evidence.
 
@@ -171,5 +171,38 @@ The conditional scope approval hash remains
 `50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19`; the original
 production $1scope is unused. Phase21 stays accepted, Phase23/48-02 remain partial, and
 Phase49 has not started.
+
+### October20 PR75 exact-source read-only comparison
+
+PR75 source `50289ed15db4e20547b5a5e5b9ff5cd8fb80bb71` passed full CI run
+`39412119620` and squash-merged as `9e2ba0551736cab603c35e59a0d5202a1af28aed`, without
+production promotion. Third read-only staging run`39412743386`, job`118594268238`, passed
+and preserved configuration, registry and the protected retention fixture. It returned
+`diffStatus=changes`, `changedItemCount=1`, `parityEstablished=false`; no deployment parity
+or apply is claimed. `48-STAGING-PREFLIGHT-RUN3-2026-10-20.json` is a byte-identical copy of
+the sanitized actual operator result, SHA256
+`cb56c2837973cae012ac15e65829bb122481e54274966effd77c4c6f0e8e6dea`. It supplements,
+and does not replace, the preserved run2 observation. Neither is a Phase23 certified artifact.
+
+The actual run3 registry observation has exactly one active row for each of five selected
+global skills. Four active body hashes match current source. `cockpit-agent v1` has hash
+`b765d7422d5e0d5d0d6beaa58b1310fbba02ced028a613cdc38aef01c3fec7e7`; this is the
+already owner-ratified Phase20-20 cloud-dev predecessor documented in
+`docs/playbooks/skill-registry.md` and `docs/playbooks/agent-runtime.md`. The source variance
+is a diagnostic with established provenance, not authorization to seed/promote/repair registry
+state. Its historical evidence does not establish a current46-case semantic pass.
+
+Preserve the actual global baseline through separate redaction-safe pre/post snapshot receipts;
+the fixed Phase23 handoff pins only the offer-architect baseline and must not be extended or
+made to imply all five globals were bound. An ordinary unpinned native turn does not emit the
+explicit-pin-load witness; baseline snapshots alone cannot prove which body actually loaded.
+Keep this attribution limit explicit in any later acceptance disposition.
+
+The separate exact-PR75 staging release checkpoint is pending: only the approved source plus
+the3attested billing labels are proposed. The earlier conditional account/fixture/$1approval
+hash is unchanged and does not authorize this release. No apply, label write, new account,
+owner grant, probe or model call occurred. Source parity remains false, production's original
+$1scope remains unused, Phase21 stays accepted, and Phase23/48-02 remain partial with Phase49
+not started.
 
 New authoring requires its own exact fresh authorization, a new bounded envelope and fresh native controlled sessions; no old envelope or undocumented receipt grants that work. The prepared scope is one inert `offer-architect` adaptation plus one escalation/refusal turn, maximum100cents aggregate and no full evaluation or activation. Exact-row paid evaluation and actual owner activation/rollback remain separate later checkpoints. Missing configuration/credentials and historical private receipts must not be replaced by fabricated readiness. Phase23 and48-02 remain open; Phase49 has not started.
