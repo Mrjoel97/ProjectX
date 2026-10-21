@@ -82,7 +82,8 @@ const isDate = (value: string): boolean =>
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: These code points are forbidden in OOXML text.
 const INVALID_XML_CONTROLS = /[\x00-\x08\x0b\x0c\x0e-\x1f]/g;
-const IDENTIFIER_HEADER = /\b(id|identifier|code|sku|phone|zip|postal|account|reference|ref|iban|uuid)\b/i;
+const IDENTIFIER_HEADER =
+  /\b(id|identifier|code|sku|phone|zip|postal|account|reference|ref|iban|uuid)\b/i;
 const CURRENCY_CODES = new Set(
   "TZS USD EUR GBP KES UGX ZAR NGN AED INR JPY CNY CAD AUD CHF NZD RWF XOF XAF GHS BWP EGP SAR QAR SGD HKD BRL MXN SEK NOK DKK PLN TRY KWD OMR BHD".split(
     " ",
@@ -377,8 +378,7 @@ export function reportFromSheets(
         const label = header[i]?.trim() || `Column ${i + 1}`;
         const column: ReportColumn = { key: `c${i + 1}`, label, type: "string", format: "text" };
         const values = data.map((row) => row[i]!.trim()).filter(Boolean);
-        if (!values.length || IDENTIFIER_HEADER.test(label))
-          return column;
+        if (!values.length || IDENTIFIER_HEADER.test(label)) return column;
         if (values.every(isDate)) return { ...column, type: "date", format: "date" };
         if (values.every((value) => /^(true|false)$/i.test(value)))
           return { ...column, type: "boolean" };

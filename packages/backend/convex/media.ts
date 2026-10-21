@@ -2504,7 +2504,12 @@ async function ownedPlanOrThrow(
   if (!plan || plan.tenantId !== tenantId) throw new Error("plan not found");
   if (plan.mediaCampaignId) {
     const campaign = await ctx.db.get(plan.mediaCampaignId);
-    if (!campaign || campaign.tenantId !== tenantId || campaign.status !== "draft" || campaign.reservedCents > 0)
+    if (
+      !campaign ||
+      campaign.tenantId !== tenantId ||
+      campaign.status !== "draft" ||
+      campaign.reservedCents > 0
+    )
       throw new Error("This batch is locked after generation approval.");
   }
   return plan;
@@ -2831,267 +2836,274 @@ type EstimateLine = { label: string; qty: number; unit: string; cents: number };
  * **This query consumes NOTHING.** It is a query and cannot.
  */
 export async function estimateReelPlanInner(
-    ctx: QueryCtx,
-    tenantId: string,
-    planId: Id<"plans">,
-  ): Promise<{
-    lines: EstimateLine[];
-    totalCents: number;
-    capCents: number;
-    remainingCents: number;
-    estUsd?: number;
-    refusal: { reason: ReserveRefusal; blockIndex?: number; chars?: number } | null;
-  }> {
-    const capCents = Math.round(MEDIA_JOB_CAP_USD * 100);
-    const remainingCents = await mediaRemainingCentsInner(ctx, tenantId);
-    const empty = { lines: [], totalCents: 0, capCents, remainingCents, refusal: null };
+  ctx: QueryCtx,
+  tenantId: string,
+  planId: Id<"plans">,
+): Promise<{
+  lines: EstimateLine[];
+  totalCents: number;
+  capCents: number;
+  remainingCents: number;
+  estUsd?: number;
+  refusal: { reason: ReserveRefusal; blockIndex?: number; chars?: number } | null;
+}> {
+  const capCents = Math.round(MEDIA_JOB_CAP_USD * 100);
+  const remainingCents = await mediaRemainingCentsInner(ctx, tenantId);
+  const empty = { lines: [], totalCents: 0, capCents, remainingCents, refusal: null };
 
-    const plan = await ownedPlan(ctx, planId, tenantId);
-    if (!plan) return empty;
-    // 20.2 wave 5 — the scene gate OPENS here in the same commit it opens at `generateReel`, and
-    // that co-location is the point: a working Generate button behind a refusing estimate would
-    // spend money the canvas never showed. The whole purpose of this query is to name the number
-    // BEFORE the button is pressed, so the two must open together or not at all.
-    const sceneDeck = sceneDeckOf(plan);
-    if (sceneDeck !== null) {
-      const { scenes, targetDurationSeconds } = sceneDeck;
+  const plan = await ownedPlan(ctx, planId, tenantId);
+  if (!plan) return empty;
+  // 20.2 wave 5 — the scene gate OPENS here in the same commit it opens at `generateReel`, and
+  // that co-location is the point: a working Generate button behind a refusing estimate would
+  // spend money the canvas never showed. The whole purpose of this query is to name the number
+  // BEFORE the button is pressed, so the two must open together or not at all.
+  const sceneDeck = sceneDeckOf(plan);
+  if (sceneDeck !== null) {
+    const { scenes, targetDurationSeconds } = sceneDeck;
 
-      // The SAME pre-flight refusals `reserveSceneJobInner` applies, in the same order.
-      if (scenes.reduce((n, s) => n + s.durationMs, 0) / 1000 !== targetDurationSeconds) {
-        return { ...empty, refusal: { reason: "illegal_duration" } };
-      }
-      // 33-03 — the confirm gate OPENS here in the same position it opens at the reserve, FREE:
-      // the block happens where every other block happens, before the button. `blockIndex` names
-      // the first offending scene so the canvas can point at the chip to confirm.
-      const claim = firstUnconfirmedClaim(plan.shots);
-      if (claim) {
-        return { ...empty, refusal: { reason: "unconfirmed_claims", blockIndex: claim.index } };
-      }
-      const specs: MediaSpec[] = [];
-      let clipSecondsTotal = 0;
-      let voiceChars = 0;
-      for (const [i, s] of scenes.entries()) {
-        if (!hasAssetSource(s)) {
-          return { ...empty, refusal: { reason: "unrenderable_block", blockIndex: s.index } };
-        }
-        const seconds = s.durationMs / 1000;
-        // The SAME table `reserveSceneJobInner` reserves from, so the number on screen and the
-        // number the rail consumes cannot drift — that used to be two hand-copied branches.
-        const picture = sceneVisualSpec(s.visual, seconds);
-        if (!picture.ok) return { ...empty, refusal: { reason: picture.error.code } };
-        if (picture.value !== null) {
-          specs.push(picture.value.spec);
-          if (picture.value.spec.kind === "video") clipSecondsTotal += seconds;
-        }
-        if (s.narration !== "") {
-          const availableSeconds = narrationCeilingSeconds(scenes, i);
-          if (s.narration.length > maxCharsFor(availableSeconds)) {
-            return {
-              ...empty,
-              refusal: {
-                reason: "narration_too_long",
-                blockIndex: s.index,
-                chars: s.narration.length,
-              },
-            };
-          }
-          const characters = s.narration.length * 2; // the 2x rewrite allowance, as reserved
-          voiceChars += characters;
-          specs.push({ kind: "tts", model: MEDIA_DEFAULT_VOICE.model, characters });
-        }
-      }
-      const audioMinutes = targetDurationSeconds / 60;
-      specs.push({ kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes });
-      // The SAME reader `reserveSceneJobInner` uses, in the same position of the same order — so
-      // the estimate and the reserve cannot disagree about whether this deck has a bed.
-      const music = musicSpecOf(plan);
-      if (music !== null) specs.push(music);
-      specs.push({ kind: "render" });
-
-      const priced = chooseMediaBatch(specs, MEDIA_JOB_CAP_USD);
-      if (!priced.ok) return { ...empty, refusal: { reason: priced.error.code } };
-      const sub = (of: MediaSpec[]): number =>
-        Math.round(
-          of.reduce((n, x) => {
-            const p = estimateMediaUsd(x);
-            return n + (p.ok ? p.value : 0);
-          }, 0) * 100,
-        );
-      const voiceCount = scenes.filter((s) => s.narration !== "").length;
-      const clips = specs.filter((x) => x.kind === "video");
-      const stills = specs.filter((x) => x.kind === "image");
-      const stock = specs.filter((x) => x.kind === "stock");
-      const stockClips = stock.filter((x) => x.kind === "stock" && x.media === "video").length;
-      return {
-        // ONE LINE PER PAID KIND (wave 7). Wave 5 printed a blended `pictures` row because the
-        // price table did not exist yet; a generated clip is 40x a still, so the blend hid the only
-        // lever the user has. D7's requirement is that the estimate names WHICH line is expensive
-        // BEFORE the button is clickable, and a mixed deck's expensive line is always the clips.
-        // A kind the deck does not use is omitted rather than printed at zero. `uploaded_video` and
-        // `text_card` have no line at all — they buy nothing, and the ribbon above already shows
-        // them.
-        lines: [
-          ...(clips.length > 0
-            ? [
-                {
-                  label: "clips",
-                  qty: clips.length,
-                  unit: `${clipSecondsTotal}s of ${targetDurationSeconds}s ${MEDIA_DEFAULT_VIDEO.resolution}`,
-                  cents: sub(clips),
-                },
-              ]
-            : []),
-          ...(stills.length > 0
-            ? [{ label: "stills", qty: stills.length, unit: "pan/zoom", cents: sub(stills) }]
-            : []),
-          // PRINTED AT ZERO when the deck uses stock, for the music line's reason: this is not "a
-          // kind the deck does not use", it is a kind the deck DOES use that happens to cost
-          // nothing. It is also the one line that teaches the lever — an owner reading "stock 3
-          // free" beside "clips 1 $0.40" can see what swapping the next clip would save.
-          ...(stock.length > 0
-            ? [
-                {
-                  label: "stock",
-                  qty: stock.length,
-                  unit: `${stockClips} clip${stockClips === 1 ? "" : "s"}, ${stock.length - stockClips} still${stock.length - stockClips === 1 ? "" : "s"}`,
-                  cents: sub(stock),
-                },
-              ]
-            : []),
-          {
-            label: "voice",
-            qty: voiceCount,
-            unit: `${voiceChars} chars`,
-            cents: sub(specs.filter((x) => x.kind === "tts")),
-          },
-          {
-            label: "captions",
-            qty: 1,
-            unit: `${audioMinutes.toFixed(2)} min`,
-            cents: sub(specs.filter((x) => x.kind === "stt")),
-          },
-          // PRINTED AT ZERO, deliberately breaking the "omit a kind the deck does not use" rule
-          // above — because it is not the same rule. A kind the deck does not use has no line;
-          // a bed the deck DOES declare has a line that happens to cost nothing, and hiding it
-          // would make the reel look like it was built from fewer inputs than it was. The owner
-          // should be able to read the estimate and see the bed they approved.
-          ...(music !== null
-            ? [{ label: "music", qty: 1, unit: `${music.mood} bed`, cents: sub([music]) }]
-            : []),
-          // 33-04: the label names what the doubled constant covers — one auto-retry sandbox.
-          {
-            label: "render (incl. one retry)",
-            qty: 1,
-            unit: "sandbox",
-            cents: sub([{ kind: "render" }]),
-          },
-        ],
-        totalCents: priced.value.estCents,
-        estUsd: priced.value.estUsd,
-        capCents,
-        remainingCents,
-        refusal: null,
-      };
-    }
-    const blocks = deckOf(plan);
-    const clipSeconds = plan.clipSeconds;
-    if (!blocks || clipSeconds === undefined) return empty;
-
-    // The SAME pre-flight refusals `reserveJobInner` applies, in the same order, so the canvas can
-    // name the lever BEFORE the button is pressed rather than after.
-    if (!isBuyableClipLength(clipSeconds)) {
+    // The SAME pre-flight refusals `reserveSceneJobInner` applies, in the same order.
+    if (scenes.reduce((n, s) => n + s.durationMs, 0) / 1000 !== targetDurationSeconds) {
       return { ...empty, refusal: { reason: "illegal_duration" } };
     }
-    for (const b of blocks) {
-      if (!isPaidBlock(b)) {
-        return { ...empty, refusal: { reason: "unrenderable_block", blockIndex: b.index } };
-      }
-      if (b.narration.length > maxCharsFor(clipSeconds)) {
-        return {
-          ...empty,
-          refusal: {
-            reason: "narration_too_long",
-            blockIndex: b.index,
-            chars: b.narration.length,
-          },
-        };
-      }
-      if (b.narration.length < minCharsFor(clipSeconds)) {
-        return {
-          ...empty,
-          refusal: {
-            reason: "narration_too_short",
-            blockIndex: b.index,
-            chars: b.narration.length,
-          },
-        };
-      }
+    // 33-03 — the confirm gate OPENS here in the same position it opens at the reserve, FREE:
+    // the block happens where every other block happens, before the button. `blockIndex` names
+    // the first offending scene so the canvas can point at the chip to confirm.
+    const claim = firstUnconfirmedClaim(plan.shots);
+    if (claim) {
+      return { ...empty, refusal: { reason: "unconfirmed_claims", blockIndex: claim.index } };
     }
-
     const specs: MediaSpec[] = [];
-    let clipCount = 0;
+    let clipSecondsTotal = 0;
     let voiceChars = 0;
-    for (const b of blocks) {
-      if (isPaidBlock(b)) {
-        clipCount += 1;
-        specs.push({
-          kind: "video",
-          model: MEDIA_DEFAULT_VIDEO.model,
-          resolution: MEDIA_DEFAULT_VIDEO.resolution,
-          seconds: clipSeconds,
-        });
+    for (const [i, s] of scenes.entries()) {
+      if (!hasAssetSource(s)) {
+        return { ...empty, refusal: { reason: "unrenderable_block", blockIndex: s.index } };
       }
-      const characters = b.narration.length * 2; // the 2x rewrite allowance, as reserved
-      voiceChars += characters;
-      specs.push({ kind: "tts", model: MEDIA_DEFAULT_VOICE.model, characters });
+      const seconds = s.durationMs / 1000;
+      // The SAME table `reserveSceneJobInner` reserves from, so the number on screen and the
+      // number the rail consumes cannot drift — that used to be two hand-copied branches.
+      const picture = sceneVisualSpec(s.visual, seconds);
+      if (!picture.ok) return { ...empty, refusal: { reason: picture.error.code } };
+      if (picture.value !== null) {
+        specs.push(picture.value.spec);
+        if (picture.value.spec.kind === "video") clipSecondsTotal += seconds;
+      }
+      if (s.narration !== "") {
+        const availableSeconds = narrationCeilingSeconds(scenes, i);
+        if (s.narration.length > maxCharsFor(availableSeconds)) {
+          return {
+            ...empty,
+            refusal: {
+              reason: "narration_too_long",
+              blockIndex: s.index,
+              chars: s.narration.length,
+            },
+          };
+        }
+        const characters = s.narration.length * 2; // the 2x rewrite allowance, as reserved
+        voiceChars += characters;
+        specs.push({ kind: "tts", model: MEDIA_DEFAULT_VOICE.model, characters });
+      }
     }
-    const audioMinutes = (blocks.length * clipSeconds) / 60;
+    const audioMinutes = targetDurationSeconds / 60;
     specs.push({ kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes });
+    // The SAME reader `reserveSceneJobInner` uses, in the same position of the same order — so
+    // the estimate and the reserve cannot disagree about whether this deck has a bed.
+    const music = musicSpecOf(plan);
+    if (music !== null) specs.push(music);
     specs.push({ kind: "render" });
 
     const priced = chooseMediaBatch(specs, MEDIA_JOB_CAP_USD);
     if (!priced.ok) return { ...empty, refusal: { reason: priced.error.code } };
-
-    /** A line's own subtotal, rounded ONCE for display. The authoritative number is `totalCents`
-     *  (the batch total, rounded once by `chooseMediaBatch`), so the four lines may differ from it
-     *  by a cent — the canvas prints the total, not the sum of the lines. */
-    const subtotal = (of: MediaSpec[]): number =>
+    const sub = (of: MediaSpec[]): number =>
       Math.round(
-        of.reduce((n, s) => {
-          const p = estimateMediaUsd(s);
+        of.reduce((n, x) => {
+          const p = estimateMediaUsd(x);
           return n + (p.ok ? p.value : 0);
         }, 0) * 100,
       );
-
-    const lines: EstimateLine[] = [
-      {
-        label: "clips",
-        qty: clipCount,
-        unit: `${clipSeconds}s ${MEDIA_DEFAULT_VIDEO.resolution}`,
-        cents: subtotal(specs.filter((s) => s.kind === "video")),
-      },
-      {
-        label: "voice",
-        qty: blocks.length,
-        unit: `${voiceChars} chars`,
-        cents: subtotal(specs.filter((s) => s.kind === "tts")),
-      },
-      {
-        label: "captions",
-        qty: 1,
-        unit: `${audioMinutes.toFixed(2)} min`,
-        cents: subtotal(specs.filter((s) => s.kind === "stt")),
-      },
-      {
+    const voiceCount = scenes.filter((s) => s.narration !== "").length;
+    const clips = specs.filter((x) => x.kind === "video");
+    const stills = specs.filter((x) => x.kind === "image");
+    const stock = specs.filter((x) => x.kind === "stock");
+    const stockClips = stock.filter((x) => x.kind === "stock" && x.media === "video").length;
+    return {
+      // ONE LINE PER PAID KIND (wave 7). Wave 5 printed a blended `pictures` row because the
+      // price table did not exist yet; a generated clip is 40x a still, so the blend hid the only
+      // lever the user has. D7's requirement is that the estimate names WHICH line is expensive
+      // BEFORE the button is clickable, and a mixed deck's expensive line is always the clips.
+      // A kind the deck does not use is omitted rather than printed at zero. `uploaded_video` and
+      // `text_card` have no line at all — they buy nothing, and the ribbon above already shows
+      // them.
+      lines: [
+        ...(clips.length > 0
+          ? [
+              {
+                label: "clips",
+                qty: clips.length,
+                unit: `${clipSecondsTotal}s of ${targetDurationSeconds}s ${MEDIA_DEFAULT_VIDEO.resolution}`,
+                cents: sub(clips),
+              },
+            ]
+          : []),
+        ...(stills.length > 0
+          ? [{ label: "stills", qty: stills.length, unit: "pan/zoom", cents: sub(stills) }]
+          : []),
+        // PRINTED AT ZERO when the deck uses stock, for the music line's reason: this is not "a
+        // kind the deck does not use", it is a kind the deck DOES use that happens to cost
+        // nothing. It is also the one line that teaches the lever — an owner reading "stock 3
+        // free" beside "clips 1 $0.40" can see what swapping the next clip would save.
+        ...(stock.length > 0
+          ? [
+              {
+                label: "stock",
+                qty: stock.length,
+                unit: `${stockClips} clip${stockClips === 1 ? "" : "s"}, ${stock.length - stockClips} still${stock.length - stockClips === 1 ? "" : "s"}`,
+                cents: sub(stock),
+              },
+            ]
+          : []),
+        {
+          label: "voice",
+          qty: voiceCount,
+          unit: `${voiceChars} chars`,
+          cents: sub(specs.filter((x) => x.kind === "tts")),
+        },
+        {
+          label: "captions",
+          qty: 1,
+          unit: `${audioMinutes.toFixed(2)} min`,
+          cents: sub(specs.filter((x) => x.kind === "stt")),
+        },
+        // PRINTED AT ZERO, deliberately breaking the "omit a kind the deck does not use" rule
+        // above — because it is not the same rule. A kind the deck does not use has no line;
+        // a bed the deck DOES declare has a line that happens to cost nothing, and hiding it
+        // would make the reel look like it was built from fewer inputs than it was. The owner
+        // should be able to read the estimate and see the bed they approved.
+        ...(music !== null
+          ? [{ label: "music", qty: 1, unit: `${music.mood} bed`, cents: sub([music]) }]
+          : []),
         // 33-04: the label names what the doubled constant covers — one auto-retry sandbox.
-        label: "render (incl. one retry)",
-        qty: 1,
-        unit: "sandbox",
-        cents: subtotal(specs.filter((s) => s.kind === "render")),
-      },
-    ];
+        {
+          label: "render (incl. one retry)",
+          qty: 1,
+          unit: "sandbox",
+          cents: sub([{ kind: "render" }]),
+        },
+      ],
+      totalCents: priced.value.estCents,
+      estUsd: priced.value.estUsd,
+      capCents,
+      remainingCents,
+      refusal: null,
+    };
+  }
+  const blocks = deckOf(plan);
+  const clipSeconds = plan.clipSeconds;
+  if (!blocks || clipSeconds === undefined) return empty;
 
-    return { lines, totalCents: priced.value.estCents, estUsd: priced.value.estUsd, capCents, remainingCents, refusal: null };
+  // The SAME pre-flight refusals `reserveJobInner` applies, in the same order, so the canvas can
+  // name the lever BEFORE the button is pressed rather than after.
+  if (!isBuyableClipLength(clipSeconds)) {
+    return { ...empty, refusal: { reason: "illegal_duration" } };
+  }
+  for (const b of blocks) {
+    if (!isPaidBlock(b)) {
+      return { ...empty, refusal: { reason: "unrenderable_block", blockIndex: b.index } };
+    }
+    if (b.narration.length > maxCharsFor(clipSeconds)) {
+      return {
+        ...empty,
+        refusal: {
+          reason: "narration_too_long",
+          blockIndex: b.index,
+          chars: b.narration.length,
+        },
+      };
+    }
+    if (b.narration.length < minCharsFor(clipSeconds)) {
+      return {
+        ...empty,
+        refusal: {
+          reason: "narration_too_short",
+          blockIndex: b.index,
+          chars: b.narration.length,
+        },
+      };
+    }
+  }
+
+  const specs: MediaSpec[] = [];
+  let clipCount = 0;
+  let voiceChars = 0;
+  for (const b of blocks) {
+    if (isPaidBlock(b)) {
+      clipCount += 1;
+      specs.push({
+        kind: "video",
+        model: MEDIA_DEFAULT_VIDEO.model,
+        resolution: MEDIA_DEFAULT_VIDEO.resolution,
+        seconds: clipSeconds,
+      });
+    }
+    const characters = b.narration.length * 2; // the 2x rewrite allowance, as reserved
+    voiceChars += characters;
+    specs.push({ kind: "tts", model: MEDIA_DEFAULT_VOICE.model, characters });
+  }
+  const audioMinutes = (blocks.length * clipSeconds) / 60;
+  specs.push({ kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes });
+  specs.push({ kind: "render" });
+
+  const priced = chooseMediaBatch(specs, MEDIA_JOB_CAP_USD);
+  if (!priced.ok) return { ...empty, refusal: { reason: priced.error.code } };
+
+  /** A line's own subtotal, rounded ONCE for display. The authoritative number is `totalCents`
+   *  (the batch total, rounded once by `chooseMediaBatch`), so the four lines may differ from it
+   *  by a cent — the canvas prints the total, not the sum of the lines. */
+  const subtotal = (of: MediaSpec[]): number =>
+    Math.round(
+      of.reduce((n, s) => {
+        const p = estimateMediaUsd(s);
+        return n + (p.ok ? p.value : 0);
+      }, 0) * 100,
+    );
+
+  const lines: EstimateLine[] = [
+    {
+      label: "clips",
+      qty: clipCount,
+      unit: `${clipSeconds}s ${MEDIA_DEFAULT_VIDEO.resolution}`,
+      cents: subtotal(specs.filter((s) => s.kind === "video")),
+    },
+    {
+      label: "voice",
+      qty: blocks.length,
+      unit: `${voiceChars} chars`,
+      cents: subtotal(specs.filter((s) => s.kind === "tts")),
+    },
+    {
+      label: "captions",
+      qty: 1,
+      unit: `${audioMinutes.toFixed(2)} min`,
+      cents: subtotal(specs.filter((s) => s.kind === "stt")),
+    },
+    {
+      // 33-04: the label names what the doubled constant covers — one auto-retry sandbox.
+      label: "render (incl. one retry)",
+      qty: 1,
+      unit: "sandbox",
+      cents: subtotal(specs.filter((s) => s.kind === "render")),
+    },
+  ];
+
+  return {
+    lines,
+    totalCents: priced.value.estCents,
+    estUsd: priced.value.estUsd,
+    capCents,
+    remainingCents,
+    refusal: null,
+  };
 }
 
 export const jobEstimate = tenantQuery({
@@ -3144,47 +3156,84 @@ export const imageEstimate = tenantQuery({
 
 /** Campaign admission uses the same estimator and reservation as the single-artifact canvas.
  * No provider is scheduled here: the campaign owns its bounded submission queue. */
-export async function estimateCampaignPlanInner(ctx: QueryCtx, tenantId: string, planId: Id<"plans">): Promise<
-  { ok: true; kind: "image" | "video"; estCents: number; estUsd: number } | { ok: false; reason: string }
+export async function estimateCampaignPlanInner(
+  ctx: QueryCtx,
+  tenantId: string,
+  planId: Id<"plans">,
+): Promise<
+  | { ok: true; kind: "image" | "video"; estCents: number; estUsd: number }
+  | { ok: false; reason: string }
 > {
   const plan = await ownedPlan(ctx, planId, tenantId);
   if (!plan || plan.kind !== "media") return { ok: false, reason: "no_media_plan" };
-  if (plan.status === "collecting") return {ok:false, reason:"storyboard_in_progress"};
+  if (plan.status === "collecting") return { ok: false, reason: "storyboard_in_progress" };
   if (plan.mediaMode === "image") {
     if (!plan.imagePrompt?.trim()) return { ok: false, reason: "no_image_plan" };
     const estimate = chooseMediaBatch([standaloneImageSpec()], MEDIA_JOB_CAP_USD);
-    return estimate.ok ? { ok: true, kind: "image", estCents: estimate.value.estCents, estUsd: estimate.value.estUsd } : { ok: false, reason: estimate.error.code };
+    return estimate.ok
+      ? {
+          ok: true,
+          kind: "image",
+          estCents: estimate.value.estCents,
+          estUsd: estimate.value.estUsd,
+        }
+      : { ok: false, reason: estimate.error.code };
   }
   if (!sceneDeckOf(plan) && !deckOf(plan)) return { ok: false, reason: "no_deck" };
   const estimate = await estimateReelPlanInner(ctx, tenantId, planId);
-  return estimate.refusal ? { ok: false, reason: estimate.refusal.reason } :
-    estimate.estUsd === undefined ? { ok: false, reason: "no_deck" } :
-    { ok: true, kind: "video", estCents: estimate.totalCents, estUsd: estimate.estUsd };
+  return estimate.refusal
+    ? { ok: false, reason: estimate.refusal.reason }
+    : estimate.estUsd === undefined
+      ? { ok: false, reason: "no_deck" }
+      : { ok: true, kind: "video", estCents: estimate.totalCents, estUsd: estimate.estUsd };
 }
 
-export async function reserveCampaignPlanInner(ctx: MutationCtx, tenantId: string, planId: Id<"plans">): Promise<
+export async function reserveCampaignPlanInner(
+  ctx: MutationCtx,
+  tenantId: string,
+  planId: Id<"plans">,
+): Promise<
   { ok: true; batchId: string; estCents: number; estUsd: number } | { ok: false; reason: string }
 > {
   const plan = await ownedPlan(ctx, planId, tenantId);
-  if (!plan?.mediaCampaignId || plan.kind !== "media") return { ok: false, reason: "no_campaign_plan" };
-  if (plan.status === "collecting") return {ok:false, reason:"storyboard_in_progress"};
-  if ((await activeMediaJobs(ctx, tenantId, planId)).length) return { ok: false, reason: "already_started" };
+  if (!plan?.mediaCampaignId || plan.kind !== "media")
+    return { ok: false, reason: "no_campaign_plan" };
+  if (plan.status === "collecting") return { ok: false, reason: "storyboard_in_progress" };
+  if ((await activeMediaJobs(ctx, tenantId, planId)).length)
+    return { ok: false, reason: "already_started" };
   let result: ReserveResult;
   if (plan.mediaMode === "image") {
     if (!plan.imagePrompt?.trim()) return { ok: false, reason: "no_image_plan" };
-    result = await reserveImageInner(ctx, {tenantId, planId, prompt: plan.imagePrompt.trim()});
+    result = await reserveImageInner(ctx, { tenantId, planId, prompt: plan.imagePrompt.trim() });
   } else {
     const sceneDeck = sceneDeckOf(plan);
     const blocks = deckOf(plan);
-    if (sceneDeck) result = await reserveSceneJobInner(ctx, {tenantId, planId, ...sceneDeck, withCaptions: true});
-    else if (blocks && plan.clipSeconds !== undefined) result = await reserveJobInner(ctx, {tenantId, planId, blocks, clipSeconds: plan.clipSeconds, withCaptions: true});
-    else return {ok:false, reason:"no_deck"};
+    if (sceneDeck)
+      result = await reserveSceneJobInner(ctx, {
+        tenantId,
+        planId,
+        ...sceneDeck,
+        withCaptions: true,
+      });
+    else if (blocks && plan.clipSeconds !== undefined)
+      result = await reserveJobInner(ctx, {
+        tenantId,
+        planId,
+        blocks,
+        clipSeconds: plan.clipSeconds,
+        withCaptions: true,
+      });
+    else return { ok: false, reason: "no_deck" };
     if (result.ok) {
       await clearRender(ctx, planId);
-      await ctx.db.patch(planId, {deckLockedAt: Date.now(), altShots: undefined, altTargetDurationSeconds: undefined});
+      await ctx.db.patch(planId, {
+        deckLockedAt: Date.now(),
+        altShots: undefined,
+        altTargetDurationSeconds: undefined,
+      });
     }
   }
-  if (result.ok) await ctx.db.patch(planId, {status: "delivering"});
+  if (result.ok) await ctx.db.patch(planId, { status: "delivering" });
   return result;
 }
 
@@ -3251,7 +3300,7 @@ export const generateReel = tenantMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
-    if (plan.mediaCampaignId) return {ok:false as const, reason:"campaign_owned" as const};
+    if (plan.mediaCampaignId) return { ok: false as const, reason: "campaign_owned" as const };
     // 20.2 wave 5 — THE SCENE GATE OPENS. Wave 2 put a `scene_render_not_ready` refusal here
     // because a scene deck reaching `deckOf` returns null and would have refused as `no_deck`,
     // which was a lie: the deck parsed and was on screen. Everything it was waiting for now
@@ -3307,7 +3356,7 @@ export const generateImage = tenantMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
-    if (plan.mediaCampaignId) return {ok:false as const, reason:"campaign_owned" as const};
+    if (plan.mediaCampaignId) return { ok: false as const, reason: "campaign_owned" as const };
     const prompt = plan.mediaMode === "image" ? plan.imagePrompt?.trim() : undefined;
     if (!prompt) return { ok: false as const, reason: "no_image_plan" as const };
     const rows = await activeMediaJobs(ctx, ctx.tenantId, planId);

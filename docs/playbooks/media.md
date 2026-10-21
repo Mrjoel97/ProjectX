@@ -5712,3 +5712,4 @@ it to paid egress. Keep legacy low defaults until measured representative owner 
 The complete v7 editorial director candidate is outside canonical seeds/mirrors and NOT active;
 the existing media director is deliberately ungated by the text runner, so editing its canonical
 seed is a promotion action. See `.planning/phases/53-media-and-document-production/53-QUALITY-BENCHMARK.md`.
+> Last verified: 2026-10-22 — PR 83 CI triage found a blocking Biome formatting diagnostic on the campaign-lock condition in media.ts. The condition was formatted with the existing repository rules; its ownership, draft-state and prior-reservation checks are unchanged. This is a formatting repair, with no media purchase, job retry, approval, renderer or provider behavior change. Current-source CI remains required after resolving the separate upstream documentation/evaluator-pin conflicts.
