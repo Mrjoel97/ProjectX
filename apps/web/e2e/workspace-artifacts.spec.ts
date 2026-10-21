@@ -116,7 +116,9 @@ async function visit(chat: ArtifactChatFixture) {
     { waitUntil: "domcontentloaded", timeout: 120_000 },
   );
   const showWork = page.getByRole("button", { name: "Show work", exact: true });
-  if (await showWork.isVisible()) {
+  // SplitPane SSR starts desktop; its existing 48rem media effect mounts this control later.
+  if (await page.evaluate(() => window.matchMedia("(max-width: 48rem)").matches)) {
+    await expect(showWork).toBeVisible();
     await expect
       .poll(() =>
         showWork.evaluate((element) =>
@@ -158,6 +160,12 @@ function primary(type: ReturnType<typeof artifactType>): ArtifactFixture {
     (entry) => artifactType(entry) === type,
   );
   if (!artifact) throw new Error(`PHASE53_REQUIRED_FIXTURE_${type.toUpperCase()}`);
+  return artifact;
+}
+
+function firstArtifact(chat: ArtifactChatFixture): ArtifactFixture {
+  const artifact = chat.artifacts[0];
+  if (!artifact) throw new Error("PHASE53_REQUIRED_CHAT_ARTIFACT");
   return artifact;
 }
 
@@ -437,7 +445,7 @@ test.describe("local native-auth artifact workspace", () => {
         .click();
     await open(workbook);
     await visit(fixtures.users.A.chats.secondary);
-    await open(fixtures.users.A.chats.secondary.artifacts[0]);
+    await open(firstArtifact(fixtures.users.A.chats.secondary));
     await visit(chat);
     await expect(
       workspace().getByRole("tab", { name: workbook.title, exact: true }),
@@ -485,10 +493,10 @@ test.describe("local native-auth artifact workspace", () => {
     const wrongThread =
       fixtures.users.A.chats.secondary.artifacts.find(
         (entry) => entry.key === fixtures.attachmentCandidates?.wrongThreadKey,
-      ) ?? fixtures.users.A.chats.secondary.artifacts[0];
+      ) ?? firstArtifact(fixtures.users.A.chats.secondary);
     const invalid = [
       wrongThread,
-      fixtures.users.B.chats.primary.artifacts[0],
+      firstArtifact(fixtures.users.B.chats.primary),
       { key: fixtures.deleted.key, title: "Deleted fixture" },
     ];
     for (const artifact of invalid) {
@@ -653,7 +661,7 @@ test.describe("local native-auth artifact workspace", () => {
     await expect(page.getByRole("button", { name: /^sign out$/iu })).toBeHidden();
     await nativeSignIn("B");
     await visit(fixtures.users.B.chats.primary);
-    await open(fixtures.users.B.chats.primary.artifacts[0]);
+    await open(firstArtifact(fixtures.users.B.chats.primary));
     await expect(workspace()).not.toContainText(workbook.title);
     await page.getByRole("button", { name: /^sign out$/iu }).click();
     await expect(page.getByRole("button", { name: /^sign out$/iu })).toBeHidden();
@@ -662,7 +670,9 @@ test.describe("local native-auth artifact workspace", () => {
     await expect(
       workspace().getByRole("tab", { name: workbook.title, exact: true }),
     ).toHaveAttribute("aria-selected", "true");
-    await expect(workspace()).not.toContainText(fixtures.users.B.chats.primary.artifacts[0].title);
+    await expect(workspace()).not.toContainText(
+      firstArtifact(fixtures.users.B.chats.primary).title,
+    );
     expect([...externalOrigins]).toEqual([]);
     expect(pageErrors).toBe(0);
     passed("fresh-native-account-partition-and-A-restore");

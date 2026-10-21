@@ -165,6 +165,8 @@ export function toAss(
 ): string {
   const x = opts.playResX ?? 1080;
   const y = opts.playResY ?? 1920;
+  const marginX = Math.ceil(x * 0.08);
+  const marginY = Math.ceil(y * 0.2);
   const rows: string[] = [];
   for (const line of lines) {
     const text = escapeAss(line.text);
@@ -187,8 +189,8 @@ export function toAss(
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    // White fill, black outline, bottom-centre, generous MarginV: the readable-on-anything default.
-    "Style: Default,DejaVu Sans,64,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,0,2,80,80,120,1",
+    // White/outlined, above native/social player chrome: bottom 20%, horizontal inset at least 8%.
+    `Style: Default,DejaVu Sans,64,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,0,2,${marginX},${marginX},${marginY},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -358,12 +360,112 @@ export function concatWavTakes(
  * a caption on the wrong shot, not a rounding error: on a 3-scene reel with a silent card the last
  * line lands ~10s early.
  */
-export function buildCaptionLines(a: {
+type CaptionBuildArgs = {
   words: readonly SttWord[];
   report: AssemblyReport;
   offsetsS: readonly number[];
   maxChars?: number;
-}): CaptionLine[] {
+  /** Exact submitted scripts in narrated ordinal order; never an unverified edited deck. */
+  expectedTakeTexts?: readonly string[];
+};
+export type CaptionBuildError = {
+  code:
+    | "caption_take_count_mismatch"
+    | "caption_expected_text_mismatch"
+    | "caption_invalid_word_time"
+    | "caption_word_outside_take"
+    | "caption_nonpositive_cue";
+};
+
+const alignmentTokens = (text: string): string[] =>
+  (
+    text
+      .normalize("NFKC")
+      .toLowerCase()
+      .match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu) ?? []
+  ).map((token) => token.replaceAll("’", "'"));
+
+/** STT may round a boundary word slightly into its preceding take. Exact submitted scripts
+ * disambiguate ownership, never timestamps. A half-second window bounds tolerated STT drift;
+ * it is a refusal threshold, not synthetic word duration or a request to stretch speech. */
+export function buildCaptionLinesChecked(
+  a: CaptionBuildArgs & { expectedTakeTexts: readonly string[] },
+): Result<CaptionLine[], CaptionBuildError> {
+  const narrated = a.report.scenes.filter((s) => s.speechDurS > 0);
+  if (
+    a.expectedTakeTexts.length !== narrated.length ||
+    a.offsetsS.length !== narrated.length ||
+    a.offsetsS.some(
+      (offset, i) =>
+        !Number.isFinite(offset) || offset < 0 || (i > 0 && offset <= (a.offsetsS[i - 1] ?? 0)),
+    )
+  )
+    return err({ code: "caption_take_count_mismatch" });
+  if (a.words.some((w) => !w || typeof w !== "object"))
+    return err({ code: "caption_invalid_word_time" });
+  const words = a.words.filter((w) => w.type === "word");
+  if (
+    words.some(
+      (w, i) =>
+        typeof w.text !== "string" ||
+        !Number.isFinite(w.start) ||
+        !Number.isFinite(w.end) ||
+        w.start < 0 ||
+        w.end < w.start ||
+        (i > 0 && (w.start < (words[i - 1]?.start ?? 0) || w.end < (words[i - 1]?.end ?? 0))),
+    )
+  )
+    return err({ code: "caption_invalid_word_time" });
+  const expected = a.expectedTakeTexts.map(alignmentTokens);
+  const actual = words.map((w) => alignmentTokens(w.text));
+  const flat = expected.flat();
+  if (
+    expected.some((tokens) => tokens.length === 0) ||
+    actual.length !== flat.length ||
+    actual.some((tokens, i) => tokens.length !== 1 || tokens[0] !== flat[i])
+  )
+    return err({ code: "caption_expected_text_mismatch" });
+  let cursor = 0;
+  const byTake: SttWord[][] = [];
+  for (const [ordinal, scene] of narrated.entries()) {
+    const selected = words.slice(cursor, cursor + (expected[ordinal]?.length ?? 0));
+    cursor += selected.length;
+    const takeStart = a.offsetsS[ordinal] as number;
+    const takeEnd = a.offsetsS[ordinal + 1] ?? takeStart + scene.leadSilenceS + scene.speechDurS;
+    if (selected.some((w) => w.start < takeStart - 0.5 || w.end > takeEnd + 0.5))
+      return err({ code: "caption_word_outside_take" });
+    byTake.push(selected);
+  }
+  const lines = captionLinesInner(a, byTake);
+  if (
+    lines.length === 0 ||
+    lines.some(
+      (line) =>
+        !Number.isFinite(line.startS) ||
+        !Number.isFinite(line.endS) ||
+        line.endS <= line.startS ||
+        assTime(line.endS) === assTime(line.startS),
+    )
+  )
+    return err({ code: "caption_nonpositive_cue" });
+  return ok(lines);
+}
+
+/** Legacy callers preserve timestamp partitioning. Supplying verified scripts opts into strict
+ * alignment; invalid alignment yields no track, never a silently timestamp-partitioned result.
+ * Adapters use the checked entry point above to retain its explicit failure reason. */
+export function buildCaptionLines(a: CaptionBuildArgs): CaptionLine[] {
+  if (a.expectedTakeTexts !== undefined) {
+    const checked = buildCaptionLinesChecked({ ...a, expectedTakeTexts: a.expectedTakeTexts });
+    return checked.ok ? checked.value : [];
+  }
+  return captionLinesInner(a);
+}
+
+function captionLinesInner(
+  a: CaptionBuildArgs,
+  wordsByTake?: readonly (readonly SttWord[])[],
+): CaptionLine[] {
   const out: CaptionLine[] = [];
   // The scenes that DECLARE narration, in reel order. This is the take list the STT stage was
   // handed, so its position is the key into `offsetsS`.
@@ -372,9 +474,9 @@ export function buildCaptionLines(a: {
     const takeStart = a.offsetsS[ordinal];
     if (takeStart === undefined) continue; // fewer takes than narrated scenes: no words for this one
     const takeEnd = a.offsetsS[ordinal + 1] ?? Number.POSITIVE_INFINITY;
-    const inTake = a.words
-      .filter((w) => w.start >= takeStart && w.start < takeEnd)
-      .map((w) => ({ ...w, start: w.start - takeStart, end: w.end - takeStart }));
+    const inTake = (
+      wordsByTake?.[ordinal] ?? a.words.filter((w) => w.start >= takeStart && w.start < takeEnd)
+    ).map((w) => ({ ...w, start: w.start - takeStart, end: w.end - takeStart }));
     // A line may run past its own scene but never into the next line — the same bound the
     // assembler enforces on the audio, applied to the captions so the two cannot disagree.
     const bound = narrated[ordinal + 1]?.speechAbsS ?? a.report.totalDurationS;

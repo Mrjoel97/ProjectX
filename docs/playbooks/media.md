@@ -1,3 +1,5 @@
+> Last verified: 2026-10-22 — Actual operator outputs exposed two cross-take caption words and captions behind native player controls. The shared caption builder now supports strict, exact-script ownership with unchanged provider timestamps and existing speech-anchor rebasing; the app binds scripts to same-batch TTS prompt hashes. Explicit mismatch/timing/nonpositive-cue failures preserve the uncaptioned deliverable. The ASS style reserves the bottom 20% and at least 8% horizontally without changing its font. Frozen operator sources, original receipts/ledger and baseline exports remain separate from the new candidate fingerprint; no paid retry, provider default or production skill promotion is introduced.
+
 > Last verified: 2026-10-21 — The assembler now exports the already priced 720×1280/30fps profile independently of the first source, uses Lanczos scaling and copies normalized H.264 scenes at concatenation instead of encoding them again. Every scene pins the same MP4 track timescale; narration, music, duration, decode and sidecar gates remain enforced. A real synthetic seven-second 24 fps landscape / 60 fps portrait / still / card fixture passed with 210 frames, monotonic decode timestamps, full-span AAC and a validated sidecar. This qualifies the local technical profile, not provider source detail, hosted cost/latency, B-roll relevance or owner visual acceptance. Stock rendition ranking now rejects malformed durations/dimensions/non-HTTPS files and prioritizes usable portrait detail; provider video relevance order is preserved.
 
 > Last verified: 2026-10-21 — Phase 53 composes image/video/mixed campaigns over existing media reservations/jobs, with exact-review approval, bounded queueing and explicit reconciliation/cancel/partial states. Offline core/backend checks passed in the delegated lane; actual media quality/provider recovery remains unqualified.
@@ -5739,3 +5741,46 @@ gate. OpenRouter's Images in-flight accounting does not establish a no-overshoot
 standard account/key controls remain additional backstops. Production defaults and prices remain
 unchanged until separate receipt-backed qualification and explicit promotion.
 > Last verified: 2026-10-22 — PR 83 CI triage found a blocking Biome formatting diagnostic on the campaign-lock condition in media.ts. The condition was formatted with the existing repository rules; its ownership, draft-state and prior-reservation checks are unchanged. This is a formatting repair, with no media purchase, job retry, approval, renderer or provider behavior change. Current-source CI remains required after resolving the separate upstream documentation/evaluator-pin conflicts.
+
+## Exact-script caption ownership and readable placement — 2026-10-22
+
+The real 30/60-second operator baseline contains all 147 spoken words, including 19 legitimate
+zero-duration STT word alignments. Its strict experiment gate stopped on `end <= start`; that
+historical source/result/hold is preserved. Production word grouping already retains zero-duration
+words. A grouped cue must have finite positive duration; an isolated zero-duration cue is refused,
+never padded with invented timing.
+
+`buildCaptionLinesChecked` takes exact `expectedTakeTexts` in narrated ordinal order. It requires
+one-to-one normalized full-token equality, the same number of narrated scenes and clean-take
+offsets, and finite ordered word starts/ends with `end >= start`. Decreasing word ends are refused
+instead of letting the next word truncate a prior word's display span. Exact script word counts determine
+which take owns each original word. Repeated phrases are assigned by ordinal, not fuzzy matching.
+Actual text/timestamps are not rewritten. A half-second bound around the assigned clean take
+rejects larger timing errors; it does not create duration, stretch audio or move provider times.
+Existing measured speech anchors, leading-silence adjustment, clamping and grouping remain the
+timing mechanism. Mismatch, invalid/implausible times and nonpositive grouped cues have explicit
+failure codes. Cues must also remain positive after the canonical ASS centisecond quantization;
+a positive floating-point duration that rounds to the same displayed timestamp is refused, never
+stretched. `buildCaptionLines` without expected scripts retains its legacy timestamp partition.
+
+The app's `captionsToBurn` adapter reads the tenant-prefixed, bounded STT batch, matches successful
+TTS block indexes to nonempty shot narration, and verifies every exact narration `promptHash`.
+An edited deck, missing/ambiguous voices or another batch cannot supply replacement scripts for
+old audio. Binding failures and checked-core refusals write the existing degraded caption terminal
+before starting a render request. Narration remains content-plane data; audit/dead-letter payloads
+contain only existing refs and reason codes. No schema, price, provider request or admission cap
+changes are needed.
+
+`toAss` keeps the existing 64-unit DejaVu Sans/white-outline style and smart wrapping, but computes
+horizontal margins with `ceil(PlayResX × 0.08)` and bottom margin with `ceil(PlayResY × 0.20)`.
+The default 1080×1920 script uses 87/87/384; a 720×1280 script uses 58/58/256. These are caption
+insets, not a promise about every platform's changing chrome. Actual playback/frame review still
+checks text visibility and crop safety. Canonical assembly/burn scripts are unchanged.
+
+The original paid baseline and all known charges remain intact. A separately fingerprinted local
+candidate reuses the delivered 147-word transcript, voices, high still and licensed footage with
+zero additional purchases. Generated opening footage failed physical-composition review (a
+floating rear bottle), and generated detail varies bottle identity. Replacing those scenes with the
+reviewed still is an explicit free editorial QC fallback, not successful video-provider acceptance
+or a production generation-profile promotion. See the phase 53 reel recovery record for receipts,
+baseline limitations, input identities and candidate verification.

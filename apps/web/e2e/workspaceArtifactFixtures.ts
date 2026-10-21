@@ -78,9 +78,9 @@ const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 const nonempty = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length < 600;
-const fail = (field: string): never => {
+function fail(field: string): never {
   throw new Error(`PHASE53_LOCAL_FIXTURE_INVALID_${field}`);
-};
+}
 
 /** Deliberately closed to this disposable stack; never accepts a production/qualification target. */
 export function validateArtifactFixtures(value: unknown): ArtifactFixtures {

@@ -69,12 +69,40 @@ export function WorkspaceTabs({
     `${output.title} ${output.format}`.toLowerCase().includes(filter.toLowerCase()),
   );
   const unread = state.unread.filter((key) => all.has(key));
+  const tabLayout = JSON.stringify(open.map((output) => [output.key, output.title]));
 
   useEffect(() => {
     void state.active;
-    const active = tabsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
-    active?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-  }, [state.active]);
+    void tabLayout; // Restored metadata can mount or resize a tab without changing its selection.
+    const strip = tabsRef.current;
+    if (!strip) return;
+    const reveal = () => {
+      const active = strip.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (!active || strip.clientWidth <= 0) return;
+      const tab = active.parentElement ?? active;
+      const viewport = strip.getBoundingClientRect();
+      const bounds = tab.getBoundingClientRect();
+      if (bounds.width <= 0) return;
+      const left = viewport.left + strip.clientLeft;
+      const right = left + strip.clientWidth;
+      const delta =
+        bounds.width > strip.clientWidth || bounds.left < left
+          ? bounds.left - left
+          : bounds.right > right
+            ? bounds.right - right
+            : 0;
+      if (delta)
+        strip.scrollLeft = Math.max(
+          0,
+          Math.min(strip.scrollLeft + delta, strip.scrollWidth - strip.clientWidth),
+        );
+    };
+    reveal();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(reveal);
+    observer?.observe(strip);
+    for (const tab of strip.children) observer?.observe(tab);
+    return () => observer?.disconnect();
+  }, [state.active, tabLayout]);
 
   function tabKeys(event: KeyboardEvent, key: string) {
     const index = keys.indexOf(key);
@@ -93,13 +121,13 @@ export function WorkspaceTabs({
       const nextKey = keys[next];
       if (nextKey) {
         onSelect(nextKey);
-        document.getElementById(id(nextKey))?.focus();
+        document.getElementById(id(nextKey))?.focus({ preventScroll: true });
       }
     } else if (event.key === "Delete" && key !== WORK_TAB) {
       event.preventDefault();
       onClose(key);
       const neighbor = keys[index + 1] ?? keys[index - 1] ?? WORK_TAB;
-      document.getElementById(id(neighbor))?.focus();
+      document.getElementById(id(neighbor))?.focus({ preventScroll: true });
     }
   }
 

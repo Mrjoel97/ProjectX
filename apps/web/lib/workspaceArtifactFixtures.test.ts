@@ -48,12 +48,16 @@ describe("disposable authenticated artifact fixture admission", () => {
     },
     () => {
       const value = valid();
-      value.users.A.chats.primary.artifacts[0].key = "../../foreign";
+      const artifact = value.users.A.chats.primary.artifacts[0];
+      if (!artifact) throw new Error("Expected primary synthetic artifact");
+      artifact.key = "../../foreign";
       return value;
     },
     () => {
       const value = valid();
-      value.users.A.chats.primary.artifacts[0].sha256 = "not-a-hash";
+      const artifact = value.users.A.chats.primary.artifacts[0];
+      if (!artifact) throw new Error("Expected primary synthetic artifact");
+      artifact.sha256 = "not-a-hash";
       return value;
     },
     () => {

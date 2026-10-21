@@ -23,6 +23,7 @@ import workflowSchema from "../../node_modules/@convex-dev/workflow/src/componen
 import workpoolSchema from "../../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
+import { contentHash } from "../lib/hash";
 import schema from "../schema";
 
 // Vite rewrites glob keys for files in THIS directory to "./x.ts" while the rest stay "../y/x.ts",
@@ -68,6 +69,141 @@ const T0 = 1_754_000_000_000;
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+});
+
+describe("caption scripts bind to the exact tenant and paid TTS batch", () => {
+  async function seedCaptions(t: T, mismatchedTranscript = false) {
+    const texts = ["Come back.", "Keep it close."];
+    const seeded = await seedMidRender(t, {
+      deckOverrides: { 0: { narration: texts[0] }, 1: { narration: texts[1] } },
+    });
+    await t.run(async (ctx) => {
+      const rows = await ctx.db
+        .query("mediaJobs")
+        .withIndex("by_batch", (q) => q.eq("tenantId", A).eq("batchId", seeded.batchId))
+        .collect();
+      for (const row of rows.filter((row) => row.kind === "tts"))
+        await ctx.db.patch(row._id, { promptHash: await contentHash(texts[row.blockIndex] ?? "") });
+      const words = [
+        { text: mismatchedTranscript ? "Go" : "Come", start: 0.1, end: 0.5, type: "word" },
+        { text: "back", start: 0.5, end: 1, type: "word" },
+        { text: "Keep", start: 2.74, end: 3.24, type: "word" },
+        { text: "it", start: 3.24, end: 3.24, type: "word" },
+        { text: "close", start: 3.5, end: 4, type: "word" },
+      ];
+      const sidecar = JSON.stringify({
+        scene_count: 2,
+        target_duration_s: 8,
+        total_duration_s: 8,
+        actual_duration_s: 8,
+        gates: [],
+        scenes: [0, 1].map((index) => ({
+          index,
+          start_s: index * 4,
+          duration_s: 4,
+          visual: "video",
+          lead_silence_s: 0,
+          speech_abs_s: index * 4 + 1,
+          speech_dur_s: 2.5,
+          overrun: false,
+        })),
+      });
+      const renderStorageId = await ctx.storage.store(
+        new Blob(["synthetic transport fixture"], { type: "video/mp4" }),
+      );
+      const sidecarStorageId = await ctx.storage.store(
+        new Blob([sidecar], { type: "application/json" }),
+      );
+      const transcriptStorageId = await ctx.storage.store(
+        new Blob([JSON.stringify({ words })], { type: "application/json" }),
+      );
+      await ctx.db.patch(seeded.planId, {
+        renderStatus: "rendered",
+        renderStorageId,
+        sidecarStorageId,
+        captionOffsetsS: [0, 3],
+        captionStatus: "pending",
+      });
+      await ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId: seeded.planId,
+        batchId: seeded.batchId,
+        blockIndex: -1,
+        kind: "stt",
+        provider: "openai",
+        model: "openai/whisper-1",
+        spec: { kind: "stt", audioMinutes: 0.1 },
+        status: "succeeded",
+        assetStorageId: transcriptStorageId,
+        promptHash: "0".repeat(64),
+        estUsd: 0.0006,
+        createdAt: T0 + 1,
+        updatedAt: T0 + 1,
+      });
+    });
+    return seeded;
+  }
+
+  test("returns exact batch-verified scripts, and a foreign tenant gets no content", async () => {
+    const t = harness(),
+      { planId } = await seedCaptions(t);
+    const job = await t.query(internal.render.renderReel.captionsToBurn, { tenantId: A, planId });
+    expect(job?.expectedTakeTexts).toEqual(["Come back.", "Keep it close."]);
+    expect(job?.alignmentReason).toBeUndefined();
+    expect(
+      await t.query(internal.render.renderReel.captionsToBurn, { tenantId: B, planId }),
+    ).toBeNull();
+  });
+
+  test("an edited current deck cannot supply new alignment text for old paid audio", async () => {
+    const t = harness(),
+      { planId } = await seedCaptions(t);
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      await ctx.db.patch(planId, {
+        shots: plan?.shots?.map((shot) =>
+          shot.index === 0 ? { ...shot, narration: "Altered private narration" } : shot,
+        ),
+      });
+    });
+    const job = await t.query(internal.render.renderReel.captionsToBurn, { tenantId: A, planId });
+    expect(job?.alignmentReason).toBe("caption_script_binding_failed");
+    expect(job?.expectedTakeTexts).toBeUndefined();
+  });
+
+  test("voice rows in another batch cannot prove the STT batch's script binding", async () => {
+    const t = harness(),
+      { planId, batchId } = await seedCaptions(t);
+    await t.run(async (ctx) => {
+      const rows = await ctx.db
+        .query("mediaJobs")
+        .withIndex("by_batch", (q) => q.eq("tenantId", A).eq("batchId", batchId))
+        .collect();
+      for (const row of rows.filter((row) => row.kind === "tts"))
+        await ctx.db.patch(row._id, { batchId: "unrelated_batch" });
+    });
+    const job = await t.query(internal.render.renderReel.captionsToBurn, { tenantId: A, planId });
+    expect(job?.alignmentReason).toBe("caption_script_binding_failed");
+  });
+
+  test("exact transcript mismatch reaches an explicit degraded terminal before any render request", async () => {
+    const t = harness(),
+      { planId } = await seedCaptions(t, true);
+    stubRenderEnv();
+    const request = vi.fn();
+    vi.stubGlobal("fetch", request);
+    const outcome = await t.action(internal.render.renderReel.burnCaptions, {
+      tenantId: A,
+      planId,
+    });
+    expect(outcome).toEqual({ ok: false, reason: "caption_expected_text_mismatch" });
+    expect(request).not.toHaveBeenCalled();
+    const plan = await planRow(t, planId);
+    expect(plan?.renderStatus).toBe("rendered");
+    expect(plan?.captionStatus).toBe("failed");
+    expect(plan?.captionReason).toBe("caption_expected_text_mismatch");
+    expect(JSON.stringify(await deadLetters(t))).not.toContain("Come back");
+  });
 });
 
 function stubRenderEnv() {

@@ -52,7 +52,9 @@ describe("authorized original downloads", () => {
       credentials: "omit",
       referrerPolicy: "no-referrer",
     });
-    expect(new Uint8Array(await blobs[0].arrayBuffer())).toEqual(bytes);
+    const downloadedBlob = blobs[0];
+    if (!downloadedBlob) throw new Error("Expected downloaded original bytes");
+    expect(new Uint8Array(await downloadedBlob.arrayBuffer())).toEqual(bytes);
     expect(clicked).toEqual([{ href: "blob:local-original", filename: "Original report.pdf" }]);
     expect(document.querySelector("a")).toBeNull();
     expect(revokeObjectURL).not.toHaveBeenCalled();

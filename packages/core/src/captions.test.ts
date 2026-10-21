@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 import type { AssemblyScene } from "./assembly";
 import {
   buildCaptionLines,
+  buildCaptionLinesChecked,
   concatWavTakes,
   DEFAULT_LINE_CHARS,
   groupIntoLines,
@@ -146,6 +147,25 @@ describe("groupIntoLines — a line that fits a 9:16 frame", () => {
 });
 
 describe("toAss — a valid file, and text that cannot become markup", () => {
+  it.each([
+    [1080, 1920],
+    [720, 1280],
+    [1920, 1080],
+  ])("reserves the bottom 20%% and at least 8%% on each side at %sx%s", (width, height) => {
+    const style = toAss([{ startS: 0, endS: 1, text: "Readable caption" }], {
+      playResX: width,
+      playResY: height,
+    })
+      .split("\n")
+      .find((row) => row.startsWith("Style: Default,"))
+      ?.split(",");
+    expect(style).toBeDefined();
+    expect(Number(style?.[2])).toBe(64); // Font size/family stay unchanged; geometry is explicit.
+    expect(Number(style?.[19])).toBeGreaterThanOrEqual(width * 0.08);
+    expect(Number(style?.[20])).toBeGreaterThanOrEqual(width * 0.08);
+    expect(Number(style?.[21])).toBe(Math.ceil(height * 0.2));
+    expect(Number(style?.[19])).toBeLessThan(width * 0.1);
+  });
   const lines = [
     { startS: 0, endS: 1.5, text: "first line" },
     { startS: 1.5, endS: 3.25, text: "second line" },
@@ -213,6 +233,170 @@ describe("toAss — a valid file, and text that cannot become markup", () => {
         .filter((l) => l.startsWith("Dialogue:"));
       expect(rows).toHaveLength(0);
     });
+  });
+});
+
+describe("verified script caption alignment", () => {
+  const report = {
+    sceneCount: 2,
+    targetDurationS: 10,
+    totalDurationS: 10,
+    actualDurationS: 10,
+    gates: [],
+    scenes: [
+      block({ index: 0, startS: 0, durationS: 5, leadSilenceS: 0, speechAbsS: 1, speechDurS: 2.5 }),
+      block({ index: 1, startS: 5, durationS: 5, leadSilenceS: 0, speechAbsS: 6, speechDurS: 2.5 }),
+    ],
+  };
+  const input = () => ({
+    report,
+    offsetsS: [0, 3],
+    expectedTakeTexts: ["Come back.", "Keep it close."],
+    words: [
+      word("Come", 0.1, 0.5),
+      word("back", 0.5, 1),
+      word("Keep", 2.74, 3.24),
+      word("it", 3.24, 3.5),
+      word("close", 3.5, 4),
+    ],
+  });
+
+  it("assigns a boundary word by exact submitted text, preserving every provider timestamp and token", () => {
+    const a = input(),
+      before = structuredClone(a.words);
+    const result = buildCaptionLinesChecked(a);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.map((line) => line.text)).toEqual(["Come back", "Keep it close"]);
+    expect(result.value[1]?.startS).toBeCloseTo(5.74, 8);
+    expect(a.words).toEqual(before);
+    expect(
+      buildCaptionLines({ ...a, expectedTakeTexts: undefined }).map((line) => line.text),
+    ).toEqual(["Come back Keep", "it close"]);
+  });
+
+  it("keeps zero-duration words inside positive-duration readable grouped cues", () => {
+    const a = input();
+    a.words[3] = word("it", 3.24, 3.24);
+    const result = buildCaptionLinesChecked(a);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value[1]?.text).toBe("Keep it close");
+    expect(result.value.every((line) => line.endS > line.startS)).toBe(true);
+  });
+
+  it("does not silently fall back when text differs or a provider token ambiguously spans words", () => {
+    for (const changed of [word("Far", 2.74, 3.24), word("Keep it", 2.74, 3.24)]) {
+      const a = input();
+      a.words[2] = changed;
+      expect(buildCaptionLinesChecked(a)).toEqual({
+        ok: false,
+        error: { code: "caption_expected_text_mismatch" },
+      });
+      expect(buildCaptionLines(a)).toEqual([]);
+    }
+  });
+
+  it.each([
+    [Number.NaN, 3.24],
+    [2.74, Number.POSITIVE_INFINITY],
+    [2.74, 2.5],
+    [-1, 0],
+  ])("refuses invalid provider times %s→%s", (start, end) => {
+    const a = input();
+    a.words[2] = word("Keep", start, end);
+    expect(buildCaptionLinesChecked(a)).toEqual({
+      ok: false,
+      error: { code: "caption_invalid_word_time" },
+    });
+  });
+
+  it("refuses exact text whose timing falls outside the bounded half-second take window", () => {
+    const a = input();
+    a.words[2] = word("Keep", 2.4, 3.24);
+    expect(buildCaptionLinesChecked(a)).toEqual({
+      ok: false,
+      error: { code: "caption_word_outside_take" },
+    });
+  });
+
+  it("refuses missing, duplicated or unordered take offsets instead of guessing ownership", () => {
+    for (const offsetsS of [[0], [0, 0], [3, 0]])
+      expect(buildCaptionLinesChecked({ ...input(), offsetsS })).toEqual({
+        ok: false,
+        error: { code: "caption_take_count_mismatch" },
+      });
+  });
+
+  it("repeated words retain ordinal ownership without fuzzy searching or editing actual text", () => {
+    const result = buildCaptionLinesChecked({
+      ...input(),
+      expectedTakeTexts: ["Refill now", "Refill tomorrow"],
+      words: [
+        word("Refill", 0, 0.4),
+        word("now", 0.4, 0.8),
+        word("Refill", 2.9, 3.2),
+        word("tomorrow", 3.2, 3.7),
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok)
+      expect(result.value.map((line) => line.text)).toEqual(["Refill now", "Refill tomorrow"]);
+  });
+
+  it("refuses an isolated zero-duration cue rather than inventing display time", () => {
+    const a = input();
+    const result = buildCaptionLinesChecked({
+      ...a,
+      report: { ...report, sceneCount: 1, scenes: [report.scenes[0] as AssemblyScene] },
+      offsetsS: [0],
+      expectedTakeTexts: ["Wait"],
+      words: [word("Wait", 0.2, 0.2)],
+    });
+    expect(result).toEqual({ ok: false, error: { code: "caption_nonpositive_cue" } });
+  });
+
+  it("refuses decreasing word ends rather than truncating an earlier overlapping word", () => {
+    const a = input();
+    a.words[0] = word("Come", 0.1, 2);
+    a.words[1] = word("back", 0.2, 0.3);
+    expect(buildCaptionLinesChecked(a)).toEqual({
+      ok: false,
+      error: { code: "caption_invalid_word_time" },
+    });
+  });
+  it("refuses positive floating-point cue duration that collapses at actual ASS precision", () => {
+    const a = input();
+    const result = buildCaptionLinesChecked({
+      ...a,
+      report: { ...report, sceneCount: 1, scenes: [report.scenes[0] as AssemblyScene] },
+      offsetsS: [0],
+      expectedTakeTexts: ["Wait"],
+      words: [word("Wait", 0.2, 0.201)],
+    });
+    expect(result).toEqual({ ok: false, error: { code: "caption_nonpositive_cue" } });
+    expect(toAss([{ startS: 1.2, endS: 1.201, text: "Wait" }])).toContain("0:00:01.20,0:00:01.20");
+  });
+
+  it("maps only narrated scenes across silent holes", () => {
+    const a = input();
+    const result = buildCaptionLinesChecked({
+      ...a,
+      report: {
+        ...report,
+        sceneCount: 3,
+        totalDurationS: 15,
+        targetDurationS: 15,
+        actualDurationS: 15,
+        scenes: [
+          report.scenes[0] as AssemblyScene,
+          block({ index: 1, startS: 5, durationS: 5, speechDurS: 0 }),
+          { ...(report.scenes[1] as AssemblyScene), index: 2, startS: 10, speechAbsS: 11 },
+        ],
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value[1]?.startS).toBeCloseTo(10.74, 8);
   });
 });
 

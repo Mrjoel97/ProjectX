@@ -23,6 +23,12 @@ to include the unchanged media provider-body extraction into pure core code. The
 all video, low-quality image and streaming verbatim-voice request fields; it does not promote a
 quality preset or add a new provider route.
 
+The final caption repair and adapter are explicitly included in the closed golden inventory.
+After the root declares the already installed Node 26.1.1 types, current golden revision is
+`2026-09-11.budgeted-evaluator.b603aab438f3f620bb29f65ac9e396abd2a22e3c08d63bf26938f5f6a81e248a`;
+vertical revision is `3af6cf5b96ca20f10b04d20bc40e702c5d75bb96da0704d6e5dd61dca5dd8971`.
+The 46/40-case corpora and historical receipts remain unchanged. No paid evaluator was run.
+
 The old PR83 CI formatting failure was repaired. CI now explicitly includes the new offline image
 and reel operator regressions beside the existing operator controls. Final exact-source CI remains
 required for the eventual pushed head.
@@ -59,8 +65,9 @@ both passed with unchanged accounts/configuration; all required local auth field
 
 ## Paid image results and reel preparation
 
-Three real fixed portrait requests completed for **$0.211995** in total, leaving **$4.788005** of
-the shared testing policy allowance. The separate [image results](53-IMAGE-RESULTS-2026-10-22.md)
+Three real fixed portrait requests completed for **$0.211995** in total. The subsequent reel
+requests brought the shared known reported total to **$0.9213768** (about **$4.0786232** of the
+policy allowance unspent). The separate [image results](53-IMAGE-RESULTS-2026-10-22.md)
 record actual charges, latency and visual findings. Every image response reported non-BYOK billing;
 all explicit quality profiles matched the official output-token calculation for this fixed prompt.
 One stochastic sample per profile does not prove general quality, price bounds or identity consistency.
@@ -82,8 +89,69 @@ these technical comparisons.
 
 ## Integration checks and remaining gates
 
-The 22 registered free gates passed after the latest main integration and provider-body extraction;
-all 26 focused image/transport/evaluator-identity operator tests passed. Final browser, typecheck,
-formatting, build, rendered-reel and exact-head CI observations remain to be added after completion.
+All five actual local browser cases passed across focused three-case and two-case invocations,
+with no page errors or external origins in the successful checks. This is not one five-pass run.
+PDF pages/text/zoom, editable-format previews, byte-matching originals with usable PDF/PPTX/XLSX
+extensions, chat close/reopen/reload, one genuine output arrival, invalid references, fresh B/A
+account separation, actual gallery playback and expanded focus/Escape behavior passed. Video
+controls fitted at 390/768/1440 pixels without page-level horizontal overflow. Safe screenshots
+and the aggregate `native-browser-acceptance-summary.json` are under `.tmp/phase53-auth/browser-qa`.
+Taste probes remain qualified by existing brand gradients/shadows, heading/contrast and no-poster
+findings; the synthetic SVG fixture still uses the existing PNG media filename hint. Original
+bytes are preserved. Neither limitation is presented as a production image-format acceptance.
+
+After restoration and a narrow-screen resize, the selected collection's tab could remain outside
+the visible strip. The strip now reveals the complete active tab after selection, delayed metadata
+and resizing, without moving the page. Work remains permanent and unclosable. Six focused tests
+and five real-browser component-fixture checks passed, including 390-pixel restoration and a live
+1440-to-390 resize. These later checks are component fixtures, not a second hosted/auth acceptance.
+
+The full frontend suite passed **86 files / 1,228 tests**, with two existing skips, in 128.20 seconds.
+All 22 registered free gates and their discovery self-test passed again after the final caption,
+lockfile and evaluator-pin changes. All 47 focused image/reel/transport/evaluator-identity operator
+tests passed, and the five identity checks passed again after final pinning. Whole-tree Biome
+checked 1,209 files without errors. Planning, playbook coverage and whitespace checks passed.
+Initial CI for `e51271c3` stopped on strict typing in the new test/fixture helpers; the narrow fixes
+retain all runtime guards. A separate local Node 14/26 ambient-type conflict in unchanged provenance
+tests was traced and repaired by explicitly declaring the already installed Node 26.1.1 types at
+the root. The final full workspace typecheck passed all twelve packages in 1m50.663s, with no
+cached results. Exact-head CI is recorded on PR83, independently of these local observations.
+
+All nineteen exact reviewed reel POSTs delivered outputs and known charges: $0.7000000 video,
+$0.0037818 voice and $0.0056000 STT, or **$0.7093818** for the reel lane and **$0.9213768** shared.
+The original operator result remains stopped at 18 counted completions because nineteen of the
+147 returned words have equal start/end times. Its known STT charge is counted and its hold is
+preserved. The full transcript matches the narration; no purchase was repeated. The separate
+[recovery record](53-REEL-RECOVERY-2026-10-22.md) preserves the exact outcome and original timestamps.
+Offline rendering uses only existing assets and does not clear the hold. The baseline exposed a
+floating generated bottle, a changed cap identity, two cross-take caption words and captions behind
+native controls. Both generated positions are excluded from the corrected editorial samples, which
+reuse the original high-quality still with licensed B-roll rather than claiming generated-motion
+acceptance.
+
+The shared caption builder now assigns words by exact normalized submitted-script sequence and
+narrated ordinal, only after validating take counts, bounded timestamp drift, monotonic word starts
+and ends, and positive final ASS cue duration. No timestamp is invented. Legacy callers without
+scripts retain their existing timestamp partitioning. The app binds expected scripts to succeeded
+same-batch TTS block indexes and prompt hashes; mismatch refuses captions while preserving the
+uncaptioned deliverable. The default bottom inset is 20%, with at least 8% horizontal margins.
+Fifty-two focused core tests and twenty-nine backend tests passed. An independent read-only review
+found two timing guard gaps; both were fixed and covered before the final source freeze.
+
+Both corrected local MP4s exported at 720×1280 / 30 fps, with actual durations 30.10 and 60.01
+seconds. All 147 words retain exact script ownership across 12/24 positive ASS cues. Muted Edge
+playback advanced with ready state 4 and native controls; no page errors, external requests or
+390-pixel overflow were observed. Parent and media-agent frame review confirmed the corrected
+cross-take words, grounded replacement bottles and higher captions. This is an editorial fallback,
+not successful generated-video quality. Six cues exceed 20 characters/second, including brief
+0.40/0.26-second fragments; readability, pacing and actual final-mix listening remain open.
+The separate candidate fingerprint is `789ca93f69bc59dad6cf2487f035dd9ff0c2c27d657620b6a87b6e9162b27257`.
+Outputs, governed sidecars, receipt, frame/player evidence and accompanying music/stock credits
+are in ignored `.tmp/phase53-reel-quality-candidate-20261022`. All 25 original evidence hashes and
+the original stopped result/hold remain unchanged. The recovery generated no paid request.
+
+The required graph update was attempted; `graphify` is unavailable on PATH. The committed graph's
+Convex-edge fixup completed, but this is not a fresh AST graph or evidence of new graph coverage.
+
 Hosted authorization/downloads, provider recovery/erasure, live batch crash recovery, reference
 identity consistency, director/preset promotion and owner creative acceptance remain separate gates.

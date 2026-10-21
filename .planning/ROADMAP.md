@@ -174,7 +174,7 @@ The current execution priority is the five-stage sequence below. [Programme scop
 **Goal:** Deliver real rich Excel and editable PowerPoint artifacts, reliable image/video campaigns, and evidence-backed media quality through the existing Executive/Vault/media architecture.
 **Requirements:** ARTF-01, ARTF-02, ARTF-03, ARTF-04.
 **Depends on:** Existing Phase 18/20/40 creation/storage/approval rails. Owner-approved parallel offline implementation after discovery; this does not reorder the current Phase 48 → 49 → 50 → 51 → 52 managed-service admission or release gates.
-**Plans:** 0/3 complete; 3/3 authored. Offline implementation partial. Local synthetic native Office observations narrow the format gap; representative Office edits, authenticated hosted flows, registry qualification, paid media benchmarks and owner artifact acceptance remain open.
+**Plans:** 0/3 complete; 3/3 authored. Offline implementation partial. Local native Office observations, five authenticated local browser cases across two focused runs and fixed paid comparisons ($0.9213768 known reported total) narrow the evidence gaps. Hosted flows, registry qualification, generated-motion quality, final audio/creative review and owner artifact acceptance remain open; the original stopped STT gate and hold remain preserved.
 **Success Criteria:**
   1. Actual downloadable XLSX files preserve typed values and source metadata, deterministic supported calculations and professional report layouts; reopen and visually inspect populated sheets/print regions.
   2. Actual PPTX files contain editable native objects/charts and source notes, with an honestly labelled optional layout preview; open/edit in presentation software and inspect every rendered slide.

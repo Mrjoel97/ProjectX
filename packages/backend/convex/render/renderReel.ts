@@ -16,7 +16,7 @@
  * `ctx.storage.get`, `ctx.runQuery` and `ctx.runMutation`, all of which the regular action has.
  */
 import { parseAssemblySidecar } from "@pikar/core/assembly";
-import { buildCaptionLines, toAss } from "@pikar/core/captions";
+import { buildCaptionLinesChecked, toAss } from "@pikar/core/captions";
 import {
   CARD_DEFAULT_BG,
   cardColorsOf,
@@ -1020,6 +1020,8 @@ export const captionsToBurn = internalQuery({
     sidecarStorageId: Id<"_storage">;
     offsetsS: number[];
     batchId: string;
+    expectedTakeTexts?: string[];
+    alignmentReason?: string;
   } | null> => {
     const plan = await ctx.db.get(a.planId);
     // The tenant check is HERE, on the row, because this query takes a plan id from an action
@@ -1035,12 +1037,44 @@ export const captionsToBurn = internalQuery({
       .order("desc")
       .first();
     if (stt?.status !== "succeeded" || !stt.assetStorageId) return null;
-    return {
+    const inputs = {
       transcriptStorageId: stt.assetStorageId,
       sidecarStorageId: plan.sidecarStorageId,
       offsetsS: plan.captionOffsetsS,
       batchId: stt.batchId,
     };
+    // Bind to the exact voice reservation, not just a current mutable deck with similar prose.
+    // The tenant-prefixed batch reader is bounded and rejects corrupted oversized histories.
+    let rows: Doc<"mediaJobs">[];
+    try {
+      rows = await readMediaBatch(ctx, a.tenantId, stt.batchId);
+    } catch {
+      return { ...inputs, alignmentReason: "caption_batch_invalid" };
+    }
+    const takes = rows
+      .filter((row) => row.kind === "tts" && row.status === "succeeded")
+      .sort((l, r) => l.blockIndex - r.blockIndex);
+    const shots = [...(plan.shots ?? [])]
+      .filter((shot) => shot.narration.trim() !== "")
+      .sort((l, r) => l.index - r.index);
+    if (
+      takes.length !== shots.length ||
+      shots.length !== plan.captionOffsetsS.length ||
+      shots.length === 0
+    )
+      return { ...inputs, alignmentReason: "caption_script_binding_failed" };
+    for (const [i, shot] of shots.entries()) {
+      const take = takes[i];
+      if (
+        !take ||
+        take.planId !== plan._id ||
+        !take.assetStorageId ||
+        take.blockIndex !== shot.index ||
+        take.promptHash !== (await contentHash(shot.narration))
+      )
+        return { ...inputs, alignmentReason: "caption_script_binding_failed" };
+    }
+    return { ...inputs, expectedTakeTexts: shots.map((shot) => shot.narration) };
   },
 });
 
@@ -1140,6 +1174,8 @@ export const burnCaptions = internalAction({
       return { ok: false, reason };
     };
     if (!job) return await fail("caption_inputs_missing");
+    if (job.alignmentReason || !job.expectedTakeTexts)
+      return await fail(job.alignmentReason ?? "caption_script_binding_failed");
 
     // The sidecar is re-read and RE-VALIDATED rather than trusted from `renderSummary`: the rebase
     // is arithmetic on its per-block anchors, and `parseAssemblySidecar` is the only thing that
@@ -1161,13 +1197,14 @@ export const burnCaptions = internalAction({
     }
     if (!Array.isArray(words)) return await fail("transcript_unreadable");
 
-    const ass = toAss(
-      buildCaptionLines({
-        words: words as Array<{ text: string; start: number; end: number; type: string }>,
-        report: report.value,
-        offsetsS: job.offsetsS,
-      }),
-    );
+    const captions = buildCaptionLinesChecked({
+      words: words as Array<{ text: string; start: number; end: number; type: string }>,
+      report: report.value,
+      offsetsS: job.offsetsS,
+      expectedTakeTexts: job.expectedTakeTexts,
+    });
+    if (!captions.ok) return await fail(captions.error.code);
+    const ass = toAss(captions.value);
     // An empty track means the transcript held no words for any block. `burn_caps.sh` refuses an
     // empty track, but refusing here saves a whole sandbox to learn that.
     if (!ass.includes("Dialogue:")) return await fail("caption_track_empty");
