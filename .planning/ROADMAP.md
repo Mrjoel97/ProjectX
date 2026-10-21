@@ -174,7 +174,7 @@ The current execution priority is the five-stage sequence below. [Programme scop
 **Goal:** Deliver real rich Excel and editable PowerPoint artifacts, reliable image/video campaigns, and evidence-backed media quality through the existing Executive/Vault/media architecture.
 **Requirements:** ARTF-01, ARTF-02, ARTF-03, ARTF-04.
 **Depends on:** Existing Phase 18/20/40 creation/storage/approval rails. Owner-approved parallel offline implementation after discovery; this does not reorder the current Phase 48 → 49 → 50 → 51 → 52 managed-service admission or release gates.
-**Plans:** 0/2 complete; 2/2 authored. Offline implementation partial. Local synthetic native Office observations narrow the format gap; representative Office edits, authenticated hosted flows, registry qualification, paid media benchmarks and owner artifact acceptance remain open.
+**Plans:** 0/3 complete; 3/3 authored. Offline implementation partial. Local synthetic native Office observations narrow the format gap; representative Office edits, authenticated hosted flows, registry qualification, paid media benchmarks and owner artifact acceptance remain open.
 **Success Criteria:**
   1. Actual downloadable XLSX files preserve typed values and source metadata, deterministic supported calculations and professional report layouts; reopen and visually inspect populated sheets/print regions.
   2. Actual PPTX files contain editable native objects/charts and source notes, with an honestly labelled optional layout preview; open/edit in presentation software and inspect every rendered slide.
@@ -183,6 +183,7 @@ The current execution priority is the five-stage sequence below. [Programme scop
 
 - [ ] 53-01-PLAN.md — Parallel offline artifact implementation, bounded campaigns and explicit remaining quality gates (partial evidence in 53-01-SUMMARY.md)
 - [ ] 53-02-PLAN.md — Per-chat artifact tabs, local PDF reader, collections and native/quality qualification (partial evidence in 53-02-SUMMARY.md)
+- [ ] 53-03-PLAN.md — Actual local authenticated workspace checks and owner-budgeted media comparison (partial)
 
 ## Post-Beta Knowledge-Work Expansion (Phases 27-30)
 
@@ -1684,7 +1685,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 50. Recurring read-and-prepare services | 0/4 | Not started — sequential programme dependency | - |
 | 51. Brain and service outcomes | 0/4 | Not started — sequential programme dependency | - |
 | 52. Social marketing service pilot | 0/3 | Not started — sequential programme dependency | - |
-| 53. Media and document production | 0/1 | Partial — owner-approved parallel offline implementation; qualification and release remain open | - |
+| 53. Media and document production | 0/3 | Partial — owner-approved parallel offline implementation; qualification and release remain open | - |
 | 1. Foundation & Governance Substrate | 8/9 | Partial — open: 01-09 | - |
 | 2. Thin End-to-End Slice | 7/9 | Complete — spine live since 2026-07; 02-08, 02-09 superseded by Phase 3.1 (the cockpit replaced the UI slice) | 2026-07-11 |
 | 3. Guardrails | 5/5 | Complete (VERIFICATION present) | 2026-07-12 |

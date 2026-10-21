@@ -8,6 +8,7 @@ import type { FunctionReturnType } from "convex/server";
 import type { GenericId } from "convex/values";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArtifactViewer, ArtifactViewerBody } from "../artifacts/ArtifactViewer";
+import { downloadOwnedOriginal } from "../artifacts/originalDownload";
 import { CampaignCollection } from "./CampaignCollection";
 import { CardList } from "./cards";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -463,20 +464,13 @@ function AttachmentOutput({
         hasOriginal: true,
         status: "ready",
       }}
-      onDownload={() => downloadFile(bytes.url, item.attachment.filename)}
+      onDownload={(signal) => downloadFile(bytes.url, item.attachment.filename, signal)}
     />
   );
 }
 
-export function downloadFile(url: string, filename: string) {
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.target = "_blank";
-  anchor.rel = "noreferrer";
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
+export function downloadFile(url: string, filename: string, signal?: AbortSignal) {
+  return downloadOwnedOriginal(url, filename, signal ?? new AbortController().signal);
 }
 
 function MediaOutput({ planId, threadId }: { planId: GenericId<"plans">; threadId: string }) {
@@ -533,7 +527,9 @@ function MediaOutput({ planId, threadId }: { planId: GenericId<"plans">; threadI
             url,
             hasOriginal: true,
           }}
-          onDownload={() => downloadFile(url, image ? "generated-image.png" : "finished-video.mp4")}
+          onDownload={(signal) =>
+            downloadFile(url, image ? "generated-image.png" : "finished-video.mp4", signal)
+          }
         />
       )}
     </div>

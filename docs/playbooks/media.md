@@ -5712,4 +5712,30 @@ it to paid egress. Keep legacy low defaults until measured representative owner 
 The complete v7 editorial director candidate is outside canonical seeds/mirrors and NOT active;
 the existing media director is deliberately ungated by the text runner, so editing its canonical
 seed is a promotion action. See `.planning/phases/53-media-and-document-production/53-QUALITY-BENCHMARK.md`.
+
+## Scoped image pricing qualification — 2026-10-22
+
+Last verified: 2026-10-22 — the owner approved a shared$5 testing policy allowance and use of the
+explicit staging credential in memory only. `scripts/run-image-quality-qualification.mjs` is an
+isolated operator experiment, not app admission or a new production quality preset. Default
+preparation performs no network work; paid execution requires the exact manifest/source digest,
+policy acknowledgement and standard-credit billing attestation. It fixes three portrait PNGs at
+low/medium/high, one image per request, no references/streaming/fallbacks/retries, and25/50/75¢
+profile policy allowances. Those amounts and the shared$5 target are not provider invoice ceilings.
+
+The `.tmp/phase53-paid-qualification/charges.jsonl` append-only ledger must cover ALL testing
+lanes under this approval. An exclusive lock serializes admission. Each purchase records a durable
+started receipt before egress; unresolved/crashed attempts block new work. Actual `usage.cost`
+always survives a later metadata, price-variance or image failure. Missing/invalid usage, unknown
+BYOK mode, unexpected identity, rate variance, overrun or ambiguous transport stops rather than
+replaying. A single-use run marker prevents rerunning completed purchases. The process-only
+`OPENROUTER_QUALIFICATION_API_KEY` is neither logged nor persisted; the integration owner controls
+the authorized staging broker. No production key/settings change or deployment is permitted.
+
+Ten focused offline operator tests pass; a prepared manifest is not a live billing or creative
+result. Review `.planning/phases/53-media-and-document-production/53-IMAGE-QUALIFICATION-2026-10-22.md`
+for primary-source limit semantics, explicit access authorization, current digest and execution
+gate. OpenRouter's Images in-flight accounting does not establish a no-overshoot invoice cap;
+standard account/key controls remain additional backstops. Production defaults and prices remain
+unchanged until separate receipt-backed qualification and explicit promotion.
 > Last verified: 2026-10-22 — PR 83 CI triage found a blocking Biome formatting diagnostic on the campaign-lock condition in media.ts. The condition was formatted with the existing repository rules; its ownership, draft-state and prior-reservation checks are unchanged. This is a formatting repair, with no media purchase, job retry, approval, renderer or provider behavior change. Current-source CI remains required after resolving the separate upstream documentation/evaluator-pin conflicts.

@@ -150,6 +150,28 @@ describe("artifact reading canvas", () => {
     expect(download).toHaveBeenCalledTimes(2);
   });
 
+  it("cancels a pending original on selection change and ignores its late failure", async () => {
+    let reject!: (error: Error) => void;
+    let signal: AbortSignal | undefined;
+    const download = vi.fn((value?: AbortSignal) => {
+      signal = value;
+      return new Promise<void>((_resolve, fail) => {
+        reject = fail;
+      });
+    });
+    await act(async () =>
+      root.render(<ArtifactViewerBody artifact={base} onDownload={download} />),
+    );
+    await click("Download original");
+    expect(element.textContent).toContain("Preparing…");
+    await show({ ...base, id: "next", title: "Next document" });
+    expect(signal?.aborted).toBe(true);
+    await act(async () => reject(new Error("late original failure")));
+    expect(element.querySelector("[role=alert]")).toBeNull();
+    expect(element.textContent).not.toContain("Preparing…");
+    expect(element.textContent).toContain("Next document");
+  });
+
   it("provides an honest Office fallback without an external document viewer", async () => {
     await show({
       ...base,

@@ -18,6 +18,43 @@ const convexBin = resolve(backendDir, "node_modules/convex/bin/main.js");
 // Distinctive markers the convex CLI prints on a genuine function failure.
 const FAILURE = /Failed to run function|Uncaught Error|isn't running|not listening/;
 
+// Only the golden runner's existing free query reads may retry a transport failure.
+// Never infer safety from retryOnEmpty: the legacy pack harness also uses it for a turn.
+const TRANSPORT_RETRY_QUERIES = new Set([
+  "blueprint:spineForTenant",
+  "guardrails:evalBudgetStatus",
+  "plans:getById",
+  "skills:inspectTenantSkill",
+  "smoke:briefingCountForThread",
+  "smoke:briefingSynopsisPresent",
+  "smoke:createdDocCountForThread",
+  "smoke:driveReadCountForThread",
+  "smoke:evaluationCountForThread",
+  "smoke:findingCountForThread",
+  "smoke:gapCountForThread",
+  "smoke:imageProposalCountForThread",
+  "smoke:mediaDispatchCountForThread",
+  "smoke:researchCountForThread",
+  "smoke:researchDeclarationPairForThread",
+  "smoke:researchDeclaredUnsupportedForThread",
+  "smoke:researchInsufficientEvidenceForThread",
+  "smoke:revenueEvalFacts",
+  "smoke:specialistCostForThread",
+  "smoke:toolCallsForThread",
+  "smoke:webSearchCallsForThread",
+  "smokeAssert:agentAuthoringStateForThread",
+  "smokeAssert:observedSkillLoads",
+]);
+
+function isReadTransportFailure(error, fn) {
+  if (!(error instanceof Error) || !TRANSPORT_RETRY_QUERIES.has(fn)) return false;
+  const message = error.message.replace(/\r\n/g, "\n");
+  const failure = `Failed to run function "${fn}":\nTypeError: fetch failed`;
+  // Match the observed CLI transport envelope only. Native Uncaught Error/authority
+  // failures, additional payloads and a different function name always stop.
+  return message === failure || message === `✖ ${failure}`;
+}
+
 /**
  * WHICH DEPLOYMENT. `convex run` with no flag targets whatever the local config points at — the DEV
  * deployment — and every pack eval, smoke script and browser provisioning step goes through here.
@@ -61,18 +98,31 @@ function invoke(fn, args) {
  *
  * OPT-IN, never the default, because `must` also wraps `llm:runCockpitAgent` (a retry BILLS a
  * second model turn) and `skills:recordEvalEvidence` (a retry writes a DUPLICATE evidence row).
- * Only pass it for pure, free, idempotent reads.
+ * Listed pure queries also get one retry for the exact CLI TypeError: fetch failed envelope.
+ * Both paths share the same two-invocation ceiling; a failed retry is never retried again.
+ * No transport retry applies to actions, mutations, native authority errors or unknown targets.
+ * Existing legacy empty-stdout behavior is unchanged; only pass it for safe idempotent calls.
  */
-export function must(fn, args = {}, { retryOnEmpty = false, redactErrors = false } = {}) {
-  try {
-    const out = invoke(fn, args);
-    return retryOnEmpty && out.trim() === "" ? invoke(fn, args) : out;
-  } catch (e) {
-    if (redactErrors) throw new Error("CONVEX_FUNCTION_FAILED");
-    console.error(e.message);
-    throw e;
-  }
+export function createMust(run = invoke) {
+  return function must(fn, args = {}, { retryOnEmpty = false, redactErrors = false } = {}) {
+    try {
+      let out;
+      try {
+        out = run(fn, args);
+      } catch (error) {
+        if (!retryOnEmpty || !isReadTransportFailure(error, fn)) throw error;
+        return run(fn, args);
+      }
+      return retryOnEmpty && out.trim() === "" ? run(fn, args) : out;
+    } catch (e) {
+      if (redactErrors) throw new Error("CONVEX_FUNCTION_FAILED");
+      console.error(e.message);
+      throw e;
+    }
+  };
 }
+
+export const must = createMust();
 
 /** Poll until the function succeeds (workflow completion is async). */
 export async function pollPass(fn, args = {}, { tries = 30, delayMs = 1000 } = {}) {

@@ -8,12 +8,13 @@ import {
   validatePresentationSpec,
 } from "@pikar/core/presentation";
 import { useConvex, useQuery } from "convex/react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { MarkdownDocument } from "../MarkdownDocument";
 import type { VaultDoc } from "../vault/DocGrid";
 import { binaryMediaKind, isSpreadsheet } from "../vault/previewState";
 import type { SheetRowsView } from "../vault/SheetGrid";
 import styles from "./artifactViewer.module.css";
+import { downloadOwnedOriginal, OriginalDownloadError } from "./originalDownload";
 import { PdfDocumentViewer } from "./PdfDocumentViewer";
 
 export interface ArtifactViewerData {
@@ -47,16 +48,11 @@ export function ArtifactViewer({ doc, onClose }: { doc: VaultDoc; onClose?: () =
   );
   const sheets = useQuery(api.vault.vaultDocSheets, workbook ? { vaultDocId: doc._id } : "skip");
   const presentation = useQuery(api.vaultPresentations.byDoc, slides ? { docId: doc._id } : "skip");
-  async function download() {
+  async function download(signal?: AbortSignal) {
     const ownedUrl = await convex.query(api.vault.vaultDownloadUrl, { vaultDocId: doc._id });
+    signal?.throwIfAborted();
     if (!ownedUrl) throw new Error("original_unavailable");
-    const anchor = window.document.createElement("a");
-    anchor.href = ownedUrl;
-    anchor.download = doc.title;
-    anchor.rel = "noopener";
-    window.document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
+    await downloadOwnedOriginal(ownedUrl, doc.title, signal ?? new AbortController().signal);
   }
   return (
     <ArtifactViewerBody
@@ -92,7 +88,7 @@ export function ArtifactViewerBody({
   onClose,
 }: {
   artifact: ArtifactViewerData;
-  onDownload?: () => void | Promise<void>;
+  onDownload?: (signal?: AbortSignal) => void | Promise<void>;
   onClose?: () => void;
 }) {
   const [mode, setMode] = useState<"auto" | "reading" | "original">("auto");
@@ -100,14 +96,22 @@ export function ArtifactViewerBody({
   const [sheet, setSheet] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [downloadBusy, setDownloadBusy] = useState(false);
-  const [downloadError, setDownloadError] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const downloadRequest = useRef<AbortController | null>(null);
+  useEffect(() => {
+    void artifact.id; // A different selected file or original source cancels its old download.
+    void artifact.url;
+    setDownloadBusy(false);
+    setDownloadError(null);
+    return () => downloadRequest.current?.abort();
+  }, [artifact.id, artifact.url]);
   useEffect(() => {
     void artifact.id;
     setMode("auto");
     setPage(0);
     setSheet(0);
     setZoom(1);
-    setDownloadError(false);
+    setDownloadError(null);
   }, [artifact.id]);
   const mime = artifact.mimeType;
   const pdf = mime === "application/pdf";
@@ -146,14 +150,22 @@ export function ArtifactViewerBody({
   const canZoom = !video && (!pdf || Boolean(reading));
   async function download() {
     if (!onDownload || downloadBusy) return;
+    downloadRequest.current?.abort();
+    const request = new AbortController();
+    downloadRequest.current = request;
     setDownloadBusy(true);
-    setDownloadError(false);
+    setDownloadError(null);
     try {
-      await onDownload();
-    } catch {
-      setDownloadError(true);
+      await onDownload(request.signal);
+    } catch (error) {
+      if (!request.signal.aborted && downloadRequest.current === request)
+        setDownloadError(
+          error instanceof OriginalDownloadError && error.code === "byte_limit"
+            ? "This original exceeds the 200 MB download limit. Contact support for the full file."
+            : "The original couldn't be downloaded. Please try again.",
+        );
     } finally {
-      setDownloadBusy(false);
+      if (!request.signal.aborted && downloadRequest.current === request) setDownloadBusy(false);
     }
   }
   const downloadAvailable = artifact.hasOriginal && onDownload;
@@ -339,7 +351,7 @@ export function ArtifactViewerBody({
       </header>
       {downloadError ? (
         <p className={styles.downloadError} role="alert">
-          The original couldn't be opened. Please try again.
+          {downloadError}
         </p>
       ) : null}
       {presentation || currentSheet || canZoom || (pdf && artifact.markdown && artifact.text) ? (

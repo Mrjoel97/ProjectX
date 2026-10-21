@@ -5,6 +5,7 @@ import { useQuery } from "convex/react";
 import type { GenericId } from "convex/values";
 import { useEffect, useRef, useState } from "react";
 import { ArtifactViewerBody } from "../artifacts/ArtifactViewer";
+import { downloadOwnedOriginal } from "../artifacts/originalDownload";
 import { ImageIcon, VideoIcon } from "../vault/icons";
 import styles from "./CampaignCollection.module.css";
 import { CampaignCard } from "./MediaCampaign";
@@ -178,17 +179,12 @@ export function CampaignCollection({
                 }}
                 onDownload={
                   url
-                    ? () => {
-                        const anchor = document.createElement("a");
-                        anchor.href = url;
-                        anchor.download =
-                          selected.kind === "image" ? "campaign-image.png" : "campaign-video.mp4";
-                        anchor.target = "_blank";
-                        anchor.rel = "noreferrer";
-                        document.body.appendChild(anchor);
-                        anchor.click();
-                        anchor.remove();
-                      }
+                    ? (signal) =>
+                        downloadOwnedOriginal(
+                          url,
+                          selected.kind === "image" ? "campaign-image.png" : "campaign-video.mp4",
+                          signal ?? new AbortController().signal,
+                        )
                     : undefined
                 }
               />

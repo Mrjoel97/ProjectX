@@ -22,6 +22,7 @@ export const EVALUATOR_FILES = [
   "packages/backend/convex/render/assembleScript.ts",
   "packages/contracts/src/skills/presentationDrafter.ts",
   "packages/core/src/mediaCampaign.ts",
+  "packages/core/src/mediaProviderContract.ts",
   "packages/core/src/workspaceArtifacts.ts",
   "packages/core/src/presentation.ts",
   "packages/core/src/workbookReport.ts",

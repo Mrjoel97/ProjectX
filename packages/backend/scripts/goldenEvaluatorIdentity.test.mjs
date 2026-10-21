@@ -75,10 +75,15 @@ test("extracted research, PDF and media-query behavior remains part of evaluator
   assert.equal(computeEvaluatorRevision(root), before);
 });
 
-test("capability routing edits retire both live evaluator identities without changing corpus bytes", (t) => {
-  const relativePath = "packages/backend/convex/cockpitCapabilities.ts";
-  assert.ok(EVALUATOR_FILES.includes(relativePath));
-  assert.ok(VERTICAL_EVALUATOR_FILES.includes(relativePath));
+test("routing and shared CLI edits retire both evaluator identities without changing corpus bytes", (t) => {
+  const dependencies = [
+    "packages/backend/convex/cockpitCapabilities.ts",
+    "packages/backend/scripts/smokeRun.mjs",
+  ];
+  for (const relativePath of dependencies) {
+    assert.ok(EVALUATOR_FILES.includes(relativePath));
+    assert.ok(VERTICAL_EVALUATOR_FILES.includes(relativePath));
+  }
   const root = fixtureRoot(t);
   const fixtureBytes = CORPUS_IDS.map((id) => {
     const path = `packages/backend/scripts/vertical-eval-cases/${id}.json`;
@@ -89,18 +94,20 @@ test("capability routing edits retire both live evaluator identities without cha
   });
   const goldenBefore = computeEvaluatorRevision(root);
   const verticalBefore = renderCorpus(root);
-  const sourcePath = join(root, relativePath);
-  const original = readFileSync(sourcePath, "utf8");
-  writeFileSync(sourcePath, original.replace("value = 1", "value = 2"));
-  assert.notEqual(computeEvaluatorRevision(root), goldenBefore);
-  const verticalAfter = renderCorpus(root);
-  assert.notEqual(verticalAfter, verticalBefore);
-  const withoutRevision = (value) =>
-    value.replace(/(VERTICAL_EVALUATOR_REVISION =\n  ")[a-f0-9]{64}(";)/, "$1$2");
-  assert.equal(withoutRevision(verticalAfter), withoutRevision(verticalBefore));
-  for (const { path, bytes } of fixtureBytes)
-    assert.deepEqual(readFileSync(join(root, path)), bytes);
-  writeFileSync(sourcePath, original);
-  assert.equal(computeEvaluatorRevision(root), goldenBefore);
-  assert.equal(renderCorpus(root), verticalBefore);
+  for (const relativePath of dependencies) {
+    const sourcePath = join(root, relativePath);
+    const original = readFileSync(sourcePath, "utf8");
+    writeFileSync(sourcePath, original.replace("value = 1", "value = 2"));
+    assert.notEqual(computeEvaluatorRevision(root), goldenBefore, relativePath);
+    const verticalAfter = renderCorpus(root);
+    assert.notEqual(verticalAfter, verticalBefore, relativePath);
+    const withoutRevision = (value) =>
+      value.replace(/(VERTICAL_EVALUATOR_REVISION =\n {2}")[a-f0-9]{64}(";)/, "$1$2");
+    assert.equal(withoutRevision(verticalAfter), withoutRevision(verticalBefore));
+    for (const { path, bytes } of fixtureBytes)
+      assert.deepEqual(readFileSync(join(root, path)), bytes);
+    writeFileSync(sourcePath, original);
+    assert.equal(computeEvaluatorRevision(root), goldenBefore);
+    assert.equal(renderCorpus(root), verticalBefore);
+  }
 });

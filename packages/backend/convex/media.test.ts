@@ -1057,11 +1057,12 @@ describe("listJobs: the per-plan detail, as a projection", () => {
 // Everything below is $0: `fetch` is a spy in every test, and `FAL_FIXTURE` covers the rest.
 
 const mediaSource = (
-  import.meta.glob("./media.ts", { query: "?raw", import: "default", eager: true }) as Record<
-    string,
-    string
-  >
-)["./media.ts"];
+  import.meta.glob("../../core/src/mediaProviderContract.ts", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>
+)["../../core/src/mediaProviderContract.ts"];
 /** Comments stripped — the invariants below are about the CODE surface, and this module's prose
  *  legitimately NAMES the things it forbids (a poll, a wait, a provider default). */
 const mediaCode = (mediaSource ?? "")

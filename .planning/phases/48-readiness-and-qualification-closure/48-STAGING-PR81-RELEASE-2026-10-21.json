@@ -1,0 +1,44 @@
+{
+  "schema": "phase48-pr81-staging-release-observation.v1",
+  "authorizationAnswerVerbatim": "i approve",
+  "authorizationSha256": "03f5acec88477108003f5d452ac1f7e47627634f0180c5a97d4ad9696d3ef9da",
+  "pullRequest": 81,
+  "mergedSha": "821c3206e47eb4cec0ebcf3d99cf943358f2910a",
+  "ciJobId": 119274837069,
+  "runId": 39618889468,
+  "jobId": 119286711355,
+  "observedAt": "2026-10-21T14:43:34.252Z",
+  "releaseObservationSha256": "6be10594d998065e4f42d57dae05be88a31a0fa36e1b2f431d32796c424e79ba",
+  "release": {
+    "schema": "phase48-staging-release.v1",
+    "target": "woozy-wren-368",
+    "success": true,
+    "phase": "complete",
+    "preflightPassed": true,
+    "billingLabelsMayHaveChanged": false,
+    "billingLabelsVerified": true,
+    "applyAttempted": true,
+    "applyCompleted": true,
+    "postflightAttempted": true,
+    "postflightPassed": true,
+    "preservationVerified": true,
+    "postflightParityZero": true,
+    "privateDiagnosticsSuppressed": true,
+    "sourceSha": "cafde7c6c7d65924b7a48433cf4938983d91707c",
+    "ciRunId": "39615369973",
+    "authorizationSha256": "03f5acec88477108003f5d452ac1f7e47627634f0180c5a97d4ad9696d3ef9da",
+    "before": {
+      "watchedConfigurationSha256": "3e6655cf6ff6c1bff7e603a8122065de8f21cdc754ed87962ca731dc42698b89",
+      "registrySha256": "faac155d8c90d9205f2aa95072a520e50e727964974e64a6f62676bea73480e3",
+      "protectedRetentionSha256": "2ecc1945e018a9af66614a2dfceb8a71209f8b480c8015e73eed9b08d9590163"
+    },
+    "after": {
+      "watchedConfigurationSha256": "3e6655cf6ff6c1bff7e603a8122065de8f21cdc754ed87962ca731dc42698b89",
+      "registrySha256": "faac155d8c90d9205f2aa95072a520e50e727964974e64a6f62676bea73480e3",
+      "protectedRetentionSha256": "2ecc1945e018a9af66614a2dfceb8a71209f8b480c8015e73eed9b08d9590163"
+    }
+  },
+  "paidEvaluationAuthorized": false,
+  "activationAuthorized": false,
+  "productionDeploymentAuthorized": false
+}
