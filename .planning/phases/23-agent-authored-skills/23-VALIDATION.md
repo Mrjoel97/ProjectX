@@ -67,6 +67,7 @@ created: 2026-08-12
 | 23-07-02 | 07 | 7 | SKILL-02 | spend authorization | exact candidate/full 46-case suite/$2 one-attempt approval bbe9dea3…d2e64; no extra attribution turn | manual | ✅ green 2026-10-20 |
 | 23-07-03 | 07 | 7 | SKILL-02 | paid held-out gate | run 0b8d825d interrupted:7 reported passes/0 fails, case 08 no verdict; normally closed budget/no passing evidence or result artifact | ✅ | ⚠️ partial 2026-10-20 |
 | 23-07-03 (October21 attempt) | 07 | 7 | SKILL-02 | paid held-out gate | separate run31a81b38 on b107/d122:28 reported passes/0 fails/0 retries; next fixture no verdict/17 later cases unattempted; native EVAL_BUDGET_EXHAUSTED; guarded closure198 settled/0 holds/$0.14551101; no passing evidence | ✅ | ⚠️ partial 2026-10-21, historical suite |
+| 23-07 startup (PR81) | 07 | 7 | SKILL-02 | startup transport / native zero-work reconciliation | consumed c663 approval; first read-only skills:inspectTenantSkill failed with TypeError fetch failed;0 case verdicts, no budget/root/run/evidence; complete bounded native window0new spend/envelopes/movements; historical bills preserved | read-only/manual | ⚠️ terminal startup abort; no semantic gate |
 | 23-07-04 | 07 | 7 | SKILL-02 | public non-owner refusal | fresh native authenticated B app/client public mutation without token extraction + exact eval-result validation | ✅/manual | ⬜ pending |
 | 23-08-01 | 08 | 8 | SKILL-02 | immutable recheck | handoff+eval validators, state/auth/cap comparison | ✅/❌ W0 | ⬜ pending |
 | 23-08-02 | 08 | 8 | SKILL-02 | owner UI activation | blocking owner human-action + exact readback | manual | ⬜ pending |
@@ -243,3 +244,29 @@ PR81 stage/handoff approval includes no paid evaluation, activation or productio
 paidReady/paidAuthorized stay false. New exact-source preflight and fresh paid consent remain
 pending. No complete eval-result, public B refusal, activation or lifecycle closure is certified.
 Phase23 remains6/9, 23-07 partial, 23-08/09 pending, SKILL-02 open, Phase48 partial and49 not started.
+
+## PR81 terminal startup and offline helper source
+
+See [the separate immutable startup observation](23-07-STARTUP-2026-10-21-PR81.json) (SHA256 `8815857b7e559e24c4daf42a2092f0e0ae7b163d329ea0c12b67e3abb851bb2c`).
+The separately approved PR81 attempt consumed authorization SHA256
+`c663e7a1b3dbe2f6060a41d2beb152de4578b0e12a86839419a456041ce2de1d` when its exclusive once record
+was written and the runner started at`2026-10-21T17:11:44.900Z`. It stopped at startup
+with`skills:inspectTenantSkill` reporting`TypeError: fetch failed`, before budget opening,
+fixture writes or provider work; zero cases were judged. The earlier wrapper admission-only
+exit had no once record or runner start and is not a second full attempt. A complete bounded
+native creation-time window, including a two-minute pre-attempt margin through server
+observation, returned zero spend rows, zero new envelopes and zero evaluation movements.
+Both historical closed budgets and bills are unchanged. No new budget, run/root identity,
+evidence, public B mutation, activation, cleanup or production change was observed.
+The consumed once record is not reset; native zero-work reconciliation permits no replay.
+
+The narrow helper repair is offline only: golden revision
+`2026-09-11.budgeted-evaluator.825ef5cab4634d8560249094e8e6db1ad841732d72545bcf8fa57214f5965b51`
+and vertical revision`01d6d6908bd0eecac14bc30b1f90a88edb0db8f14c4cc46fc8fa2f036a724425`
+retain the unchanged 46-case golden and 40-case vertical corpora. The deployed source remains
+`cafde7c6c7d65924b7a48433cf4938983d91707c` with 5867/5dbe suite and immutable 39df
+handoff; that chain does not qualify the new helper source. Exact-source CI, reviewed staging
+release, a new versioned handoff and fresh paid approval must precede another attempt.
+No evaluation or source-deployment retry is authorized by the consumed approval.
+
+Original certified artifacts and checkpoints remain immutable. No eval-result, public B refusal or lifecycle closure is certified. Phase 23 stays 6/9, 23-07 partial, 23-08/09 pending, SKILL-02 open, Phase 48 partial and49 not started.

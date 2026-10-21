@@ -482,4 +482,31 @@ SHA256 `32ca4afd73d5aece2b645acae84f4739234c65cf231c4ef2c7a3146b28cbdc60`, binds
 readback/browser receipt hashes and both immutable predecessor hashes. The next
 [proposed checkpoint](../23-agent-authored-skills/23-07-CHECKPOINT-2026-10-21-PR81.md), SHA256
 `deb8215f29b273c0d7a5509b25b41c75cf209c9fba0ff5c7b58f0123323172d4`, supplies a concrete review
-scope only; no new spending consent has been received.
+scope only at that refresh boundary. Its later approval was consumed by the terminal startup attempt below.
+
+## PR81 startup stop and unstaged read-only helper repair
+
+The separately approved PR81 attempt consumed authorization SHA256
+`c663e7a1b3dbe2f6060a41d2beb152de4578b0e12a86839419a456041ce2de1d` when its exclusive once record
+was written and the runner started at`2026-10-21T17:11:44.900Z`. It stopped at startup
+with`skills:inspectTenantSkill` reporting`TypeError: fetch failed`, before budget opening,
+fixture writes or provider work; zero cases were judged. The earlier wrapper admission-only
+exit had no once record or runner start and is not a second full attempt. A complete bounded
+native creation-time window, including a two-minute pre-attempt margin through server
+observation, returned zero spend rows, zero new envelopes and zero evaluation movements.
+Both historical closed budgets and bills are unchanged. No new budget, run/root identity,
+evidence, public B mutation, activation, cleanup or production change was observed.
+The consumed once record is not reset; native zero-work reconciliation permits no replay.
+
+[The immutable startup observation](../23-agent-authored-skills/23-07-STARTUP-2026-10-21-PR81.json) (SHA256 `8815857b7e559e24c4daf42a2092f0e0ae7b163d329ea0c12b67e3abb851bb2c`) records the stop and complete bounded native zero-work window.
+
+The narrow helper repair is offline only: golden revision
+`2026-09-11.budgeted-evaluator.825ef5cab4634d8560249094e8e6db1ad841732d72545bcf8fa57214f5965b51`
+and vertical revision`01d6d6908bd0eecac14bc30b1f90a88edb0db8f14c4cc46fc8fa2f036a724425`
+retain the unchanged 46-case golden and 40-case vertical corpora. The deployed source remains
+`cafde7c6c7d65924b7a48433cf4938983d91707c` with 5867/5dbe suite and immutable 39df
+handoff; that chain does not qualify the new helper source. Exact-source CI, reviewed staging
+release, a new versioned handoff and fresh paid approval must precede another attempt.
+No evaluation or source-deployment retry is authorized by the consumed approval.
+
+Phase21 acceptance and all immutable predecessors remain preserved. Phase 23 stays 6/9, 48-02 partial/SKILL-02 open, Phase 48 partial and49 not started; unqualified verticals stay unavailable and Buffer/Zernio exceptions retain their existing limits.

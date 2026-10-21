@@ -282,7 +282,7 @@ corpus. The current deployedb107/ce31 input and all prior immutable records reta
 meaning. A reviewed new staging release and a new source-bound handoff must precede any new paid
 checkpoint. No staging or production deployment, further evaluation or activation occurred.
 
-## Current PR81 staging release and versioned handoff, without new paid consent
+## Historical PR81 staging release and handoff refresh boundary
 
 The later verbatim **“i approve”** authorized merging PR81, staging-only release of exact
 source `cafde7c6c7d65924b7a48433cf4938983d91707c`, existing-account checks and a new handoff.
@@ -324,12 +324,39 @@ SHA256 `32ca4afd73d5aece2b645acae84f4739234c65cf231c4ef2c7a3146b28cbdc60`, binds
 fresh state/UI witnesses and preserved historical hashes. The current
 [proposed PR81 checkpoint](23-07-CHECKPOINT-2026-10-21-PR81.md), SHA256
 `deb8215f29b273c0d7a5509b25b41c75cf209c9fba0ff5c7b58f0123323172d4`, is the new exact-source
-scope awaiting consent. The earlier October21 b107 checkpoint is consumed historical authority,
+scope that awaited consent at the refresh boundary. Its later PR81 approval and startup outcome are recorded below. The earlier October21 b107 checkpoint is consumed historical authority,
 not current permission to spend.
 
-This is now the next input for 23-07/08/09. Future eval/accounting/live results must be siblings
+At that boundary this was the next input for23-07/08/09. Result artifacts for that source were to be siblings
 in `handoffs/2026-10-21-pr81/`; the PR79 directory is historical. Readiness and the new handoff
 retain `paidReady:false` and `paidAuthorized:false`. No new full evaluation, public B mutation,
 owner activation, rollback, cleanup or production change followed. Fresh exact-source preflight
 and separately approved evaluation remain required; a proposed checkpoint is not consent.
 Phase23 remains6/9, 23-07 partial, 23-08/09 open, SKILL-02 open, Phase48 partial and49 not started.
+
+## PR81 authorized startup abort; zero new native work
+
+The separately approved PR81 attempt consumed authorization SHA256
+`c663e7a1b3dbe2f6060a41d2beb152de4578b0e12a86839419a456041ce2de1d` when its exclusive once record
+was written and the runner started at`2026-10-21T17:11:44.900Z`. It stopped at startup
+with`skills:inspectTenantSkill` reporting`TypeError: fetch failed`, before budget opening,
+fixture writes or provider work; zero cases were judged. The earlier wrapper admission-only
+exit had no once record or runner start and is not a second full attempt. A complete bounded
+native creation-time window, including a two-minute pre-attempt margin through server
+observation, returned zero spend rows, zero new envelopes and zero evaluation movements.
+Both historical closed budgets and bills are unchanged. No new budget, run/root identity,
+evidence, public B mutation, activation, cleanup or production change was observed.
+The consumed once record is not reset; native zero-work reconciliation permits no replay.
+
+[The separate immutable startup observation](23-07-STARTUP-2026-10-21-PR81.json) (SHA256 `8815857b7e559e24c4daf42a2092f0e0ae7b163d329ea0c12b67e3abb851bb2c`) preserves the actual local stop and bounded native reconciliation; neither stdout absence nor null local budget fields alone establishes zero spend. No full-suite verdict or passing evaluation artifact exists.
+
+The narrow helper repair is offline only: golden revision
+`2026-09-11.budgeted-evaluator.825ef5cab4634d8560249094e8e6db1ad841732d72545bcf8fa57214f5965b51`
+and vertical revision`01d6d6908bd0eecac14bc30b1f90a88edb0db8f14c4cc46fc8fa2f036a724425`
+retain the unchanged 46-case golden and 40-case vertical corpora. The deployed source remains
+`cafde7c6c7d65924b7a48433cf4938983d91707c` with 5867/5dbe suite and immutable 39df
+handoff; that chain does not qualify the new helper source. Exact-source CI, reviewed staging
+release, a new versioned handoff and fresh paid approval must precede another attempt.
+No evaluation or source-deployment retry is authorized by the consumed approval.
+
+The original/PR79/PR81 handoffs, checkpoints and both prior partial receipts remain byte-identical. This startup attempt is distinct from the earlier28-pass paid run and is not an extra case failure. Phase 23 remains 6/9, 23-07 partial, 23-08/09 pending, SKILL-02 open, Phase 48 partial and49 not started.

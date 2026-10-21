@@ -27,6 +27,18 @@ admission checks are required for another23-07 run. Phase23 remains6/9, Phase48p
 Phase49notstarted pending48-04's readiness seal. Existing Buffer publishing and Zernio reporting
 exceptions remain bounded; unqualified verticals stay excluded.
 
+## Latest PR81 startup disposition
+
+[The separate immutable startup observation](../23-agent-authored-skills/23-07-STARTUP-2026-10-21-PR81.json) (SHA256 `8815857b7e559e24c4daf42a2092f0e0ae7b163d329ea0c12b67e3abb851bb2c`)
+records consumed authorization c663, the first read-only candidate-inspection fetch failure,
+zero judged cases and a complete bounded native window with zero new spend rows, envelopes
+or evaluation movements. No budget/root/run/evidence or public B mutation was produced.
+Both prior closed paid attempts remain unchanged. The caf/5867/39df handoff qualifies only
+the deployed old source; offline golden 825ef/vertical 01d6 need exact-source CI, reviewed
+staging release, a new versioned handoff and fresh consent before another attempt. Neither
+existing approval nor zero-work reconciliation permits replay. Phase 23 stays 6/9, 48 partial
+and49 not started; no eval/live result, activation or production authority is created.
+
 ## Reuse and dependencies
 
 Existing Phase 21 acceptance; consumes Phase 23 plans 06–09 and Phase 27 plan 09.

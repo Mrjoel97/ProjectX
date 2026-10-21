@@ -19,6 +19,7 @@ export const EVALUATOR_FILES = [
   "pnpm-lock.yaml",
   "packages/backend/scripts/vertical-eval-corpus.mjs",
   "packages/backend/scripts/vertical-eval-collect.mjs",
+  "packages/backend/scripts/smokeRun.mjs",
   "packages/backend/scripts/vertical-eval-sources.mjs",
   "packages/backend/scripts/vertical-eval-observations.mjs",
   "packages/backend/scripts/vertical-eval-review.mjs",
