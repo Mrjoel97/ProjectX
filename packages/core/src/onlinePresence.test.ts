@@ -212,6 +212,7 @@ test("progress requires exact immutable artifact receipts and never inherits ano
 test("the service grant contains only context, draft and build tools, with a complete registry mirror", async () => {
   expect(ONLINE_PRESENCE_TOOLS).toEqual([
     "readOnlinePresenceContext",
+    "prepareOnlinePresenceAssets",
     "searchVault",
     "saveOnlinePresenceBrief",
     "buildOnlinePresenceProject",

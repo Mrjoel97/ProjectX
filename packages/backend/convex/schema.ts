@@ -38,7 +38,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 const webRecipeName = literals(WEB_RECIPE_SKILL_NAMES);
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 78 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 79 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -51,7 +51,7 @@ const webRecipeName = literals(WEB_RECIPE_SKILL_NAMES);
 // │                                                                            │
 // │ ── Content & Pipeline ──────────────────────────────────── ~L334           │
 // │   requests, plans, briefings, intakeArtifacts, attachments,                │
-// │   webProjects, webProjectVersions, webMetrics, webSubmissions,             │
+// │   webProjects, webProjectVersions, webAssets, webMetrics, webSubmissions,  │
 // │   onlinePresenceSessions, telemetry, demoItems, funnels                                            │
 // │                                                                            │
 // │ ── Agent ───────────────────────────────────────────────── ~L998           │
@@ -2614,6 +2614,7 @@ export default defineSchema({
     // (§2.5), never by a status query. ⚠ Read it with a bounded `.take()` and project `text` away;
     // see the `folderId` comment above for why a `.collect()` here is a 16 MiB read-cap fault.
     .index("by_tenant_folder", ["tenantId", "folderId"])
+    .index("by_tenant_mime_status", ["tenantId", "mimeType", "status"])
     // Phase-15.3. The Drive re-import primary key: "have I already imported this Drive file for
     // this tenant?" — answered without scanning the partition.
     .index("by_tenant_driveFileId", ["tenantId", "driveFileId"])
@@ -4099,6 +4100,22 @@ export default defineSchema({
     // `isolation.test.ts`: the rollup is deployment-wide and has no tenant in hand until it reads
     // a row. Every consumer is an internalMutation reached only from the cron.
     .index("by_status_dueAt", ["status", "dueAt"]),
+  /** Immutable raster copies explicitly selected for private website preparation. */
+  webAssets: defineTable({
+    tenantId: v.string(),
+    vaultDocumentId: v.id("vaultDocuments"),
+    sourceRevision: v.string(),
+    storageId: v.id("_storage"),
+    contentHash: v.string(),
+    mimeType: v.union(v.literal("image/png"), v.literal("image/jpeg"), v.literal("image/webp")),
+    byteLength: v.number(),
+    width: v.number(),
+    height: v.number(),
+    title: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_source", ["tenantId", "vaultDocumentId", "sourceRevision"]),
   webProjects: defineTable({
     tenantId: v.string(),
     kind: v.union(v.literal("site"), v.literal("landing"), v.literal("storefront")),
@@ -4159,6 +4176,24 @@ export default defineSchema({
     createdAt: v.number(),
     basedOnVersion: v.optional(v.number()),
     sourceRefs: v.array(v.string()),
+    assetSnapshots: v.optional(
+      v.array(
+        v.object({
+          assetId: v.id("webAssets"),
+          assetRef: v.string(),
+          contentHash: v.string(),
+          mimeType: v.union(
+            v.literal("image/png"),
+            v.literal("image/jpeg"),
+            v.literal("image/webp"),
+          ),
+          byteLength: v.number(),
+          width: v.number(),
+          height: v.number(),
+          sourceRef: v.string(),
+        }),
+      ),
+    ),
     // Immutable disclosure warnings belong to this exact rendered version, never today's brief.
     sourceWarnings: v.optional(
       v.array(v.object({ code: v.string(), sourceRef: v.optional(v.string()) })),

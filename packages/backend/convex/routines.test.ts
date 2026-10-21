@@ -266,6 +266,7 @@ const CONVEX_MODULES = [
   "voiceControl.ts",
   "voiceDoc.ts",
   "voiceToken.ts",
+  "webAssets.ts",
   "webForms.ts",
   "webHttp.ts",
   "webProjects.ts",

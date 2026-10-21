@@ -588,6 +588,13 @@
     "apps/web/playwright.design.config.ts",
     "apps/web/e2e/online-presence-design.spec.ts",
     "packages/backend/convex/webProjectLegacyRendering.test.ts",
-    "packages/backend/scripts/webRecipeEvaluatorIdentity.mjs"
+    "packages/backend/scripts/webRecipeEvaluatorIdentity.mjs",
+    "packages/core/src/webAssets",
+    "packages/backend/convex/webAssets",
+    "apps/web/e2e/fixtures/online-presence/",
+    "packages/contracts/src/tenantCommerce",
+    "packages/core/src/tenantCommerce",
+    "packages/core/src/tenantInventory",
+    "packages/core/src/tenantOrder"
   ]
 }

@@ -598,16 +598,32 @@ test("routing lookup is tenant-bound and source excerpts have a fixed content bu
   expect(context.latestUserMessage).toBe("Acme designs gardens for homeowners.");
 });
 
-test("the real specialist loop reads context, saves a brief, and builds real versioned pages through its frozen tools", async () => {
+test("the real specialist loop prepares owned imagery, saves a brief, and builds real versioned pages through its frozen tools", async () => {
   const { t, tenantId, planId, threadId, session, brief } = await setup(
     "Acme designs gardens. Our established brand color is #246B58. Services include planting plans. Acme guides projects from the first layout to the planting plan.",
   );
-  const designedBrief = {
-    ...brief,
-    services: ["Planting plans"],
-    about: "Acme guides projects from the first layout to the planting plan.",
-    design: { artDirection: "studio", primaryColor: "#246b58" },
-  };
+  const image = new Uint8Array(
+    readFileSync(
+      new URL("../../../apps/web/e2e/fixtures/online-presence/design-study.png", import.meta.url),
+    ),
+  );
+  const imageSource = await t.run(async (ctx) => {
+    const storageId = await ctx.storage.store(new Blob([image], { type: "image/png" }));
+    const id = await ctx.db.insert("vaultDocuments", {
+      tenantId,
+      title: "Garden illustration",
+      source: "upload",
+      kind: "upload",
+      category: "media",
+      mimeType: "image/png",
+      size: image.length,
+      contentHash: "owned-source-version",
+      storageId,
+      status: "ready",
+      createdAt: 1,
+    });
+    return { sourceRef: `vault:${id}`, storageId };
+  });
   await activeRecipe(t);
   await t.run((ctx) =>
     ctx.db.insert("skills", {
@@ -635,8 +651,62 @@ test("the real specialist loop reads context, saves a brief, and builds real ver
     usage,
     warnings: [],
   });
+  const actionCtx = {
+    runQuery: t.query.bind(t),
+    runMutation: t.mutation.bind(t),
+    runAction: t.action.bind(t),
+  } as unknown as Parameters<typeof runSpecialistTurn>[0];
+  // The first real tool turn materializes the opaque ref. The following turn exercises a safe
+  // preparation retry and supplies exactly that server-produced asset in the model's brief.
+  const preparation = await runSpecialistTurn(actionCtx, {
+    tenantId,
+    planId,
+    threadId,
+    turnId: "online-presence-image-preparation",
+    skillName: "online-presence-specialist",
+    toolNames: ONLINE_PRESENCE_TOOLS,
+    prompt: "Prepare the owned garden illustration for my website.",
+    mockScript: {
+      primary: [
+        toolStep("readOnlinePresenceContext", {}),
+        toolStep("prepareOnlinePresenceAssets", { sourceRefs: [imageSource.sourceRef] }),
+        {
+          content: [{ type: "text", text: "The image is prepared for the private draft." }],
+          finishReason: { unified: "stop", raw: "stop" },
+          usage,
+          warnings: [],
+        },
+      ],
+    },
+  });
+  expect(preparation.toolTrace).toEqual([
+    "readOnlinePresenceContext",
+    "prepareOnlinePresenceAssets",
+  ]);
+  const assets = await t.run((ctx) => ctx.db.query("webAssets").collect());
+  expect(assets).toHaveLength(1);
+  const asset = assets[0];
+  if (!asset) throw new Error("Actual image preparation did not complete");
+  expect(asset.storageId).not.toBe(imageSource.storageId);
+  const assetRef = `webasset:${asset._id}:${asset.contentHash.slice(7)}`;
+  const designedBrief = {
+    ...brief,
+    sourceRefs: [...brief.sourceRefs, imageSource.sourceRef],
+    services: ["Planting plans"],
+    about: "Acme guides projects from the first layout to the planting plan.",
+    design: { artDirection: "studio", primaryColor: "#246b58" },
+    media: {
+      hero: {
+        storageRef: assetRef,
+        alt: "An illustration of planting in a garden",
+        crop: "cover",
+        aspect: "landscape",
+      },
+    },
+  };
   const script = [
     toolStep("readOnlinePresenceContext", {}),
+    toolStep("prepareOnlinePresenceAssets", { sourceRefs: [imageSource.sourceRef] }),
     toolStep("saveOnlinePresenceBrief", {
       brief: designedBrief,
       expectedRevision: session.revision,
@@ -651,11 +721,6 @@ test("the real specialist loop reads context, saves a brief, and builds real ver
       warnings: [],
     },
   ];
-  const actionCtx = {
-    runQuery: t.query.bind(t),
-    runMutation: t.mutation.bind(t),
-    runAction: t.action.bind(t),
-  } as unknown as Parameters<typeof runSpecialistTurn>[0];
   const result = await runSpecialistTurn(actionCtx, {
     tenantId,
     planId,
@@ -669,6 +734,7 @@ test("the real specialist loop reads context, saves a brief, and builds real ver
   expect(result.truncated).toBe(false);
   expect(result.toolTrace).toEqual([
     "readOnlinePresenceContext",
+    "prepareOnlinePresenceAssets",
     "saveOnlinePresenceBrief",
     "buildOnlinePresenceProject",
   ]);
@@ -680,6 +746,18 @@ test("the real specialist loop reads context, saves a brief, and builds real ver
   expect(versions[0]?.document.pages.length).toBeGreaterThan(1);
   expect(versions[0]?.document.brand.primaryColor).toBe("#246b58");
   expect(versions[0]?.recipeRef?.designProfile.artDirection).toBe("studio");
+  expect(versions[0]?.assetSnapshots).toContainEqual(
+    expect.objectContaining({
+      assetRef,
+      sourceRef: imageSource.sourceRef,
+      contentHash: asset.contentHash,
+    }),
+  );
+  expect(versions[0]?.artifacts?.[0]?.html).toContain(`data-asset-ref="${assetRef}"`);
+  expect(versions[0]?.sourceWarnings).toContainEqual({
+    code: "private_source",
+    sourceRef: imageSource.sourceRef,
+  });
   expect(versions[0]?.sourceWarnings).toContainEqual({
     code: "publication_permission_unset",
     sourceRef: session.sourceRef,
@@ -710,9 +788,11 @@ test("the real specialist loop reads context, saves a brief, and builds real ver
       version: 1,
     });
   expect(formerReview?.sourceWarnings).toEqual(userReview?.sourceWarnings);
-  expect(formerReview?.sourceWarnings.some((warning) => warning.code === "private_source")).toBe(
-    false,
-  );
+  expect(
+    formerReview?.sourceWarnings.some(
+      (warning) => warning.code === "private_source" && warning.sourceRef === `vault:${newSource}`,
+    ),
+  ).toBe(false);
   const project = await t.run((ctx) => ctx.db.get(stored.artifact?.projectId as Id<"webProjects">));
   expect(project?.publishedVersion).toBeUndefined();
 });

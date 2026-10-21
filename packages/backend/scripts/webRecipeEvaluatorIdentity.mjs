@@ -13,6 +13,9 @@ export const WEB_RECIPE_EVALUATOR_FILES = [
   "packages/backend/convex/webRecipeEvals.ts",
   "packages/backend/convex/webRecipes.ts",
   "packages/backend/convex/webProjects.ts",
+  "packages/backend/convex/webAssets.ts",
+  "packages/backend/convex/webHttp.ts",
+  "packages/backend/convex/webRuntime.ts",
   "packages/backend/convex/skills.ts",
   "packages/backend/convex/schema.ts",
   "packages/backend/convex/lib/functions.ts",
@@ -23,6 +26,7 @@ export const WEB_RECIPE_EVALUATOR_FILES = [
   "packages/core/src/webRecipeFixtures.ts",
   "packages/core/src/webDesignRenderer.ts",
   "packages/core/src/webRuntime.ts",
+  "packages/core/src/webAssets.ts",
   "packages/core/src/designKnowledge.ts",
   "packages/core/src/designKnowledge.generated.ts",
 ].sort();

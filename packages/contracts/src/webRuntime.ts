@@ -1,8 +1,8 @@
 /** Closed, serializable contracts for tenant-owned sites and landing pages. */
 
-// v3 keeps the brand link inside its project. Stored earlier artifacts retain
+// v4 adds immutable, hash-bound raster media. Stored earlier artifacts retain
 // their original renderer identity and bytes; callers must never regenerate them in place.
-export const WEB_RENDERER_VERSION = "web-runtime-v3" as const;
+export const WEB_RENDERER_VERSION = "web-runtime-v4" as const;
 export const IDEMPOTENCY_RETENTION_MS = 24 * 60 * 60 * 1000;
 export const ABUSE_BUCKET_RETENTION_MS = 15 * 60 * 1000;
 
@@ -103,6 +103,7 @@ export type WebBrand = {
   readonly name: string;
   readonly primaryColor?: string;
   readonly logoStorageRef?: string;
+  readonly logo?: { readonly storageRef: string; readonly alt: string };
 };
 
 export type WebNavigationItem = {
@@ -138,6 +139,10 @@ export type WebMediaNode = {
   readonly kind: "media";
   readonly storageRef: string;
   readonly alt: string;
+  readonly crop?: "cover" | "contain";
+  readonly placement?: "hero" | "gallery" | "inline";
+  readonly aspect?: "landscape" | "portrait" | "square";
+  readonly focalPoint?: { readonly x: number; readonly y: number };
 };
 /**
  * A publisher-authored catalogue item. This is deliberately a presentation-only shape: it has

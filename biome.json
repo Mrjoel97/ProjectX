@@ -62,6 +62,7 @@
         "packages/backend/convex/lib/functions.ts",
         "packages/backend/convex/invites.ts",
         "packages/backend/convex/webHttp.ts",
+        "packages/backend/convex/webAssets.ts",
         "packages/backend/convex/webProjects.ts",
         "packages/backend/convex/webRuntime.ts",
         "packages/backend/convex/webForms.ts",

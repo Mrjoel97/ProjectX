@@ -21,6 +21,7 @@ import { internalQuery, type MutationCtx } from "./_generated/server";
 import { appendAudit } from "./audit";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { assertTenantWritable } from "./lib/tenantLifecycle";
+import { resolveDocumentAssets } from "./webAssets";
 
 const projectKind = v.union(v.literal("site"), v.literal("landing"));
 const documentInput = v.any();
@@ -170,6 +171,7 @@ async function appendVersion(
   sourceWarnings?: readonly { code: string; sourceRef?: string }[],
 ): Promise<{ version: number; contentHash: string; byteLength: number }> {
   const validated = validatedDocument(document, project.kind);
+  const assetSnapshots = await resolveDocumentAssets(ctx, project.tenantId, validated);
   const previous = await ctx.db
     .query("webProjectVersions")
     .withIndex("by_tenant_project_version", (q) =>
@@ -182,9 +184,12 @@ async function appendVersion(
   // Already stored versions keep their exact old bytes and renderer identity.
   const designed =
     recipeRef?.rendererVersion !== undefined &&
-    ["web-design-renderer-v1", "web-design-renderer-v2", WEB_DESIGN_RENDERER_VERSION].includes(
-      recipeRef.rendererVersion,
-    );
+    [
+      "web-design-renderer-v1",
+      "web-design-renderer-v2",
+      "web-design-renderer-v3",
+      WEB_DESIGN_RENDERER_VERSION,
+    ].includes(recipeRef.rendererVersion);
   if (recipeRef?.rendererVersion !== undefined && !designed)
     throw new Error("WEB_RENDERER_UNAVAILABLE");
   const profile = recipeRef?.designProfile;
@@ -224,6 +229,7 @@ async function appendVersion(
     createdAt: Date.now(),
     ...(previous ? { basedOnVersion: previous.version } : {}),
     sourceRefs: sourceRefs ? [...sourceRefs] : (previous?.sourceRefs ?? []),
+    assetSnapshots,
     sourceWarnings: sourceWarnings ? [...sourceWarnings] : (previous?.sourceWarnings ?? []),
     ...(originRecipeRef !== undefined
       ? { recipeRef: originRecipeRef }

@@ -5,12 +5,14 @@ import {
   type OnlinePresenceSource,
   type OnlinePresenceWarning,
 } from "@pikar/core/onlinePresence";
+import { materializeWebRecipe } from "@pikar/core/webRecipes";
 import { sha256Bytes } from "@pikar/core/webRuntime";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
 import { assertTenantWritable, internalMutation } from "./lib/tenantLifecycle";
+import { imageSource, listImageCandidates, resolveDocumentAssets } from "./webAssets";
 import { createProjectWithVersion, reviseProjectWithVersion } from "./webProjects";
 import { materializeActiveRecipe } from "./webRecipes";
 
@@ -102,6 +104,26 @@ async function sourceForDocument(
   kind: OnlinePresenceSource["kind"],
 ): Promise<OnlinePresenceSource | null> {
   const doc = await ctx.db.get(id);
+  if (doc) {
+    const image = await imageSource(ctx, tenantId, doc);
+    if (image)
+      return {
+        ref: image.sourceRef,
+        kind: "vault",
+        revision: image.sourceRevision,
+        text: "Owned image selected for private website preparation. Image descriptions are not business evidence.",
+        intent: "current",
+        status: "approved",
+        visibility: "private",
+      };
+    // A missing/invalid raster must not fall back to treating its generation prompt as facts.
+    if (
+      doc.kind === "image" ||
+      doc.mimeType.startsWith("image/") ||
+      doc.storedMimeType?.startsWith("image/")
+    )
+      return null;
+  }
   if (
     !doc ||
     doc.tenantId !== tenantId ||
@@ -204,6 +226,28 @@ function brandColorSourced(assessment: Extract<OnlinePresenceAssessment, { ok: t
   // including case-insensitive evidence, rather than accepting the prefix of an eight-digit color.
   const token = new RegExp(`${color}(?![a-f0-9])`, "i");
   return assessment.sources.some((source) => token.test(source.text));
+}
+
+async function assetSourcesCurrent(
+  ctx: DatabaseCtx,
+  tenantId: string,
+  assessment: Extract<OnlinePresenceAssessment, { ok: true }>,
+): Promise<boolean> {
+  try {
+    const snapshots = await resolveDocumentAssets(
+      ctx,
+      tenantId,
+      materializeWebRecipe(assessment.recipeId, assessment.input),
+    );
+    for (const snapshot of snapshots) {
+      const row = await ctx.db.get(snapshot.assetId);
+      const source = assessment.sources.find((entry) => entry.ref === snapshot.sourceRef);
+      if (!row || !source || row.sourceRevision !== source.revision) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function localDestinationAvailable(
@@ -334,6 +378,7 @@ async function artifactFor(
 }
 
 export type OnlinePresenceContext = {
+  assetCandidates: Awaited<ReturnType<typeof listImageCandidates>>;
   revision: number;
   threadId: string;
   planId: Id<"plans">;
@@ -369,6 +414,7 @@ export const contextForTenant = internalQuery({
           ? null
           : statusAssessment(assessOnlinePresenceBrief(session.brief, sources)),
       latestUserMessage: session.humanMessages.at(-1)?.text ?? "",
+      assetCandidates: await listImageCandidates(ctx, args.tenantId),
     };
   },
 });
@@ -389,6 +435,23 @@ export const saveBrief = internalMutation({
     if (session.revision !== args.expectedRevision) throw new Error("STALE_REVISION");
     const sources = await resolveSources(ctx, session, selectedRefs(args.brief));
     const assessment = assessOnlinePresenceBrief(args.brief, sources);
+    if (assessment.ok && !(await assetSourcesCurrent(ctx, args.tenantId, assessment)))
+      return {
+        ok: false,
+        revision: session.revision,
+        assessment: {
+          ok: false,
+          missing: [
+            {
+              field: "media",
+              reason: "unknown_source",
+              question:
+                "Use prepared owned images and include each returned image source reference in the brief.",
+            },
+          ],
+          warnings: assessment.warnings,
+        },
+      };
     if (assessment.ok && !brandColorSourced(assessment))
       return {
         ok: false,
@@ -521,6 +584,8 @@ export const buildProject = internalMutation({
     const assessment = assessOnlinePresenceBrief(session.brief, sources);
     if (!assessment.ok)
       return { ok: false, revision: session.revision, assessment: statusAssessment(assessment) };
+    if (!(await assetSourcesCurrent(ctx, args.tenantId, assessment)))
+      return { ok: false, revision: session.revision, reason: "asset_source_unavailable" };
     if (!brandColorSourced(assessment))
       return { ok: false, revision: session.revision, reason: "brand_color_not_sourced" };
     if (

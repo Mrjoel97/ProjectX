@@ -1,4 +1,4 @@
-import type { ProjectKind, WebDocument } from "@pikar/contracts/webRuntime";
+import type { ProjectKind, WebDocument, WebMediaNode } from "@pikar/contracts/webRuntime";
 import {
   type ArtDirection,
   type DesignDials,
@@ -6,10 +6,42 @@ import {
   selectDesignProfile,
   validateDesignProfileRef,
 } from "./designKnowledge";
-import { canonicalWebDocument, sha256Bytes, validateWebDocument } from "./webRuntime";
+import { parseWebAssetRef } from "./webAssets";
+import {
+  canonicalWebDocument,
+  sha256Bytes,
+  validateWebDocument,
+  validateWebMediaInput,
+} from "./webRuntime";
 
 export const WEB_RECIPE_SCHEMA_VERSION = 1 as const;
-export const WEB_RECIPE_COMPILER_ID = "web-recipes-v3" as const;
+export const WEB_RECIPE_COMPILER_ID = "web-recipes-v4" as const;
+export type WebRecipeMedia = {
+  readonly logo?: { readonly storageRef: string; readonly alt: string };
+  readonly hero?: Omit<WebMediaNode, "kind" | "placement">;
+  readonly gallery?: readonly Omit<WebMediaNode, "kind" | "placement">[];
+};
+
+export function validateWebRecipeMedia(value: unknown): value is WebRecipeMedia {
+  if (!isRecord(value) || !hasOnly(value, ["logo", "hero", "gallery"])) return false;
+  if (
+    value.logo !== undefined &&
+    (!isRecord(value.logo) ||
+      !hasOnly(value.logo, ["storageRef", "alt"]) ||
+      !parseWebAssetRef(value.logo.storageRef) ||
+      !text(value.logo.alt, 256))
+  )
+    return false;
+  const image = (entry: unknown) =>
+    isRecord(entry) &&
+    hasOnly(entry, ["storageRef", "alt", "crop", "aspect", "focalPoint"]) &&
+    validateWebMediaInput(entry);
+  if (value.hero !== undefined && !image(value.hero)) return false;
+  return (
+    value.gallery === undefined ||
+    (Array.isArray(value.gallery) && value.gallery.length <= 6 && value.gallery.every(image))
+  );
+}
 export const WEB_RECIPE_BUNDLE_HASH =
   "d818e4d9ab6fcf85b3725d578edf2fbace642dc0472e1d94922c030f7df016a8" as const;
 
@@ -22,7 +54,7 @@ export type WebRecipeRegistryName =
 export type WebRecipeField = {
   readonly id: string;
   readonly label: string;
-  readonly type: "text" | "text-list" | "email" | "catalogue-list" | "dials";
+  readonly type: "text" | "text-list" | "email" | "catalogue-list" | "dials" | "media";
   readonly required: boolean;
   readonly maxLength?: number;
 };
@@ -45,6 +77,7 @@ export type WebRecipeDefinition = {
 };
 
 export type BusinessSiteInput = {
+  readonly media?: WebRecipeMedia;
   readonly artDirection?: ArtDirection;
   readonly primaryColor?: string;
   readonly brandName: string;
@@ -60,6 +93,7 @@ export type BusinessSiteInput = {
   readonly design?: Partial<DesignDials>;
 };
 export type CampaignLandingInput = {
+  readonly media?: WebRecipeMedia;
   readonly artDirection?: ArtDirection;
   readonly primaryColor?: string;
   readonly brandName: string;
@@ -74,6 +108,7 @@ export type CampaignLandingInput = {
   readonly design?: Partial<DesignDials>;
 };
 export type StorefrontCatalogueInput = {
+  readonly media?: WebRecipeMedia;
   readonly artDirection?: ArtDirection;
   readonly primaryColor?: string;
   readonly brandName: string;
@@ -155,6 +190,7 @@ const httpsHref = (value: unknown): value is string => {
 const inputKeys: Record<WebRecipeId, readonly string[]> = {
   "business-site": [
     "brandName",
+    "media",
     "artDirection",
     "primaryColor",
     "headline",
@@ -169,6 +205,7 @@ const inputKeys: Record<WebRecipeId, readonly string[]> = {
     "design",
   ],
   "campaign-landing": [
+    "media",
     "artDirection",
     "primaryColor",
     "brandName",
@@ -182,7 +219,15 @@ const inputKeys: Record<WebRecipeId, readonly string[]> = {
     "attributionSource",
     "design",
   ],
-  "storefront-catalogue": ["brandName", "intro", "items", "design", "artDirection", "primaryColor"],
+  "storefront-catalogue": [
+    "brandName",
+    "intro",
+    "items",
+    "design",
+    "artDirection",
+    "primaryColor",
+    "media",
+  ],
 };
 
 function issue(errors: WebRecipeValidationIssue[], path: string, code: string): void {
@@ -256,6 +301,8 @@ export function validateWebRecipeInput(
   if (idValue !== "storefront-catalogue" && !text(input.headline, 256))
     issue(errors, "headline", "required_text");
   validateDials(input.design, "design", errors);
+  if (input.media !== undefined && !validateWebRecipeMedia(input.media))
+    issue(errors, "media", "invalid_media");
   if (
     input.artDirection !== undefined &&
     input.artDirection !== "editorial" &&
@@ -321,6 +368,13 @@ const definitionSeed = [
     family: "business",
     outputKind: "site",
     fields: [
+      {
+        id: "media",
+        label: "Prepared business images",
+        type: "media",
+        required: false,
+        maxLength: 8,
+      },
       { id: "artDirection", label: "Art direction", type: "text", required: false, maxLength: 16 },
       { id: "primaryColor", label: "Brand accent", type: "text", required: false, maxLength: 7 },
       { id: "brandName", label: "Brand name", type: "text", required: true, maxLength: 128 },
@@ -371,6 +425,13 @@ const definitionSeed = [
     family: "campaign",
     outputKind: "landing",
     fields: [
+      {
+        id: "media",
+        label: "Prepared business images",
+        type: "media",
+        required: false,
+        maxLength: 8,
+      },
       { id: "artDirection", label: "Art direction", type: "text", required: false, maxLength: 16 },
       { id: "primaryColor", label: "Brand accent", type: "text", required: false, maxLength: 7 },
       { id: "brandName", label: "Brand name", type: "text", required: true, maxLength: 128 },
@@ -426,6 +487,13 @@ const definitionSeed = [
     family: "storefront",
     outputKind: "storefront",
     fields: [
+      {
+        id: "media",
+        label: "Prepared business images",
+        type: "media",
+        required: false,
+        maxLength: 8,
+      },
       { id: "artDirection", label: "Art direction", type: "text", required: false, maxLength: 16 },
       { id: "primaryColor", label: "Brand accent", type: "text", required: false, maxLength: 7 },
       { id: "brandName", label: "Brand name", type: "text", required: true, maxLength: 128 },
@@ -750,12 +818,46 @@ export function materializeWebRecipe(idValue: WebRecipeId, input: unknown): WebD
     throw new Error(
       `WEB_RECIPE_INPUT_INVALID:${checked.errors.map((entry) => entry.code).join(",")}`,
     );
-  const document =
+  const sourceDocument =
     idValue === "business-site"
       ? documentForBusiness(checked.value as BusinessSiteInput)
       : idValue === "campaign-landing"
         ? documentForCampaign(checked.value as CampaignLandingInput)
         : documentForStorefront(checked.value as StorefrontCatalogueInput);
+  const media = checked.value.media;
+  const document: WebDocument = media
+    ? {
+        ...sourceDocument,
+        brand: { ...sourceDocument.brand, ...(media.logo ? { logo: media.logo } : {}) },
+        pages: sourceDocument.pages.map((page, index) =>
+          index === 0
+            ? {
+                ...page,
+                nodes: [
+                  ...page.nodes,
+                  ...(media.hero
+                    ? [{ ...media.hero, kind: "media" as const, placement: "hero" as const }]
+                    : []),
+                  ...(media.gallery?.length
+                    ? [
+                        {
+                          kind: "section" as const,
+                          id: "gallery",
+                          heading: "Gallery",
+                          children: media.gallery.map((image) => ({
+                            ...image,
+                            kind: "media" as const,
+                            placement: "gallery" as const,
+                          })),
+                        },
+                      ]
+                    : []),
+                ],
+              }
+            : page,
+        ),
+      }
+    : sourceDocument;
   const result = validateWebDocument(document);
   if (!result.ok)
     throw new Error(

@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
     version: number;
     contentHash: string;
     document: { pages: { slug: string }[] };
+    assetSnapshots?: { assetRef: string }[];
   }[],
   calls: [] as { name: string; args: unknown }[],
   queries: [] as { name: string; args: unknown }[],
@@ -53,8 +54,20 @@ vi.mock("convex/react", () => ({
   },
 }));
 vi.mock("./preview/PreviewCanvas", () => ({
-  PreviewCanvas: ({ projectId, version }: { projectId: string; version: number }) => (
-    <div data-testid="exact-preview" data-project={projectId} data-version={version} />
+  PreviewCanvas: ({
+    projectId,
+    version,
+    onReadinessChange,
+  }: {
+    projectId: string;
+    version: number;
+    onReadinessChange?: (ready: boolean) => void;
+  }) => (
+    <div data-testid="exact-preview" data-project={projectId} data-version={version}>
+      <button type="button" onClick={() => onReadinessChange?.(true)}>
+        Finish image preview
+      </button>
+    </div>
   ),
 }));
 
@@ -109,6 +122,19 @@ const click = async (text: string) => {
 };
 
 describe("human website review controls", () => {
+  test("saved image loading gates approval and readiness cannot carry into another version", async () => {
+    state.versions[0]!.assetSnapshots = [{ assetRef: "prepared-image" }];
+    await mount(3);
+    expect(button("Approve this version").disabled).toBe(true);
+    await click("Finish image preview");
+    expect(button("Approve this version").disabled).toBe(false);
+    const next = { ...state.versions[0]!, _id: "version-4", version: 4, contentHash: hash(4) };
+    state.versions.unshift(next);
+    state.project = { ...state.project, draftVersion: 4 };
+    await mount(4);
+    expect(button("Approve this version").disabled).toBe(true);
+  });
+
   test("loads the pinned version and sends only its exact version/hash for approval", async () => {
     await mount(3);
     expect(

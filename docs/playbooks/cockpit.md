@@ -1,3 +1,5 @@
+> Last verified: 2026-10-22 — Website review loads exact-version images through authenticated actions into an inert data-image preview. Missing/failed images block approval readiness; late responses cannot replace another version. Images stay off anonymous draft routes. The existing conversation remains the authoring entry; no customer HTML or asset wiring is required.
+
 > Last verified: 2026-10-21 —53-04 The offline online-presence browser suite renders fictional saved documents without cockpit/auth/provider calls. It checks actual text ranges (not stretched heading boxes), useful navigation targets, CTA placement and exact form destinations. Dedicated design controls remain model draft inputs; public human review remains exact-version/hash bound.
 
 > Last verified: 2026-10-21 — Phase53 adds a dedicated attended online-presence conversation through the existing specialist runner, server-bound session/context/brief/build tools and a receipt-derived workspace card. Existing ordinary cockpit routing is preserved. Exact frozen grants exclude model approval/publication. See online-presence.md and ADR-062; local source checks do not qualify hosted model behavior.

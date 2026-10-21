@@ -41,6 +41,7 @@ export * from "./spend";
 export * from "./toolGrants";
 export * from "./validateSubmit";
 export * from "./verticalPacks";
+export * from "./webAssets";
 export * from "./webDesignRenderer";
 export * from "./webForms";
 export * from "./webRecipeFixtures";

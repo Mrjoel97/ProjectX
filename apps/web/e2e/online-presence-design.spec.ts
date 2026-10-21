@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { renderDesignedWebDocument } from "@pikar/core/webDesignRenderer";
 import { materializeWebRecipeWithProvenance } from "@pikar/core/webRecipes";
 import { expect, test } from "@playwright/test";
@@ -86,6 +88,116 @@ const fixtures = [
     },
   },
 ] as const;
+
+for (const direction of ["editorial", "studio", "technical"] as const) {
+  for (const width of [1440, 768, 390]) {
+    test(`${direction} renders real hero and gallery image bytes at ${width}px`, async ({
+      page,
+    }, testInfo) => {
+      const files = ["design-study", "color-study", "booklet-study"].map((name) => {
+        const bytes = readFileSync(
+          new URL(`./fixtures/online-presence/${name}.png`, import.meta.url),
+        );
+        const digest = createHash("sha256").update(bytes).digest("hex");
+        return {
+          bytes,
+          digest,
+          ref: `webasset:${name}:${digest}`,
+          path: `/p/media-site/assets/${name}/${digest}`,
+        };
+      });
+      const result = materializeWebRecipeWithProvenance("business-site", {
+        brandName: "Fieldwork Studio",
+        headline: "Make the useful beautiful.",
+        summary:
+          "Brand and digital design for independent businesses. Generated illustration studies shown below.",
+        services: [
+          "Brand identity shaped around your business.",
+          "Digital experiences for your customers.",
+        ],
+        about: "We start with your business, your customers and the details that set you apart.",
+        ctaLabel: "Discuss your project",
+        ctaHref: "https://example.com/inquiry",
+        artDirection: direction,
+        pageMode: "multi-page",
+        projectSlug: "media-site",
+        media: {
+          hero: {
+            storageRef: files[0]!.ref,
+            alt: "Generated paper composition study",
+            crop: "cover",
+            aspect: "landscape",
+            focalPoint: { x: 55, y: 50 },
+          },
+          gallery: files.slice(1).map((file, index) => ({
+            storageRef: file.ref,
+            alt: index === 0 ? "Generated colour print study" : "Generated folded booklet study",
+            crop: "contain",
+          })),
+        },
+      });
+      const home = result.document.pages[0]!;
+      const html = renderDesignedWebDocument(result.document, result.designProfile, {
+        slug: "media-site",
+        page: home.slug,
+      });
+      const unexpected: string[] = [];
+      const loadedAssets: string[] = [];
+      const rootUrl = `https://design-fixture.test/p/media-site/${home.slug}`;
+      await page.route("**/*", async (route) => {
+        const url = route.request().url();
+        if (url === rootUrl) return route.fulfill({ contentType: "text/html", body: html });
+        const file = files.find(
+          (candidate) => url === `https://design-fixture.test${candidate.path}`,
+        );
+        if (file) {
+          loadedAssets.push(file.ref);
+          return route.fulfill({ contentType: "image/png", body: file.bytes });
+        }
+        unexpected.push(url);
+        return route.abort();
+      });
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(rootUrl);
+      const images = page.locator("img[data-asset-ref]");
+      await expect(images).toHaveCount(3);
+      for (const image of await images.all()) {
+        await image.scrollIntoViewIfNeeded();
+        await expect
+          .poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth))
+          .toBeGreaterThan(1000);
+        await image.evaluate((element) => (element as HTMLImageElement).decode());
+        expect(await image.getAttribute("alt")).toMatch(/^Generated /);
+        const box = await image.boundingBox();
+        expect(box!.width).toBeGreaterThan(100);
+        expect(box!.height).toBeGreaterThan(100);
+        expect(box!.x).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+      }
+      expect(new Set(loadedAssets).size).toBe(3);
+      expect(unexpected).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        width,
+      );
+      expect(await images.first().evaluate((image) => getComputedStyle(image).objectPosition)).toBe(
+        "55% 50%",
+      );
+      const action = page.getByRole("button", { name: "Discuss your project" });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+      expect((await action.boundingBox())!.y).toBeLessThan(900);
+      await page.screenshot({
+        path: testInfo.outputPath(`media-${direction}-${width}.png`),
+        fullPage: true,
+      });
+    });
+  }
+}
 
 for (const fixture of fixtures) {
   for (const width of [1440, 768, 390]) {

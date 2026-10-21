@@ -10,6 +10,36 @@ export function buildOnlinePresenceTools(context: {
   planId: Id<"plans">;
 }) {
   const { ctx, tenantId, planId } = context;
+  const asset = {
+    type: "object",
+    properties: {
+      storageRef: {
+        type: "string",
+        pattern: "^webasset:[A-Za-z0-9_-]{1,96}:[a-f0-9]{64}$",
+        maxLength: 170,
+      },
+      alt: { type: "string", minLength: 1, maxLength: 512 },
+    },
+    required: ["storageRef", "alt"],
+    additionalProperties: false,
+  } as const;
+  const image = {
+    ...asset,
+    properties: {
+      ...asset.properties,
+      crop: { type: "string", enum: ["cover", "contain"] },
+      aspect: { type: "string", enum: ["landscape", "portrait", "square"] },
+      focalPoint: {
+        type: "object",
+        properties: {
+          x: { type: "number", minimum: 0, maximum: 100 },
+          y: { type: "number", minimum: 0, maximum: 100 },
+        },
+        required: ["x", "y"],
+        additionalProperties: false,
+      },
+    },
+  } as const;
   const run = async (operation: () => Promise<unknown>) => {
     try {
       return JSON.stringify(await operation());
@@ -35,6 +65,28 @@ export function buildOnlinePresenceTools(context: {
       execute: ({ sourceRefs }) =>
         run(() =>
           ctx.runQuery(internal.onlinePresence.contextForTenant, { tenantId, planId, sourceRefs }),
+        ),
+    }),
+    prepareOnlinePresenceAssets: tool({
+      description:
+        "Prepare selected existing Vault images for this private website. Use exact image source references returned by context. Validates owned raster bytes and freezes a copy; returns opaque asset refs, never publishes or generates an image.",
+      inputSchema: jsonSchema<{ sourceRefs: string[] }>({
+        type: "object",
+        properties: {
+          sourceRefs: {
+            type: "array",
+            items: { type: "string", pattern: "^vault:[A-Za-z0-9_-]+$", maxLength: 256 },
+            minItems: 1,
+            maxItems: 6,
+            uniqueItems: true,
+          },
+        },
+        required: ["sourceRefs"],
+        additionalProperties: false,
+      }),
+      execute: ({ sourceRefs }) =>
+        run(() =>
+          ctx.runAction(internal.webAssets.prepareForPresence, { tenantId, planId, sourceRefs }),
         ),
     }),
     saveOnlinePresenceBrief: tool({
@@ -63,6 +115,15 @@ export function buildOnlinePresenceTools(context: {
                 properties: {
                   artDirection: { type: "string", enum: ["editorial", "studio", "technical"] },
                   primaryColor: { type: "string", pattern: "^#[a-fA-F0-9]{6}$", maxLength: 7 },
+                },
+                additionalProperties: false,
+              },
+              media: {
+                type: "object",
+                properties: {
+                  logo: asset,
+                  hero: image,
+                  gallery: { type: "array", items: image, maxItems: 6 },
                 },
                 additionalProperties: false,
               },

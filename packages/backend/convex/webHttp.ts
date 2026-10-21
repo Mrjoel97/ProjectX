@@ -2,6 +2,7 @@ import type { WebCtaNode, WebDocument, WebNode } from "@pikar/contracts/webRunti
 import type { HttpRouter } from "convex/server";
 import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
+import { servePublishedAsset } from "./webAssets";
 
 export function registerPublicWebRoutes(router: HttpRouter): void {
   // ── Phase 48 public structured runtime ──────────────────────────────────────
@@ -12,7 +13,7 @@ export function registerPublicWebRoutes(router: HttpRouter): void {
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
     "Content-Security-Policy":
-      "default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
   };
   const runtimeHeaders = (declaration: { hosting: string; source: string }) => ({
     ...publicHeaders,
@@ -81,6 +82,7 @@ export function registerPublicWebRoutes(router: HttpRouter): void {
     handler: httpAction(async (ctx, req) => {
       if (req.method !== "GET" && req.method !== "HEAD") return publicNotFound();
       const parts = publicSegments(req);
+      if (parts[1] === "assets") return servePublishedAsset(ctx, req);
       if (parts.length !== 2) return publicNotFound();
       const slug = parts[0]!;
       const page = parts[1]!;

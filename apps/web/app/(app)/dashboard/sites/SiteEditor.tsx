@@ -4,7 +4,7 @@ import { api } from "@pikar/backend/api";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { PreviewCanvas } from "./preview/PreviewCanvas";
 
 type ProjectId = FunctionArgs<typeof api.webProjects.getProject>["projectId"];
@@ -39,6 +39,20 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
   const rollback = useMutation(api.webProjects.rollback);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const previewPin = `${id}:${selected?.version}:${selected?.contentHash}`;
+  const [previewReadiness, setPreviewReadiness] = useState<{ pin: string; ready: boolean } | null>(
+    null,
+  );
+  const onPreviewReadiness = useCallback(
+    (ready: boolean) => {
+      setPreviewReadiness((previous) =>
+        previous?.pin === previewPin && previous.ready === ready
+          ? previous
+          : { pin: previewPin, ready },
+      );
+    },
+    [previewPin],
+  );
   const run = async (operation: () => Promise<unknown>, success: string) => {
     if (busy) return;
     setBusy(true);
@@ -73,7 +87,9 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
   const reviewReady =
     session !== undefined &&
     (session === null ||
-      (session.version === selected.version && session.contentHash === selected.contentHash));
+      (session.version === selected.version && session.contentHash === selected.contentHash)) &&
+    ((selected.assetSnapshots?.length ?? 0) === 0 ||
+      (previewReadiness?.pin === previewPin && previewReadiness.ready));
   const firstPage = (selected.document as { pages: { slug: string }[] }).pages[0]?.slug;
   const publicUrl =
     project.publicHost && firstPage
@@ -119,7 +135,11 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
           </Link>
         )}
       </header>
-      <PreviewCanvas projectId={projectId} version={selected.version} />
+      <PreviewCanvas
+        projectId={projectId}
+        version={selected.version}
+        onReadinessChange={onPreviewReadiness}
+      />
       {reviewReady && (session?.sourceWarnings?.length ?? 0) > 0 && (
         <aside
           aria-label="Information to review"
@@ -156,7 +176,9 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
         version shown above.
       </p>
       {!reviewReady && (
-        <p role="status">Loading the source information for this version before approval…</p>
+        <p role="status">
+          Loading the source information and saved images for this version before approval…
+        </p>
       )}
       <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
         <button

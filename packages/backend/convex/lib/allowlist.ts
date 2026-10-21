@@ -35,6 +35,7 @@ export const RAW_BUILDER_ALLOWLIST: readonly string[] = [
   "http.ts",
   // Narrow public page boundary and internal tenant-validated readers.
   "webHttp.ts",
+  "webAssets.ts",
   "webProjects.ts",
   "webRuntime.ts",
   "webForms.ts",

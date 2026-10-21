@@ -2,11 +2,14 @@ import {
   type BusinessSiteInput,
   type CampaignLandingInput,
   validateWebRecipeInput,
+  validateWebRecipeMedia,
+  type WebRecipeMedia,
 } from "./webRecipes";
 
 /** A one-time attended build, independent of the planned recurring-service engine. */
 export const ONLINE_PRESENCE_TOOLS = Object.freeze([
   "readOnlinePresenceContext",
+  "prepareOnlinePresenceAssets",
   "searchVault",
   "saveOnlinePresenceBrief",
   "buildOnlinePresenceProject",
@@ -25,6 +28,8 @@ export type OnlinePresenceBrief = {
   ctaLabel?: string;
   ctaHref?: string;
   proof?: readonly string[];
+  /** Prepared tenant-owned raster assets; ownership/source binding is checked again by the adapter. */
+  media?: WebRecipeMedia;
   /** Creative presentation choices, never a grant to insert CSS or claim a brand identity. */
   design?: {
     artDirection?: "editorial" | "studio" | "technical";
@@ -107,6 +112,7 @@ const KEYS = [
   "ctaLabel",
   "ctaHref",
   "proof",
+  "media",
   "design",
   "sourceRefs",
   "contactConsent",
@@ -167,6 +173,8 @@ export function assessOnlinePresenceBrief(
   ] as const)
     if (raw[field] !== undefined && !list(raw[field], 512, limit))
       add(field, "invalid", `Provide at most ${limit} short ${field} entries.`);
+  if (raw.media !== undefined && !validateWebRecipeMedia(raw.media))
+    add("media", "invalid", "Select prepared business images with descriptive alternative text.");
   if (raw.design !== undefined) {
     if (
       !record(raw.design) ||
@@ -261,6 +269,7 @@ export function assessOnlinePresenceBrief(
   const input: BusinessSiteInput | CampaignLandingInput =
     recipeId === "campaign-landing"
       ? {
+          ...(brief.media === undefined ? {} : { media: brief.media }),
           brandName: brief.businessName,
           headline: brief.headline,
           offer: brief.offer ?? brief.summary,
@@ -280,6 +289,7 @@ export function assessOnlinePresenceBrief(
             : { primaryColor: brief.design.primaryColor }),
         }
       : {
+          ...(brief.media === undefined ? {} : { media: brief.media }),
           brandName: brief.businessName,
           headline: brief.headline,
           summary: brief.summary,

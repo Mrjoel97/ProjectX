@@ -1,3 +1,5 @@
+> Last verified: 2026-10-22 — 53-05 adds real owned logo/hero/gallery preparation, exact-version private image preview and current-published-only raster serving. The actual specialist loop prepares imagery before save/build; source warnings, immutable copies, tenant export/erasure and human exact-version review remain. See ADR-063, docs/design/online-presence-media.md and53-05-SUMMARY. Pure goods foundations were recovered under partial53-03; working checkout/hosted qualification remain open.
+
 > Last verified: 2026-10-21 —53-04 Taste and UI/UX Pro Max quality pass adds business-directed editorial/studio/technical rendering, source-backed brand colors, useful home content and content-dependent pages. Profile direction and current renderer/compiler identity flow through schema, provenance and immutable versions; old published bytes remain unchanged. Real browser checks cover1440/768/390, touch targets, contrast/focus, long text and actual actions. See docs/design/online-presence-quality.md and53-04; no hosted model/recipe acceptance is implied.
 
 # Playbook: Agentic online presence

@@ -29,6 +29,7 @@ import {
   webRecipeFixturesFor,
 } from "@pikar/core";
 import { designKnowledgeBundle } from "@pikar/core/designKnowledge.generated";
+import { collectWebAssetRefs } from "@pikar/core/webAssets";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { internalMutation } from "./lib/tenantLifecycle";
@@ -210,6 +211,52 @@ function assertRepeat(family: string): void {
     first.inputHash !== second.inputHash
   )
     throw new Error("WEB_RECIPE_REPEAT_NOT_DETERMINISTIC");
+}
+
+function assertMediaQualification(family: string): void {
+  const id = family as "business-site" | "campaign-landing" | "storefront-catalogue";
+  const fixture = webRecipeFixturesFor(id).find((item) => item.kind === "positive");
+  if (!fixture?.input || typeof fixture.input !== "object")
+    throw new Error("WEB_RECIPE_MEDIA_FIXTURE_MISSING");
+  const refs = ["logo", "hero", "gallery"].map(
+    (role, index) => `webasset:${role}:${String(index + 1).repeat(64)}`,
+  );
+  const output = materializeWebRecipeWithProvenance(id, {
+    ...fixture.input,
+    media: {
+      logo: { storageRef: refs[0], alt: "Prepared brand mark" },
+      hero: {
+        storageRef: refs[1],
+        alt: "Prepared hero study",
+        crop: "contain",
+        focalPoint: { x: 25, y: 60 },
+      },
+      gallery: [{ storageRef: refs[2], alt: "Prepared gallery study" }],
+    },
+  });
+  const html = renderDesignedWebDocument(output.document, output.designProfile, {
+    slug: "media-qualification",
+    page: output.document.pages[0]!.slug,
+  });
+  if (
+    collectWebAssetRefs(output.document).length !== 3 ||
+    refs.some((ref) => !html.includes(`data-asset-ref="${ref}"`))
+  )
+    throw new Error("WEB_RECIPE_MEDIA_NOT_RENDERED");
+  if (!html.includes("object-fit:contain") || !html.includes("object-position:25% 60%"))
+    throw new Error("WEB_RECIPE_MEDIA_CROP_LOST");
+  let refused = false;
+  try {
+    materializeWebRecipeWithProvenance(id, {
+      ...fixture.input,
+      media: {
+        hero: { storageRef: "https://example.com/private.png", alt: "Unsafe external reference" },
+      },
+    });
+  } catch {
+    refused = true;
+  }
+  if (!refused) throw new Error("WEB_RECIPE_MEDIA_EXTERNAL_REF_ACCEPTED");
 }
 
 function assertArtDirectionQualification(family: string): void {
@@ -467,6 +514,7 @@ export function evaluateWebRecipeCandidate(
       assertSourceCoverage(definition);
       assertSourceInfluence(targetFamily);
       assertArtDirectionQualification(targetFamily);
+      assertMediaQualification(targetFamily);
     }
     if (current.expected === "identity") {
       if (kind === "source-removal") assertSourceInfluence(targetFamily);

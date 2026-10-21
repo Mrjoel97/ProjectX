@@ -87,6 +87,8 @@ test("NO_GRANTS is the bare caller, NOT the executive", () => {
 
 test("the presence tuple grants only the bounded service and copies cannot grant writes", () => {
   expect(Object.isFrozen(ONLINE_PRESENCE_TOOLS)).toBe(true);
+  expect(ONLINE_PRESENCE_TOOLS).toContain("prepareOnlinePresenceAssets");
+  expect(grantsFor({ toolNames: ["prepareOnlinePresenceAssets"] }).onlinePresence).toBe(false);
   const service = grantsFor({ toolNames: ONLINE_PRESENCE_TOOLS });
   expect(service).toEqual({ ...base, onlinePresence: true });
   expect(service.dispatch).toBe(false);

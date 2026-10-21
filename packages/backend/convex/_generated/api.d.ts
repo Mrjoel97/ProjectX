@@ -175,6 +175,7 @@ import type * as voice from "../voice.js";
 import type * as voiceControl from "../voiceControl.js";
 import type * as voiceDoc from "../voiceDoc.js";
 import type * as voiceToken from "../voiceToken.js";
+import type * as webAssets from "../webAssets.js";
 import type * as webForms from "../webForms.js";
 import type * as webHttp from "../webHttp.js";
 import type * as webProjects from "../webProjects.js";
@@ -365,6 +366,7 @@ import type * as zernioActions from "../zernioActions.js";
 "voiceControl": typeof voiceControl,
 "voiceDoc": typeof voiceDoc,
 "voiceToken": typeof voiceToken,
+"webAssets": typeof webAssets,
 "webForms": typeof webForms,
 "webHttp": typeof webHttp,
 "webProjects": typeof webProjects,

@@ -2,11 +2,12 @@
 
 import { api } from "@pikar/backend/api";
 import type { WebDocument } from "@pikar/contracts/webRuntime";
-import { useQuery } from "convex/react";
+import { collectWebAssetRefs, parseWebAssetRef } from "@pikar/core/webAssets";
+import { useAction, useQuery } from "convex/react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type ProjectId = FunctionArgs<typeof api.webProjects.getProject>["projectId"];
 type Project = NonNullable<FunctionReturnType<typeof api.webProjects.getProject>>;
@@ -14,6 +15,12 @@ type ExactVersion = NonNullable<FunctionReturnType<typeof api.webProjects.getVer
 export type PreviewVersion = Pick<ExactVersion, "version" | "contentHash" | "artifacts"> & {
   document: WebDocument;
 };
+export type PreviewAsset = { assetRef: string; dataUrl: string };
+const safePreviewAsset = (asset: PreviewAsset) =>
+  parseWebAssetRef(asset.assetRef) !== null &&
+  typeof asset.dataUrl === "string" &&
+  asset.dataUrl.length <= 7_000_000 &&
+  /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(asset.dataUrl);
 type OwnerApiShape = { webRecipes: { getStorefrontQualification: unknown } };
 const ownerApi = (api as unknown as OwnerApiShape).webRecipes;
 
@@ -26,16 +33,47 @@ const card = {
 
 /** The source artifact stays immutable. A preview-only base makes every code-owned anchor
  * request a popup, which the empty iframe sandbox blocks. Scrolling remains available. */
-export function inertPreviewHtml(html: string): string | null {
+export function inertPreviewHtml(html: string, assets?: readonly PreviewAsset[]): string | null {
+  if (assets !== undefined) {
+    if (typeof DOMParser === "undefined" || !html.includes("<head>")) return null;
+    const mappings = new Map<string, string>();
+    for (const asset of assets) {
+      if (!safePreviewAsset(asset)) return null;
+      mappings.set(asset.assetRef, asset.dataUrl);
+    }
+    // Presentation-only data URLs keep private bytes off anonymous public routes. A restrictive
+    // preview policy also prevents any original src from making a background network request.
+    const policy =
+      "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data:; style-src 'unsafe-inline'; form-action 'none'\">";
+    const parsed = new DOMParser().parseFromString(
+      html.replace("<head>", `<head>${policy}`),
+      "text/html",
+    );
+    for (const image of parsed.querySelectorAll("img")) {
+      const ref = image.getAttribute("data-asset-ref");
+      const dataUrl = ref ? mappings.get(ref) : undefined;
+      if (!dataUrl) return null;
+      image.setAttribute("src", dataUrl);
+    }
+    html = `<!doctype html>${parsed.documentElement.outerHTML}`;
+  }
   return html.includes("<head>") ? html.replace("<head>", '<head><base target="_blank">') : null;
 }
 
-export function StoredArtifactPreview({ exact, title }: { exact: PreviewVersion; title: string }) {
+export function StoredArtifactPreview({
+  exact,
+  title,
+  assets,
+}: {
+  exact: PreviewVersion;
+  title: string;
+  assets?: readonly PreviewAsset[];
+}) {
   const [pageSlug, setPageSlug] = useState(exact.document.pages[0]?.slug ?? "");
   const [width, setWidth] = useState("desktop");
   const page = exact.document.pages.find((candidate) => candidate.slug === pageSlug);
   const artifact = exact.artifacts?.find((candidate) => candidate.pageSlug === pageSlug);
-  const html = artifact ? inertPreviewHtml(artifact.html) : null;
+  const html = artifact ? inertPreviewHtml(artifact.html, assets) : null;
   return (
     <section aria-label="Rendered page" style={{ ...card, display: "grid", gap: "1rem" }}>
       <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
@@ -93,14 +131,76 @@ export function StoredArtifactPreview({ exact, title }: { exact: PreviewVersion;
   );
 }
 
+function ProtectedArtifactPreview({
+  projectId,
+  exact,
+  title,
+  onReadinessChange,
+}: {
+  projectId: ProjectId;
+  exact: PreviewVersion;
+  title: string;
+  onReadinessChange?: (ready: boolean) => void;
+}) {
+  const previewAsset = useAction(api.webAssets.previewAsset);
+  const [result, setResult] = useState<{
+    pin: string;
+    assets?: PreviewAsset[];
+    failed?: true;
+  } | null>(null);
+  const pin = `${projectId}:${exact.version}:${exact.contentHash}`;
+  const refs = collectWebAssetRefs(exact.document);
+  const refsKey = JSON.stringify(refs);
+  useEffect(() => {
+    let current = true;
+    onReadinessChange?.(false);
+    const load = async () => {
+      try {
+        const assets: PreviewAsset[] = [];
+        // Bounded sequential reads keep large private image responses out of one action and avoid
+        // fetching a whole gallery concurrently. They never enter logs, URLs or persisted HTML.
+        for (const assetRef of JSON.parse(refsKey) as string[]) {
+          const asset = await previewAsset({ projectId, version: exact.version, assetRef });
+          if (asset.assetRef !== assetRef || !safePreviewAsset(asset))
+            throw new Error("PREVIEW_ASSET_MISMATCH");
+          assets.push(asset);
+        }
+        if (current) {
+          setResult({ pin, assets });
+          onReadinessChange?.(true);
+        }
+      } catch {
+        if (current) {
+          setResult({ pin, failed: true });
+          onReadinessChange?.(false);
+        }
+      }
+    };
+    void load();
+    return () => {
+      current = false;
+    };
+  }, [projectId, exact.version, pin, refsKey, previewAsset, onReadinessChange]);
+  if (result?.pin !== pin) return <p role="status">Loading the saved images for this version…</p>;
+  if (result.failed || !result.assets)
+    return (
+      <p role="alert">
+        The saved images could not be loaded. Refresh to review this exact version before approval.
+      </p>
+    );
+  return <StoredArtifactPreview exact={exact} title={title} assets={result.assets} />;
+}
+
 export function PreviewCanvas({
   projectId,
   version,
   qualificationOnly = false,
+  onReadinessChange,
 }: {
   projectId: string;
   version: number;
   qualificationOnly?: boolean;
+  onReadinessChange?: (ready: boolean) => void;
 }) {
   const typedProjectId = projectId as ProjectId;
   const params = useSearchParams();
@@ -206,11 +306,21 @@ export function PreviewCanvas({
           Current version {exact.version} · content {exact.contentHash}
         </span>
       </section>
-      <StoredArtifactPreview
-        key={`${projectId}:${exact.version}:${exact.contentHash}`}
-        exact={exact}
-        title={project.title}
-      />
+      {collectWebAssetRefs(exact.document).length > 0 ? (
+        <ProtectedArtifactPreview
+          key={`${projectId}:${exact.version}:${exact.contentHash}`}
+          projectId={typedProjectId}
+          exact={exact}
+          title={project.title}
+          onReadinessChange={onReadinessChange}
+        />
+      ) : (
+        <StoredArtifactPreview
+          key={`${projectId}:${exact.version}:${exact.contentHash}`}
+          exact={exact}
+          title={project.title}
+        />
+      )}
     </main>
   );
 }

@@ -1,3 +1,5 @@
+> Last verified: 2026-10-22 — The explicit Convex module inventory now includes webAssets. It introduces no scheduler caller, recurrence or paid/provider lane; source image selection is bounded, tenant-owned and metadata-only. Existing routine namespace and isolation suites remain green.
+
 > Last verified: 2026-10-21 — Phase53 explicitly inventories nine new website/service modules and webForms.ts as a scheduler caller. Its only new cron, web-form-retention, deletes expired privacy receipts; bounded backlog continuation drains then stops. General tenant recurrence remains deferred, with existing schema/token/closed-namespace guards retained.
 
 > Last verified: 2026-10-19 — ADR-060 adds two explicitly inventoried Zernio modules, one bounded opt-in daily-read scheduler caller and one hourly system dispatcher. No generic recurrence engine, standing publish approval or business-write loop is introduced.

@@ -1,3 +1,5 @@
+> Last verified: 2026-10-22 — The exact frozen online-presence tool tuple adds only prepareOnlinePresenceAssets: existing owned Vault raster copying, no network image fetch or paid image generation. The actual scripted specialist loop exercises context, preparation/retry, brief and immutable media build. Image metadata/prompt is not business evidence; private warnings remain.
+
 > Last verified: 2026-10-21 —53-04 Current rendering/brief/registry/source contracts move both evaluator identities; the existing source inventories include these dependencies. Mechanical pin refresh preserves corpus bytes and historical receipts. The offline browser quality suite is renderer evidence, not a model-acceptance verdict.
 
 > Last verified: 2026-10-21 — Phase53 routes its attended leaf service through runSpecialistTurn and the existing governed loop. Source identity must cover the new service/tool/core dependencies as well as cockpit/schema/registry integration. Refreshing golden/vertical fingerprints retires old exact-source evidence and preserves all historical partial results; it creates no paid pass.

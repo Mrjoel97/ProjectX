@@ -14,10 +14,10 @@ export const WEB_RECIPE_EVAL_RUNNER = "eval:web-recipe-deterministic" as const;
 export const WEB_RECIPE_EVAL_FIXTURE_HASH =
   "fc9ff50300ef7de36d4b2e7f28ea32518e10d7f2ad4e18d258ec6e80caa2b379" as const;
 export const WEB_RECIPE_EVAL_IMPLEMENTATION_HASH =
-  "3c25831f57997fae081cd5125bdc823ea23c719b74828db64b90002d71790c4c" as const;
+  "662af6a77d918ad8883975e3b5fcde05e0609279b728de08fbdfe5176f0b8b8a" as const;
 export const WEB_RECIPE_BROWSER_RUNNER = "playwright:web-recipe" as const;
 export const WEB_RECIPE_BROWSER_ROUTE = "/ops" as const;
-export const WEB_RECIPE_BROWSER_EVIDENCE_REVISION = "browser-observed-v3" as const;
+export const WEB_RECIPE_BROWSER_EVIDENCE_REVISION = "browser-observed-v4" as const;
 export const WEB_RECIPE_BROWSER_LANE_OUTCOMES = [
   "selected",
   "partial",
@@ -279,7 +279,7 @@ export const WEB_RECIPE_UPSTREAM_PROVENANCE = {
 } as const satisfies Record<WebRecipeSkillName, readonly unknown[]>;
 
 export const WEB_RECIPE_EVAL_SUITE = {
-  revision: "2026-10-21.online-presence-art-direction.v4",
+  revision: "2026-10-22.online-presence-media.v5",
   casesHash: sha256Utf8(`${WEB_RECIPE_EVAL_FIXTURE_HASH}\n${WEB_RECIPE_EVAL_IMPLEMENTATION_HASH}`),
   /** Twenty complete cases per exact candidate family; the corpus contains 60 cases in total. */
   caseCount: 20,

@@ -1765,9 +1765,10 @@ Owner authorized after the October21 deep discovery. Preserve the distinct histo
 
 - 53-01: selective website/runtime recovery, agent-prepared brief/private pages and exact-version review; local implementation/validation.
 - 53-02: actual hosted model, recipe/browser qualification and release admission — not run.
-- 53-03: complete merchant-direct Stripe plus PayPal test-mode commerce and fulfillment — open.
+- 53-03: partial — pure goods quote/inventory/order foundations recovered; merchant-direct Stripe plus PayPal, persistent adapters and fulfillment remain open.
 - 53-04: complete locally — Taste/UI UX Pro Max quality, business-directed rendering and offline browser checks; see53-04-SUMMARY.md.
+- 53-05: complete locally — owned logo/hero/gallery assets, agent preparation, protected review and exact published image delivery; see53-05-SUMMARY.md.
 
 Requirements: OPRES-01..04. See `.planning/phases/53-agentic-online-presence/53-VALIDATION.md`.
 
-| 53. Agentic online presence | 2/4 | Partial — isolated source integration and design quality verified locally; hosted qualification and commerce open | - |
+| 53. Agentic online presence | 3/5 | Partial — website source, design and imagery verified locally; hosted qualification and complete commerce open | - |

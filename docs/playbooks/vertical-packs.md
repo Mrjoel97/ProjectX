@@ -1,3 +1,5 @@
+> Last verified: 2026-10-22 — Shared website imagery dependencies now participate in exact-source vertical/golden identities. Fixture/corpus bytes are unchanged. Local media integration and browser tests do not qualify a vertical candidate or activate a shared skill.
+
 > Last verified: 2026-10-21 —53-04 Online-presence art direction and recipe evidence contract changes retire current exact-source evaluator identities through the existing shared inventories. Native vertical source pins are regenerated mechanically; all existing lanes/cases and historical evidence remain unchanged.
 
 > Last verified: 2026-10-21 — Phase53 adds shared online-presence tool/core/recipe dependencies to the exact evaluator source inventories, with isolated edit/restore tests proving identity retirement. Corpus cases and historical evidence remain unchanged; refreshed identities create no qualification or activation.

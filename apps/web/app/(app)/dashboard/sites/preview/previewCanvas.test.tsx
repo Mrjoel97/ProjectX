@@ -12,8 +12,10 @@ const state = vi.hoisted(() => ({
   qualification: null as unknown,
   search: "",
   calls: [] as { name: string; args: unknown }[],
+  previewAsset: vi.fn(),
 }));
 vi.mock("convex/react", () => ({
+  useAction: () => state.previewAsset,
   useQuery: (ref: Parameters<typeof getFunctionName>[0], args: unknown) => {
     const name = getFunctionName(ref);
     state.calls.push({ name, args });
@@ -28,7 +30,10 @@ vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(s
 
 import { inertPreviewHtml, PreviewCanvas, type PreviewVersion } from "./PreviewCanvas";
 
-function savedVersion(version = 4): PreviewVersion {
+const assetRef = `webasset:fixture-image:${"a".repeat(64)}`;
+const imageData = "data:image/png;base64,iVBORw0KGgo=";
+
+function savedVersion(version = 4, withMedia = false): PreviewVersion {
   const document = materializeWebRecipe("business-site", {
     brandName: "Acme",
     headline: `Saved version ${version}`,
@@ -39,6 +44,9 @@ function savedVersion(version = 4): PreviewVersion {
     ctaLabel: "Inquire",
     ctaHref: "https://inquiry.example/",
     contactConsent: "Contact me about this inquiry.",
+    ...(withMedia
+      ? { media: { hero: { storageRef: assetRef, alt: "Generated paper study" } } }
+      : {}),
   });
   return {
     version,
@@ -60,6 +68,11 @@ beforeEach(() => {
   state.qualification = null;
   state.search = "";
   state.calls = [];
+  state.previewAsset.mockReset();
+  state.previewAsset.mockImplementation(async (args: { assetRef: string }) => ({
+    assetRef: args.assetRef,
+    dataUrl: imageData,
+  }));
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -82,6 +95,62 @@ const select = async (label: string, value: string) => {
 };
 
 describe("exact stored website preview", () => {
+  test("loads private images for the exact version and changes only the inert preview", async () => {
+    state.exact = savedVersion(4, true);
+    const original = (state.exact as PreviewVersion).artifacts?.[0]?.html;
+    await mount();
+    expect(state.previewAsset).toHaveBeenCalledWith({
+      projectId: "project-one",
+      version: 4,
+      assetRef,
+    });
+    const html = container.querySelector("iframe")?.getAttribute("srcdoc") ?? "";
+    const parsed = new DOMParser().parseFromString(html, "text/html");
+    expect(parsed.querySelector("img")?.getAttribute("src")).toBe(imageData);
+    expect(parsed.querySelector("img")?.getAttribute("alt")).toBe("Generated paper study");
+    expect(
+      parsed.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute("content"),
+    ).toContain("img-src data:");
+    expect((state.exact as PreviewVersion).artifacts?.[0]?.html).toBe(original);
+    expect(original).not.toContain(imageData);
+    expect(
+      inertPreviewHtml(original ?? "", [{ assetRef, dataUrl: "https://private.example/file" }]),
+    ).toBeNull();
+    expect(inertPreviewHtml(original ?? "", [])).toBeNull();
+  });
+
+  test("a missing private image blocks the preview and reports it unready", async () => {
+    state.exact = savedVersion(4, true);
+    state.previewAsset.mockRejectedValue(new Error("not available"));
+    const readiness = vi.fn();
+    await act(async () =>
+      root.render(
+        <PreviewCanvas projectId="project-one" version={4} onReadinessChange={readiness} />,
+      ),
+    );
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(container.textContent).toContain("saved images could not be loaded");
+    expect(readiness).toHaveBeenLastCalledWith(false);
+  });
+
+  test("a late image response cannot replace another exact version's preview", async () => {
+    let resolveOld!: (asset: { assetRef: string; dataUrl: string }) => void;
+    state.previewAsset.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOld = resolve;
+        }),
+    );
+    state.exact = savedVersion(4, true);
+    await mount();
+    state.exact = savedVersion(5, true);
+    await mount(5);
+    await act(async () => resolveOld({ assetRef, dataUrl: "data:image/png;base64,YQ==" }));
+    expect(container.querySelector("iframe")?.title).toContain("version 5");
+    expect(container.querySelector("iframe")?.getAttribute("srcdoc")).toContain(imageData);
+    expect(container.querySelector("iframe")?.getAttribute("srcdoc")).not.toContain("base64,YQ==");
+  });
+
   test("selects all four saved pages without loading a public or different version", async () => {
     await mount();
     const exact = state.exact as PreviewVersion;

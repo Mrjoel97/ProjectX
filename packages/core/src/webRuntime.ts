@@ -16,6 +16,7 @@ import {
   type WebPage,
   type WebRouteContext,
 } from "@pikar/contracts/webRuntime";
+import { collectWebAssetRefs, parseWebAssetRef, webAssetPath } from "./webAssets";
 
 export { ABUSE_BUCKET_RETENTION_MS, IDEMPOTENCY_RETENTION_MS, WEB_RENDERER_VERSION };
 
@@ -69,7 +70,39 @@ const safeHttps = (value: unknown): value is string => {
 const safeColor = (value: unknown): value is string =>
   typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
 const safeStorageRef = (value: unknown): value is string =>
-  typeof value === "string" && /^storage:[a-zA-Z0-9:_-]{1,240}$/.test(value);
+  typeof value === "string" &&
+  (/^storage:[a-zA-Z0-9:_-]{1,240}$/.test(value) || parseWebAssetRef(value) !== null);
+
+export function validateWebMediaInput(value: unknown): boolean {
+  if (
+    !validObject(value, ["storageRef", "alt", "crop", "placement", "aspect", "focalPoint"]) ||
+    !parseWebAssetRef(value.storageRef) ||
+    !text(value.alt, 256)
+  )
+    return false;
+  if (value.crop !== undefined && value.crop !== "cover" && value.crop !== "contain") return false;
+  if (
+    value.placement !== undefined &&
+    !["hero", "gallery", "inline"].includes(String(value.placement))
+  )
+    return false;
+  if (
+    value.aspect !== undefined &&
+    !["landscape", "portrait", "square"].includes(String(value.aspect))
+  )
+    return false;
+  return (
+    value.focalPoint === undefined ||
+    (validObject(value.focalPoint, ["x", "y"]) &&
+      [value.focalPoint.x, value.focalPoint.y].every(
+        (position) =>
+          typeof position === "number" &&
+          Number.isFinite(position) &&
+          position >= 0 &&
+          position <= 100,
+      ))
+  );
+}
 const commerceActionText =
   /\b(?:buy|cart|checkout|payment|merchant|inventory|stock|tax|shipping|refund|order|fulfil(?:ment|lment))\b/i;
 const safePublisherText = (value: unknown, max: number): value is string =>
@@ -192,9 +225,21 @@ function validateNode(
   }
   if (kind === "media") {
     if (
-      !validObject(value, ["kind", "storageRef", "alt"]) ||
+      !validObject(value, [
+        "kind",
+        "storageRef",
+        "alt",
+        "crop",
+        "placement",
+        "aspect",
+        "focalPoint",
+      ]) ||
       !safeStorageRef(value.storageRef) ||
-      !text(value.alt, WEB_RUNTIME_LIMITS.maxShortTextLength)
+      !text(value.alt, WEB_RUNTIME_LIMITS.maxShortTextLength) ||
+      (parseWebAssetRef(value.storageRef) !== null &&
+        !validateWebMediaInput(
+          Object.fromEntries(Object.entries(value).filter(([key]) => key !== "kind")),
+        ))
     )
       issue(errors, path, "invalid_media");
     return true;
@@ -336,10 +381,14 @@ export function validateWebDocument(input: unknown): WebValidationResult<WebDocu
     issue(errors, "title", "invalid_title");
   if (!optionalText(input.description)) issue(errors, "description", "invalid_description");
   if (
-    !validObject(input.brand, ["name", "primaryColor", "logoStorageRef"]) ||
+    !validObject(input.brand, ["name", "primaryColor", "logoStorageRef", "logo"]) ||
     !text(input.brand.name, WEB_RUNTIME_LIMITS.maxBrandNameLength) ||
     (input.brand.primaryColor !== undefined && !safeColor(input.brand.primaryColor)) ||
-    (input.brand.logoStorageRef !== undefined && !safeStorageRef(input.brand.logoStorageRef))
+    (input.brand.logoStorageRef !== undefined && !safeStorageRef(input.brand.logoStorageRef)) ||
+    (input.brand.logo !== undefined &&
+      (!validObject(input.brand.logo, ["storageRef", "alt"]) ||
+        !parseWebAssetRef(input.brand.logo.storageRef) ||
+        !text(input.brand.logo.alt, 256)))
   )
     issue(errors, "brand", "invalid_brand");
   validateNavigation(input.navigation, "navigation", errors);
@@ -398,6 +447,13 @@ export function validateWebDocument(input: unknown): WebValidationResult<WebDocu
   )
     issue(errors, "footer", "invalid_footer");
   if (counter.urls > MAX_WEB_URLS) issue(errors, "$", "url_limit");
+  if (!errors.length) {
+    try {
+      collectWebAssetRefs(input as WebDocument);
+    } catch {
+      issue(errors, "$", "asset_limit_or_ref");
+    }
+  }
   if (encoder.encode(JSON.stringify(input)).byteLength > MAX_WEB_DOCUMENT_BYTES)
     issue(errors, "$", "document_size");
   return errors.length ? { ok: false, errors } : { ok: true, value: input as WebDocument };
@@ -442,9 +498,9 @@ function renderNode(node: WebNode, route: WebRouteContext, depth = 0): string {
     case "text":
       return `<p>${escapeHtml(node.text)}</p>`;
     case "media":
-      return `<figure><img${attribute("alt", node.alt)}${attribute("data-storage-ref", node.storageRef)}></figure>`;
+      return renderWebMedia(node, route);
     case "catalogue":
-      return `<section class="catalogue" aria-label="Catalogue presentation">${node.heading ? `<h2>${escapeHtml(node.heading)}</h2>` : ""}<div class="catalogue-items">${node.items.map((item) => `<article${attribute("data-catalogue-id", item.id)}><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.description)}</p>${item.imageStorageRef ? `<img${attribute("alt", item.name)}${attribute("data-storage-ref", item.imageStorageRef)}>` : ""}${item.displayPriceText ? `<p class="display-price">${escapeHtml(item.displayPriceText)}</p>` : ""}${item.availabilityLabel ? `<p class="availability">${escapeHtml(item.availabilityLabel)}</p>` : ""}</article>`).join("")}</div><p class="commerce-unavailable">Ordering is unavailable in this presentation-only catalogue.</p></section>`;
+      return `<section class="catalogue" aria-label="Catalogue presentation">${node.heading ? `<h2>${escapeHtml(node.heading)}</h2>` : ""}<div class="catalogue-items">${node.items.map((item) => `<article${attribute("data-catalogue-id", item.id)}><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.description)}</p>${item.imageStorageRef ? renderWebMedia({ kind: "media", storageRef: item.imageStorageRef, alt: item.name }, route) : ""}${item.displayPriceText ? `<p class="display-price">${escapeHtml(item.displayPriceText)}</p>` : ""}${item.availabilityLabel ? `<p class="availability">${escapeHtml(item.availabilityLabel)}</p>` : ""}</article>`).join("")}</div><p class="commerce-unavailable">Ordering is unavailable in this presentation-only catalogue.</p></section>`;
     case "cta": {
       const url = targetUrl(node.target);
       if (node.analytics)
@@ -460,6 +516,23 @@ function renderNode(node: WebNode, route: WebRouteContext, depth = 0): string {
     default:
       throw new Error("WEB_NODE_INVALID");
   }
+}
+
+export function renderWebMedia(
+  node: import("@pikar/contracts/webRuntime").WebMediaNode,
+  route: WebRouteContext,
+): string {
+  if (
+    !validateWebMediaInput(
+      Object.fromEntries(Object.entries(node).filter(([key]) => key !== "kind")),
+    )
+  )
+    return "";
+  const src = webAssetPath(node.storageRef, route.slug);
+  if (!src) return "";
+  const aspect =
+    node.aspect === "portrait" ? "3 / 4" : node.aspect === "square" ? "1 / 1" : "16 / 10";
+  return `<figure class="web-media media-${node.placement ?? "inline"}"${attribute("data-webasset-ref", node.storageRef)} style="aspect-ratio:${aspect}"><img${attribute("data-asset-ref", node.storageRef)}${attribute("src", src)}${attribute("alt", node.alt)} loading="${node.placement === "hero" ? "eager" : "lazy"}" decoding="async" style="width:100%;height:100%;object-fit:${node.crop ?? "cover"};object-position:${node.focalPoint?.x ?? 50}% ${node.focalPoint?.y ?? 50}%"></figure>`;
 }
 
 function renderPage(document: WebDocument, page: WebPage, route: WebRouteContext): string {
@@ -509,7 +582,17 @@ function canonicalNode(node: WebNode): unknown {
     case "text":
       return { kind: node.kind, text: node.text };
     case "media":
-      return { kind: node.kind, storageRef: node.storageRef, alt: node.alt };
+      return {
+        kind: node.kind,
+        storageRef: node.storageRef,
+        alt: node.alt,
+        ...(node.crop === undefined ? {} : { crop: node.crop }),
+        ...(node.placement === undefined ? {} : { placement: node.placement }),
+        ...(node.aspect === undefined ? {} : { aspect: node.aspect }),
+        ...(node.focalPoint === undefined
+          ? {}
+          : { focalPoint: { x: node.focalPoint.x, y: node.focalPoint.y } }),
+      };
     case "catalogue":
       return {
         kind: node.kind,
@@ -587,6 +670,9 @@ export function canonicalWebDocument(document: WebDocument): string {
       ...(validated.brand.logoStorageRef === undefined
         ? {}
         : { logoStorageRef: validated.brand.logoStorageRef }),
+      ...(validated.brand.logo === undefined
+        ? {}
+        : { logo: { storageRef: validated.brand.logo.storageRef, alt: validated.brand.logo.alt } }),
     },
     navigation: validated.navigation.map((item) => ({ label: item.label, path: item.path })),
     pages: validated.pages.map((page) => ({
@@ -627,7 +713,7 @@ export function renderWebDocument(
     document.pages.find((candidate) => candidate.slug === route.page) ?? document.pages[0]!;
   const description = document.description ?? page.description ?? document.title;
   const homePath = `/p/${route.slug}/${document.pages[0]?.slug ?? route.page}`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${escapeHtml(version)}"><title>${escapeHtml(document.title)}</title><meta name="description" content="${escapeHtml(description)}"></head><body><header><a${attribute("href", homePath)}>${escapeHtml(document.brand.name)}</a></header>${renderPage(document, page, route)}</body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${escapeHtml(version)}"><title>${escapeHtml(document.title)}</title><meta name="description" content="${escapeHtml(description)}"></head><body><header><a${attribute("href", homePath)}>${document.brand.logo ? `<img${attribute("src", webAssetPath(document.brand.logo.storageRef, route.slug) ?? "")}${attribute("data-asset-ref", document.brand.logo.storageRef)}${attribute("alt", document.brand.logo.alt)} style="height:40px;max-width:140px;object-fit:contain">` : ""}${escapeHtml(document.brand.name)}</a></header>${renderPage(document, page, route)}</body></html>`;
 }
 
 export function renderWebDocumentBytes(
