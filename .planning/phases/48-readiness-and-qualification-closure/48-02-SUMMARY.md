@@ -510,3 +510,27 @@ release, a new versioned handoff and fresh paid approval must precede another at
 No evaluation or source-deployment retry is authorized by the consumed approval.
 
 Phase21 acceptance and all immutable predecessors remain preserved. Phase 23 stays 6/9, 48-02 partial/SKILL-02 open, Phase 48 partial and49 not started; unqualified verticals stay unavailable and Buffer/Zernio exceptions retain their existing limits.
+
+## Current PR82 release and handoff boundary — 2026-10-22 reconciliation
+
+PR82 source `821b097ceae440730bc51988af0425fb878687fb` passed CI `39663077579`; merge
+`2a70886519fccbf0a0524f680f67142c909cbfa7` and release `39668142870`/job
+`119458556492` succeeded under staging-only approval d792. [Public release receipt](48-STAGING-PR82-RELEASE-2026-10-21.json),
+SHA256 `3113664464004c54d805023d965fcbdd59e1a77cfa4f43e09f94f7cc7872b60f`, preserves configuration, registry and retention.
+[Current handoff](../23-agent-authored-skills/handoffs/2026-10-21-pr82/23-LIVE-HANDOFF.json), SHA256
+`e7ee9d75acf644ab20d8e72e708b92941649b20b026b8778738b3f371ebf4b62`, and [refresh](../23-agent-authored-skills/handoffs/2026-10-21-pr82/23-HANDOFF-REFRESH.json), SHA256
+`f94d17cf0457952c3c035755d23683f55374bfbf682f7dd9677afd98fb62f59c`, bind the released 825ef/5dbe 46-case suite.
+
+Fresh native A owner/B non-owner identities showed NOT_STARTED. Keyboard draft/diff review,
+1280x720 direct native and 390x900 read-only iframe views, followed by six matching reads,
+passed; temporary local configuration was restored. The shared schema, actual private-canary
+scan and assertLiveMatches passed. Candidate/provenance, global/foreign state, registry,
+retention and both historical closed bills remain unchanged. Embedded controls, touch/device
+tests and new authoring/refusal replay are not claimed.
+
+This supersedes only the next-input pointer. All three predecessor handoffs, both partial
+paid attempts, the consumed PR81 startup approval/once record and its bounded zero-work
+receipt remain unchanged. No new paid checkpoint or consent, evaluation result, public B
+mutation, activation, cleanup or production deployment followed. Fresh exact-source admission
+and separate concrete paid approval remain required. Phase 23 stays 6/9, SKILL-02 open,
+Phase 48 partial and Phase 49 not started.

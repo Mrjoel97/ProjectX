@@ -1,0 +1,46 @@
+{
+  "schema": "phase48-pr82-staging-release-observation.v1",
+  "authorizationAnswerVerbatim": "Approve PR82 staging release",
+  "authorizationSha256": "d792ee1a6daa2d4dfb5a05767736b963f9777dcaae66dd71fb9774bdb47c1c96",
+  "pullRequest": 82,
+  "mergedSha": "2a70886519fccbf0a0524f680f67142c909cbfa7",
+  "ciJobId": 119440878683,
+  "runId": 39668142870,
+  "jobId": 119458556492,
+  "observedAt": "2026-10-21T21:09:06.394Z",
+  "releaseObservationSha256": "44b4ff45a060bd8239803306f305564e534f12829303768c20c686c081d6bb81",
+  "release": {
+    "schema": "phase48-staging-release.v1",
+    "target": "woozy-wren-368",
+    "success": true,
+    "phase": "complete",
+    "preflightPassed": true,
+    "billingLabelsMayHaveChanged": false,
+    "billingLabelsVerified": true,
+    "applyAttempted": true,
+    "applyCompleted": true,
+    "postflightAttempted": true,
+    "postflightPassed": true,
+    "preservationVerified": true,
+    "postflightParityZero": true,
+    "privateDiagnosticsSuppressed": true,
+    "sourceSha": "821b097ceae440730bc51988af0425fb878687fb",
+    "ciRunId": "39663077579",
+    "authorizationSha256": "d792ee1a6daa2d4dfb5a05767736b963f9777dcaae66dd71fb9774bdb47c1c96",
+    "before": {
+      "watchedConfigurationSha256": "3e6655cf6ff6c1bff7e603a8122065de8f21cdc754ed87962ca731dc42698b89",
+      "registrySha256": "faac155d8c90d9205f2aa95072a520e50e727964974e64a6f62676bea73480e3",
+      "protectedRetentionSha256": "2ecc1945e018a9af66614a2dfceb8a71209f8b480c8015e73eed9b08d9590163"
+    },
+    "after": {
+      "watchedConfigurationSha256": "3e6655cf6ff6c1bff7e603a8122065de8f21cdc754ed87962ca731dc42698b89",
+      "registrySha256": "faac155d8c90d9205f2aa95072a520e50e727964974e64a6f62676bea73480e3",
+      "protectedRetentionSha256": "2ecc1945e018a9af66614a2dfceb8a71209f8b480c8015e73eed9b08d9590163"
+    }
+  },
+  "paidEvaluationAuthorized": false,
+  "activationAuthorized": false,
+  "productionDeploymentAuthorized": false,
+  "productionPromotionRequested": false,
+  "authorizationProvenance": "Exact question and answer retained from call_629ffe7764764d22a8cc459a4fee4785. Approval covers ready, merge, staging-only release, existing read-only account checks and new versioned handoff."
+}

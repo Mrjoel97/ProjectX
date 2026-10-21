@@ -1,6 +1,18 @@
 # Phase 23 execution preparation — 2026-09-11
 
-## Current continuation — PR81 terminal startup, 2026-10-21
+## Current continuation — PR82 released handoff, 2026-10-22
+
+Use [the current PR82 handoff](handoffs/2026-10-21-pr82/23-LIVE-HANDOFF.json), SHA256
+`e7ee9d75acf644ab20d8e72e708b92941649b20b026b8778738b3f371ebf4b62`, after source `821b097ceae440730bc51988af0425fb878687fb` passed
+CI `39663077579` and staging release `39668142870`. [The refresh](handoffs/2026-10-21-pr82/23-HANDOFF-REFRESH.json),
+SHA256 `f94d17cf0457952c3c035755d23683f55374bfbf682f7dd9677afd98fb62f59c`, records fresh native/UI and final six matching
+reads. The released suite is 825ef/5dbe, 46 cases; candidate and both historical bills remain
+unchanged. Follow the current 23-07/08/09 contexts and PR82 sibling artifact directory. No
+paid checkpoint/consent or evaluation result exists. Revalidate exact admission before a
+separate paid checkpoint; do not replay authoring/bootstrap or the consumed PR81 attempt.
+Phase 23 stays 6/9, Phase 48 partial and Phase 49 not started.
+
+## Historical PR81 terminal startup, 2026-10-21
 
 23-06 is complete; do not rerun authoring/bootstrap from older setup instructions.
 [The separate immutable startup observation](23-07-STARTUP-2026-10-21-PR81.json) (SHA256 `8815857b7e559e24c4daf42a2092f0e0ae7b163d329ea0c12b67e3abb851bb2c`) records the latest attempt.

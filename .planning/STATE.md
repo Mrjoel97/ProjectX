@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: "Platform -> Private Beta"
 current_phase: 48
-current_plan: "48-02 — PR81 attempt stopped on read-only startup fetch failure; consumed approval, native zero new work. Offline helper repair awaits source-qualified release/new handoff/new consent. Phase 23 six of nine, 48 partial, 49 not started."
+current_plan: "48-02 — PR82 helper repair released to staging; validated source-bound handoff e7ee ready for separate paid checkpoint. Phase 23 six of nine, 48 partial, 49 not started."
 status: in_progress
-stopped_at: "2026-10-21 — PR81 authorization c663e7… consumed by sole guarded runner start; skills:inspectTenantSkill TypeError fetch failed before budget/fixtures/providers. Complete bounded native ledger window confirms zero new work. Offline golden 825ef/vertical 01d6 await release; deployed caf/5867/39df remains old-source proof only. No replay/evidence/B mutation/activation/cleanup/production release."
-last_updated: "2026-10-21"
+stopped_at: "2026-10-22 — Approved PR82 staging release 39668142870 and new handoff e7ee/refresh f94d validated with fresh native UI and six matching reads. Prior c663 startup remains terminal with zero new work. No new paid consent/evaluation result/B mutation/activation/production deployment."
+last_updated: "2026-10-22"
 progress:
   total_phases: 79
   completed_phases: 54
@@ -47,6 +47,32 @@ The owner approved the managed-service programme on 2026-10-19: **48 readiness �
 - Progress counts are planning-file/disposition counts, not product readiness. The new20 plans lower the plan-completion percentage without undoing existing work.
 
 ## Next execution boundary
+
+The approved PR82 staging release now supplies the current input for 23-07/08/09. Source
+`821b097ceae440730bc51988af0425fb878687fb` passed CI `39663077579`; merge
+`2a70886519fccbf0a0524f680f67142c909cbfa7` and release `39668142870`/job
+`119458556492` are recorded in [the release observation](phases/48-readiness-and-qualification-closure/48-STAGING-PR82-RELEASE-2026-10-21.json),
+SHA256 `3113664464004c54d805023d965fcbdd59e1a77cfa4f43e09f94f7cc7872b60f`. Staging-only authorization SHA256 is
+`d792ee1a6daa2d4dfb5a05767736b963f9777dcaae66dd71fb9774bdb47c1c96`; it grants no paid or owner-action authority.
+
+[Current handoff](phases/23-agent-authored-skills/handoffs/2026-10-21-pr82/23-LIVE-HANDOFF.json),
+SHA256 `e7ee9d75acf644ab20d8e72e708b92941649b20b026b8778738b3f371ebf4b62`, and [refresh observation](phases/23-agent-authored-skills/handoffs/2026-10-21-pr82/23-HANDOFF-REFRESH.json),
+SHA256 `f94d17cf0457952c3c035755d23683f55374bfbf682f7dd9677afd98fb62f59c`, bind the released 825ef/5dbe 46-case
+suite and fresh native/UI/six-read proof. Fresh native A owner/B non-owner identities showed NOT_STARTED. Keyboard draft/diff review,
+1280x720 direct native and 390x900 read-only iframe views, followed by six matching reads,
+passed; temporary local configuration was restored. The shared schema, actual private-canary
+scan and assertLiveMatches passed. Candidate/provenance, global/foreign state, registry,
+retention and both historical closed bills remain unchanged. Embedded controls, touch/device
+tests and new authoring/refusal replay are not claimed.
+
+This supersedes only the next-input pointer. All three predecessor handoffs, both partial
+paid attempts, the consumed PR81 startup approval/once record and its bounded zero-work
+receipt remain unchanged. No new paid checkpoint or consent, evaluation result, public B
+mutation, activation, cleanup or production deployment followed. Fresh exact-source admission
+and separate concrete paid approval remain required. Phase 23 stays 6/9, SKILL-02 open,
+Phase 48 partial and Phase 49 not started.
+
+### Historical PR81 startup and repair boundary
 
 The separately approved PR81 attempt consumed authorization SHA256
 `c663e7a1b3dbe2f6060a41d2beb152de4578b0e12a86839419a456041ce2de1d` when its exclusive once record
