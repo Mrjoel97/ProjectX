@@ -43,7 +43,13 @@ const buttonStyle = {
   maxWidth: "100%",
 } as const;
 
-function CampaignCard({ campaign }: { campaign: Campaign }) {
+export function CampaignCard({
+  campaign,
+  onOpenPlan,
+}: {
+  campaign: Campaign;
+  onOpenPlan?: (id: string) => void;
+}) {
   const convex = useConvex();
   const approve = useMutation(api.mediaCampaign.approve);
   const cancel = useMutation(api.mediaCampaign.cancel);
@@ -213,6 +219,14 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
             >
               <a
                 href={`/dashboard/workspace?thread=${encodeURIComponent(campaign.threadId)}&plan=${encodeURIComponent(item.planId)}&view=canvas`}
+                onClick={
+                  onOpenPlan
+                    ? (event) => {
+                        event.preventDefault();
+                        onOpenPlan(item.planId);
+                      }
+                    : undefined
+                }
                 style={{ color: "var(--teal-900)" }}
               >
                 Review plan

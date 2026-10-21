@@ -15,10 +15,7 @@
     "apps/web/app/(app)/dashboard/marketing/BufferPanel.tsx",
     "apps/web/app/(app)/dashboard/marketing/bufferPanel.test.tsx"
   ],
-  "_unassigned": [
-    "packages/backend/vitest.diag.setup.ts",
-    "packages/backend/convex/schema.ts"
-  ],
+  "_unassigned": ["packages/backend/vitest.diag.setup.ts", "packages/backend/convex/schema.ts"],
   "marketing.md": [
     "apps/web/e2e/marketing-uat.spec.ts",
     "packages/core/src/marketing",
@@ -211,6 +208,8 @@
     "apps/web/public/fonts/"
   ],
   "cockpit.md": [
+    "packages/core/src/workspaceArtifacts",
+    "packages/backend/convex/workspaceArtifacts",
     "scripts/check-phase23-probe-controls",
     "scripts/check-phase23-mutation-proofs.mjs",
     "apps/web/app/(app)/dashboard/workspace/",
@@ -365,6 +364,8 @@
     "apps/web/app/lib/normalizeAudio.ts"
   ],
   "vault.md": [
+    "apps/web/app/(app)/dashboard/artifacts/",
+    "apps/web/scripts/sync-pdf-assets.mjs",
     "packages/vault/",
     "packages/backend/convex/vault.ts",
     "packages/backend/convex/vaultExtract.ts",
@@ -397,6 +398,7 @@
     "packages/backend/convex/vaultPresentations"
   ],
   "media.md": [
+    "packages/core/src/productionQuality",
     "packages/backend/convex/reliabilitySweep.ts",
     "packages/backend/convex/reliabilitySweep.test.ts",
     "packages/cost/src/media.ts",
@@ -565,10 +567,7 @@
     "apps/web/app/(app)/dashboard/profile/VerticalPackRecommendations.tsx",
     "apps/web/app/(app)/dashboard/profile/verticalPackRecommendations"
   ],
-  "revenue-crm.md": [
-    "packages/revenue/src/crm",
-    "packages/backend/convex/revenueCrm"
-  ],
+  "revenue-crm.md": ["packages/revenue/src/crm", "packages/backend/convex/revenueCrm"],
   "revenue-finance.md": [
     "packages/revenue/src/money",
     "packages/revenue/src/finance",

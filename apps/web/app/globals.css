@@ -2249,3 +2249,48 @@ button.clay-card:hover {
     outline-offset: 1px;
   }
 }
+.artifact-expand {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--teal-900);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.artifact-media-switch {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--rule);
+}
+.artifact-media-switch button {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.artifact-media-switch button[aria-pressed="true"] {
+  background: var(--canvas);
+  color: var(--teal-900);
+  font-weight: 600;
+}
+.artifact-media-switch span {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+@media (max-width: 48rem) {
+  .artifact-media-switch button {
+    min-height: 44px;
+  }
+}

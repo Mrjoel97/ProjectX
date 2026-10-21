@@ -215,6 +215,70 @@ type CampaignView = {
   }[];
 };
 
+async function campaignView(
+  ctx: QueryCtx & { tenantId: string },
+  campaign: Doc<"mediaCampaigns">,
+  active: Doc<"mediaCampaigns"> | null,
+): Promise<CampaignView> {
+  const items: CampaignView["items"] = [];
+  const reviewedPlans: Doc<"plans">[] = [];
+  for (const item of campaign.items) {
+    const plan = await ctx.db.get(item.planId);
+    // A corrupt manifest must not become a cross-tenant signed-download capability.
+    if (
+      !plan ||
+      plan.tenantId !== ctx.tenantId ||
+      plan.threadId !== campaign.threadId ||
+      plan.mediaCampaignId !== campaign._id
+    )
+      throw new Error("CAMPAIGN_PLAN_NOT_OWNED");
+    reviewedPlans.push(plan);
+    const estimate =
+      item.status === "ready" || item.status === "proposal" || item.status === "failed"
+        ? plan.status === "collecting"
+          ? { ok: false as const, reason: "planning_in_progress" }
+          : await estimateCampaignPlanInner(ctx, ctx.tenantId, item.planId)
+        : null;
+    items.push({
+      planId: item.planId,
+      kind: item.kind,
+      label: item.label,
+      status: item.status === "proposal" && estimate?.ok ? "ready" : item.status,
+      estimateCents: estimate?.ok ? campaignMaximumCents(estimate.estUsd) : item.estimateCents,
+      refusal: estimate && !estimate.ok ? estimate.reason : null,
+      failureReason: item.failureReason ?? null,
+      downloadable: item.status === "succeeded",
+      musicCredit: plan.musicCredit ?? null,
+    });
+  }
+  return {
+    id: campaign._id,
+    threadId: campaign.threadId,
+    title: campaign.title,
+    status: campaign.status,
+    updatedAt: campaign.updatedAt,
+    reviewHash: await contentHash(JSON.stringify(reviewedPlans)),
+    maxCostCents: campaign.maxCostCents,
+    reservedCents: campaign.reservedCents,
+    nextMaximumCents: items
+      .filter((item) => item.status === "ready")
+      .reduce((n, item) => n + item.estimateCents, 0),
+    cancelled: campaign.cancelledAt !== undefined,
+    tenantBusy: active !== null && active._id !== campaign._id,
+    items,
+  };
+}
+
+export const byId = tenantQuery({
+  args: { threadId: v.string(), campaignId: v.id("mediaCampaigns") },
+  handler: async (ctx, { threadId, campaignId }): Promise<CampaignView | null> => {
+    const campaign = await ctx.db.get(campaignId);
+    if (!campaign || campaign.tenantId !== ctx.tenantId || campaign.threadId !== threadId)
+      return null;
+    return campaignView(ctx, campaign, await activeCampaign(ctx, ctx.tenantId));
+  },
+});
+
 /** Bounded parent manifests; owned final bytes stay downloadable even after a sibling fails. */
 export const list = tenantQuery({
   args: { threadId: v.string() },
@@ -225,54 +289,7 @@ export const list = tenantQuery({
       .order("desc")
       .take(5);
     const active = await activeCampaign(ctx, ctx.tenantId);
-    return Promise.all(
-      campaigns.map(async (campaign) => {
-        const items: CampaignView["items"] = [];
-        const reviewedPlans: Doc<"plans">[] = [];
-        for (const item of campaign.items) {
-          const plan = await ctx.db.get(item.planId);
-          // A corrupt manifest must not become a cross-tenant signed-download capability.
-          if (!plan || plan.tenantId !== ctx.tenantId || plan.mediaCampaignId !== campaign._id)
-            throw new Error("CAMPAIGN_PLAN_NOT_OWNED");
-          reviewedPlans.push(plan);
-          const estimate =
-            item.status === "ready" || item.status === "proposal" || item.status === "failed"
-              ? plan.status === "collecting"
-                ? { ok: false as const, reason: "planning_in_progress" }
-                : await estimateCampaignPlanInner(ctx, ctx.tenantId, item.planId)
-              : null;
-          items.push({
-            planId: item.planId,
-            kind: item.kind,
-            label: item.label,
-            status: item.status === "proposal" && estimate?.ok ? "ready" : item.status,
-            estimateCents: estimate?.ok
-              ? campaignMaximumCents(estimate.estUsd)
-              : item.estimateCents,
-            refusal: estimate && !estimate.ok ? estimate.reason : null,
-            failureReason: item.failureReason ?? null,
-            downloadable: item.status === "succeeded",
-            musicCredit: plan.musicCredit ?? null,
-          });
-        }
-        return {
-          id: campaign._id,
-          threadId: campaign.threadId,
-          title: campaign.title,
-          status: campaign.status,
-          updatedAt: campaign.updatedAt,
-          reviewHash: await contentHash(JSON.stringify(reviewedPlans)),
-          maxCostCents: campaign.maxCostCents,
-          reservedCents: campaign.reservedCents,
-          nextMaximumCents: items
-            .filter((item) => item.status === "ready")
-            .reduce((n, item) => n + item.estimateCents, 0),
-          cancelled: campaign.cancelledAt !== undefined,
-          tenantBusy: active !== null && active._id !== campaign._id,
-          items,
-        };
-      }),
-    );
+    return Promise.all(campaigns.map((campaign) => campaignView(ctx, campaign, active)));
   },
 });
 

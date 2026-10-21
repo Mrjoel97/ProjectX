@@ -9,6 +9,11 @@ requirements-completed: []
 
 # 53-01 — Partial offline implementation
 
+Subsequent scope is tracked in [53-02-SUMMARY.md](53-02-SUMMARY.md): per-chat artifact tabs,
+the local actual-page PDF reader and native Office qualification. Its PowerPoint 15.0 render and
+saved/reopened title edit supersede the initial "no Office converter found" observation below;
+historical lane counts and initial gaps remain as recorded. Neither plan is complete.
+
 The owner approved implementation and multiple agents after reviewing the discovery packet. Work
 is isolated on `codex/media-documents-discovery-20261021`, based on
 `821c3206e47eb4cec0ebcf3d99cf943358f2910a`. This records work in progress, not a completed plan,
@@ -107,9 +112,11 @@ reported unresolved new module references; do not describe the full graph as reg
    hosted download/erasure-fence acceptance remain unperformed.
 2. Optional-preview failure, capped grids, stale-storage guards, foreign-tenant refusal and replacement
    cleanup have offline regression coverage; retain these checks through hosted qualification.
-3. Open exported XLSX/PPTX in their intended applications, edit chart/text/data objects, verify no
-   repair warnings and render/inspect every populated worksheet/slide. No Office converter was
-   found in the local environment; HTML preview alone cannot close this gate.
+3. Extend the actual native Office observations in 53-02 to representative chart/data edits and
+   intended application behavior. PowerPoint 15.0 opened/rendered the seven-layout sample and
+   preserved a title edit through save/reopen; chart-data editing and instrumented repair-warning
+   checks were not exercised. Native Excel qualification is recorded by its lane. HTML previews
+   alone cannot close this acceptance gate.
 4. Qualify the exact new registry version before any reviewed seed/activation. The presentation
    drafter is currently a non-gated builtin, whose ordinary first seed can auto-activate; no seed
    or activation was performed by this implementation scope.

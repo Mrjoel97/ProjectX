@@ -5686,3 +5686,29 @@ Download queries validate campaign, child-plan and asset ownership before mintin
 Existing stock/uploaded scenes already support B-roll. Quality acceptance still needs representative actual image sets and30/60-second reels, measured final dimensions/fps/duration/audio/captions, relevant B-roll/credits, pacing/continuity and owner visual review. The supplied Taste Skill repository is frontend-design guidance, not a video provider. No4K/native-source-resolution/provider-quality claim or paid comparison follows from a preset or local parser test. Record subsequent source-supported profile changes and actual benchmarks separately.
 
 Verify focused mediaCampaign core/backend and rendered MediaCampaign tests, existing media money-path tests and ordinary plan/approval regressions. 53-01 records partial evidence; root consolidated/hosted/provider/visual gates remain open.
+
+## Candidate production quality review — 2026-10-21
+
+Last verified: 2026-10-21 — `packages/core/src/productionQuality.ts` validates candidate image
+quality/placement tuples and typed human review records for30/60-second vertical reels. Its house
+policy checks timeline, safe caption/overlay layout, shot scale/purpose/coverage variety, source and
+license references, generated-second limits and explicit visual/audio/caption evidence. It does not
+inspect media bytes, establish license rights, authorize spending or certify a rendered artifact.
+Synthetic test evidence is never owner quality acceptance.
+
+`productionQuality.fixtures.ts` freezes a public synthetic image prompt and representative30/60s
+briefs/narration. The focused regression reproduces the official GPT Image2 output calculator and
+derives the current low-profile reel reservations from shared prices with2×voice allowance:41¢
+and77¢. Three separately reserved baseline images add3¢, for121¢ of current software reservation;
+director/research planning uses its separate envelope. These numbers are not guaranteed provider
+invoice maxima. The benchmark packet records exact proposed inputs, output-only quality estimates,
+source URLs, recovery rehearsals and actual-output acceptance requirements.
+
+Higher image qualities are supported by the provider but remain candidate-only. No Images-route
+hard token/spend bound has been qualified; the published calculator is an estimate and excludes
+inputs. Do not change only the outgoing quality value or claim a billing maximum. Persist and
+price the exact profile in plan/job/estimate/admission/reconciliation together before connecting
+it to paid egress. Keep legacy low defaults until measured representative owner acceptance.
+The complete v7 editorial director candidate is outside canonical seeds/mirrors and NOT active;
+the existing media director is deliberately ungated by the text runner, so editing its canonical
+seed is a promotion action. See `.planning/phases/53-media-and-document-production/53-QUALITY-BENCHMARK.md`.

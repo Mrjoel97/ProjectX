@@ -95,6 +95,7 @@ import type * as llm from "../llm.js";
 import type * as media from "../media.js";
 import type * as mediaCampaign from "../mediaCampaign.js";
 import type * as vaultPresentations from "../vaultPresentations.js";
+import type * as workspaceArtifacts from "../workspaceArtifacts.js";
 import type * as mediaComplete from "../mediaComplete.js";
 import type * as mediaIntent from "../mediaIntent.js";
 import type * as microsoftAuth from "../microsoftAuth.js";
@@ -277,6 +278,7 @@ declare const fullApi: ApiFromModules<{
   "media": typeof media;
   "mediaCampaign": typeof mediaCampaign;
   "vaultPresentations": typeof vaultPresentations;
+  "workspaceArtifacts": typeof workspaceArtifacts;
   "mediaComplete": typeof mediaComplete;
   "mediaIntent": typeof mediaIntent;
   "microsoftAuth": typeof microsoftAuth;

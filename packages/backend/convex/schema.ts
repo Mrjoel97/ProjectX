@@ -2552,6 +2552,7 @@ export default defineSchema({
   })
     .index("by_tenant", ["tenantId"]) // browse
     .index("by_tenant_contentHash", ["tenantId", "contentHash"]) // dedup
+    .index("by_tenant_sourceThread", ["tenantId", "sourceThreadId"])
     // Phase-17.1 (BLPR-01) Stage-1 drift: the tenant's `ready` docs and NOTHING else. Without it
     // the read is a `by_tenant` scan over every status — on the table whose own comment above warns
     // a `.collect()` walks into the 16 MiB / 32k-doc read cap.
