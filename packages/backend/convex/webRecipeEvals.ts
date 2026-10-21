@@ -13,6 +13,7 @@ import {
   assertDesignProfileSources,
   canonicalWebDocument,
   canonicalWebRecipeDefinition,
+  designedWebDocumentHash,
   hashWebRecipeDefinition,
   materializeWebRecipe,
   materializeWebRecipeWithProvenance,
@@ -85,28 +86,41 @@ function assertSourceInfluence(family: string): void {
   if (designed === plain) throw new Error("WEB_RECIPE_SOURCE_HAS_NO_RENDERED_INFLUENCE");
   assertDesignProfileSources(output.designProfile);
   const css = styleFrom(designed);
-  // Each reviewed role reaches a concrete presentation decision: UI/UX pattern, type and form,
-  // Nexscope palette, and Taste dials. A constant style tag cannot satisfy these values.
+  // The bundle is validated provenance. Current presentation is Pikar-owned: verify the actual
+  // selected composition and consumed CSS values, without attributing these presets upstream.
+  const direction = output.designProfile.artDirection ?? "editorial";
+  const palettes = { editorial: "#254e72", studio: "#ad2247", technical: "#71e1c2" };
+  const radii = { editorial: 0, studio: 16, technical: 6 };
+  if (
+    !designed.includes(`data-art-direction="${direction}"`) ||
+    !designed.includes(`data-pattern="${output.designProfile.patternId}"`)
+  )
+    throw new Error("WEB_RECIPE_SOURCE_ROLE_HAS_NO_INFLUENCE:pattern");
+  if (!css.includes("body[data-pattern=hero-features-cta] .hero-copy{max-width:700px}"))
+    throw new Error("WEB_RECIPE_PATTERN_STYLE_NOT_CONSUMED");
+  assertStyle(css, /--radius:(\d+)px;/, String(radii[direction]), "style");
+  assertStyle(css, /font:400 1rem\/1\.6 ([^;]+);/, "system-ui,sans-serif", "typography");
+  assertStyle(css, /--control-height:(\d+)px;/, "44", "form");
+  if (!css.includes("min-height:var(--control-height)"))
+    throw new Error("WEB_RECIPE_SOURCE_ROLE_HAS_NO_INFLUENCE:form");
   assertStyle(
     css,
-    /h1\{text-align:([^;]+);/,
-    id === "campaign-landing" ? "center" : "left",
-    "pattern",
+    /--accent:([^;]+);/,
+    output.document.brand.primaryColor ?? palettes[direction],
+    "palette",
   );
-  assertStyle(css, /border-radius:(\d+)px\}/, "12", "style");
-  assertStyle(css, /font:400 1rem\/1\.6 ([^;]+);/, "system-ui,sans-serif", "typography");
-  assertStyle(css, /min-height:(\d+)px\}/, "44", "form");
-  assertStyle(css, /--teal:([^;]+);/, "#0b4f4a", "palette");
+  if (!css.includes("background:var(--accent)") || !css.includes("font-family:var(--heading)"))
+    throw new Error("WEB_RECIPE_PRESENTATION_TOKEN_UNUSED");
   assertStyle(
     css,
     /--space:(\d+)px;/,
-    String(12 + output.designProfile.dials.density * 2),
+    String(36 - output.designProfile.dials.density * 2),
     "density",
   );
   assertStyle(
     css,
-    /--measure:(\d+)ch/,
-    String(72 - output.designProfile.dials.variance),
+    /--measure:(\d+)px/,
+    String(1180 + (output.designProfile.dials.variance - 5) * 18),
     "variance",
   );
   assertStyle(
@@ -150,10 +164,12 @@ function assertDesignDial(family: string): void {
   const baseHtml = renderDesignedWebDocument(base.document, base.designProfile);
   const baseStyle = styleFrom(baseHtml);
   const readings = {
-    variance: (css: string) => css.match(/--measure:(\d+)ch/)?.[1],
+    variance: (css: string) => css.match(/--measure:(\d+)px/)?.[1],
     motion: (css: string) => css.match(/transition:transform (\d+)ms ease/)?.[1],
     density: (css: string) => css.match(/--space:(\d+)px;/)?.[1],
   };
+  if (!baseStyle.includes("max-width:var(--measure)") || !baseStyle.includes("calc(var(--space)"))
+    throw new Error("WEB_RECIPE_DIAL_STYLE_NOT_CONSUMED");
   for (const key of ["variance", "motion", "density"] as const) {
     const value = expected[key];
     if (value === undefined || value === base.designProfile.dials[key])
@@ -167,8 +183,9 @@ function assertDesignDial(family: string): void {
     const dialStyle = styleFrom(renderDesignedWebDocument(dialled.document, dialled.designProfile));
     if (readings[key](baseStyle) === readings[key](dialStyle))
       throw new Error(`WEB_RECIPE_DIAL_DID_NOT_CHANGE_RENDERED_STYLE:${key}`);
-    if (key === "variance") assertStyle(dialStyle, /--measure:(\d+)ch/, String(72 - value), key);
-    if (key === "density") assertStyle(dialStyle, /--space:(\d+)px;/, String(12 + value * 2), key);
+    if (key === "variance")
+      assertStyle(dialStyle, /--measure:(\d+)px/, String(1180 + (value - 5) * 18), key);
+    if (key === "density") assertStyle(dialStyle, /--space:(\d+)px;/, String(36 - value * 2), key);
     if (key === "motion")
       assertStyle(dialStyle, /transition:transform (\d+)ms ease/, String(value * 12), key);
   }
@@ -193,6 +210,72 @@ function assertRepeat(family: string): void {
     first.inputHash !== second.inputHash
   )
     throw new Error("WEB_RECIPE_REPEAT_NOT_DETERMINISTIC");
+}
+
+function assertArtDirectionQualification(family: string): void {
+  const id = family as "business-site" | "campaign-landing" | "storefront-catalogue";
+  const fixture = webRecipeFixturesFor(id).find((item) => item.kind === "positive");
+  if (!fixture?.input || typeof fixture.input !== "object")
+    throw new Error("WEB_RECIPE_ART_DIRECTION_FIXTURE_MISSING");
+  const rendered = new Set<string>();
+  const hashes = new Set<string>();
+  const inputs = new Set<string>();
+  for (const artDirection of ["editorial", "studio", "technical"] as const) {
+    const output = materializeWebRecipeWithProvenance(id, {
+      ...fixture.input,
+      artDirection,
+      primaryColor: "#243B53",
+      design: { variance: 5, motion: 2, density: 3 },
+    });
+    const html = renderDesignedWebDocument(output.document, output.designProfile);
+    const headings = {
+      editorial: 'Georgia,"Times New Roman",serif',
+      studio: '"Arial Black",Arial,sans-serif',
+      technical: "Arial,Helvetica,sans-serif",
+    };
+    const radii = { editorial: 0, studio: 16, technical: 6 };
+    if (
+      output.designProfile.artDirection !== artDirection ||
+      output.document.brand.primaryColor !== "#243B53" ||
+      !html.includes(`data-art-direction="${artDirection}"`) ||
+      !styleFrom(html).includes("--accent:#243B53;")
+    )
+      throw new Error("WEB_RECIPE_ART_DIRECTION_NOT_MATERIALIZED");
+    assertStyle(
+      styleFrom(html),
+      /--heading:([^}]+)}/,
+      headings[artDirection],
+      "direction-typography",
+    );
+    assertStyle(
+      styleFrom(html),
+      /--radius:(\d+)px;/,
+      String(radii[artDirection]),
+      "direction-style",
+    );
+    rendered.add(html);
+    hashes.add(designedWebDocumentHash(output.document, output.designProfile));
+    inputs.add(output.inputHash);
+  }
+  if (rendered.size !== 3 || hashes.size !== 3 || inputs.size !== 3)
+    throw new Error("WEB_RECIPE_ART_DIRECTION_NOT_DISTINCT");
+  for (const invalid of [
+    { artDirection: "unknown" },
+    { artDirection: "<script>" },
+    { primaryColor: "red" },
+    { primaryColor: "#fff" },
+    { primaryColor: "#123456;display:none" },
+  ]) {
+    let refused = false;
+    try {
+      materializeWebRecipeWithProvenance(id, { ...fixture.input, ...invalid });
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.startsWith("WEB_RECIPE_INPUT_INVALID:"))
+        throw error;
+      refused = true;
+    }
+    if (!refused) throw new Error("WEB_RECIPE_ART_DIRECTION_UNSAFE_ACCEPTED");
+  }
 }
 
 function assertFormPreservation(
@@ -383,6 +466,7 @@ export function evaluateWebRecipeCandidate(
     if (kind === "source-influence") {
       assertSourceCoverage(definition);
       assertSourceInfluence(targetFamily);
+      assertArtDirectionQualification(targetFamily);
     }
     if (current.expected === "identity") {
       if (kind === "source-removal") assertSourceInfluence(targetFamily);

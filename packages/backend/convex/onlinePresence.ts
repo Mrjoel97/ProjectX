@@ -197,6 +197,15 @@ const selectedRefs = (brief: unknown): string[] => {
   return brief.sourceRefs.filter((ref): ref is string => typeof ref === "string").slice(0, 32);
 };
 
+function brandColorSourced(assessment: Extract<OnlinePresenceAssessment, { ok: true }>): boolean {
+  const color = assessment.brief.design?.primaryColor;
+  if (!color) return true;
+  // The pure validator has already closed this value to #RRGGBB. Match the full color token,
+  // including case-insensitive evidence, rather than accepting the prefix of an eight-digit color.
+  const token = new RegExp(`${color}(?![a-f0-9])`, "i");
+  return assessment.sources.some((source) => token.test(source.text));
+}
+
 async function localDestinationAvailable(
   ctx: DatabaseCtx,
   tenantId: string,
@@ -380,6 +389,23 @@ export const saveBrief = internalMutation({
     if (session.revision !== args.expectedRevision) throw new Error("STALE_REVISION");
     const sources = await resolveSources(ctx, session, selectedRefs(args.brief));
     const assessment = assessOnlinePresenceBrief(args.brief, sources);
+    if (assessment.ok && !brandColorSourced(assessment))
+      return {
+        ok: false,
+        revision: session.revision,
+        assessment: {
+          ok: false,
+          missing: [
+            {
+              field: "design.primaryColor",
+              reason: "missing",
+              question:
+                "Use a brand color explicitly stated in the selected business evidence, or omit it for a suitable default palette.",
+            },
+          ],
+          warnings: assessment.warnings,
+        },
+      };
     // Source/disclosure wording must occur in a real user message; a model cannot invent consent.
     const consent =
       args.brief && typeof args.brief === "object" ? args.brief.contactConsent : undefined;
@@ -495,6 +521,8 @@ export const buildProject = internalMutation({
     const assessment = assessOnlinePresenceBrief(session.brief, sources);
     if (!assessment.ok)
       return { ok: false, revision: session.revision, assessment: statusAssessment(assessment) };
+    if (!brandColorSourced(assessment))
+      return { ok: false, revision: session.revision, reason: "brand_color_not_sourced" };
     if (
       assessment.brief.contactConsent &&
       !session.humanMessages.some((message) =>

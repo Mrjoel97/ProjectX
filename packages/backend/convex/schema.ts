@@ -4177,6 +4177,9 @@ export default defineSchema({
         inputHash: v.string(),
         rendererVersion: v.optional(v.string()),
         designProfile: v.object({
+          artDirection: v.optional(
+            v.union(v.literal("editorial"), v.literal("studio"), v.literal("technical")),
+          ),
           bundleHash: v.string(),
           compilerHash: v.string(),
           patternId: v.string(),

@@ -29,6 +29,38 @@ const assess = (overrides: Record<string, unknown> = {}, sources = [source]) =>
   assessOnlinePresenceBrief({ ...brief, ...overrides }, sources);
 
 describe("attended online presence brief", () => {
+  test("passes closed business-fitting art direction and a bounded color to both recipe families", () => {
+    for (const kind of ["landing", "website"] as const) {
+      const result = assess({ kind, design: { artDirection: "studio", primaryColor: "#246B58" } });
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("Expected designed brief");
+      expect(result.input).toMatchObject({ artDirection: "studio", primaryColor: "#246B58" });
+      expect(result.brief.design).toEqual({ artDirection: "studio", primaryColor: "#246B58" });
+      expect(result.input).not.toHaveProperty("design");
+    }
+    const automaticPalette = assess({ design: { artDirection: "editorial" } });
+    expect(automaticPalette.ok).toBe(true);
+    if (automaticPalette.ok) expect(automaticPalette.input).not.toHaveProperty("primaryColor");
+  });
+
+  test.each([
+    null,
+    [],
+    "studio",
+    { artDirection: "luxury" },
+    { css: "body{color:red}" },
+    { primaryColor: "#abc" },
+    { primaryColor: "#12345678" },
+    { primaryColor: "rgb(1,2,3)" },
+    { primaryColor: "#123456;background:url(https://example.com)" },
+    { primaryColor: 123456 },
+  ])("rejects unknown direction, arbitrary presentation code and unsupported color shapes: %j", (design) => {
+    const result = assess({ design });
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.missing).toContainEqual(expect.objectContaining({ reason: "invalid" }));
+  });
+
   test("materializes approved context into an existing business recipe without inventing consent", () => {
     const result = assess();
     expect(result.ok).toBe(true);

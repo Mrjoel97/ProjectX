@@ -187,7 +187,7 @@ describe("canonical web recipes", () => {
       expect(html).toContain(
         "https://appointments.example/consultation?service=design&amp;locale=en",
       );
-      expect(result.recipe.compilerId).toBe("web-recipes-v2");
+      expect(result.recipe.compilerId).toBe("web-recipes-v3");
       expect(
         materializeWebRecipeWithProvenance(family, {
           ...input,
@@ -341,6 +341,52 @@ describe("canonical web recipes", () => {
       validateWebRecipeInput("business-site", { ...copy, headline: "<script>attack()</script>" })
         .ok,
     ).toBe(false);
+  });
+
+  it("omits unsupported empty pages and keeps real business content on the home page", () => {
+    const minimal = materializeWebRecipe("business-site", {
+      brandName: "Acme",
+      headline: "Our work",
+      summary: "A real summary",
+      pageMode: "multi-page",
+      projectSlug: "acme",
+    });
+    expect(minimal.pages.map((page) => page.slug)).toEqual(["home"]);
+    const complete = materializeWebRecipe("business-site", {
+      brandName: "Acme",
+      headline: "Our work",
+      services: ["Research"],
+      about: "An independent practice",
+      pageMode: "multi-page",
+      projectSlug: "acme",
+    });
+    expect(complete.pages.map((page) => page.slug)).toEqual(["home", "about", "services"]);
+    expect(
+      canonicalWebDocument({
+        ...complete,
+        pages: [complete.pages[0] as (typeof complete.pages)[number]],
+      }),
+    ).toContain("An independent practice");
+    expect(complete.navigation.some((item) => item.path.endsWith("/contact"))).toBe(false);
+  });
+
+  it("admits only closed art direction and safe brand colors and includes them in input identity", () => {
+    const base = { brandName: "Acme", headline: "Our work" };
+    for (const family of ["business-site", "campaign-landing"] as const) {
+      const directed = materializeWebRecipeWithProvenance(family, {
+        ...base,
+        artDirection: "studio",
+        primaryColor: "#123ABC",
+      });
+      expect(directed.designProfile.artDirection).toBe("studio");
+      expect(directed.document.brand.primaryColor).toBe("#123ABC");
+      expect(directed.inputHash).not.toBe(
+        materializeWebRecipeWithProvenance(family, base).inputHash,
+      );
+      for (const primaryColor of ["red", "#123", "#12345678", "#fff;url(evil)"])
+        expect(validateWebRecipeInput(family, { ...base, primaryColor }).ok).toBe(false);
+      expect(validateWebRecipeInput(family, { ...base, artDirection: "wild" }).ok).toBe(false);
+    }
   });
 
   it("preserves repeat output/hash and returns separate immutable design provenance", () => {

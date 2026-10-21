@@ -310,6 +310,72 @@ test("a model cannot invent consent wording or a booking destination", async () 
   }
 });
 
+test("brand color must be explicit in selected business evidence and survives actual materialization", async () => {
+  const { t, tenantId, planId, session, brief } = await setup(
+    "Acme designs gardens. Our existing brand color is #246B58.",
+  );
+  const refused = await t.mutation(internal.onlinePresence.saveBrief, {
+    tenantId,
+    planId,
+    expectedRevision: session.revision,
+    brief: { ...brief, design: { artDirection: "studio", primaryColor: "#112233" } },
+  });
+  expect(refused.ok).toBe(false);
+  expect(refused.assessment).toMatchObject({
+    ok: false,
+    missing: [expect.objectContaining({ field: "design.primaryColor", reason: "missing" })],
+  });
+  expect(refused.revision).toBe(session.revision);
+  const saved = await t.mutation(internal.onlinePresence.saveBrief, {
+    tenantId,
+    planId,
+    expectedRevision: session.revision,
+    brief: { ...brief, design: { artDirection: "studio", primaryColor: "#246b58" } },
+  });
+  expect(saved.ok).toBe(true);
+  await activeRecipe(t);
+  const built = await t.mutation(internal.onlinePresence.buildProject, {
+    tenantId,
+    planId,
+    expectedRevision: saved.revision,
+  });
+  expect(built.ok).toBe(true);
+  const versions = await t.run((ctx) => ctx.db.query("webProjectVersions").collect());
+  expect(versions[0]?.document.brand.primaryColor).toBe("#246b58");
+  expect(versions[0]?.recipeRef?.designProfile.artDirection).toBe("studio");
+  const row = await t.run((ctx) => ctx.db.query("onlinePresenceSessions").first());
+  if (!row) throw new Error("Missing service session");
+  await t.run((ctx) =>
+    ctx.db.patch(row._id, {
+      brief: { ...brief, design: { artDirection: "technical", primaryColor: "#112233" } },
+    }),
+  );
+  expect(
+    await t.mutation(internal.onlinePresence.buildProject, {
+      tenantId,
+      planId,
+      expectedRevision: built.revision,
+    }),
+  ).toMatchObject({ ok: false, reason: "brand_color_not_sourced" });
+});
+
+test("a six-digit prefix of an eight-digit color is not a sourced brand color", async () => {
+  const { t, tenantId, planId, session, brief } = await setup(
+    "Acme designs gardens. A document contains #11223344.",
+  );
+  const result = await t.mutation(internal.onlinePresence.saveBrief, {
+    tenantId,
+    planId,
+    expectedRevision: session.revision,
+    brief: { ...brief, design: { primaryColor: "#112233" } },
+  });
+  expect(result.ok).toBe(false);
+  expect(result.assessment).toMatchObject({
+    ok: false,
+    missing: [expect.objectContaining({ field: "design.primaryColor" })],
+  });
+});
+
 test("source changes between saved brief and materialization stop before any project write", async () => {
   const { t, tenantId, planId, session, brief } = await setup();
   const doc = await vault(t, tenantId);
@@ -371,7 +437,20 @@ test("missing active qualification fails closed; deleting tenants cannot create 
 });
 
 test("a qualified build produces real multiple pages and immutable provenance, with idempotent retries", async () => {
-  const { t, tenantId, planId, session, brief } = await setup();
+  const {
+    t,
+    tenantId,
+    planId,
+    session,
+    brief: baseBrief,
+  } = await setup(
+    "Acme designs gardens for homeowners. Services include planting plans. Acme guides projects from the first layout to the planting plan.",
+  );
+  const brief = {
+    ...baseBrief,
+    services: ["Planting plans"],
+    about: "Acme guides projects from the first layout to the planting plan.",
+  };
   await activeRecipe(t);
   const saved = await t.mutation(internal.onlinePresence.saveBrief, {
     tenantId,
@@ -520,7 +599,15 @@ test("routing lookup is tenant-bound and source excerpts have a fixed content bu
 });
 
 test("the real specialist loop reads context, saves a brief, and builds real versioned pages through its frozen tools", async () => {
-  const { t, tenantId, planId, threadId, session, brief } = await setup();
+  const { t, tenantId, planId, threadId, session, brief } = await setup(
+    "Acme designs gardens. Our established brand color is #246B58. Services include planting plans. Acme guides projects from the first layout to the planting plan.",
+  );
+  const designedBrief = {
+    ...brief,
+    services: ["Planting plans"],
+    about: "Acme guides projects from the first layout to the planting plan.",
+    design: { artDirection: "studio", primaryColor: "#246b58" },
+  };
   await activeRecipe(t);
   await t.run((ctx) =>
     ctx.db.insert("skills", {
@@ -550,7 +637,10 @@ test("the real specialist loop reads context, saves a brief, and builds real ver
   });
   const script = [
     toolStep("readOnlinePresenceContext", {}),
-    toolStep("saveOnlinePresenceBrief", { brief, expectedRevision: session.revision }),
+    toolStep("saveOnlinePresenceBrief", {
+      brief: designedBrief,
+      expectedRevision: session.revision,
+    }),
     toolStep("buildOnlinePresenceProject", { expectedRevision: session.revision + 1 }),
     {
       content: [
@@ -588,6 +678,8 @@ test("the real specialist loop reads context, saves a brief, and builds real ver
   expect(stored.artifact).not.toHaveProperty("publishedVersion");
   const versions = await t.run((ctx) => ctx.db.query("webProjectVersions").collect());
   expect(versions[0]?.document.pages.length).toBeGreaterThan(1);
+  expect(versions[0]?.document.brand.primaryColor).toBe("#246b58");
+  expect(versions[0]?.recipeRef?.designProfile.artDirection).toBe("studio");
   expect(versions[0]?.sourceWarnings).toContainEqual({
     code: "publication_permission_unset",
     sourceRef: session.sourceRef,

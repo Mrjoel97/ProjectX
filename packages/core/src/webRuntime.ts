@@ -469,6 +469,27 @@ function renderPage(document: WebDocument, page: WebPage, route: WebRouteContext
   return `<main${attribute("data-page", page.slug)}>${navigation}${page.nodes.map((node) => renderNode(node, route)).join("")}${document.footer ? renderNode(document.footer, route) : ""}</main>`;
 }
 
+/** Reusable safe parts for code-owned presentation. Every string is rendered only after closed
+ * document validation; consumers compose these parts rather than rearrange untrusted HTML. */
+export function renderWebPageParts(documentInput: WebDocument, suppliedRoute?: WebRouteContext) {
+  const document = ensureDocument(documentInput);
+  const route = routeOrDefault(document, suppliedRoute);
+  const page = document.pages.find((candidate) => candidate.slug === route.page);
+  if (!page) throw new Error("WEB_PAGE_UNAVAILABLE");
+  return {
+    document,
+    page,
+    route,
+    navigationHtml: document.navigation.length
+      ? renderNode({ kind: "navigation", items: document.navigation }, route)
+      : "",
+    nodes: page.nodes.map((node) => ({ node, html: renderNode(node, route) })),
+    footerHtml: document.footer ? renderNode(document.footer, route) : "",
+  };
+}
+
+export { escapeHtml as escapeWebText };
+
 function canonicalNode(node: WebNode): unknown {
   switch (node.kind) {
     case "shell":

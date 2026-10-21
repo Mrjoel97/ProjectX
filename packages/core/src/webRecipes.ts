@@ -1,5 +1,6 @@
 import type { ProjectKind, WebDocument } from "@pikar/contracts/webRuntime";
 import {
+  type ArtDirection,
   type DesignDials,
   type DesignProfileRef,
   selectDesignProfile,
@@ -8,7 +9,7 @@ import {
 import { canonicalWebDocument, sha256Bytes, validateWebDocument } from "./webRuntime";
 
 export const WEB_RECIPE_SCHEMA_VERSION = 1 as const;
-export const WEB_RECIPE_COMPILER_ID = "web-recipes-v2" as const;
+export const WEB_RECIPE_COMPILER_ID = "web-recipes-v3" as const;
 export const WEB_RECIPE_BUNDLE_HASH =
   "d818e4d9ab6fcf85b3725d578edf2fbace642dc0472e1d94922c030f7df016a8" as const;
 
@@ -44,6 +45,8 @@ export type WebRecipeDefinition = {
 };
 
 export type BusinessSiteInput = {
+  readonly artDirection?: ArtDirection;
+  readonly primaryColor?: string;
   readonly brandName: string;
   readonly headline: string;
   readonly summary?: string;
@@ -57,6 +60,8 @@ export type BusinessSiteInput = {
   readonly design?: Partial<DesignDials>;
 };
 export type CampaignLandingInput = {
+  readonly artDirection?: ArtDirection;
+  readonly primaryColor?: string;
   readonly brandName: string;
   readonly headline: string;
   readonly offer?: string;
@@ -69,6 +74,8 @@ export type CampaignLandingInput = {
   readonly design?: Partial<DesignDials>;
 };
 export type StorefrontCatalogueInput = {
+  readonly artDirection?: ArtDirection;
+  readonly primaryColor?: string;
   readonly brandName: string;
   readonly intro?: string;
   readonly items: readonly {
@@ -148,6 +155,8 @@ const httpsHref = (value: unknown): value is string => {
 const inputKeys: Record<WebRecipeId, readonly string[]> = {
   "business-site": [
     "brandName",
+    "artDirection",
+    "primaryColor",
     "headline",
     "summary",
     "services",
@@ -160,6 +169,8 @@ const inputKeys: Record<WebRecipeId, readonly string[]> = {
     "design",
   ],
   "campaign-landing": [
+    "artDirection",
+    "primaryColor",
     "brandName",
     "headline",
     "offer",
@@ -171,7 +182,7 @@ const inputKeys: Record<WebRecipeId, readonly string[]> = {
     "attributionSource",
     "design",
   ],
-  "storefront-catalogue": ["brandName", "intro", "items", "design"],
+  "storefront-catalogue": ["brandName", "intro", "items", "design", "artDirection", "primaryColor"],
 };
 
 function issue(errors: WebRecipeValidationIssue[], path: string, code: string): void {
@@ -245,6 +256,18 @@ export function validateWebRecipeInput(
   if (idValue !== "storefront-catalogue" && !text(input.headline, 256))
     issue(errors, "headline", "required_text");
   validateDials(input.design, "design", errors);
+  if (
+    input.artDirection !== undefined &&
+    input.artDirection !== "editorial" &&
+    input.artDirection !== "studio" &&
+    input.artDirection !== "technical"
+  )
+    issue(errors, "artDirection", "invalid_art_direction");
+  if (
+    input.primaryColor !== undefined &&
+    (typeof input.primaryColor !== "string" || !/^#[0-9a-fA-F]{6}$/.test(input.primaryColor))
+  )
+    issue(errors, "primaryColor", "invalid_brand_color");
   if (idValue !== "storefront-catalogue") {
     if (!optionalText(input.ctaLabel, 128)) issue(errors, "ctaLabel", "invalid_text");
     if (input.ctaHref !== undefined && !httpsHref(input.ctaHref))
@@ -298,6 +321,8 @@ const definitionSeed = [
     family: "business",
     outputKind: "site",
     fields: [
+      { id: "artDirection", label: "Art direction", type: "text", required: false, maxLength: 16 },
+      { id: "primaryColor", label: "Brand accent", type: "text", required: false, maxLength: 7 },
       { id: "brandName", label: "Brand name", type: "text", required: true, maxLength: 128 },
       { id: "headline", label: "Headline", type: "text", required: true, maxLength: 256 },
       { id: "summary", label: "Summary", type: "text", required: false, maxLength: 4000 },
@@ -346,6 +371,8 @@ const definitionSeed = [
     family: "campaign",
     outputKind: "landing",
     fields: [
+      { id: "artDirection", label: "Art direction", type: "text", required: false, maxLength: 16 },
+      { id: "primaryColor", label: "Brand accent", type: "text", required: false, maxLength: 7 },
       { id: "brandName", label: "Brand name", type: "text", required: true, maxLength: 128 },
       { id: "headline", label: "Campaign headline", type: "text", required: true, maxLength: 256 },
       { id: "offer", label: "Offer", type: "text", required: false, maxLength: 4000 },
@@ -399,6 +426,8 @@ const definitionSeed = [
     family: "storefront",
     outputKind: "storefront",
     fields: [
+      { id: "artDirection", label: "Art direction", type: "text", required: false, maxLength: 16 },
+      { id: "primaryColor", label: "Brand accent", type: "text", required: false, maxLength: 7 },
       { id: "brandName", label: "Brand name", type: "text", required: true, maxLength: 128 },
       {
         id: "intro",
@@ -566,41 +595,61 @@ function documentForBusiness(input: BusinessSiteInput): WebDocument {
       {
         slug: "home",
         title: input.headline,
-        nodes: nodes.filter((node) => node.kind === "hero" || node.kind === "cta"),
+        nodes: nodes.filter((node) => node.kind !== "form"),
       },
-      {
-        slug: "about",
-        title: `About ${input.brandName}`,
-        nodes: [
-          { kind: "hero" as const, heading: `About ${input.brandName}` },
-          ...(input.about || input.summary
-            ? [{ kind: "text" as const, text: input.about ?? (input.summary as string) }]
-            : []),
-        ],
-      },
-      {
-        slug: "services",
-        title: "Services",
-        nodes: [
-          { kind: "hero" as const, heading: "Services" },
-          ...nodes.filter((node) => node.kind === "section" && node.id === "services"),
-        ],
-      },
-      {
-        slug: "contact",
-        title: `Contact ${input.brandName}`,
-        nodes: [
-          { kind: "hero" as const, heading: `Contact ${input.brandName}` },
-          ...nodes.filter((node) => node.kind === "form" || node.kind === "cta"),
-        ],
-      },
+      ...(input.about
+        ? [
+            {
+              slug: "about",
+              title: `About ${input.brandName}`,
+              nodes: [
+                { kind: "hero" as const, heading: "About" },
+                { kind: "text" as const, text: input.about },
+              ],
+            },
+          ]
+        : []),
+      ...(input.services?.length
+        ? [
+            {
+              slug: "services",
+              title: "Services",
+              nodes: [
+                { kind: "hero" as const, heading: "Services" },
+                ...nodes.filter((node) => node.kind === "section" && node.id === "services"),
+              ],
+            },
+          ]
+        : []),
+      ...(input.contactConsent || input.ctaHref
+        ? [
+            {
+              slug: "contact",
+              title: `Contact ${input.brandName}`,
+              nodes: [
+                { kind: "hero" as const, heading: "Contact" },
+                ...nodes.filter((node) => node.kind === "form" || node.kind === "cta"),
+              ],
+            },
+          ]
+        : []),
     ];
     return {
       kind: "site",
       title: input.brandName,
-      brand: { name: input.brandName },
+      brand: {
+        name: input.brandName,
+        ...(input.primaryColor ? { primaryColor: input.primaryColor } : {}),
+      },
       navigation: pages.map((page) => ({
-        label: page.slug === "home" ? "Home" : page.slug === "about" ? "About" : page.title,
+        label:
+          page.slug === "home"
+            ? "Home"
+            : page.slug === "about"
+              ? "About"
+              : page.slug === "contact"
+                ? "Contact"
+                : page.title,
         path: `/p/${input.projectSlug}/${page.slug}`,
       })),
       pages,
@@ -609,7 +658,10 @@ function documentForBusiness(input: BusinessSiteInput): WebDocument {
   return {
     kind: "site",
     title: input.brandName,
-    brand: { name: input.brandName },
+    brand: {
+      name: input.brandName,
+      ...(input.primaryColor ? { primaryColor: input.primaryColor } : {}),
+    },
     navigation: [],
     pages: [{ slug: "home", title: input.headline, nodes }],
   };
@@ -658,7 +710,10 @@ function documentForCampaign(input: CampaignLandingInput): WebDocument {
   return {
     kind: "landing",
     title: input.brandName,
-    brand: { name: input.brandName },
+    brand: {
+      name: input.brandName,
+      ...(input.primaryColor ? { primaryColor: input.primaryColor } : {}),
+    },
     navigation: [],
     pages: [{ slug: "campaign", title: input.headline, nodes }],
   };
@@ -669,7 +724,10 @@ function documentForStorefront(input: StorefrontCatalogueInput): WebDocument {
     kind: "storefront",
     title: input.brandName,
     ...(input.intro ? { description: input.intro } : {}),
-    brand: { name: input.brandName },
+    brand: {
+      name: input.brandName,
+      ...(input.primaryColor ? { primaryColor: input.primaryColor } : {}),
+    },
     navigation: [],
     pages: [
       {
@@ -718,6 +776,7 @@ export function materializeWebRecipeWithProvenance(
   const document = materializeWebRecipe(idValue, checked.value);
   const design = isRecord(checked.value.design) ? checked.value.design : {};
   const selection = selectDesignProfile({
+    ...(checked.value.artDirection ? { artDirection: checked.value.artDirection } : {}),
     pageGoal:
       idValue === "business-site"
         ? "business"

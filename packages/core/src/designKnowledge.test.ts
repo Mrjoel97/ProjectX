@@ -91,4 +91,28 @@ describe("closed design knowledge", () => {
     expect(result.reason).toBe("unknown_brief");
     expect(result.profile.dials.variance).toBe(5);
   });
+
+  it("selects bounded business-directed presentation while explicit brand and accessibility take precedence", () => {
+    expect(
+      selectDesignProfile({ businessType: "Creative design studio" }).profile.artDirection,
+    ).toBe("studio");
+    expect(
+      selectDesignProfile({ audience: "Software developers", pageGoal: "business" }).profile
+        .artDirection,
+    ).toBe("technical");
+    expect(
+      selectDesignProfile({ businessType: "Accounting", tone: "calm" }).profile.artDirection,
+    ).toBe("editorial");
+    expect(
+      selectDesignProfile({ businessType: "Software", artDirection: "studio" }).profile
+        .artDirection,
+    ).toBe("studio");
+    expect(
+      selectDesignProfile({
+        artDirection: "studio",
+        accessibilityPosture: "high",
+        dials: { motion: 10 },
+      }).profile.artDirection,
+    ).toBe("editorial");
+  });
 });

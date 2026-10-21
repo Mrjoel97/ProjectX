@@ -117,9 +117,9 @@ describe("web recipe deterministic evaluator", () => {
   test("ignoring each compiled role's pattern, palette or form style fails", () => {
     const original = core.renderDesignedWebDocument;
     for (const [before, after, expected] of [
-      ["h1{text-align:left", "h1{text-align:center", "pattern"],
-      ["--teal:#0b4f4a", "--teal:#0e1419", "palette"],
-      ["min-height:44px", "min-height:40px", "form"],
+      ['data-pattern="landing-proof"', 'data-pattern="wrong"', "pattern"],
+      ["--accent:#254e72", "--accent:#0e1419", "palette"],
+      ["--control-height:44px", "--control-height:40px", "form"],
     ] as const) {
       const spy = vi
         .spyOn(core, "renderDesignedWebDocument")
@@ -133,6 +133,34 @@ describe("web recipe deterministic evaluator", () => {
       } finally {
         spy.mockRestore();
       }
+    }
+  });
+
+  test("dropping art direction or leaving density as an unused token cannot qualify", () => {
+    const original = core.renderDesignedWebDocument;
+    const directionSpy = vi
+      .spyOn(core, "renderDesignedWebDocument")
+      .mockImplementation((document, profile, route) =>
+        original(document, { ...profile, artDirection: "editorial" }, route),
+      );
+    try {
+      expect(() => evaluateWebRecipeCandidate(probeRow(), "direction-probe", 1)).toThrow(
+        /WEB_RECIPE_ART_DIRECTION_NOT_MATERIALIZED/,
+      );
+    } finally {
+      directionSpy.mockRestore();
+    }
+    const densitySpy = vi
+      .spyOn(core, "renderDesignedWebDocument")
+      .mockImplementation((document, profile, route) =>
+        original(document, profile, route).replaceAll("calc(var(--space)", "calc(20px"),
+      );
+    try {
+      expect(() => evaluateWebRecipeCandidate(probeRow(), "density-probe", 1)).toThrow(
+        /WEB_RECIPE_DIAL_STYLE_NOT_CONSUMED/,
+      );
+    } finally {
+      densitySpy.mockRestore();
     }
   });
 
@@ -379,6 +407,7 @@ describe("web recipe deterministic evaluator", () => {
       ["actorClass", "tenant"],
       ["route", "/dashboard/sites"],
       ["revision", 0],
+      ["evidenceRevision", "browser-observed-v2"],
       ["rawContent", "fixture bytes"],
     ] as const) {
       await expect(
@@ -404,6 +433,19 @@ describe("web recipe deterministic evaluator", () => {
     );
     if (!row) throw new Error("candidate row missing");
     const refs = evaluateWebRecipeCandidate(row, "run-closed", 1);
+    await expect(
+      t.mutation(internal.skills.recordWebRecipeEvalEvidence, {
+        name: row.name,
+        version: row.version,
+        evidence: JSON.stringify({
+          ...refs,
+          suite: {
+            ...refs.suite,
+            revision: "2026-09-23.phase49-web-recipe-deterministic.v3",
+          },
+        }),
+      }),
+    ).rejects.toThrow(/EVIDENCE_INVALID/);
     await expect(
       t.mutation(internal.skills.recordWebRecipeEvalEvidence, {
         name: row.name,

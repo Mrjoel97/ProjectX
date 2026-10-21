@@ -57,7 +57,11 @@ export type DesignDials = {
   readonly density: number;
 };
 
+/** Pikar-owned art directions; the pinned upstream bundle remains reviewed reference data. */
+export type ArtDirection = "editorial" | "studio" | "technical";
+
 export type DesignBrief = {
+  readonly artDirection?: ArtDirection;
   readonly businessType?: string;
   readonly audience?: string;
   readonly brandName?: string;
@@ -69,6 +73,7 @@ export type DesignBrief = {
 };
 
 export type DesignProfileRef = {
+  readonly artDirection?: ArtDirection;
   readonly bundleHash: typeof DESIGN_KNOWLEDGE_BUNDLE_HASH;
   readonly compilerHash: typeof DESIGN_KNOWLEDGE_COMPILER_HASH;
   readonly patternId: string;
@@ -284,6 +289,7 @@ export function validateDesignProfileRef(input: unknown): input is DesignProfile
       "formProfileId",
       "dials",
       "pageOverride",
+      "artDirection",
     ])
   )
     return false;
@@ -305,6 +311,10 @@ export function validateDesignProfileRef(input: unknown): input is DesignProfile
     !boundedDial(input.dials.variance) ||
     !boundedDial(input.dials.motion) ||
     !boundedDial(input.dials.density) ||
+    (input.artDirection !== undefined &&
+      input.artDirection !== "editorial" &&
+      input.artDirection !== "studio" &&
+      input.artDirection !== "technical") ||
     (input.pageOverride !== undefined &&
       (typeof input.pageOverride !== "string" || input.pageOverride.length > 64))
   )
@@ -327,6 +337,24 @@ export function selectDesignProfile(brief: DesignBrief = {}): DesignSelection {
   const campaign = input.pageGoal === "campaign";
   const accessibility =
     input.accessibilityPosture === "high" || input.regulatoryPosture === "strict";
+  const signals =
+    `${input.businessType ?? ""} ${input.tone ?? ""} ${input.audience ?? ""}`.toLowerCase();
+  const artDirection: ArtDirection = accessibility
+    ? "editorial"
+    : input.artDirection === "editorial" ||
+        input.artDirection === "studio" ||
+        input.artDirection === "technical"
+      ? input.artDirection
+      : /\b(?:software|technology|developer|engineering|technical|saas)\b/.test(signals)
+        ? "technical"
+        : /\b(?:creative|studio|design|playful|bold|expressive)\b/.test(signals)
+          ? "studio"
+          : "editorial";
+  const presets = {
+    editorial: { variance: 5, motion: 2, density: 3 },
+    studio: { variance: 8, motion: 4, density: 3 },
+    technical: { variance: 6, motion: 3, density: 4 },
+  } as const;
   const profile: DesignProfileRef = {
     bundleHash: DESIGN_KNOWLEDGE_BUNDLE_HASH,
     compilerHash: DESIGN_KNOWLEDGE_COMPILER_HASH,
@@ -335,10 +363,11 @@ export function selectDesignProfile(brief: DesignBrief = {}): DesignSelection {
     paletteId: storefront ? "trust-commerce" : "trust-commerce",
     typographyId: "modern-professional",
     formProfileId: "forms-first",
+    artDirection,
     dials: {
-      variance: dial(input.dials?.variance, 5),
-      motion: accessibility ? 1 : dial(input.dials?.motion, 3),
-      density: dial(input.dials?.density, storefront ? 5 : 2),
+      variance: dial(input.dials?.variance, presets[artDirection].variance),
+      motion: accessibility ? 1 : dial(input.dials?.motion, presets[artDirection].motion),
+      density: dial(input.dials?.density, storefront ? 5 : presets[artDirection].density),
     },
     ...(campaign ? { pageOverride: "campaign" } : {}),
   };

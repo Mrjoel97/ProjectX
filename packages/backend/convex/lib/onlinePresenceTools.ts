@@ -58,6 +58,14 @@ export function buildOnlinePresenceTools(context: {
               ctaLabel: { type: "string", maxLength: 128 },
               ctaHref: { type: "string", maxLength: 256 },
               proof: { type: "array", items: { type: "string", maxLength: 512 }, maxItems: 6 },
+              design: {
+                type: "object",
+                properties: {
+                  artDirection: { type: "string", enum: ["editorial", "studio", "technical"] },
+                  primaryColor: { type: "string", pattern: "^#[a-fA-F0-9]{6}$", maxLength: 7 },
+                },
+                additionalProperties: false,
+              },
               contactConsent: { type: "string", maxLength: 512 },
               sourceRefs: {
                 type: "array",

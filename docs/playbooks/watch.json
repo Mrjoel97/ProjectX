@@ -584,6 +584,10 @@
     "packages/core/src/index.ts",
     "packages/backend/convex/isolation.test.ts",
     "packages/backend/convex/webRecipeRegistry",
-    "packages/backend/convex/webTenantLifecycle"
+    "packages/backend/convex/webTenantLifecycle",
+    "apps/web/playwright.design.config.ts",
+    "apps/web/e2e/online-presence-design.spec.ts",
+    "packages/backend/convex/webProjectLegacyRendering.test.ts",
+    "packages/backend/scripts/webRecipeEvaluatorIdentity.mjs"
   ]
 }

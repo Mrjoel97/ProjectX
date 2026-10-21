@@ -61,6 +61,7 @@ export type RecipeRef = {
   inputHash: string;
   rendererVersion?: string;
   designProfile: {
+    artDirection?: "editorial" | "studio" | "technical";
     bundleHash: string;
     compilerHash: string;
     patternId: string;
@@ -177,7 +178,15 @@ async function appendVersion(
     .order("desc")
     .first();
   const recipeRef = originRecipeRef ?? previous?.recipeRef;
-  const designed = recipeRef?.rendererVersion === WEB_DESIGN_RENDERER_VERSION;
+  // Origin refs stay immutable; a new edit is rendered with the current artifact renderer.
+  // Already stored versions keep their exact old bytes and renderer identity.
+  const designed =
+    recipeRef?.rendererVersion !== undefined &&
+    ["web-design-renderer-v1", "web-design-renderer-v2", WEB_DESIGN_RENDERER_VERSION].includes(
+      recipeRef.rendererVersion,
+    );
+  if (recipeRef?.rendererVersion !== undefined && !designed)
+    throw new Error("WEB_RENDERER_UNAVAILABLE");
   const profile = recipeRef?.designProfile;
   if (designed && !validateDesignProfileRef(profile)) throw new Error("WEB_DESIGN_PROFILE_INVALID");
   const contentHash = designed

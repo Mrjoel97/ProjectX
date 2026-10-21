@@ -61,8 +61,8 @@ jobs:
         # diagnostic cap and hide the errors that actually reddened the job.
         run: pnpm lint --diagnostic-level=error --max-diagnostics=none
 
-      # Unit tests only (vitest). apps/web's Playwright suite is `test:e2e` and is deliberately NOT
-      # part of this gate — it needs a live deployment and a seeded tenant.
+      # The ordinary authenticated Playwright suite still needs a live deployment and seeded tenant.
+      # The separate offline website design suite below uses only in-memory fictional artifacts.
       # THE FREE GATES. Seventeen scripts carry an offline `--self-test` / `--self-check` mode, and
       # until 2026-09-09 nothing ran them: two were found red BY ACCIDENT, one of them stale since
       # 35-02. A gate nobody runs is indistinguishable from a gate that passes, and a gate that sits
@@ -79,6 +79,13 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Install browser for offline website design checks
+        run: pnpm --filter @pikar/web exec playwright install --with-deps chromium
+
+      - name: Check rendered website design at three widths
+        # In-memory fictional briefs only. No auth, app server, provider keys or shared registry.
+        run: pnpm --filter @pikar/web exec playwright test --config=playwright.design.config.ts
 
       - name: Operator control regressions
         # Read-only staging parity controls are tested without deployment credentials.

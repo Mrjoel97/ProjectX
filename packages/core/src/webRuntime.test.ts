@@ -8,6 +8,7 @@ import {
   hashWebDocument,
   renderWebDocument,
   renderWebDocumentBytes,
+  renderWebPageParts,
   validateWebDocument,
 } from "./webRuntime";
 
@@ -68,6 +69,31 @@ const landingFixture = (): WebDocument => ({
 });
 
 describe("web runtime contract and renderer", () => {
+  it("composes only validated escaped parts and refuses an absent requested page", () => {
+    const document = siteFixture();
+    const parts = renderWebPageParts(document, { slug: "acme", page: "home" });
+    expect(parts.nodes.find((part) => part.node.kind === "hero")?.html).toContain(
+      "&lt;bold&gt;trust&lt;/bold&gt;",
+    );
+    expect(parts.nodes.find((part) => part.node.kind === "cta")?.html).toContain(
+      "/p/acme/home/cta/book",
+    );
+    expect(() => renderWebPageParts(document, { slug: "acme", page: "missing" })).toThrow(
+      "WEB_PAGE_UNAVAILABLE",
+    );
+    expect(() =>
+      renderWebPageParts({
+        ...document,
+        pages: [
+          {
+            slug: "home",
+            title: "Unsafe",
+            nodes: [{ kind: "html", html: "<script>bad()</script>" }],
+          },
+        ],
+      } as never),
+    ).toThrow("WEB_DOCUMENT_INVALID");
+  });
   it("accepts both site and landing documents", () => {
     expect(validateWebDocument(siteFixture())).toEqual({ ok: true, value: siteFixture() });
     expect(validateWebDocument(landingFixture()).ok).toBe(true);

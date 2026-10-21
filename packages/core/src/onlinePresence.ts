@@ -25,6 +25,12 @@ export type OnlinePresenceBrief = {
   ctaLabel?: string;
   ctaHref?: string;
   proof?: readonly string[];
+  /** Creative presentation choices, never a grant to insert CSS or claim a brand identity. */
+  design?: {
+    artDirection?: "editorial" | "studio" | "technical";
+    /** Only an explicitly sourced six-digit brand color; omit for the style's default palette. */
+    primaryColor?: string;
+  };
   /** Exact, adapter-issued references. A reference is provenance, not proof of a claim. */
   sourceRefs: readonly string[];
   /** Exact user-supplied disclosure copy; absence means no inquiry form. */
@@ -101,6 +107,7 @@ const KEYS = [
   "ctaLabel",
   "ctaHref",
   "proof",
+  "design",
   "sourceRefs",
   "contactConsent",
 ] as const;
@@ -160,6 +167,38 @@ export function assessOnlinePresenceBrief(
   ] as const)
     if (raw[field] !== undefined && !list(raw[field], 512, limit))
       add(field, "invalid", `Provide at most ${limit} short ${field} entries.`);
+  if (raw.design !== undefined) {
+    if (
+      !record(raw.design) ||
+      Object.keys(raw.design).some((key) => !["artDirection", "primaryColor"].includes(key))
+    )
+      add(
+        "design",
+        "invalid",
+        "Use a supported art direction and an explicitly sourced brand color only.",
+      );
+    else {
+      if (
+        raw.design.artDirection !== undefined &&
+        !["editorial", "studio", "technical"].includes(String(raw.design.artDirection))
+      )
+        add(
+          "design.artDirection",
+          "invalid",
+          "Choose editorial, studio, or technical presentation.",
+        );
+      if (
+        raw.design.primaryColor !== undefined &&
+        (typeof raw.design.primaryColor !== "string" ||
+          !/^#[a-f0-9]{6}$/i.test(raw.design.primaryColor))
+      )
+        add(
+          "design.primaryColor",
+          "invalid",
+          "Provide a six-digit brand color from the selected business evidence, or omit it.",
+        );
+    }
+  }
 
   const selected: OnlinePresenceSource[] = [];
   if (!list(raw.sourceRefs, 256, 32) || raw.sourceRefs.length === 0)
@@ -233,6 +272,12 @@ export function assessOnlinePresenceBrief(
               ? { ctaPath: brief.ctaHref }
               : { ctaHref: brief.ctaHref }),
           ...(brief.contactConsent === undefined ? {} : { formConsent: brief.contactConsent }),
+          ...(brief.design?.artDirection === undefined
+            ? {}
+            : { artDirection: brief.design.artDirection }),
+          ...(brief.design?.primaryColor === undefined
+            ? {}
+            : { primaryColor: brief.design.primaryColor }),
         }
       : {
           brandName: brief.businessName,
@@ -243,6 +288,12 @@ export function assessOnlinePresenceBrief(
           ...(brief.ctaLabel === undefined ? {} : { ctaLabel: brief.ctaLabel }),
           ...(brief.ctaHref === undefined ? {} : { ctaHref: brief.ctaHref }),
           ...(brief.contactConsent === undefined ? {} : { contactConsent: brief.contactConsent }),
+          ...(brief.design?.artDirection === undefined
+            ? {}
+            : { artDirection: brief.design.artDirection }),
+          ...(brief.design?.primaryColor === undefined
+            ? {}
+            : { primaryColor: brief.design.primaryColor }),
         };
   // Reuse recovered runtime validation rather than duplicate its safe URL/content contract.
   const checked = validateWebRecipeInput(recipeId, input);

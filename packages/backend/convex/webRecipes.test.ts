@@ -203,7 +203,12 @@ describe("Phase 49 recipe project boundary", () => {
       ) => Promise<{ projectId: string; version: number; contentHash: string }>
     )(createRef, {
       recipeId: "business-site",
-      values: { brandName: "Lineage Studio", headline: "A bounded site" },
+      values: {
+        brandName: "Lineage Studio",
+        headline: "A bounded site",
+        artDirection: "studio",
+        primaryColor: "#243B53",
+      },
       slug: "lineage-studio",
       title: "Lineage Studio",
       expectedAvailability: "tenant_discoverable",
@@ -269,8 +274,13 @@ describe("Phase 49 recipe project boundary", () => {
       skillId: String(row._id),
       bodyHash: refs.bodyHash,
       inputHash: expect.any(String),
-      designProfile: expect.objectContaining({ bundleHash: expect.any(String) }),
+      designProfile: expect.objectContaining({
+        bundleHash: expect.any(String),
+        artDirection: "studio",
+      }),
     });
+    if (!first) throw new Error("stored recipe version missing");
+    expect((first.document as WebDocument).brand.primaryColor).toBe("#243B53");
     expect(first?.rendererVersion).toBe(WEB_DESIGN_RENDERER_VERSION);
     expect(first?.recipeRef?.rendererVersion).toBe(WEB_DESIGN_RENDERER_VERSION);
     expect(first?.artifactHtml).toContain("<style>");
@@ -354,6 +364,18 @@ describe("Phase 49 recipe project boundary", () => {
 
     const expected = WEB_RECIPE_DEFINITIONS.find((candidate) => candidate.id === "business-site");
     if (!expected) throw new Error("definition missing");
+    // Dropping the new direction field cannot retain evidence issued for the exact current body.
+    const directionTamper = canonicalWebRecipeDefinition({
+      ...expected,
+      fields: expected.fields.filter((field) => field.id !== "artDirection"),
+    });
+    await t.run((ctx) => ctx.db.patch(row._id, { body: directionTamper }));
+    expect(
+      await (asUser.query as unknown as (fn: unknown, args: unknown) => Promise<unknown>)(
+        recipes.listAvailable,
+        {},
+      ),
+    ).toEqual([]);
     const mispinnedBody = canonicalWebRecipeDefinition(
       WEB_RECIPE_DEFINITIONS.find((candidate) => candidate.id === "campaign-landing")!,
     );
