@@ -1,0 +1,12 @@
+{
+  "framework": "nextjs",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
+        { "key": "X-Pikar-Environment", "value": "online-presence-staging" }
+      ]
+    }
+  ]
+}

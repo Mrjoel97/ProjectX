@@ -1,15 +1,14 @@
 /* eslint-disable */
-  /**
-   * Generated `api` utility.
-   *
-   * THIS CODE IS AUTOMATICALLY GENERATED.
-   *
-   * To regenerate, run `npx convex dev`.
-   * @module
-   */
+/**
+ * Generated `api` utility.
+ *
+ * THIS CODE IS AUTOMATICALLY GENERATED.
+ *
+ * To regenerate, run `npx convex dev`.
+ * @module
+ */
 
-  import type { ApiFromModules, FilterApi, FunctionReference } from "convex/server";
-  import type * as agenda from "../agenda.js";
+import type * as agenda from "../agenda.js";
 import type * as agentSteps from "../agentSteps.js";
 import type * as aggregates from "../aggregates.js";
 import type * as approvals from "../approvals.js";
@@ -87,6 +86,7 @@ import type * as lib_hash from "../lib/hash.js";
 import type * as lib_markdownPdf from "../lib/markdownPdf.js";
 import type * as lib_mediaRead from "../lib/mediaRead.js";
 import type * as lib_models from "../lib/models.js";
+import type * as lib_onlinePresenceTools from "../lib/onlinePresenceTools.js";
 import type * as lib_paidBudgetModel from "../lib/paidBudgetModel.js";
 import type * as lib_planRow from "../lib/planRow.js";
 import type * as lib_tenantLifecycle from "../lib/tenantLifecycle.js";
@@ -191,199 +191,222 @@ import type * as wormCursor from "../wormCursor.js";
 import type * as zernio from "../zernio.js";
 import type * as zernioActions from "../zernioActions.js";
 
-  /**
-   * A utility for referencing Convex functions in your app's API.
-   *
-   * Usage:
-   * ```js
-   * const myFunctionReference = api.myModule.myFunction;
-   * ```
-   */
-  declare const fullApi: ApiFromModules<{
-    "agenda": typeof agenda,
-"agentSteps": typeof agentSteps,
-"aggregates": typeof aggregates,
-"approvals": typeof approvals,
-"audit": typeof audit,
-"auth": typeof auth,
-"authRevocations": typeof authRevocations,
-"authoringProbe": typeof authoringProbe,
-"billing": typeof billing,
-"billingApi": typeof billingApi,
-"billingLedger": typeof billingLedger,
-"billingRollup": typeof billingRollup,
-"billingWebhook": typeof billingWebhook,
-"blueprint": typeof blueprint,
-"briefings": typeof briefings,
-"buffer": typeof buffer,
-"bufferActions": typeof bufferActions,
-"bufferTools": typeof bufferTools,
-"calendar": typeof calendar,
-"calendarComplete": typeof calendarComplete,
-"calendarEvents": typeof calendarEvents,
-"calendarViews": typeof calendarViews,
-"cash": typeof cash,
-"cockpit": typeof cockpit,
-"cockpitCapabilities": typeof cockpitCapabilities,
-"connectorConnections": typeof connectorConnections,
-"connectorCredentials": typeof connectorCredentials,
-"connectorFetch": typeof connectorFetch,
-"connectorOAuth": typeof connectorOAuth,
-"contacts": typeof contacts,
-"content": typeof content,
-"contentAudit": typeof contentAudit,
-"crons": typeof crons,
-"deadLetter": typeof deadLetter,
-"deadLetters": typeof deadLetters,
-"deliverApprovedPlan": typeof deliverApprovedPlan,
-"delivery": typeof delivery,
-"demo": typeof demo,
-"dispatch": typeof dispatch,
-"dispatchRun": typeof dispatchRun,
-"dstProbe": typeof dstProbe,
-"evaluations": typeof evaluations,
-"feedback": typeof feedback,
-"finance": typeof finance,
-"foundation": typeof foundation,
-"funnels": typeof funnels,
-"gmail": typeof gmail,
-"gmailAuth": typeof gmailAuth,
-"goals": typeof goals,
-"graph": typeof graph,
-"guardrails": typeof guardrails,
-"home": typeof home,
-"http": typeof http,
-"hubspot": typeof hubspot,
-"hubspotAuth": typeof hubspotAuth,
-"index": typeof index,
-"intake": typeof intake,
-"intakeDb": typeof intakeDb,
-"invites": typeof invites,
-"invoiceReminders": typeof invoiceReminders,
-"knowledgeExternalSources": typeof knowledgeExternalSources,
-"knowledgeLlm": typeof knowledgeLlm,
-"knowledgeSearch": typeof knowledgeSearch,
-"knowledgeVaultDrive": typeof knowledgeVaultDrive,
-"lib/agenda": typeof lib_agenda,
-"lib/allowlist": typeof lib_allowlist,
-"lib/authEmail": typeof lib_authEmail,
-"lib/bufferMcp": typeof lib_bufferMcp,
-"lib/dispatchShared": typeof lib_dispatchShared,
-"lib/env": typeof lib_env,
-"lib/evalBudgetModel": typeof lib_evalBudgetModel,
-"lib/foglamp": typeof lib_foglamp,
-"lib/foundationValidators": typeof lib_foundationValidators,
-"lib/functions": typeof lib_functions,
-"lib/hash": typeof lib_hash,
-"lib/markdownPdf": typeof lib_markdownPdf,
-"lib/mediaRead": typeof lib_mediaRead,
-"lib/models": typeof lib_models,
-"lib/paidBudgetModel": typeof lib_paidBudgetModel,
-"lib/planRow": typeof lib_planRow,
-"lib/tenantLifecycle": typeof lib_tenantLifecycle,
-"lib/toolContextArgs": typeof lib_toolContextArgs,
-"lib/webResearchTools": typeof lib_webResearchTools,
-"llm": typeof llm,
-"media": typeof media,
-"mediaComplete": typeof mediaComplete,
-"mediaIntent": typeof mediaIntent,
-"microsoftAuth": typeof microsoftAuth,
-"microsoftCalendar": typeof microsoftCalendar,
-"migrations": typeof migrations,
-"notifications": typeof notifications,
-"notifyExternal": typeof notifyExternal,
-"onboarding": typeof onboarding,
-"onlinePresence": typeof onlinePresence,
-"onlinePresenceRun": typeof onlinePresenceRun,
-"ops": typeof ops,
-"opsSignals": typeof opsSignals,
-"optimizerConfig": typeof optimizerConfig,
-"optimizerEligibility": typeof optimizerEligibility,
-"owner": typeof owner,
-"paypalAuth": typeof paypalAuth,
-"paypalConnector": typeof paypalConnector,
-"pinnedWorkflows": typeof pinnedWorkflows,
-"pipeline": typeof pipeline,
-"plans": typeof plans,
-"proactiveReview": typeof proactiveReview,
-"proposals": typeof proposals,
-"providerGates": typeof providerGates,
-"quickbooks": typeof quickbooks,
-"quickbooksAuth": typeof quickbooksAuth,
-"ragErasure": typeof ragErasure,
-"reliabilitySweep": typeof reliabilitySweep,
-"render/assembleScript": typeof render_assembleScript,
-"render/burnCapsScript": typeof render_burnCapsScript,
-"render/renderReel": typeof render_renderReel,
-"reportPack": typeof reportPack,
-"reportPackData": typeof reportPackData,
-"reportsBusiness": typeof reportsBusiness,
-"reportsGovernance": typeof reportsGovernance,
-"requests": typeof requests,
-"research": typeof research,
-"researchControl": typeof researchControl,
-"researchDeliverable": typeof researchDeliverable,
-"revenueCrm": typeof revenueCrm,
-"revenueFinance": typeof revenueFinance,
-"revenueTelemetry": typeof revenueTelemetry,
-"revenueTools": typeof revenueTools,
-"review": typeof review,
-"savedPrompts": typeof savedPrompts,
-"skilloptExport": typeof skilloptExport,
-"skills": typeof skills,
-"smoke": typeof smoke,
-"smokeAssert": typeof smokeAssert,
-"spendLedger": typeof spendLedger,
-"stripeAuth": typeof stripeAuth,
-"stripeConnector": typeof stripeConnector,
-"telemetry": typeof telemetry,
-"tenantDelete": typeof tenantDelete,
-"tenantExport": typeof tenantExport,
-"tenantProfile": typeof tenantProfile,
-"uploads": typeof uploads,
-"vault": typeof vault,
-"vaultDigest": typeof vaultDigest,
-"vaultDrive": typeof vaultDrive,
-"vaultExtract": typeof vaultExtract,
-"vaultFolders": typeof vaultFolders,
-"vaultGraph": typeof vaultGraph,
-"vaultGround": typeof vaultGround,
-"vaultIngest": typeof vaultIngest,
-"vaultLlm": typeof vaultLlm,
-"vaultRag": typeof vaultRag,
-"vaultSmoke": typeof vaultSmoke,
-"vaultSources": typeof vaultSources,
-"vaultSweep": typeof vaultSweep,
-"vaultTranscribe": typeof vaultTranscribe,
-"verticalData": typeof verticalData,
-"verticalEvalEvidence": typeof verticalEvalEvidence,
-"verticalEvalSources": typeof verticalEvalSources,
-"verticalPackBinding": typeof verticalPackBinding,
-"verticalPackTelemetry": typeof verticalPackTelemetry,
-"verticalPacks": typeof verticalPacks,
-"verticalVisual": typeof verticalVisual,
-"voice": typeof voice,
-"voiceControl": typeof voiceControl,
-"voiceDoc": typeof voiceDoc,
-"voiceToken": typeof voiceToken,
-"webAssets": typeof webAssets,
-"webForms": typeof webForms,
-"webHttp": typeof webHttp,
-"webProjects": typeof webProjects,
-"webRecipeEvals": typeof webRecipeEvals,
-"webRecipes": typeof webRecipes,
-"webRuntime": typeof webRuntime,
-"workflowPackBinding": typeof workflowPackBinding,
-"workflowPackDiscovery": typeof workflowPackDiscovery,
-"workflowPackEventLog": typeof workflowPackEventLog,
-"workflowPackOutcomes": typeof workflowPackOutcomes,
-"worm": typeof worm,
-"wormCursor": typeof wormCursor,
-"zernio": typeof zernio,
-"zernioActions": typeof zernioActions,
-  }>;
-  export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "public">>;
-  export declare const internal: FilterApi<typeof fullApi, FunctionReference<any, "internal">>;
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
+
+declare const fullApi: ApiFromModules<{
+  agenda: typeof agenda;
+  agentSteps: typeof agentSteps;
+  aggregates: typeof aggregates;
+  approvals: typeof approvals;
+  audit: typeof audit;
+  auth: typeof auth;
+  authRevocations: typeof authRevocations;
+  authoringProbe: typeof authoringProbe;
+  billing: typeof billing;
+  billingApi: typeof billingApi;
+  billingLedger: typeof billingLedger;
+  billingRollup: typeof billingRollup;
+  billingWebhook: typeof billingWebhook;
+  blueprint: typeof blueprint;
+  briefings: typeof briefings;
+  buffer: typeof buffer;
+  bufferActions: typeof bufferActions;
+  bufferTools: typeof bufferTools;
+  calendar: typeof calendar;
+  calendarComplete: typeof calendarComplete;
+  calendarEvents: typeof calendarEvents;
+  calendarViews: typeof calendarViews;
+  cash: typeof cash;
+  cockpit: typeof cockpit;
+  cockpitCapabilities: typeof cockpitCapabilities;
+  connectorConnections: typeof connectorConnections;
+  connectorCredentials: typeof connectorCredentials;
+  connectorFetch: typeof connectorFetch;
+  connectorOAuth: typeof connectorOAuth;
+  contacts: typeof contacts;
+  content: typeof content;
+  contentAudit: typeof contentAudit;
+  crons: typeof crons;
+  deadLetter: typeof deadLetter;
+  deadLetters: typeof deadLetters;
+  deliverApprovedPlan: typeof deliverApprovedPlan;
+  delivery: typeof delivery;
+  demo: typeof demo;
+  dispatch: typeof dispatch;
+  dispatchRun: typeof dispatchRun;
+  dstProbe: typeof dstProbe;
+  evaluations: typeof evaluations;
+  feedback: typeof feedback;
+  finance: typeof finance;
+  foundation: typeof foundation;
+  funnels: typeof funnels;
+  gmail: typeof gmail;
+  gmailAuth: typeof gmailAuth;
+  goals: typeof goals;
+  graph: typeof graph;
+  guardrails: typeof guardrails;
+  home: typeof home;
+  http: typeof http;
+  hubspot: typeof hubspot;
+  hubspotAuth: typeof hubspotAuth;
+  index: typeof index;
+  intake: typeof intake;
+  intakeDb: typeof intakeDb;
+  invites: typeof invites;
+  invoiceReminders: typeof invoiceReminders;
+  knowledgeExternalSources: typeof knowledgeExternalSources;
+  knowledgeLlm: typeof knowledgeLlm;
+  knowledgeSearch: typeof knowledgeSearch;
+  knowledgeVaultDrive: typeof knowledgeVaultDrive;
+  "lib/agenda": typeof lib_agenda;
+  "lib/allowlist": typeof lib_allowlist;
+  "lib/authEmail": typeof lib_authEmail;
+  "lib/bufferMcp": typeof lib_bufferMcp;
+  "lib/dispatchShared": typeof lib_dispatchShared;
+  "lib/env": typeof lib_env;
+  "lib/evalBudgetModel": typeof lib_evalBudgetModel;
+  "lib/foglamp": typeof lib_foglamp;
+  "lib/foundationValidators": typeof lib_foundationValidators;
+  "lib/functions": typeof lib_functions;
+  "lib/hash": typeof lib_hash;
+  "lib/markdownPdf": typeof lib_markdownPdf;
+  "lib/mediaRead": typeof lib_mediaRead;
+  "lib/models": typeof lib_models;
+  "lib/onlinePresenceTools": typeof lib_onlinePresenceTools;
+  "lib/paidBudgetModel": typeof lib_paidBudgetModel;
+  "lib/planRow": typeof lib_planRow;
+  "lib/tenantLifecycle": typeof lib_tenantLifecycle;
+  "lib/toolContextArgs": typeof lib_toolContextArgs;
+  "lib/webResearchTools": typeof lib_webResearchTools;
+  llm: typeof llm;
+  media: typeof media;
+  mediaComplete: typeof mediaComplete;
+  mediaIntent: typeof mediaIntent;
+  microsoftAuth: typeof microsoftAuth;
+  microsoftCalendar: typeof microsoftCalendar;
+  migrations: typeof migrations;
+  notifications: typeof notifications;
+  notifyExternal: typeof notifyExternal;
+  onboarding: typeof onboarding;
+  onlinePresence: typeof onlinePresence;
+  onlinePresenceRun: typeof onlinePresenceRun;
+  ops: typeof ops;
+  opsSignals: typeof opsSignals;
+  optimizerConfig: typeof optimizerConfig;
+  optimizerEligibility: typeof optimizerEligibility;
+  owner: typeof owner;
+  paypalAuth: typeof paypalAuth;
+  paypalConnector: typeof paypalConnector;
+  pinnedWorkflows: typeof pinnedWorkflows;
+  pipeline: typeof pipeline;
+  plans: typeof plans;
+  proactiveReview: typeof proactiveReview;
+  proposals: typeof proposals;
+  providerGates: typeof providerGates;
+  quickbooks: typeof quickbooks;
+  quickbooksAuth: typeof quickbooksAuth;
+  ragErasure: typeof ragErasure;
+  reliabilitySweep: typeof reliabilitySweep;
+  "render/assembleScript": typeof render_assembleScript;
+  "render/burnCapsScript": typeof render_burnCapsScript;
+  "render/renderReel": typeof render_renderReel;
+  reportPack: typeof reportPack;
+  reportPackData: typeof reportPackData;
+  reportsBusiness: typeof reportsBusiness;
+  reportsGovernance: typeof reportsGovernance;
+  requests: typeof requests;
+  research: typeof research;
+  researchControl: typeof researchControl;
+  researchDeliverable: typeof researchDeliverable;
+  revenueCrm: typeof revenueCrm;
+  revenueFinance: typeof revenueFinance;
+  revenueTelemetry: typeof revenueTelemetry;
+  revenueTools: typeof revenueTools;
+  review: typeof review;
+  savedPrompts: typeof savedPrompts;
+  skilloptExport: typeof skilloptExport;
+  skills: typeof skills;
+  smoke: typeof smoke;
+  smokeAssert: typeof smokeAssert;
+  spendLedger: typeof spendLedger;
+  stripeAuth: typeof stripeAuth;
+  stripeConnector: typeof stripeConnector;
+  telemetry: typeof telemetry;
+  tenantDelete: typeof tenantDelete;
+  tenantExport: typeof tenantExport;
+  tenantProfile: typeof tenantProfile;
+  uploads: typeof uploads;
+  vault: typeof vault;
+  vaultDigest: typeof vaultDigest;
+  vaultDrive: typeof vaultDrive;
+  vaultExtract: typeof vaultExtract;
+  vaultFolders: typeof vaultFolders;
+  vaultGraph: typeof vaultGraph;
+  vaultGround: typeof vaultGround;
+  vaultIngest: typeof vaultIngest;
+  vaultLlm: typeof vaultLlm;
+  vaultRag: typeof vaultRag;
+  vaultSmoke: typeof vaultSmoke;
+  vaultSources: typeof vaultSources;
+  vaultSweep: typeof vaultSweep;
+  vaultTranscribe: typeof vaultTranscribe;
+  verticalData: typeof verticalData;
+  verticalEvalEvidence: typeof verticalEvalEvidence;
+  verticalEvalSources: typeof verticalEvalSources;
+  verticalPackBinding: typeof verticalPackBinding;
+  verticalPackTelemetry: typeof verticalPackTelemetry;
+  verticalPacks: typeof verticalPacks;
+  verticalVisual: typeof verticalVisual;
+  voice: typeof voice;
+  voiceControl: typeof voiceControl;
+  voiceDoc: typeof voiceDoc;
+  voiceToken: typeof voiceToken;
+  webAssets: typeof webAssets;
+  webForms: typeof webForms;
+  webHttp: typeof webHttp;
+  webProjects: typeof webProjects;
+  webRecipeEvals: typeof webRecipeEvals;
+  webRecipes: typeof webRecipes;
+  webRuntime: typeof webRuntime;
+  workflowPackBinding: typeof workflowPackBinding;
+  workflowPackDiscovery: typeof workflowPackDiscovery;
+  workflowPackEventLog: typeof workflowPackEventLog;
+  workflowPackOutcomes: typeof workflowPackOutcomes;
+  worm: typeof worm;
+  wormCursor: typeof wormCursor;
+  zernio: typeof zernio;
+  zernioActions: typeof zernioActions;
+}>;
+
+/**
+ * A utility for referencing Convex functions in your app's public API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
+export declare const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+>;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
+export declare const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+>;
 
 export declare const components: {
   workflow: import("@convex-dev/workflow/_generated/component.js").ComponentApi<"workflow">;

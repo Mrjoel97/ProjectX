@@ -28,6 +28,7 @@
     "packages/backend/convex/foglamp.test.ts"
   ],
   "ci-gate.md": [
+    "config/online-presence-staging.vercel.json",
     ".github/scripts/phase48-staging-parity",
     ".github/workflows/phase48-staging-parity.yml",
     ".github/scripts/phase48-staging-release",

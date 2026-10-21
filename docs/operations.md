@@ -1,5 +1,10 @@
 # Current operations guide
 
+## Isolated online-presence staging — 2026-10-22
+
+A new, separate environment is deployed at https://pikar-presence-stg.vercel.app with Convex `third-gecko-977`. See [dedicated staging operations](online-presence-staging.md) for exact target IDs, deployment configuration and remaining native/model/browser acceptance. This does not change production status or the Phase48 staging environment described elsewhere.
+
+
 ## Latest onboarding status — 2026-10-18
 
 **Global foundation onboarding is enabled in production.** Following the owner's explicit rollout instruction after voice and six-document acceptance, `FOUNDATION_ONBOARDING_ENABLED=1` was saved in `opulent-octopus-494` on October 18. The authenticated production onboarding page was independently verified writable, with Start voice onboarding available after the owner pilot had expired. No runtime deployment, ordinary-voice change, budget reset or billing activation was performed. Roll back admission by setting this flag to `0`; retain additive tables, approved documents, registry and cleanup workers. Do not restore production data to roll back a feature flag.

@@ -1764,11 +1764,11 @@ Plans:
 Owner authorized after the October21 deep discovery. Preserve the distinct historical PR36 website/recipe/merchant phase directories and current managed-service phases48–52.
 
 - 53-01: selective website/runtime recovery, agent-prepared brief/private pages and exact-version review; local implementation/validation.
-- 53-02: actual hosted model, recipe/browser qualification and release admission — not run.
+- 53-02: partial — new dedicated staging frontend/backend deployed; anonymous browser/boundary checks and hosted deterministic recipes pass. Native authentication, model workflow, recipe browser qualification and release admission remain open; see53-02-SUMMARY.md.
 - 53-03: partial — pure goods quote/inventory/order foundations recovered; merchant-direct Stripe plus PayPal, persistent adapters and fulfillment remain open.
 - 53-04: complete locally — Taste/UI UX Pro Max quality, business-directed rendering and offline browser checks; see53-04-SUMMARY.md.
 - 53-05: complete locally — owned logo/hero/gallery assets, agent preparation, protected review and exact published image delivery; see53-05-SUMMARY.md.
 
 Requirements: OPRES-01..04. See `.planning/phases/53-agentic-online-presence/53-VALIDATION.md`.
 
-| 53. Agentic online presence | 3/5 | Partial — website source, design and imagery verified locally; hosted qualification and complete commerce open | - |
+| 53. Agentic online presence | 3/5 | Partial — website/design/imagery verified locally and dedicated staging deployed; hosted qualification and complete commerce open | - |
