@@ -1,7 +1,7 @@
 # Managed business services programme
 
 Owner-approved: 2026-10-19. Planning baseline: b4deef8bba42347e31df638b828443eb11407138.
-Status: Phase 48 inventory executed; qualification and all implementation/live gates remain open.
+Status reconciled from existing evidence 2026-10-21: Phase 48 inventory executed and qualification partial; Phase 23 is 6/9 with a current staging handoff but no completed eval/live-result chain. Phases 49–52 remain blocked by their preceding verification gates.
 
 ## Product outcome
 
@@ -22,7 +22,7 @@ Planning and read-only research may run in parallel. Implementation/release admi
 ## What remains authoritative
 
 - Phase 21 SKILL-01 is accepted by its 2026-08-20 VERIFICATION. The stronger synthetic-author runtime-attribution limitation is not reopened or repurchased.
-- Phase 23 plans 06–09 retain the sole handoff → exact-row evaluation → actual owner activation/isolation/rollback → closure chain. September 14's failed native re-sign-in left no certified handoff; inspect actual candidate/owner/budget/once-lock state before any retry.
+- Phase 23 plans 06–09 retain the sole handoff → exact-row evaluation → actual owner activation/isolation/rollback → closure chain. September 14's missing handoff is historical; 23-06 later completed. PR79 staging source `b10740d6466db155c48519aba6323d5b0c27c406` and its [current versioned handoff](../phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json), SHA256 `ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61`, are recorded in the [refresh observation](../phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-HANDOFF-REFRESH.json), SHA256 `6b86ddbe2ad61dc4f331024a0e08b3fdb3420c0771bdbb28a5a38c3161cc31c8`. The original 23-07 attempt remains partial and normally closed; paidReady/paidAuthorized remain false. Revalidate the current exact state before a separately authorized next evaluation; preserve all historical bytes and do not replay authoring or owner bootstrap.
 - Phase 27 plan 09 remains partial. Six historical pilot activations are not a completed per-pack behavioral browser protocol. The seventh offer-and-lead-plan needs separate inclusion evidence or explicit exclusion.
 - Six Phase 30 vertical candidates and connector variants stay unavailable until independently qualified. This programme does not expose all verticals.
 - ADR-046 remains binding: unattended reads/preparation only. An exact approved post can be scheduled; future unknown content has no standing publishing grant.
@@ -60,4 +60,4 @@ Concrete paid/model budgets, actual owner activation, third-party account author
 
 No provider publication, token handling, paid evaluation, owner bootstrap, DST probe or recurring service was performed during this planning work.
 
-Start execution at [48-02](../phases/48-readiness-and-qualification-closure/48-02-PLAN.md) after reading [the inventory](../phases/48-readiness-and-qualification-closure/48-CAPABILITY-INVENTORY.md). 48-01 is the completed planning/inventory step only.
+Resume [48-02](../phases/48-readiness-and-qualification-closure/48-02-PLAN.md) from its [actual partial summary](../phases/48-readiness-and-qualification-closure/48-02-SUMMARY.md) and current versioned handoff after reading [the inventory](../phases/48-readiness-and-qualification-closure/48-CAPABILITY-INVENTORY.md). The 2026-10-21 bookkeeping reconciliation performs no live check or new paid consent. 48-01 is the completed planning/inventory step only; 48-04's readiness seal still gates Phase 49.

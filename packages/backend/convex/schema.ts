@@ -2995,7 +2995,13 @@ export default defineSchema({
     kind: v.optional(v.string()),
     // Evaluation uses this same append-only ledger and the existing limiter, never a second bill.
     evalBudgetId: v.optional(v.id("spendEvents")),
-    evalEnvelope: v.optional(v.object({ tenantIds: v.array(v.string()), expiresAt: v.number() })),
+    evalEnvelope: v.optional(
+      v.object({
+        tenantIds: v.array(v.string()),
+        expiresAt: v.number(),
+        accountingMode: v.optional(v.literal("ledger-nanos-v1")),
+      }),
+    ),
     evalAuthoringProbe: v.optional(
       v.object({ threadId: v.string(), authorizationSha256: v.string() }),
     ),

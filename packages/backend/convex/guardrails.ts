@@ -19,13 +19,15 @@ import {
   EVAL_MAX_BUDGET_CENTS,
   evalActualCents,
   evalCallCeilingCents,
+  evalLedgerCanReserve,
+  evalLedgerUsageNanos,
 } from "@pikar/cost/evalBudget";
 import { goldenProviderCeilingCents, goldenTavilyBilling } from "@pikar/cost/goldenProviderBudget";
 import { scanText } from "@pikar/pii";
 import { clampRefundCents, type EstimateInput, estimateFolderCents } from "@pikar/vault";
 import { v } from "convex/values";
 import { components } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalQuery } from "./_generated/server";
 import { probeControl } from "./authoringProbe";
@@ -430,7 +432,15 @@ export const openEvalBudget = internalMutation({
         : `eval:${crypto.randomUUID()}`,
       createdAt: now,
       kind: "eval_envelope",
-      evalEnvelope: { tenantIds, expiresAt: now + EVAL_BUDGET_LIFETIME_MS },
+      evalEnvelope: {
+        tenantIds,
+        expiresAt: now + EVAL_BUDGET_LIFETIME_MS,
+        // Only new isolated golden runs opt in. Existing envelopes, authoring probes and
+        // pack/vertical budgets retain their original component accounting with no migration.
+        ...(family === "golden" && !authoringProbe
+          ? { accountingMode: "ledger-nanos-v1" as const }
+          : {}),
+      },
       ...(authoringProbe ? { evalAuthoringProbe: authoringProbe } : {}),
     });
   },
@@ -453,6 +463,18 @@ async function evalEnvelopeFor(ctx: QueryCtx, budgetId: Id<"spendEvents">, tenan
     start: envelope.createdAt,
   };
   return { envelope, config };
+}
+
+function evalLedgerUsage(envelope: Doc<"spendEvents">, rows: Doc<"spendEvents">[]) {
+  return evalLedgerUsageNanos(
+    envelope.amountCents,
+    rows.filter((row) => row.phase === "reserved"),
+    rows.flatMap((row) =>
+      row.evalActualUsd === undefined
+        ? []
+        : [{ correlationId: row.correlationId, evalActualUsd: row.evalActualUsd }],
+    ),
+  );
 }
 
 export const reserveEvalCall = internalMutation({
@@ -528,7 +550,13 @@ export const reserveEvalCall = internalMutation({
     if (rows.length > 1500 || rows.filter((row) => row.phase === "reserved").length >= 500)
       throw new Error("EVAL_CALL_LIMIT");
     // Check all rails before moving any; the writes and ledger insert share this transaction.
-    if (
+    const ledgerMode = envelope.evalEnvelope?.accountingMode === "ledger-nanos-v1";
+    if (ledgerMode) {
+      // The indexed range read above and reservation insert below share one native mutation.
+      // Concurrent reservations/settlements conflict on this range and retry against fresh rows.
+      if (!evalLedgerCanReserve(evalLedgerUsage(envelope, rows).remainingNanos, amountCents))
+        throw new Error("EVAL_BUDGET_EXHAUSTED");
+    } else if (
       !(
         await rateLimiter.check(ctx, "evalBudgetCents", {
           key: String(budgetId),
@@ -544,11 +572,12 @@ export const reserveEvalCall = internalMutation({
       throw new Error("EVAL_DAILY_BUDGET_EXHAUSTED");
     if (!(await rateLimiter.check(ctx, "deploymentSpendCents", { count: amountCents })).ok)
       throw new Error("EVAL_DEPLOYMENT_BUDGET_EXHAUSTED");
-    await rateLimiter.limit(ctx, "evalBudgetCents", {
-      key: String(budgetId),
-      config,
-      count: amountCents,
-    });
+    if (!ledgerMode)
+      await rateLimiter.limit(ctx, "evalBudgetCents", {
+        key: String(budgetId),
+        config,
+        count: amountCents,
+      });
     await rateLimiter.limit(ctx, "dailySpendCents", { key: tenantId, count: amountCents });
     await rateLimiter.limit(ctx, "deploymentSpendCents", { count: amountCents });
     return recordMovement(ctx, {
@@ -584,6 +613,7 @@ export const settleEvalCall = internalMutation({
     )
       throw new Error("EVAL_RESERVATION_NOT_FOUND");
     const { envelope, config } = await evalEnvelopeFor(ctx, reservation.evalBudgetId, tenantId);
+    const ledgerMode = envelope.evalEnvelope?.accountingMode === "ledger-nanos-v1";
     const siblings = await ctx.db
       .query("spendEvents")
       .withIndex("by_correlation", (q) => q.eq("correlationId", reservation.correlationId))
@@ -615,7 +645,7 @@ export const settleEvalCall = internalMutation({
         reserve: true,
       });
       await rateLimiter.limit(ctx, "deploymentSpendCents", { count: debt, reserve: true });
-      if (Date.now() < (envelope.evalEnvelope?.expiresAt ?? 0))
+      if (!ledgerMode && Date.now() < (envelope.evalEnvelope?.expiresAt ?? 0))
         await rateLimiter.limit(ctx, "evalBudgetCents", {
           key: String(reservation.evalBudgetId),
           config,
@@ -625,7 +655,7 @@ export const settleEvalCall = internalMutation({
     }
     const refund = reservation.amountCents - actualCents;
     if (refund > 0) {
-      if (Date.now() < (envelope.evalEnvelope?.expiresAt ?? 0))
+      if (!ledgerMode && Date.now() < (envelope.evalEnvelope?.expiresAt ?? 0))
         await rateLimiter.limit(ctx, "evalBudgetCents", {
           key: String(reservation.evalBudgetId),
           config,
@@ -699,17 +729,27 @@ export const evalBudgetStatus = internalQuery({
     const settledIds = new Set(settled.map((row) => row.correlationId));
     const outstanding = reserved.filter((row) => !settledIds.has(row.correlationId));
     const expired = Date.now() >= (envelope.evalEnvelope?.expiresAt ?? 0);
-    const window = await rateLimiter.getValue(ctx, "evalBudgetCents", {
-      key: String(budgetId),
-      config,
-    });
+    const remainingCents =
+      envelope.evalEnvelope?.accountingMode === "ledger-nanos-v1"
+        ? evalLedgerUsage(envelope, rows).remainingCents
+        : Math.max(
+            0,
+            Math.floor(
+              (
+                await rateLimiter.getValue(ctx, "evalBudgetCents", {
+                  key: String(budgetId),
+                  config,
+                })
+              ).value,
+            ),
+          );
     return {
       budgetId,
       closed: rows.some((row) => row.kind === "eval_budget_closed"),
       capCents: envelope.amountCents,
       expired,
       breached: rows.some((row) => row.evalBreach === true),
-      remainingCents: expired ? 0 : Math.max(0, Math.floor(window.value)),
+      remainingCents: expired ? 0 : remainingCents,
       actualUsd: settled.reduce((sum, row) => sum + (row.evalActualUsd ?? 0), 0),
       callCount: reserved.length,
       settledCount: settled.length,

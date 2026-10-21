@@ -425,7 +425,7 @@
     "packages/backend/convex/lib/paidBudgetModel",
     "packages/backend/convex/paidAdmission.test.ts",
     "packages/backend/convex/evalBudget",
-    "packages/cost/src/evalBudget.ts",
+    "packages/cost/src/evalBudget",
     "packages/cost/src/goldenProviderBudget",
     "packages/backend/scripts/run-smoke-guardrails.mjs",
     "packages/cost/src/cost.ts",
