@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: "Platform -> Private Beta"
 current_phase: 48
-current_plan: "48-02 — October21 evaluation partial28/46, budgetclosed198settled/0holds/$0.14551101. Precise golden-envelope repair implemented offline; freechecks/review, no deployment or paid rerun authorized."
+current_plan: "48-02 — PR81 precision repair released to staging; new source-bound handoff ready. 23-07 partial28/46; paidReady/paidAuthorized false. Phase23 six of nine,48 partial,49 not started."
 status: in_progress
-stopped_at: "2026-10-21 — separately approved23-07 run31a81b38 exited2 after28passes/0fails/0retries. ServerconfirmedEVAL_BUDGET_EXHAUSTED; normalclose13:47:31.744Z,198settled/0holds/$0.14551101. Noeval-result/Bmutation/activation/cleanup/rerun. Phase23 sixofnine/48partial/49notstarted."
+stopped_at: "2026-10-21 — PR81 staging release39618889468 succeeded and new handoff39dfb145…8a930 written. Prior23-07 run31a81b38 remains partial/closed:28passes,198settled/0holds/$0.14551101. No new paid consent/eval-result/B mutation/activation/cleanup/production release."
 last_updated: "2026-10-21"
 progress:
   total_phases: 79
@@ -48,55 +48,21 @@ The owner approved the managed-service programme on 2026-10-19: **48 readiness �
 
 ## Next execution boundary
 
-The separately approved October21 run is now terminal and partial. Owner answer
-`Approve this new $2 staging evaluation` binds authorization SHA256
-`944728bd84721c101713df0d4f91e08880f6782f8b30e39b3acc552d1d0faeba`; one unfiltered run
-`31a81b38` used exact clean sourceb107/current ce31 handoff under a new200-cent envelope.
-[Immutable partial observation](phases/23-agent-authored-skills/23-07-PARTIAL-2026-10-21.json),
-SHA256 `64a1edc5b7843212673e119679da0eba1bc7993fe6343ce712fb821534399062`, records28passes/0fails,
-next fixture30 without a verdict and17 later unattempted.63paid-action receipts comprise62returns
-and1unresolved. Native errors from one request identify EVAL_BUDGET_EXHAUSTED, not the post-case
-unsettled-budget guard.198settled provider calls cost$0.14551101 while consuming198 whole-cent
-enforcement units. Normal guarded closure at13:47:31.744Z retained spend/test state; postcheck
-confirmed closed/0holds/unbreached and unchanged candidate/source/provenance/registry/retention.
-No full result, B public mutation, activation, cleanup or rerun occurred.
+The [PR81 handoff refresh](phases/23-agent-authored-skills/handoffs/2026-10-21-pr81/23-HANDOFF-REFRESH.json), SHA256 `32ca4afd73d5aece2b645acae84f4739234c65cf231c4ef2c7a3146b28cbdc60`, preserves actual browser/readback scope and both predecessor hashes. The [new proposed paid checkpoint](phases/23-agent-authored-skills/23-07-CHECKPOINT-2026-10-21-PR81.md), SHA256 `deb8215f29b273c0d7a5509b25b41c75cf209c9fba0ff5c7b58f0123323172d4`, is prepared for review; it is not authorization or an execution receipt.
 
-Offline repair is implemented on a separate review branch: only new isolated golden envelopes
-without authoring probes opt into precise integer-nanodollar aggregate ledger admission. All
-existing envelopes, new probes/packs/verticals, call ceilings and other rails keep their existing
-behavior. [Proposed ADR061](../docs/decisions/061-precise-golden-envelope-accounting.md) records the
-decision and required tests. This changes evaluator identity; the currently deployedb107/ce31
-chain stays historical/current only for that deployed source. A future reviewed staging release,
-new versioned handoff and new exact paid consent are separate prerequisites. No release, budget
-increase, conversion, replenishment or second paid attempt is authorized by the consumed scope.
-Phase23 stays6/9,48partial and49notstarted.
+PR81's approved staging release succeeded for source `cafde7c6c7d65924b7a48433cf4938983d91707c`, CI `39615369973`, merge `821c3206e47eb4cec0ebcf3d99cf943358f2910a`, run `39618889468`/job `119286711355`. The [release observation](phases/48-readiness-and-qualification-closure/48-STAGING-PR81-RELEASE-2026-10-21.json), SHA256 `499a08b00c0bf5e64927351782fb4bc1b982afcb0c6b629768850dadaba19f73`, records completed apply, passing postflight/zero parity/preservation/billing checks and unchanged configuration/registry/protected retention. The [new current handoff](phases/23-agent-authored-skills/handoffs/2026-10-21-pr81/23-LIVE-HANDOFF.json), SHA256 `39dfb14558a96cdbede3ca7d0641ee33ed09edaec0526510950528a19a48a930`, binds the current 5867/5dbe 46-case suite. It supersedes only the next-input pointer; all earlier bytes remain historical. PaidReady/paidAuthorized remain false. No new evaluation, public B mutation, activation, cleanup or production deployment follows from this staging approval; Phase23 remains6/9,27 remains8/9,48partial and49notstarted.
 
-The repair's golden evaluator revision is
-`2026-09-11.budgeted-evaluator.5867c6e86ad02677493c5b238d206965704761cf7eac8b7561078afac91d8d4d`;
-its46-case corpus/hash5dbe is unchanged. Native vertical revision is
-`e4174daf40d9477487ae28a45b3a7412c5f30223bdbdeb1dfcb9137de98a20f4`, with six lanes/40cases
-and unchangeddc21 corpus.63focused cost/native regression tests and independent review passed;
-repository free gates passed. These are offline results, not deployed behavior or qualification.
-Graphify is unavailable; the existing Convex-edge fixup ran with zero edge changes.
+The separately approved October21 run remains terminal and partial. Owner answer `Approve this new $2 staging evaluation` binds authorization SHA256 `944728bd84721c101713df0d4f91e08880f6782f8b30e39b3acc552d1d0faeba`; one unfiltered run `31a81b38` used exact clean sourceb107/current ce31 handoff under a new200-cent envelope. [Immutable partial observation](phases/23-agent-authored-skills/23-07-PARTIAL-2026-10-21.json), SHA256 `64a1edc5b7843212673e119679da0eba1bc7993fe6343ce712fb821534399062`, records28passes/0fails, next fixture30 without a verdict and17 later unattempted.63paid-action receipts comprise62returns and1unresolved. Native errors from one request identify EVAL_BUDGET_EXHAUSTED, not the post-case unsettled-budget guard.198settled provider calls cost$0.14551101 while consuming198 whole-cent enforcement units. Normal guarded closure at13:47:31.744Z retained spend/test state; postcheck confirmed closed/0holds/unbreached and unchanged candidate/source/provenance/registry/retention. No full result, B public mutation, activation, cleanup or rerun occurred.
 
-October21 continuation completed free preparation with three parallel agents. Plans23-07/08/09
-now consume the versioned PR79 handoff and sibling future results; capability/research/validation
-and programme bookkeeping preserve actual partial status. [Dated preparation observation](phases/23-agent-authored-skills/23-07-PREPARATION-2026-10-21.json),
-SHA256 `5ebb281e37def7c71927bbcc1a7587c987360e93022613d3060076cdca899a35`, records six stable
-readbacks, unchanged registry/protected retention, absent candidate evidence/approval, closed old
-budget, fresh native A owner/B non-owner and public check NOT_STARTED. Shared schema/private scanner
-and assertLiveMatches passed against the captured readbacks. The initial browser-helper standalone
-operator invocation did not pass; the later authorized CLI [shared preflight](phases/23-agent-authored-skills/23-07-PREFLIGHT-2026-10-21.json)
-passed at13:07:46.389Z with six matching reads, SHA256
-`6b7f112d3e4544625e56a299004083a4345d9a31da7bfe0faaf5696052ac2915`.
-Its authSessionVerified:false is preserved: native identities were observed separately, not by that
-CLI. The private scan passed separately; the later CLI used a public secondary canary. Free golden self-check
-(57 fixtures/12 skills),187 skill tests and focused artifact/operator checks passed. Public catalogs
-list all proposed routes; account quota remains unverified. [New proposed checkpoint](phases/23-agent-authored-skills/23-07-CHECKPOINT-2026-10-21.md)
-binds current candidate/source/suite to one new $2 aggregate run, with separate evidence/aggregate
-cost disclosure and all existing gates. No new paid authorization, paid run, B public mutation,
-activation or production change occurred. Immediate execution preflight and exact fresh consent
-remain required; Phase23 stays6/9,48 partial and49 not started.
+The precision repair, now released to staging, opts only new isolated golden envelopes without authoring probes into precise integer-nanodollar aggregate ledger admission. All existing envelopes, new probes/packs/verticals, call ceilings and other rails keep their existing behavior. [Proposed ADR061](../docs/decisions/061-precise-golden-envelope-accounting.md) records the decision and required tests. It changed evaluator identity; the priorb107/ce31 chain retains its original-source meaning. The approved PR81 release/new handoff above are separate from any new exact paid consent. No budget increase, conversion, replenishment or second paid attempt is authorized by the consumed evaluation scope. Phase23 stays6/9,48partial and49notstarted.
+
+The repair's golden evaluator revision is `2026-09-11.budgeted-evaluator.5867c6e86ad02677493c5b238d206965704761cf7eac8b7561078afac91d8d4d`; its46-case corpus/hash5dbe is unchanged. Native vertical revision is `e4174daf40d9477487ae28a45b3a7412c5f30223bdbdeb1dfcb9137de98a20f4`, with six lanes/40cases and unchangeddc21 corpus.63focused cost/native regression tests and independent review passed; repository free gates passed. These are offline results, not live semantic qualification; the separate PR81 receipt records staging deployment only. Graphify is unavailable; the existing Convex-edge fixup ran with zero edge changes.
+
+Before the October21 paid attempt, continuation completed free preparation with three parallel agents. Plans23-07/08/09 then consumed the versioned PR79 handoff and sibling future results; capability/research/validation and programme bookkeeping preserve actual partial status. [Dated preparation observation](phases/23-agent-authored-skills/23-07-PREPARATION-2026-10-21.json), SHA256 `5ebb281e37def7c71927bbcc1a7587c987360e93022613d3060076cdca899a35`, records six stable readbacks, unchanged registry/protected retention, absent candidate evidence/approval, closed old budget, fresh native A owner/B non-owner and public check NOT_STARTED. Shared schema/private scanner and assertLiveMatches passed against the captured readbacks. The initial browser-helper standalone operator invocation did not pass; the later authorized CLI [shared preflight](phases/23-agent-authored-skills/23-07-PREFLIGHT-2026-10-21.json) passed at13:07:46.389Z with six matching reads, SHA256 `6b7f112d3e4544625e56a299004083a4345d9a31da7bfe0faaf5696052ac2915`. Its authSessionVerified:false is preserved: native identities were observed separately, not by that CLI. The private scan passed separately; the later CLI used a public secondary canary. Free golden self-check (57 fixtures/12 skills),187 skill tests and focused artifact/operator checks passed. Public catalogs list all proposed routes; account quota remains unverified. [The then-proposed checkpoint](phases/23-agent-authored-skills/23-07-CHECKPOINT-2026-10-21.md) bound that candidate/source/suite to one new $2 aggregate run, with separate evidence/aggregate cost disclosure and all existing gates; its later approval and partial outcome are recorded above. At that preparation boundary no paid run, B public mutation, activation or production change had occurred. Its preflight and consumed consent do not qualify a new-source attempt; Phase23 stays6/9,48 partial and49 not started.
+
+
+
+## Historical records preserved
 
 The [conditional staging account/fixture/$1scope](phases/48-readiness-and-qualification-closure/48-STAGING-ALTERNATIVE.md) retains hash`50cd91ae6e081d6b911ab52ecce7a4966faac95f54d4c3bddbd21277beb63a19`. Its new staging pair and two-turn probe ran within scope; original production $1 scope remains unused. Separate release hash`a1772ce8b78d8d34e4a88fb54d6e5c7fd41e84d2f355adcd927c848d0bb18f47` and [historical failed release receipt](phases/48-readiness-and-qualification-closure/48-STAGING-RELEASE-2026-10-20.json) are preserved; no redeploy/automatic retry followed. At the pre-23-07 boundary no evaluation, activation, registry repair or cleanup had occurred; the later interrupted evaluation is recorded below. 48-02 stays partial/SKILL-02 open; Phase49 has not started.
 

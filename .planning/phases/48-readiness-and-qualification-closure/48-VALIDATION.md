@@ -13,19 +13,26 @@ This is a planned verification strategy, not an execution receipt.
 | Plan | Requirement coverage | Required proof | Current state |
 |---|---|---|---|
 | 48-01 | MSVC-01 | Planning consistency checker succeeds with an explicit repository root. Every inventory claim has a source, evidence scope and next action. No new live or paid qualification is claimed. | Inventory executed; see 48-01-SUMMARY.md |
-| 48-02 | MSVC-02 | Existing operator validators accept 23-LIVE-HANDOFF.json → 23-EVAL-RESULT.json → 23-LIVE-RESULT.json with matching hashes/current source and deployment. Required owner acts are observed; current free gates pass. | Partial: 23-06 complete; PR79 staging release/current versioned handoff recorded. 23-07 interrupted/partial; no eval/live result. paidReady/paidAuthorized false. See [48-02 summary](48-02-SUMMARY.md). |
+| 48-02 | MSVC-02 | Existing operator validators accept 23-LIVE-HANDOFF.json → 23-EVAL-RESULT.json → 23-LIVE-RESULT.json with matching hashes/current source and deployment. Required owner acts are observed; current free gates pass. | Partial: 23-06 complete; PR81 staging release/current versioned handoff recorded. Both 23-07 attempts interrupted/partial; no eval/live result. paidReady/paidAuthorized false. See [48-02 summary](48-02-SUMMARY.md). |
 | 48-03 | MSVC-02 | Each applicable matrix cell references an observed result or an explicit exclusion reason. Responsive and two-identity paths pass; privacy/audit receipts contain refs/counts only. Uncertain writes are not retried. | Not executed |
 | 48-04 | MSVC-02 | Requirement-to-plan-to-evidence mapping is complete, baseline restored, planning checker passes and unresolved blockers are explicit. | Not executed |
 
-Existing-evidence reconciliation, 2026-10-21: the [PR79 staging release](48-STAGING-PR79-RELEASE-2026-10-20.json)
-records source `b10740d6466db155c48519aba6323d5b0c27c406`, CI `39446162910` and
-release `39460078883`. The [current handoff](../23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json)
-has SHA256 `ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61`;
-the [refresh observation](../23-agent-authored-skills/handoffs/2026-10-20-pr79/23-HANDOFF-REFRESH.json)
-has SHA256 `6b86ddbe2ad61dc4f331024a0e08b3fdb3420c0771bdbb28a5a38c3161cc31c8`.
-This is the current next input, not a replacement for historical handoff/partial bytes or proof
-of new paid evaluation. This document review performs no live checks and supplies no new consent.
-Phase 21 remains accepted, Phase 23 stays 6/9, Phase 48 partial and Phase 49 blocked on 48-04.
+Existing-evidence reconciliation, 2026-10-21: the [PR81 staging release](48-STAGING-PR81-RELEASE-2026-10-21.json),
+SHA256`499a08b00c0bf5e64927351782fb4bc1b982afcb0c6b629768850dadaba19f73`, records source
+`cafde7c6c7d65924b7a48433cf4938983d91707c`, CI`39615369973` and successful
+release`39618889468`/job`119286711355`, with configuration/registry/protected-retention
+hashes preserved. Merge`821c3206e47eb4cec0ebcf3d99cf943358f2910a` did not promote production.
+The [current PR81 handoff](../23-agent-authored-skills/handoffs/2026-10-21-pr81/23-LIVE-HANDOFF.json)
+has SHA256`39dfb14558a96cdbede3ca7d0641ee33ed09edaec0526510950528a19a48a930`, current5867/5dbe46-case
+suite, fresh existing A owner/B non-owner and NOT_STARTED, direct1280x720/embedded390x900
+views, native keyboard draft/diff and six stable final reads. Embedded controls and
+touch/physical-device behavior were not exercised. Historical authoring/refusal was not replayed.
+
+PR79/original handoffs and both interrupted attempts remain unchanged historical artifacts;
+this new next input supplies no passing evaluation, B mutation, activation or fresh paid
+consent. PaidReady/paidAuthorized remain false. This document review performs no live checks.
+Phase21 remains accepted, Phase23 stays6/9, Phase48partial and Phase49notstarted, blocked
+on48-04. Unqualified verticals remain excluded; existing Buffer/Zernio exceptions are preserved.
 
 ## Release discipline
 

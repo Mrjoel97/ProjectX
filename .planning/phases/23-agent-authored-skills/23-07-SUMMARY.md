@@ -281,3 +281,55 @@ same46-case5dbe corpus; vertical
 corpus. The current deployedb107/ce31 input and all prior immutable records retain their historical
 meaning. A reviewed new staging release and a new source-bound handoff must precede any new paid
 checkpoint. No staging or production deployment, further evaluation or activation occurred.
+
+## Current PR81 staging release and versioned handoff, without new paid consent
+
+The later verbatim **“i approve”** authorized merging PR81, staging-only release of exact
+source `cafde7c6c7d65924b7a48433cf4938983d91707c`, existing-account checks and a new handoff.
+Private release authorization SHA256 is
+`03f5acec88477108003f5d452ac1f7e47627634f0180c5a97d4ad9696d3ef9da`.
+Full CI `39615369973`, job `119274837069`, passed. Staging release `39618889468`, job
+`119286711355`, completed with zero postflight parity, verified billing labels and preserved
+watched configuration, registry and protected retention. This release consent excludes a new
+paid evaluation, activation and production deployment.
+
+Final post-UI readiness at `2026-10-21T15:09:09.368Z` contains six stable matching reads of
+candidate/source/provenance and unchanged baseline/effective/global/foreign/governance state.
+Native exact A-owner/B-non-owner identities were verified. Both historical budgets remain
+closed with spend retained: October20 `$0.06160618`, 89 settled calls/zero holds; October21
+`$0.14551101`, 198 settled calls/zero holds. Neither is reusable, and neither partial run is
+passing current-suite evidence. The historical cockpit source/body variance remains preserved;
+no registry repair or new authoring turn occurred.
+
+Current responsive proof is measured **1280x720 direct native signed-in review** and
+**390x900 read-only embedded review**. Candidate visibility and disabled activation were observed
+on both; keyboard draft/diff expansion was exercised only in the direct native view. Viewport
+override had no effect. This claims neither a 1440-pixel current desktop nor embedded keyboard,
+touch or physical-device testing. Original source-thread authoring/refusal remains historical.
+
+At `2026-10-21T15:09:37.814Z`, the existing immutable writer, actual private-canary scanner,
+closed validator and `assertLiveMatches` passed for
+[the PR81 handoff](handoffs/2026-10-21-pr81/23-LIVE-HANDOFF.json), SHA256
+`39dfb14558a96cdbede3ca7d0641ee33ed09edaec0526510950528a19a48a930`.
+It binds the exact unchanged candidate to source `cafde7c6c7d65924b7a48433cf4938983d91707c`
+and evaluator revision
+`2026-09-11.budgeted-evaluator.5867c6e86ad02677493c5b238d206965704761cf7eac8b7561078afac91d8d4d`,
+with the unchanged 46-case corpus
+`5dbe6fdbd447ab2a152ccf928d195ed404ca3bf431f5240397f6be3b627e55fd`.
+Both original `112ce264…dc45` and PR79 `ce31e352…7d61` handoff bytes were verified unchanged.
+The earlier b107/d122 records retain their original source and scope.
+
+The separate [PR81 refresh observation](handoffs/2026-10-21-pr81/23-HANDOFF-REFRESH.json),
+SHA256 `32ca4afd73d5aece2b645acae84f4739234c65cf231c4ef2c7a3146b28cbdc60`, binds the release,
+fresh state/UI witnesses and preserved historical hashes. The current
+[proposed PR81 checkpoint](23-07-CHECKPOINT-2026-10-21-PR81.md), SHA256
+`deb8215f29b273c0d7a5509b25b41c75cf209c9fba0ff5c7b58f0123323172d4`, is the new exact-source
+scope awaiting consent. The earlier October21 b107 checkpoint is consumed historical authority,
+not current permission to spend.
+
+This is now the next input for 23-07/08/09. Future eval/accounting/live results must be siblings
+in `handoffs/2026-10-21-pr81/`; the PR79 directory is historical. Readiness and the new handoff
+retain `paidReady:false` and `paidAuthorized:false`. No new full evaluation, public B mutation,
+owner activation, rollback, cleanup or production change followed. Fresh exact-source preflight
+and separately approved evaluation remain required; a proposed checkpoint is not consent.
+Phase23 remains6/9, 23-07 partial, 23-08/09 open, SKILL-02 open, Phase48 partial and49 not started.
