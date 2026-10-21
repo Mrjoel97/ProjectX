@@ -25,8 +25,8 @@ quality preset or add a new provider route.
 
 The final caption repair and adapter are explicitly included in the closed golden inventory.
 After the root declares the already installed Node 26.1.1 types, current golden revision is
-`2026-09-11.budgeted-evaluator.b603aab438f3f620bb29f65ac9e396abd2a22e3c08d63bf26938f5f6a81e248a`;
-vertical revision is `3af6cf5b96ca20f10b04d20bc40e702c5d75bb96da0704d6e5dd61dca5dd8971`.
+`2026-09-11.budgeted-evaluator.d6a19a207c045990dd80a8ebf95db45decf3a0955694d97c3ba91e7bb1afa46a`;
+vertical revision is `ace853904b28c76f71615cdf79fac15254c9981bc0cb3cd8dc4c95685efe09df`.
 The 46/40-case corpora and historical receipts remain unchanged. No paid evaluator was run.
 
 The old PR83 CI formatting failure was repaired. CI now explicitly includes the new offline image
@@ -116,6 +116,18 @@ retain all runtime guards. A separate local Node 14/26 ambient-type conflict in 
 tests was traced and repaired by explicitly declaring the already installed Node 26.1.1 types at
 the root. The final full workspace typecheck passed all twelve packages in 1m50.663s, with no
 cached results. Exact-head CI is recorded on PR83, independently of these local observations.
+
+The local production build on `2eed8dbf` also passed (37 pages, 1m43.552s). That exact commit's
+CI run39692848758 passed typecheck/lint/free gates and all frontend tests (86 files/1,231 passed,
+two existing skips), then found nine backend failures: four older caption fixtures lacked exact
+submitted-script/TTS binding and five closed namespace/schema assertions omitted the new modules
+and tables. The fixtures now supply matching narration/hash/transcript inputs; positive burn and
+retention cases still require actual success, and an empty transcript refuses before a sandbox.
+The full media file passes 294/294. The explicitly reviewed four-module/one-scheduler inventory
+and 75-table comment index pass all 50 routines/schema checks, preserving literal inventories
+and non-vacuity controls. This follow-up changes tests and schema comments, not caption/render
+runtime or the candidate artifact sources. Both evaluator identities were regenerated solely to
+bind the corrected schema header; the final corrected head requires its own full CI run.
 
 All nineteen exact reviewed reel POSTs delivered outputs and known charges: $0.7000000 video,
 $0.0037818 voice and $0.0056000 STT, or **$0.7093818** for the reel lane and **$0.9213768** shared.

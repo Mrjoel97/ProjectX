@@ -4988,12 +4988,24 @@ function sidecarFor(blocks: number, clipSeconds = MEDIA_DEFAULT_VIDEO.seconds): 
  *  at blockIndex -1 — exactly what `reserveJobInner` writes for `withCaptions`. */
 async function seedCaptionable(
   t: T,
-  opts: { blocks?: number; batchId?: string; takesLanded?: boolean } = {},
+  opts: { blocks?: number; batchId?: string; takesLanded?: boolean; narrations?: string[] } = {},
 ) {
   const blocks = opts.blocks ?? 2;
   const batchId = opts.batchId ?? "batch_caps";
+  if (opts.narrations && opts.narrations.length !== blocks)
+    throw new Error("caption fixture needs one narration per take");
   const { planId, jobIds } = await seedInFlight(t, { blocks, batchId });
   const sttJobId = await t.run(async (ctx) => {
+    if (opts.narrations) {
+      const plan = await ctx.db.get(planId);
+      if (!plan?.shots) throw new Error("caption fixture needs a deck");
+      await ctx.db.patch(planId, {
+        shots: plan.shots.map((shot) => ({
+          ...shot,
+          narration: opts.narrations?.[shot.index] ?? shot.narration,
+        })),
+      });
+    }
     for (const id of jobIds) {
       const row = await ctx.db.get(id as Id<"mediaJobs">);
       if (row?.kind !== "tts") continue;
@@ -5006,6 +5018,10 @@ async function seedCaptionable(
       await ctx.db.patch(id as Id<"mediaJobs">, {
         assetStorageId: storageId,
         ...(opts.takesLanded ? { status: "succeeded" as const } : {}),
+        // The burn must bind each same-batch landed take to the exact current deck script.
+        ...(opts.narrations
+          ? { promptHash: await contentHash(opts.narrations[row.blockIndex] as string) }
+          : {}),
       });
     }
     return await ctx.db.insert("mediaJobs", {
@@ -5130,6 +5146,7 @@ describe("the caption BURN terminal: a failure degrades the reel, it never unpub
     const { planId, batchId, jobIds, sttJobId } = await seedCaptionable(t, {
       blocks: 2,
       takesLanded: true,
+      narrations: ["hello", "there"],
     });
     const reelId = await storeBlob(t, new Uint8Array([1, 2, 3]), "video/mp4");
     const sidecarId = await storeBlob(t, sidecarFor(2), "application/json");
@@ -5231,7 +5248,7 @@ describe("the caption BURN terminal: a failure degrades the reel, it never unpub
 
     expect(
       await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId }),
-    ).toEqual({ ok: false, reason: "caption_track_empty" });
+    ).toEqual({ ok: false, reason: "caption_expected_text_mismatch" });
     expectNoRenderPost(fetchMock, planId);
     expect((await planRow(t, planId))?.renderStatus).toBe("rendered");
   });
@@ -5253,6 +5270,7 @@ describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
     const { planId, batchId, sttJobId } = await seedCaptionable(t, {
       blocks: 2,
       takesLanded: true,
+      narrations: ["hello", "there"],
     });
     await t.run(async (ctx) => {
       // Every renderable line landed, as `batchToRender` requires.
@@ -5305,7 +5323,12 @@ describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
     const { planId } = await renderWithCaptions(t);
     const transcriptId = await storeBlob(
       t,
-      JSON.stringify({ words: [{ text: "hi", start: 0.5, end: 0.9, type: "word" }] }),
+      JSON.stringify({
+        words: [
+          { text: "hello", start: 0.5, end: 0.9, type: "word" },
+          { text: "there", start: 1.5, end: 1.9, type: "word" },
+        ],
+      }),
       "application/json",
     );
     const captionedId = await storeBlob(t, new Uint8Array([9, 9, 9]), "video/mp4");
@@ -5318,7 +5341,9 @@ describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
       "MEDIA_SANDBOX_FIXTURE",
       JSON.stringify({ ok: true, mp4StorageId: captionedId, renderMs: 100 }),
     );
-    await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId });
+    expect(
+      await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId }),
+    ).toEqual({ ok: true });
 
     const rows = await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect());
     for (const row of rows) {

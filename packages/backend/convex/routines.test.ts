@@ -91,6 +91,10 @@ const sourcesUnder = (root: string) =>
 // Phase 31 adds only internal bounded operator probe controls and GET-driven aggregate
 // funnels. Neither module schedules work; the independent scheduler and token pins below
 // remain unchanged and prove recurrence is still deferred.
+// Phase 53's four modules were reviewed individually: lib/presentationPptx.ts exports validated
+// OOXML bytes without ctx or scheduling; vaultPresentations.ts owns a bounded tenant preview;
+// workspaceArtifacts.ts provides bounded tenant/thread queries only. mediaCampaign.ts schedules
+// the finite, explicitly requested production run classified beside SCHEDULER_CALL_SITES below.
 const CONVEX_MODULES = [
   "_generated/api.d.ts",
   "_generated/dataModel.d.ts",
@@ -177,12 +181,14 @@ const CONVEX_MODULES = [
   "lib/models.ts",
   "lib/paidBudgetModel.ts",
   "lib/planRow.ts",
+  "lib/presentationPptx.ts",
   "lib/tenantLifecycle.ts",
   "lib/toolContextArgs.ts",
   "lib/webResearchTools.ts",
   "lib/ws.d.ts",
   "llm.ts",
   "media.ts",
+  "mediaCampaign.ts",
   "mediaComplete.ts",
   "mediaIntent.ts",
   "microsoftAuth.ts",
@@ -247,6 +253,7 @@ const CONVEX_MODULES = [
   "vaultGround.ts",
   "vaultIngest.ts",
   "vaultLlm.ts",
+  "vaultPresentations.ts",
   "vaultRag.ts",
   "vaultSmoke.ts",
   "vaultSources.ts",
@@ -267,6 +274,7 @@ const CONVEX_MODULES = [
   "workflowPackDiscovery.ts",
   "workflowPackEventLog.ts",
   "workflowPackOutcomes.ts",
+  "workspaceArtifacts.ts",
   "worm.ts",
   "wormCursor.ts",
   "zernio.ts",
@@ -303,6 +311,12 @@ const SCHEDULER_CALL_SITES = [
   "foundation.ts",
   "llm.ts",
   "media.ts",
+  // Phase 53: explicit finite campaign manifests (max 15 items, two workers). Proposal director
+  // starts are bounded by that manifest; paid submission starts only after human approval.
+  // The 5s self-callback polls this run while status === running, with expectedUpdatedAt replay
+  // guards and a per-item two-hour settlement stop to needs_reconciliation. Cancellation stops
+  // queued starts; no future occurrence, standing approval or calendar cadence is created.
+  "mediaCampaign.ts",
   "mediaComplete.ts",
   "notifications.ts",
   "onboarding.ts",

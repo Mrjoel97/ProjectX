@@ -35,7 +35,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 73 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 75 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -62,7 +62,8 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │   zernioConnections, zernioReports                                        │
 // │                                                                            │
 // │ ── Vault (Document Store) ──────────────────────────────── ~L956           │
-// │   vaultSources, vaultDocuments, vaultFolders, vaultSheets, uploadReceipts                  │
+// │   vaultSources, vaultDocuments, vaultFolders, vaultSheets,                 │
+// │   vaultPresentations, uploadReceipts                                      │
 // │                                                                            │
 // │ ── Knowledge Graph ─────────────────────────────────────── ~L1772          │
 // │   graphNodes, graphEdges                                                   │
@@ -79,7 +80,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │   spendEvents, spendCoverage, financeInputs                                │
 // │                                                                            │
 // │ ── Media ───────────────────────────────────────────────── ~L2030          │
-// │   mediaJobs                                                                │
+// │   mediaJobs, mediaCampaigns                                                │
 // │                                                                            │
 // │ ── CRM ─────────────────────────────────────────────────── ~L2104          │
 // │   contacts, followUps, suppressions                                        │
