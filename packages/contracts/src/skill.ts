@@ -79,6 +79,7 @@ export const CONTENT_DRAFTER_SKILL = "content-drafter" as const;
  * row instead of an edit to `document-drafter` (that one IS gated).
  */
 export const SPREADSHEET_DRAFTER_SKILL = "spreadsheet-drafter" as const;
+export const PRESENTATION_DRAFTER_SKILL = "presentation-drafter" as const;
 
 /** The three shapes a drafted document can take. `createDocument` and `createVariants` share it. */
 export const DOCUMENT_FORMS = ["short", "long", "sheet"] as const;
@@ -734,7 +735,7 @@ export function hasPassingTenantEvidence(
  */
 export const AGENT_EVAL_SUITE = {
   revision:
-    "2026-09-11.budgeted-evaluator.5867c6e86ad02677493c5b238d206965704761cf7eac8b7561078afac91d8d4d",
+    "2026-09-11.budgeted-evaluator.e0a8ff7b84b445358350f2d300addb5ad8765a97fdaa42deaa539490090943f2",
   casesHash: "5dbe6fdbd447ab2a152ccf928d195ed404ca3bf431f5240397f6be3b627e55fd",
   caseCount: 46,
 } as const;

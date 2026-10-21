@@ -38,6 +38,7 @@ import {
   KNOWLEDGE_WORK_PROVENANCE,
 } from "@pikar/contracts/skills/knowledgeWorkProvenance";
 import { packBusinessPulseSkillBody } from "@pikar/contracts/skills/packBusinessPulse";
+import { presentationDrafterSkillBody } from "@pikar/contracts/skills/presentationDrafter";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { revenueSkillBodies } from "@pikar/contracts/skills/revenueBodies";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
@@ -1136,6 +1137,7 @@ describe("no hardcoded agent prompts in convex/", () => {
     ["email-drafter.md", emailDrafterSkillBody],
     ["cockpit-agent.md", cockpitAgentSkillBody],
     ["document-drafter.md", documentDrafterSkillBody],
+    ["presentation-drafter.md", presentationDrafterSkillBody],
     ["attachment-extractor.md", attachmentExtractorSkillBody],
     ["graph-extractor.md", graphExtractorSkillBody],
     ["inbox-digest.md", inboxDigestSkillBody],

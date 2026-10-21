@@ -167,6 +167,22 @@ The current execution priority is the five-stage sequence below. [Programme scop
 - [ ] 52-03-PLAN.md — Measure repeated cycles and seal the pilot
 
 
+## Parallel artifact-production lane — owner-approved 2026-10-21
+
+### Phase 53: Media and document production
+
+**Goal:** Deliver real rich Excel and editable PowerPoint artifacts, reliable image/video campaigns, and evidence-backed media quality through the existing Executive/Vault/media architecture.
+**Requirements:** ARTF-01, ARTF-02, ARTF-03, ARTF-04.
+**Depends on:** Existing Phase 18/20/40 creation/storage/approval rails. Owner-approved parallel offline implementation after discovery; this does not reorder the current Phase 48 → 49 → 50 → 51 → 52 managed-service admission or release gates.
+**Plans:** 0/1 complete; 1/1 authored. Offline implementation partial; Office visual/editability, authenticated hosted flows, registry qualification, paid media benchmarks and owner artifact acceptance remain open.
+**Success Criteria:**
+  1. Actual downloadable XLSX files preserve typed values and source metadata, deterministic supported calculations and professional report layouts; reopen and visually inspect populated sheets/print regions.
+  2. Actual PPTX files contain editable native objects/charts and source notes, with an honestly labelled optional layout preview; open/edit in presentation software and inspect every rendered slide.
+  3. Image/video/mixed campaigns enforce exact reviewed content, aggregate ceilings, bounded jobs, partial recovery, selected paid retries and owned downloads without publication authority.
+  4. Representative image sets and B-roll reels pass measured technical and owner visual checks; provider quality claims require actual outputs, not preset names or frontend-design guidance.
+
+- [ ] 53-01-PLAN.md — Parallel offline artifact implementation, bounded campaigns and explicit remaining quality gates (partial evidence in 53-01-SUMMARY.md)
+
 ## Post-Beta Knowledge-Work Expansion (Phases 27-30)
 
 These phases are the reviewed expansion queue after Phase 25 opens the private beta. They do not
@@ -1667,6 +1683,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 50. Recurring read-and-prepare services | 0/4 | Not started — sequential programme dependency | - |
 | 51. Brain and service outcomes | 0/4 | Not started — sequential programme dependency | - |
 | 52. Social marketing service pilot | 0/3 | Not started — sequential programme dependency | - |
+| 53. Media and document production | 0/1 | Partial — owner-approved parallel offline implementation; qualification and release remain open | - |
 | 1. Foundation & Governance Substrate | 8/9 | Partial — open: 01-09 | - |
 | 2. Thin End-to-End Slice | 7/9 | Complete — spine live since 2026-07; 02-08, 02-09 superseded by Phase 3.1 (the cockpit replaced the UI slice) | 2026-07-11 |
 | 3. Guardrails | 5/5 | Complete (VERIFICATION present) | 2026-07-12 |

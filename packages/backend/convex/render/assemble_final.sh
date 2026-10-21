@@ -286,21 +286,10 @@ if printf '%s\n' "${KINDS[@]}" | grep -qx card; then
   [[ -n "$FONT" ]] || { echo "ERROR: a 'card' scene needs a TrueType font and none was found — install dejavu-sans-fonts in the image or set ASSEMBLE_FONT." >&2; exit 1; }
 fi
 
-# GEOMETRY comes from the first VIDEO scene, because that is the only kind whose size we do not
-# choose. A deck of stills and cards has no such reference, so it takes the portrait tier the
-# price table pins. Named here rather than passed as a flag: a caller that could set it could set
-# a size nobody priced the encode time for.
+# The priced portrait export profile is code-owned. Inheriting the first stock/uploaded clip
+# made one landscape or low-resolution source change every scene's canvas and frame rate.
+# Native source detail still limits quality; a fixed container cannot invent missing detail.
 W=720; H=1280; FPS=30
-for ((i=0;i<SCENES;i++)); do
-  [[ "${KINDS[i]}" == "video" ]] || continue
-  c0="$IN_DIR/$(printf 'block%02d.mp4' $((i+1)))"
-  [[ -f "$c0" ]] || { echo "ERROR: clip not found: $c0" >&2; exit 1; }
-  DIMS="$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$c0")"
-  W="${DIMS%%,*}"; H="${DIMS##*,}"
-  FPS_RAW="$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of csv=p=0 "$c0")"
-  FPS="$(awk -F/ '{ if(NF==2 && $2>0) printf "%.4f",$1/$2; else print $1 }' <<< "$FPS_RAW")"; [ -z "$FPS" ] && FPS=30
-  break
-done
 
 TOT=0; for ((i=0;i<SCENES;i++)); do TOT=$((TOT + ${SECS[i]})); done
 
@@ -387,8 +376,8 @@ for ((i=0;i<SCENES;i++)); do
       FRZT="$(ffmpeg -v info -sseof -2 -i "$clip" -vf "freezedetect=n=-60dB:d=1.2" -an -f null - 2>&1 | grep -c freeze_start || true)"
       [[ "$FRZT" != "0" ]] && echo "WARN: clip $n ends on ~static frames (frozen tail) — consider regenerating." >&2
       ffmpeg -y -loglevel error -i "$clip" \
-        -vf "scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,${NORM},tpad=stop_mode=clone:stop_duration=${SEC}" \
-        -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 "$pic"
+        -vf "scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,${NORM},tpad=stop_mode=clone:stop_duration=${SEC}" \
+        -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 -video_track_timescale 15360 "$pic"
       ;;
     image)
       still=""
@@ -405,8 +394,8 @@ for ((i=0;i<SCENES;i++)); do
       # the push does not reset to 1.0 every frame. Pinning zoompan's own fps keeps that state
       # advance deterministic instead of inheriting the filter's 25fps default.
       ffmpeg -y -loglevel error -loop 1 -framerate "$FPS" -t "$SEC" -i "$still" \
-        -vf "scale=${W}*4:${H}*4:force_original_aspect_ratio=increase,crop=${W}*4:${H}*4,zoompan=z='min(pzoom+0.0012,1.20)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${W}x${H}:fps=${FPS},${NORM}" \
-        -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 "$pic"
+        -vf "scale=${W}*4:${H}*4:force_original_aspect_ratio=increase:flags=lanczos,crop=${W}*4:${H}*4,zoompan=z='min(pzoom+0.0012,1.20)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${W}x${H}:fps=${FPS},${NORM}" \
+        -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 -video_track_timescale 15360 "$pic"
       ;;
     card)
       txt="$IN_DIR/$(printf 'card%02d.txt' "$n")"
@@ -452,7 +441,7 @@ for ((i=0;i<SCENES;i++)); do
       done < "$wrapped"
       ffmpeg -y -loglevel error -f lavfi -t "$SEC" -i "color=c=${CARD_BG}:s=${W}x${H}:r=${FPS}" \
         -vf "${DT}fade=t=in:st=0:d=${CFADE},${NORM}" \
-        -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 "$pic"
+        -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 -video_track_timescale 15360 "$pic"
       ;;
   esac
 
@@ -611,7 +600,9 @@ done
 
 VOSIL="$TMP/silent.mp4"
 echo "[2/4] concat -> single silent picture track" >&2
-ffmpeg -y -loglevel error -f concat -safe 0 -i "$LIST" -an -c:v libx264 -preset veryfast -crf 20 "$VOSIL"
+# Every scene has already been encoded to the same H.264/pixel-format/profile, dimensions,
+# frame rate and MP4 track timescale. Copy that normalized stream: another encode loses detail.
+ffmpeg -y -loglevel error -f concat -safe 0 -i "$LIST" -an -c:v copy "$VOSIL"
 
 # ── THE SINGLE MIX ────────────────────────────────────────────────────────────────────────────
 # Input 0 is the picture. Input 1 is a silence bed spanning the WHOLE reel — it costs nothing at

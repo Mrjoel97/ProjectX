@@ -9,6 +9,7 @@ import { MarkdownDocument } from "../MarkdownDocument";
 import { docLabel, fmtSize, type VaultDoc } from "./DocGrid";
 import { failureCopy } from "./failureCopy";
 import { XIcon } from "./icons";
+import { PresentationPreview } from "./PresentationPreview";
 import {
   type PreviewActionId,
   type PreviewControlHandlers,
@@ -59,6 +60,12 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   // query and the render branch, and the last time those two answered the mime question separately
   // a document qualified for a branch whose URL was never fetched and rendered nothing, silently.
   const displayMime = doc.storedMimeType ?? doc.mimeType;
+  const presentation = useQuery(
+    api.vaultPresentations.byDoc,
+    displayMime === "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      ? { docId: doc._id }
+      : "skip",
+  );
   const media = binaryMediaKind(displayMime) !== null;
   const mediaUrl = useQuery(api.vault.vaultDownloadUrl, media ? { vaultDocId: doc._id } : "skip");
   const docText = useQuery(api.vault.vaultDocText, { vaultDocId: doc._id });
@@ -293,6 +300,7 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                   projection is the artifact of record and stays reachable through the same
                   "Show full text" control, which would otherwise render beside nothing it
                   controls. */}
+              {presentation ? <PresentationPreview spec={presentation} /> : null}
               {sheets ? <SheetGrid sheets={sheets.sheets} sheetCount={sheets.sheetCount} /> : null}
               {/* With a grid on screen the tab-separated projection is redundant noise, so it waits
                   behind the expand control the modal already has — which is what gives that button

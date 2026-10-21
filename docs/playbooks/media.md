@@ -1,3 +1,7 @@
+> Last verified: 2026-10-21 — The assembler now exports the already priced 720×1280/30fps profile independently of the first source, uses Lanczos scaling and copies normalized H.264 scenes at concatenation instead of encoding them again. Every scene pins the same MP4 track timescale; narration, music, duration, decode and sidecar gates remain enforced. A real synthetic seven-second 24 fps landscape / 60 fps portrait / still / card fixture passed with 210 frames, monotonic decode timestamps, full-span AAC and a validated sidecar. This qualifies the local technical profile, not provider source detail, hosted cost/latency, B-roll relevance or owner visual acceptance. Stock rendition ranking now rejects malformed durations/dimensions/non-HTTPS files and prioritizes usable portrait detail; provider video relevance order is preserved.
+
+> Last verified: 2026-10-21 — Phase 53 composes image/video/mixed campaigns over existing media reservations/jobs, with exact-review approval, bounded queueing and explicit reconciliation/cancel/partial states. Offline core/backend checks passed in the delegated lane; actual media quality/provider recovery remains unqualified.
+
 > Last verified: 2026-10-19 — The fixed cron inventory is now twelve jobs because ADR-060 adds the opt-in Zernio read-only report dispatcher. Reliability sweep and media scheduling behavior are unchanged.
 
 > Last verified: 2026-10-19 — The pinned cron count increases from ten to eleven for the owner-authorized Buffer engagement snapshot and OAuth-retention driver (ADR-058). Media reliability sweep implementation, thresholds, arming and provider calls are unchanged. See buffer.md for the separate marketing workflow.
@@ -5665,3 +5669,20 @@ downstream of it.
 ## Reliability extraction — 2026-10-15
 
 Last verified: 2026-10-15 — stock audio/video/photo selection moved to the pure core stockSelection module. Media adapters supply the existing configured duration tolerances and keep their public compatibility exports. No provider requests, prices, ranking or output shapes change. Existing media selection tests are the regression contract.
+
+
+## Phase 53 — campaign production and quality acceptance
+
+packages/core/src/mediaCampaign.ts owns bounded input/status/queue policy; mediaCampaign.ts is the tenant adapter. Core and Executive tool cap a campaign at15items. One active campaign per tenant admits at most2 whole deliverables through their caption terminal; ordinary single-item jobs keep their independent admission. Campaign manifests and private plans share the real tenant/thread for exact review, but ordinary roots/Approvals exclude campaign children before bounded scans and direct single-item execution/generation refuses.
+
+Campaign strings pass fail-closed personal-data redaction before staging or director use. Creation and all director schedules commit in one transaction; a tenant-indexed normalized request/content hash reuses the same campaign on replay without duplicate director schedules. Controlled research and evaluation contexts cannot start this tool. Media purchases still require the separate human Generate action. Current child reservation policy is at least one cent, rounded up per whole child job; older floor descriptions below describe historical pricing and do not override current chooseMediaBatch code.
+
+Staging creates proposals only; video storyboards use existing governed director dispatch. Human approval binds a hash of current plans and the selected items plus aggregate maximum. reserveApproved re-estimates and reserves through existing per-item media rails in one subtransaction; a refusal or changed estimate rolls back earlier child reservations. The maximum uses upward cents rounding without replacing legacy rail settlement semantics. Parent accounting records cumulative reserved maxima, not a fresh provider-billed total.
+
+The queue preserves succeeded siblings and downloads. Ambiguous submit/provider/network/timeout outcomes become needs_reconciliation and stop new starts rather than permitting a blind paid retry. Explicit selected retries disclose added maximum cost. Cancel prevents queued starts; already submitted work may finish, and no refund is assumed. Progress/refresh and settlement watchdog are bounded; their local tests do not prove hosted crash recovery or provider cancellation.
+
+Download queries validate campaign, child-plan and asset ownership before minting one selected URL. The browser exports a JSON item/credit manifest without temporary capabilities and supports individual completed files; a single ZIP asset collection is not yet implemented. Do not call the JSON manifest a complete asset archive. Publication remains a separate exact-content approval under ADR-046 and existing social-provider controls.
+
+Existing stock/uploaded scenes already support B-roll. Quality acceptance still needs representative actual image sets and30/60-second reels, measured final dimensions/fps/duration/audio/captions, relevant B-roll/credits, pacing/continuity and owner visual review. The supplied Taste Skill repository is frontend-design guidance, not a video provider. No4K/native-source-resolution/provider-quality claim or paid comparison follows from a preset or local parser test. Record subsequent source-supported profile changes and actual benchmarks separately.
+
+Verify focused mediaCampaign core/backend and rendered MediaCampaign tests, existing media money-path tests and ordinary plan/approval regressions. 53-01 records partial evidence; root consolidated/hosted/provider/visual gates remain open.

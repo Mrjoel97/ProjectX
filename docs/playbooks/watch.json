@@ -15,7 +15,10 @@
     "apps/web/app/(app)/dashboard/marketing/BufferPanel.tsx",
     "apps/web/app/(app)/dashboard/marketing/bufferPanel.test.tsx"
   ],
-  "_unassigned": ["packages/backend/vitest.diag.setup.ts", "packages/backend/convex/schema.ts"],
+  "_unassigned": [
+    "packages/backend/vitest.diag.setup.ts",
+    "packages/backend/convex/schema.ts"
+  ],
   "marketing.md": [
     "apps/web/e2e/marketing-uat.spec.ts",
     "packages/core/src/marketing",
@@ -75,7 +78,9 @@
     "packages/backend/convex/importGuard.test.ts",
     "apps/web/app/(app)/ops/",
     "packages/backend/convex/authRevocations",
-    "packages/core/src/authLifetime.ts"
+    "packages/core/src/authLifetime.ts",
+    "packages/backend/convex/mediaCampaign",
+    "packages/backend/convex/vaultPresentations"
   ],
   "growth-diagnostic.md": [
     "packages/core/src/researchEvidence",
@@ -283,7 +288,10 @@
     "packages/backend/convex/requests.ts",
     "packages/backend/convex/lib/webResearchTools.ts",
     "packages/backend/convex/lib/markdownPdf.ts",
-    "packages/backend/convex/retrievalBounds.test.ts"
+    "packages/backend/convex/retrievalBounds.test.ts",
+    "packages/core/src/presentation",
+    "packages/backend/convex/lib/presentationPptx",
+    "packages/backend/convex/productionArtifacts.test.ts"
   ],
   "audit-dead-letter.md": [
     "packages/backend/convex/ragErasure",
@@ -383,7 +391,10 @@
     "apps/web/e2e/vault.spec.ts",
     "packages/backend/scripts/run-smoke-vault.mjs",
     "packages/backend/convex/vaultRag.test.ts",
-    "apps/web/app/lib/uploadTranscriptionAudio.ts"
+    "apps/web/app/lib/uploadTranscriptionAudio.ts",
+    "packages/core/src/workbookReport",
+    "packages/core/src/presentation",
+    "packages/backend/convex/vaultPresentations"
   ],
   "media.md": [
     "packages/backend/convex/reliabilitySweep.ts",
@@ -393,7 +404,7 @@
     "packages/core/src/assembly.ts",
     "packages/core/src/render.ts",
     "packages/core/src/captions.ts",
-    "packages/core/src/stockSelection.ts",
+    "packages/core/src/stockSelection",
     "packages/backend/convex/media.ts",
     "packages/backend/convex/media.test.ts",
     "packages/backend/convex/mediaComplete.ts",
@@ -405,7 +416,10 @@
     "apps/web/scripts/music/",
     "packages/backend/scripts/run-storyboard-bakeoff.mjs",
     "packages/backend/scripts/storyboard-briefs.json",
-    "packages/backend/convex/lib/mediaRead.ts"
+    "packages/backend/convex/lib/mediaRead.ts",
+    "packages/core/src/mediaCampaign",
+    "packages/backend/convex/mediaCampaign",
+    "apps/web/app/(app)/dashboard/workspace/MediaCampaign"
   ],
   "contacts-crm.md": [
     "packages/core/src/marketingLead",
@@ -431,7 +445,9 @@
     "packages/cost/src/cost.ts",
     "packages/core/src/fallback.ts",
     "packages/core/src/fallback.test.ts",
-    "packages/backend/convex/scaleConstants.test.ts"
+    "packages/backend/convex/scaleConstants.test.ts",
+    "packages/backend/convex/mediaCampaign",
+    "packages/core/src/mediaCampaign"
   ],
   "proposals.md": [
     "packages/core/src/proposal.ts",
@@ -549,7 +565,10 @@
     "apps/web/app/(app)/dashboard/profile/VerticalPackRecommendations.tsx",
     "apps/web/app/(app)/dashboard/profile/verticalPackRecommendations"
   ],
-  "revenue-crm.md": ["packages/revenue/src/crm", "packages/backend/convex/revenueCrm"],
+  "revenue-crm.md": [
+    "packages/revenue/src/crm",
+    "packages/backend/convex/revenueCrm"
+  ],
   "revenue-finance.md": [
     "packages/revenue/src/money",
     "packages/revenue/src/finance",

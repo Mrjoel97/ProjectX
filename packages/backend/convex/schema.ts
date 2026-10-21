@@ -1342,6 +1342,7 @@ export default defineSchema({
      *  before standalone images existed. `imagePrompt` is content-plane text: shown to the human,
      *  submitted only after their Generate click, and never copied to audit/telemetry rows. */
     mediaMode: v.optional(v.union(v.literal("reel"), v.literal("image"))),
+    mediaCampaignId: v.optional(v.id("mediaCampaigns")),
     imagePrompt: v.optional(v.string()),
     /** koda's fixed 9-field art-direction block, parsed, plus the optional music bed. */
     artDirection: v.optional(
@@ -1617,7 +1618,16 @@ export default defineSchema({
     // decides whether a fan-out is finished (no sibling left at `collecting` ⇒ the parent becomes
     // approvable). Leads with `tenantId`, so `isolation.test.ts`'s non-tenant-leading index
     // registry needs no new exception.
-    .index("by_parent", ["tenantId", "parentPlanId"]),
+    .index("by_parent", ["tenantId", "parentPlanId"])
+    // Campaign private plans share the real thread for exact review but never its ordinary roots.
+    // Exclude them in the index BEFORE bounded scans/counts/pagination.
+    .index("by_thread_campaign", ["tenantId", "threadId", "mediaCampaignId"])
+    .index("by_tenant_status_campaign_createdAt", [
+      "tenantId",
+      "status",
+      "mediaCampaignId",
+      "createdAt",
+    ]),
 
   // ── Phase-3.7 inbox-briefing plane (CKPT-04) ───────────────────────────────
   // New tables only → no migration (prior-phase discipline).
@@ -1719,7 +1729,9 @@ export default defineSchema({
     // beside `titles`, not a second table.
     // Phase 40 (DOC-01) added `sheet` — a real .xlsx workbook. Widening this union is what lets
     // the Output card's badge say SPREADSHEET instead of mislabelling a workbook DOCUMENT.
-    form: v.optional(v.union(v.literal("short"), v.literal("long"), v.literal("sheet"))),
+    form: v.optional(
+      v.union(v.literal("short"), v.literal("long"), v.literal("sheet"), v.literal("presentation")),
+    ),
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"])
@@ -2040,6 +2052,7 @@ export default defineSchema({
       // `agentSteps:record` throw an ArgumentValidationError inside an AI-SDK callback the
       // SDK SILENTLY swallows, so prod loses the step while the whole suite stays green.
       v.literal("createVariants"),
+      v.literal("createMediaCampaign"),
       // Phase-19 (ACTN-05): the CRM staging tool. Same swallow trap as every literal above — a
       // missing literal makes `agentSteps:record` throw an ArgumentValidationError inside an
       // AI-SDK callback, which the SDK SILENTLY swallows, so prod loses the step while the whole
@@ -2589,6 +2602,61 @@ export default defineSchema({
   // The text projection stays the artifact of record: this table is a VIEW for the preview, so a
   // missing row means "no grid", never "no document". Replaced wholesale per doc (Retry re-runs the
   // rail), deleted with its document.
+  vaultPresentations: defineTable({
+    tenantId: v.string(),
+    docId: v.id("vaultDocuments"),
+    spec: v.string(),
+  })
+    .index("by_doc", ["tenantId", "docId"])
+    .index("by_tenant", ["tenantId"]),
+
+  mediaCampaigns: defineTable({
+    tenantId: v.string(),
+    creationKey: v.optional(v.string()),
+    threadId: v.string(),
+    title: v.string(),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("running"),
+      v.literal("complete"),
+      v.literal("partial"),
+      v.literal("failed"),
+      v.literal("cancelled"),
+      v.literal("needs_reconciliation"),
+    ),
+    maxCostCents: v.number(),
+    reservedCents: v.number(),
+    concurrency: v.number(),
+    items: v.array(
+      v.object({
+        planId: v.id("plans"),
+        kind: v.union(v.literal("image"), v.literal("video")),
+        label: v.string(),
+        estimateCents: v.number(),
+        status: v.union(
+          v.literal("proposal"),
+          v.literal("ready"),
+          v.literal("reserved"),
+          v.literal("running"),
+          v.literal("succeeded"),
+          v.literal("failed"),
+          v.literal("cancelled"),
+          v.literal("needs_reconciliation"),
+        ),
+        batchId: v.optional(v.string()),
+        startedAt: v.optional(v.number()),
+        failureReason: v.optional(v.string()),
+      }),
+    ),
+    cancelledAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant_thread", ["tenantId", "threadId"])
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_status", ["tenantId", "status"])
+    .index("by_tenant_creationKey", ["tenantId", "creationKey"]),
+
   vaultSheets: defineTable({
     tenantId: v.string(),
     docId: v.id("vaultDocuments"),

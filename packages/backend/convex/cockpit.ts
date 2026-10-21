@@ -1286,6 +1286,7 @@ export const executePlan = tenantMutation({
   > => {
     const plan = await ctx.db.get(planId);
     if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant approve
+    if (plan.mediaCampaignId) throw new Error("Generate this item through its media batch.");
     await ctx.runQuery(internal.authoringProbe.assertUnregisteredThread, {
       tenantId: ctx.tenantId,
       threadId: plan.threadId,

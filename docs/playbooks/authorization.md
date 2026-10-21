@@ -1,3 +1,5 @@
+> Last verified: 2026-10-21 — Phase 53 adds tenant-scoped campaign review/download and presentation preview reads, with explicit owned-document/child-asset checks. Direct child Generate/execute paths refuse. Offline source/test evidence does not establish hosted native isolation.
+
 > Last verified: 2026-10-20 — Offline native qualification tests now exercise the actual read-only dashboard guard: canonical explicit CONVEX_URL must match the selected dev/prod deployment before owner/probe work or a paid submission. Missing or credential-bearing URLs fail before CLI execution; wrong targets, CLI failure, timeout and absent output fail with fixed diagnostics. These harness checks do not change product authorization, prove browser identity by themselves, grant a role or replay any live probe.
 
 > Last verified: 2026-10-19 — The local-only Phase23 qualification route calls the real public `skills.activateAgentCandidate` through native auth, with server-pinned candidate and expected B identity. It returns404 outside development or without explicit valid pins. Loading, absent profile, wrong identity and owner sessions cannot begin the check. A single click must receive the exact `OWNER_REQUIRED` error; uncertainty or identity changes fail. Client readiness is presentation support, not atomic authorization: use a dedicated B context, prohibit concurrent role/session changes and independently compare before/after governance. No internal proxy, token extraction, role change or production enablement exists. Offline tests do not establish a live refusal.
@@ -721,3 +723,12 @@ Last verified: 2026-10-15 — Owner email ambiguity checks inspect at most2 rows
 
 
 Voice erasure retains provider call handles until an acknowledged hangup. Each bounded voice deletion page is preceded by a provider termination attempt; unresolved calls refuse the page and remain available for an explicit deletion retry. The lifecycle guard permits only hangup receipt fields and destructive clearing of transient voice events/commands during deletion; it never permits new transcript/business content. Reset-invalidated sessions remain refused even on the erasure retry exception. Provider side effects already dispatched before the fence cannot be recalled.
+
+
+## Phase 53 — campaign and presentation authorization
+
+mediaCampaign public list/approve/refresh/cancel/download use tenant wrappers. Every campaign and referenced child plan must belong to that tenant; downloading a completed child additionally verifies the owned final image/reel asset. Mint one bearer URL for the selected artifact only, after ownership checks. Content refs, preview URLs and provider payloads cannot become audit/telemetry fields.
+
+vaultPresentations.byDoc first validates the tenant-owned PPTX document; an internal upsert validates the same tenant, agent origin, stored MIME/original bytes and bounded presentation spec. Internal mutations remain trusted tenant-lifecycle wrappers, not a public client-supplied tenant bypass. Review state shown in React is not authorization. Ordinary executePlan and individual media mutations refuse campaign-private children; the campaign exact-review hash and transactional reservation are the admission boundary.
+
+New tables are tenant-owned export/erasure content. Follow existing identity fences for late callbacks/storage writes; replacement/deletion must not orphan a preview or make another tenant artifact readable. Do not infer hosted auth/JWT/erasure or native browser acceptance from convex-test scenarios. Verify campaign foreign-ID and production artifact/preview/lifecycle regressions, then perform actual hosted isolation under a separate admitted gate.

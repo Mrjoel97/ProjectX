@@ -1,3 +1,5 @@
+> Last verified: 2026-10-21 — Phase 53 keeps campaign-private plans out of ordinary Approval counts/lists/running work using an index predicate before read bounds; campaign review stays in its workspace card. Local regressions are distinct from hosted responsive/owner acceptance.
+
 > Last verified: 2026-10-21 — The spend movement validator mirrors schema.ts's optional closed `evalEnvelope.accountingMode: "ledger-nanos-v1"` metadata so the existing append-only writer can preserve a newly opened isolated golden envelope's accounting mode. No writer behavior, ordinary dashboard accounting, existing row, ledger history or saved envelope is changed; marker-free rows remain valid. Admission/settlement policy is owned by guardrails.md and proposed ADR-061.
 
 > Last verified: 2026-10-19 — Workspace restores visible attachment, folder and voice controls with the microphone beside Send. The research-count selector remains removed. Voice fills an editable prompt and never auto-sends; files/folders accept optional instructions on their first Send. No work-status dismissal behavior changes.
@@ -3245,3 +3247,12 @@ Last verified: 2026-09-12 — `e2e/marketing-uat.spec.ts` collects three serial,
 Last verified: 2026-10-15 — Delivery report badges distinguish unknown external outcomes and expose mailbox reconciliation. Ordinary status labels remain readable.
 
 Last verified: 2026-10-15 — The operator confirmed legal name pikar-ai, operating country Tanzania and support joel@pikar-ai.com. Legal banners now accurately describe unresolved address/review rather than asserting an unformed entity or an active build block. Commercial billing must stay disabled for this release by explicit operator instruction; registered address remains pending.
+
+
+## Phase 53 — campaign visibility and artifact labels
+
+Campaign children are reviewed through the media batch card, not ordinary Approvals. summary, paginatePlans, runningWork and listCleared use by_tenant_status_campaign_createdAt with mediaCampaignId=undefined before take/paginate/time bounds. The ordinary thread-root lookup likewise filters through by_thread_campaign before ROOT_SCAN. Preserve these indexed exclusions; filtering only after a capped read lets repeated campaigns hide older normal work or inflate approval badges. approvals.test.ts covers this boundary.
+
+The new workspace campaign card shows real proposed/queued/running/succeeded/failed/partial/reconciliation/cancelled state, per-item review/download and selected paid retry. Cumulative reserved maximum is not actual spend. JSON manifest download contains no bearer URLs and is not a ZIP collection. Missing/failing items cannot be labelled complete or replaced by placeholders.
+
+PPTX remains an owned Vault/Content artifact with a labelled same-spec layout preview and original download, not a second content store or Office-fidelity renderer. Reuse existing provenance, on-demand download and tenant boundaries. Root consolidated regressions, authenticated browser/responsive review and owner artifact quality gates remain open.

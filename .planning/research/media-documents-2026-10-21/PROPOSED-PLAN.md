@@ -1,6 +1,6 @@
 # Proposed production-quality programme
 
-Status: proposal for owner go-ahead, not admitted GSD execution or a release request. Read [RESEARCH.md](RESEARCH.md) for the baseline and [CONTEXT.md](CONTEXT.md) for isolation.
+Status: owner approved parallel offline implementation on 2026-10-21 after this proposal ("proceed", "spawn multiple agents"). Phase 53 / 53-01 now tracks partial execution; this proposed programme remains the acceptance target, not a release request. Read [RESEARCH.md](RESEARCH.md) for the baseline and [CONTEXT.md](CONTEXT.md) for isolation.
 
 ## Product acceptance target
 
@@ -93,4 +93,4 @@ Keep working from this isolated branch. Before implementation, fetch current `ma
 
 Use one implementation owner for each shared file in a wave. Keep domain specs/validators pure TypeScript in existing packages. Update the responsible playbook in the same implementation commit and add a new immutable ADR when changing an accepted decision. Reconcile only relevant stale requirement/playbook statements against evidence; preserve historical receipts and existing open phase dispositions.
 
-After approval, allocate GSD phase IDs from the then-current roadmap, write concrete PLAN files with dependencies and `must_haves`, and define source-bound verification before execution. The current managed-service programme controls admission; choose where this programme enters it explicitly. This discovery does not reorder phases, activate skills, approve paid comparisons or authorize deployment.
+Owner approval has been received. Phase 53 and 53-01-PLAN.md now define the first offline implementation, dependencies, must_haves and source-bound verification. ARTF-01..04 and 53-01 remain open/partial; subsequent qualification work must retain the acceptance matrix above. The current managed-service programme controls admission; choose where this programme enters it explicitly. This discovery does not reorder phases, activate skills, approve paid comparisons or authorize deployment.

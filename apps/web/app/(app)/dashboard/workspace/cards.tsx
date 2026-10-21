@@ -24,11 +24,13 @@ import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useState } from "react";
 import { MarkdownDocument } from "../MarkdownDocument";
+import { PresentationPreview } from "../vault/PresentationPreview";
 // The SHIPPED vault preview, mounted here rather than reimplemented: it already renders markdown,
 // PDFs, images and video, the extraction/failure states and the entity chips. A second document
 // viewer would be a second thing to keep in step with `previewState`.
 import { PreviewModal } from "../vault/PreviewModal";
 import { DeliveryReview } from "./DeliveryReview";
+import { MediaCampaign } from "./MediaCampaign";
 import { MediaCanvas, ProposalFailureCanvas } from "./MediaCanvas";
 import { RevenuePackPanel } from "./RevenuePackPanel";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
@@ -2269,6 +2271,7 @@ const VERB: Record<string, [running: string, done: string]> = {
   // card, so this must never read "Saved to your vault" (BRAND §1 forbids claiming an action
   // that did not happen). Plural throughout — one card carries every version.
   createVariants: ["Writing the versions…", "Versions ready to approve"],
+  createMediaCampaign: ["Preparing your media batch…", "Media batch ready to review"],
   // Phase-19 (ACTN-05): MANDATORY beside the schema literal — traceParity.test.ts asserts set
   // equality BOTH ways, so either half alone is RED. The done state is the PROMISE the tool keeps:
   // it STAGES a card and applies nothing, so this must never read "Saved" or "Updated your
@@ -2575,7 +2578,12 @@ function SourceCard({ threadId }: { threadId?: string }) {
  *  every revise) and is the ONLY thing this card can read for the type: byThread returns a
  *  vaultSources row, and the short/long discriminator otherwise lives on vaultDocuments.kind,
  *  which this card deliberately never queries. */
-const FORM_LABEL = { long: "DOCUMENT", short: "POST", sheet: "SPREADSHEET" } as const;
+const FORM_LABEL = {
+  long: "DOCUMENT",
+  short: "POST",
+  sheet: "SPREADSHEET",
+  presentation: "POWERPOINT",
+} as const;
 
 // The type badge pill. Token-only (the DocGrid icon-badge tint + --ink text): --teal-600 on white
 // is ~2.9:1 and BRAND §6 bans it for small text, so the teal lives in the FILL and the label stays
@@ -2748,6 +2756,14 @@ function OutputCard({ threadId }: { threadId?: string }) {
     api.vault.vaultDocText,
     selectedId ? { vaultDocId: selectedId } : "skip",
   );
+  const presentation = useQuery(
+    api.vaultPresentations.byDoc,
+    selectedId &&
+      artifact?.storedMimeType ===
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      ? { docId: selectedId }
+      : "skip",
+  );
   // Phase 40 (DOC-01), and the ONE place in this file that mints a storage URL.
   //
   // A Convex storage URL does not expire (`ctx.storage.getUrl` takes no expiry), so it is a
@@ -2836,6 +2852,8 @@ function OutputCard({ threadId }: { threadId?: string }) {
               background: "var(--card)",
             }}
           />
+        ) : presentation ? (
+          <PresentationPreview spec={presentation} />
         ) : artifact?.text ? (
           <div style={{ maxHeight: "32rem", overflowY: "auto" }}>
             <MarkdownDocument markdown={artifact.text} />
@@ -3367,6 +3385,7 @@ export function CardList({
       {/* Same footing as SourceCard (ACTN-04 SC#6): createDocument saves and never sends, so a
           creating turn carries no plan row at all — the Output card must not sit under a plan gate. */}
       <OutputCard threadId={threadId} />
+      <MediaCampaign threadId={threadId ?? null} />
       {/* Like SourceCard: evaluation happens on advice turns that may carry no plan row, so it
           renders above the plan-status branches and self-reads its own latest-row data. */}
       <EvaluationCard threadId={threadId} />

@@ -152,8 +152,8 @@ async function reserveProviderLinesInner(
   // is refused for price or budget is still a tenant we can report a confident zero for.
   await ensureCoverage(ctx, tenantId, Date.now());
 
-  // The cap, and the ONE flooring of cents (D12a). `chooseMediaBatch` floors the TOTAL exactly
-  // once; the per-line `estUsd` values stay unfloored on their rows.
+  // The shared cap and conservative integer reservation. `chooseMediaBatch` rounds the TOTAL
+  // up once, with a one-cent minimum; each row retains its exact fractional-USD estimate.
   const est = chooseMediaBatch(specs, MEDIA_JOB_CAP_USD);
   if (!est.ok) return { ok: false, reason: est.error.code };
   const { estUsd, estCents } = est.value;
@@ -180,14 +180,14 @@ async function reserveProviderLinesInner(
   await rateLimiter.limit(ctx, "deploymentMediaSpendCents", { count: estCents, reserve: true });
 
   // FIN-01: ONE `reserved` movement for the WHOLE job, in this same transaction. Per-line rows
-  // would not sum back to this number — `chooseMediaBatch` floors the TOTAL exactly once (D12a),
+  // would not sum back to this number — `chooseMediaBatch` rounds the TOTAL up once,
   // so the batch estimate is not the sum of the line estimates.
   //
   // DERIVED from `batchId`, not minted: `batchId` is server-minted per reservation and the approve
   // arm reserves inside the plan's proposed→approved CAS, so approve-once IS reserve-once. A
   // genuine second reservation gets a new batch and therefore its own row.
-  // Guarded for the same reason the landing is: a batch that prices under a cent (a lone short
-  // voice line) floors to 0, and a zero-cent movement is rejected — it would abort the reservation.
+  // Keep the positive guard at the ledger boundary. The shared price gate currently reserves
+  // at least one cent, including a short voice line; zero-cent ledger movements are invalid.
   if (estCents > 0) {
     await recordMovement(ctx, {
       tenantId,
@@ -403,7 +403,7 @@ export async function reserveJobInner(
   // render is a plan-row concern, with no falRequestId and no webhook.
   const specs: MediaSpec[] = [...lines.map((l) => l.spec), { kind: "render" }];
 
-  // 5-9. The shared transaction floors the batch total once, checks and consumes BOTH windows, and
+  // 5-9. The shared transaction rounds the batch total up once, checks and consumes BOTH windows, and
   // inserts only after every refusal has passed. The standalone image path calls this exact helper.
   return await reserveProviderLinesInner(ctx, a.tenantId, batchId, lines, specs);
 }
@@ -414,7 +414,7 @@ export async function reserveJobInner(
  * Separate from `reserveJobInner` rather than a widened signature, and the reason is the same one
  * that keeps `deckOf` and `sceneDeckOf` apart: a plan carries one contract or the other, never
  * both, so a function that took either would spend its length asking which. The two SHARE the part
- * that actually moves money — `reserveProviderLinesInner` floors the batch total, checks and
+ * that actually moves money — `reserveProviderLinesInner` rounds the batch total up, checks and
  * consumes both windows, and inserts only after every refusal has passed — so there is exactly one
  * transaction, not two to keep in step.
  *
@@ -830,7 +830,7 @@ type KindTotals = { estCents: number; actualCents: number; rowCount: number };
  * the payload rather than only in this comment:
  *
  *  1. **`estCents` is NOT the reserved amount.** The reservation was `chooseMediaBatch` over the
- *     whole batch INCLUDING the `render` line, floored to cents ONCE. The render line has no row.
+ *     whole batch INCLUDING the `render` line, rounded up to cents ONCE. The render line has no row.
  *     So reserved > Σ rows, by construction — hence `notes.reservedTotalNotDerivable`.
  *  2. **A `tts` row's `estUsd` is DOUBLE** (20-04 reserves voice at 2× so one rewrite round is
  *     pre-paid). est/actual ≈ 2 on voice is HEALTHY; without `notes.ttsReservedAt2x` that reads as
@@ -2502,6 +2502,11 @@ async function ownedPlanOrThrow(
 ): Promise<Doc<"plans">> {
   const plan = await ctx.db.get(planId);
   if (!plan || plan.tenantId !== tenantId) throw new Error("plan not found");
+  if (plan.mediaCampaignId) {
+    const campaign = await ctx.db.get(plan.mediaCampaignId);
+    if (!campaign || campaign.tenantId !== tenantId || campaign.status !== "draft" || campaign.reservedCents > 0)
+      throw new Error("This batch is locked after generation approval.");
+  }
   return plan;
 }
 
@@ -2825,23 +2830,23 @@ type EstimateLine = { label: string; qty: number; unit: string; cents: number };
  *
  * **This query consumes NOTHING.** It is a query and cannot.
  */
-export const jobEstimate = tenantQuery({
-  args: { planId: v.id("plans") },
-  handler: async (
-    ctx,
-    { planId },
+export async function estimateReelPlanInner(
+    ctx: QueryCtx,
+    tenantId: string,
+    planId: Id<"plans">,
   ): Promise<{
     lines: EstimateLine[];
     totalCents: number;
     capCents: number;
     remainingCents: number;
+    estUsd?: number;
     refusal: { reason: ReserveRefusal; blockIndex?: number; chars?: number } | null;
-  }> => {
+  }> {
     const capCents = Math.round(MEDIA_JOB_CAP_USD * 100);
-    const remainingCents = await mediaRemainingCentsInner(ctx, ctx.tenantId);
+    const remainingCents = await mediaRemainingCentsInner(ctx, tenantId);
     const empty = { lines: [], totalCents: 0, capCents, remainingCents, refusal: null };
 
-    const plan = await ownedPlan(ctx, planId, ctx.tenantId);
+    const plan = await ownedPlan(ctx, planId, tenantId);
     if (!plan) return empty;
     // 20.2 wave 5 — the scene gate OPENS here in the same commit it opens at `generateReel`, and
     // that co-location is the point: a working Generate button behind a refusing estimate would
@@ -2982,6 +2987,7 @@ export const jobEstimate = tenantQuery({
           },
         ],
         totalCents: priced.value.estCents,
+        estUsd: priced.value.estUsd,
         capCents,
         remainingCents,
         refusal: null,
@@ -3085,8 +3091,12 @@ export const jobEstimate = tenantQuery({
       },
     ];
 
-    return { lines, totalCents: priced.value.estCents, capCents, remainingCents, refusal: null };
-  },
+    return { lines, totalCents: priced.value.estCents, estUsd: priced.value.estUsd, capCents, remainingCents, refusal: null };
+}
+
+export const jobEstimate = tenantQuery({
+  args: { planId: v.id("plans") },
+  handler: (ctx, { planId }) => estimateReelPlanInner(ctx, ctx.tenantId, planId),
 });
 
 /** The standalone image estimate. It builds the exact pinned spec consumed by
@@ -3131,6 +3141,52 @@ export const imageEstimate = tenantQuery({
     };
   },
 });
+
+/** Campaign admission uses the same estimator and reservation as the single-artifact canvas.
+ * No provider is scheduled here: the campaign owns its bounded submission queue. */
+export async function estimateCampaignPlanInner(ctx: QueryCtx, tenantId: string, planId: Id<"plans">): Promise<
+  { ok: true; kind: "image" | "video"; estCents: number; estUsd: number } | { ok: false; reason: string }
+> {
+  const plan = await ownedPlan(ctx, planId, tenantId);
+  if (!plan || plan.kind !== "media") return { ok: false, reason: "no_media_plan" };
+  if (plan.status === "collecting") return {ok:false, reason:"storyboard_in_progress"};
+  if (plan.mediaMode === "image") {
+    if (!plan.imagePrompt?.trim()) return { ok: false, reason: "no_image_plan" };
+    const estimate = chooseMediaBatch([standaloneImageSpec()], MEDIA_JOB_CAP_USD);
+    return estimate.ok ? { ok: true, kind: "image", estCents: estimate.value.estCents, estUsd: estimate.value.estUsd } : { ok: false, reason: estimate.error.code };
+  }
+  if (!sceneDeckOf(plan) && !deckOf(plan)) return { ok: false, reason: "no_deck" };
+  const estimate = await estimateReelPlanInner(ctx, tenantId, planId);
+  return estimate.refusal ? { ok: false, reason: estimate.refusal.reason } :
+    estimate.estUsd === undefined ? { ok: false, reason: "no_deck" } :
+    { ok: true, kind: "video", estCents: estimate.totalCents, estUsd: estimate.estUsd };
+}
+
+export async function reserveCampaignPlanInner(ctx: MutationCtx, tenantId: string, planId: Id<"plans">): Promise<
+  { ok: true; batchId: string; estCents: number; estUsd: number } | { ok: false; reason: string }
+> {
+  const plan = await ownedPlan(ctx, planId, tenantId);
+  if (!plan?.mediaCampaignId || plan.kind !== "media") return { ok: false, reason: "no_campaign_plan" };
+  if (plan.status === "collecting") return {ok:false, reason:"storyboard_in_progress"};
+  if ((await activeMediaJobs(ctx, tenantId, planId)).length) return { ok: false, reason: "already_started" };
+  let result: ReserveResult;
+  if (plan.mediaMode === "image") {
+    if (!plan.imagePrompt?.trim()) return { ok: false, reason: "no_image_plan" };
+    result = await reserveImageInner(ctx, {tenantId, planId, prompt: plan.imagePrompt.trim()});
+  } else {
+    const sceneDeck = sceneDeckOf(plan);
+    const blocks = deckOf(plan);
+    if (sceneDeck) result = await reserveSceneJobInner(ctx, {tenantId, planId, ...sceneDeck, withCaptions: true});
+    else if (blocks && plan.clipSeconds !== undefined) result = await reserveJobInner(ctx, {tenantId, planId, blocks, clipSeconds: plan.clipSeconds, withCaptions: true});
+    else return {ok:false, reason:"no_deck"};
+    if (result.ok) {
+      await clearRender(ctx, planId);
+      await ctx.db.patch(planId, {deckLockedAt: Date.now(), altShots: undefined, altTargetDurationSeconds: undefined});
+    }
+  }
+  if (result.ok) await ctx.db.patch(planId, {status: "delivering"});
+  return result;
+}
 
 /** Reserve + schedule, shared by the two paid entry points. Returns the governed refusal rather
  *  than throwing — a refusal is an answer, not an error. */
@@ -3195,6 +3251,7 @@ export const generateReel = tenantMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    if (plan.mediaCampaignId) return {ok:false as const, reason:"campaign_owned" as const};
     // 20.2 wave 5 — THE SCENE GATE OPENS. Wave 2 put a `scene_render_not_ready` refusal here
     // because a scene deck reaching `deckOf` returns null and would have refused as `no_deck`,
     // which was a lie: the deck parsed and was on screen. Everything it was waiting for now
@@ -3250,6 +3307,7 @@ export const generateImage = tenantMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    if (plan.mediaCampaignId) return {ok:false as const, reason:"campaign_owned" as const};
     const prompt = plan.mediaMode === "image" ? plan.imagePrompt?.trim() : undefined;
     if (!prompt) return { ok: false as const, reason: "no_image_plan" as const };
     const rows = await activeMediaJobs(ctx, ctx.tenantId, planId);

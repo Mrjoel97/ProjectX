@@ -1,3 +1,5 @@
+> Last verified: 2026-10-21 — Phase 53 classifies mediaCampaigns and vaultPresentations as tenant_owned data (75 schema tables total). Campaign briefs/specs/preview content stay outside insert-only refs/counts audit; lifecycle and hosted acceptance remain distinct.
+
 > Last verified: 2026-10-19 — Review-first voice transcription emits `intake.dictation_draft`; the audit viewer projects only its character count and existing correlation reference. Transcript text, filenames and nested PII counts remain outside the projection. A focused regression covers this boundary; no recording is sent as an agent turn until the user explicitly sends the written prompt.
 
 > Last verified: 2026-10-19 — Zernio connections export as credential summaries; the latest report exports as tenant-owned data. Both ride the existing erasure walk. Erasure reports local deletion with upstream revocation unsupported, requiring key revocation in Zernio; no provider grant is automatically deleted.
@@ -1350,3 +1352,12 @@ Independent review, 2026-09-10: synthetic eval teardown now deletes each unexpor
 ## Delivery receipt preservation — 2026-10-15
 
 Last verified: 2026-10-15 — workflow failure handling preserves confirmed delivery receipts and holds uncertain attempts instead of declaring them failed. Delivery reconciliation records user observation separately from provider receipt events and never reopens an attempt for sending.
+
+
+## Phase 53 — production metadata is tenant content
+
+TENANT_TABLE_CLASSIFICATION adds mediaCampaigns and vaultPresentations as tenant_owned; tenantData.test.ts now expects75 schema tables and exact registry coverage. Campaign item briefs, plan labels, source references, presentation specs/notes and workbook source metadata are content-plane data, never audit/dead-letter payloads. Existing generated-artifact audit events retain refs/hashes/counts/enums only. A new storage or sidecar field needs lifecycle and storage-registry coverage at its owning seam.
+
+Tenant export/erasure must traverse the added tables. Presentation preview sidecars must also retire with their document/replacement, while immutable audit remains insert-only. Preserve owned-byte receipt promotion, late-write erasure fences and replacement-before-deleting-good-bytes ordering. A JSON campaign manifest must not persist temporary download capabilities.
+
+Local registry and artifact/campaign tests do not prove hosted late-provider cleanup, Office export fidelity, physical erasure or WORM acceptance. No paid/provider or historical Phase23 retention receipt was changed by this lane. See Phase53 partial summary for exact remaining gates.

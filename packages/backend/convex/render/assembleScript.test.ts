@@ -59,8 +59,8 @@ test("no time-stretch filter and no deferred-mode flag survives in the harvested
 
 // ── The music bed ───────────────────────────────────────────────────────────────────────────────
 //
-// Source tripwires, same instrument and same reason as the scene branches: a shell script cannot
-// be unit-tested, and the behavioural half is `smoke_assemble.sh`. What these pin is the SHAPE that
+// Source tripwires complement the real offline `assembleQuality.test.ts`/`smoke_assemble.sh`
+// fixtures. What these pin is the SHAPE that
 // makes the bed safe — every one of them is a way a well-meaning "make the music better" edit
 // would quietly break something that has nothing to do with music.
 
@@ -263,7 +263,10 @@ test("audio is mixed ONCE, on one timeline — not per scene and concatenated", 
   // The concat list carries the PICTURE, which is silent by construction. Listing a per-scene mux
   // here is what the old shape did.
   expect(code).toContain('echo "file \'$(basename "$pic")\'"');
-  expect(code, "the picture track is joined with no audio at all").toContain("-an -c:v libx264");
+  expect(
+    code,
+    "the normalized picture track is joined without audio or another lossy encode",
+  ).toContain('-an -c:v copy "$VOSIL"');
 });
 
 test("the per-cell speech band is GONE, and did not come back as a constant", () => {
@@ -394,7 +397,9 @@ test("the fade is drawn INSIDE the scene and cannot move a boundary", () => {
   expect(SH).toContain("fade=t=in:st=0:d=${CFADE}");
   expect(SH).toContain("if(d>0.4)d=0.4");
   // The card branch's own length still comes from SEC and nothing else.
-  expect(SH).toContain('-an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 "$pic"');
+  expect(SH).toContain(
+    '-an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 -video_track_timescale 15360 "$pic"',
+  );
 });
 
 test("TYPOGRAPHY IS NOT WIRED, and the script says why rather than silently ignoring it", () => {

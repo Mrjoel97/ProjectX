@@ -37,6 +37,7 @@ import {
   EXECUTIVE_ROUTER_SKILL,
   INBOX_DIGEST_SKILL,
   MEDIA_DIRECTOR_SKILL,
+  PRESENTATION_DRAFTER_SKILL,
   REPLY_DRAFTER_SKILL,
   RESEARCH_SPECIALIST_SKILL,
   REVENUE_SPECIALIST_SKILL,
@@ -93,11 +94,18 @@ import {
   validateFigureClaim,
 } from "@pikar/core";
 import {
+  type PresentationSpec,
+  presentationJsonSchema,
+  presentationToMarkdown,
+  validatePresentationSpec,
+} from "@pikar/core/presentation";
+import {
   type ResearchClaims,
   renderResearchEvidence,
   researchClaimsSchema,
 } from "@pikar/core/researchEvidence";
 import { verticalIdForSkill } from "@pikar/core/verticalPacks";
+import { reportFromSheets } from "@pikar/core/workbookReport";
 import {
   CHEAP_MODEL,
   DEFAULT_MODEL,
@@ -114,7 +122,8 @@ import {
 import { scanText } from "@pikar/pii";
 // Subpath import (NOT the barrel), the vaultExtract discipline: SheetJS is ~1 MB and enters only
 // the `use node` modules that write or read a workbook. STATIC, per Pitfall 9 — see sheets.ts.
-import { sheetsToXlsx } from "@pikar/vault/sheets";
+import { reportToXlsx } from "@pikar/vault/reportWorkbook";
+import { sheetRows as workbookPreviewRows } from "@pikar/vault/sheets";
 import { type BriefSections, buildBriefMarkdown } from "@pikar/voice";
 import {
   generateObject,
@@ -141,7 +150,7 @@ import {
   shouldUseGmailCapability,
 } from "./cockpitCapabilities";
 import { buildInvoiceReminderTool } from "./invoiceReminders";
-import { VARIANT_FAILED_MEMO } from "./lib/dispatchShared";
+import { ENVELOPE_FRACTION, VARIANT_FAILED_MEMO } from "./lib/dispatchShared";
 import { type EvalContext, evalBudgetModel, type ImageInput } from "./lib/evalBudgetModel";
 import { fogIntegration, traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
@@ -151,6 +160,7 @@ import {
   NODE_ONLY_MODEL_PREFIX,
   resolveModel as resolveSharedModel,
 } from "./lib/models";
+import { presentationToPptx } from "./lib/presentationPptx";
 import { internalAction } from "./lib/tenantLifecycle";
 import { buildWebResearchTool, sourcesFromToolOutput } from "./lib/webResearchTools";
 
@@ -1954,6 +1964,103 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
   // model must not get wrong in that window (no drafts this turn, one card, relay the count)
   // belongs in the string it reads on EVERY turn, not only in the body it may never be told.
   const createVariantsTool = {
+    createMediaCampaign: tool({
+      description:
+        "Prepare a set of images, video reels, or both from one campaign brief. Each item needs " +
+        "its own visual prompt or video brief. Video storyboards are prepared in the background. " +
+        "The user reviews the batch, its maximum cost and each video before clicking Generate. " +
+        "This tool never buys media or publishes. Use it for multiple media deliverables, not written-content variants.",
+      inputSchema: jsonSchema<{
+        title: string;
+        items: (
+          | { kind: "image"; label: string; prompt: string }
+          | { kind: "video"; label: string; brief: string }
+        )[];
+        maxCostCents: number;
+      }>({
+        type: "object",
+        properties: {
+          title: { type: "string", maxLength: 120 },
+          items: {
+            type: "array",
+            minItems: 1,
+            maxItems: 15,
+            items: {
+              oneOf: [
+                {
+                  type: "object",
+                  properties: {
+                    kind: { const: "image", type: "string" },
+                    label: { type: "string" },
+                    prompt: { type: "string" },
+                  },
+                  required: ["kind", "label", "prompt"],
+                  additionalProperties: false,
+                },
+                {
+                  type: "object",
+                  properties: {
+                    kind: { const: "video", type: "string" },
+                    label: { type: "string" },
+                    brief: { type: "string" },
+                  },
+                  required: ["kind", "label", "brief"],
+                  additionalProperties: false,
+                },
+              ],
+            },
+          },
+          maxCostCents: {
+            type: "integer",
+            minimum: 1,
+            maximum: 1000,
+            description:
+              "Proposed whole-batch maximum in USD cents, subject to the user's Generate approval and existing daily limits.",
+          },
+        },
+        required: ["title", "items", "maxCostCents"],
+        additionalProperties: false,
+      }),
+      execute: async ({ title, items, maxCostCents }): Promise<string> => {
+        if (evalBudgetId)
+          return "This evaluation cannot prepare a media campaign. Nothing was started.";
+        if (toolCtx.researchControlId || toolCtx.researchRequestId)
+          return "A controlled research run cannot start a media campaign. Nothing was started.";
+        const checkedTitle = scanText(title);
+        if (!checkedTitle.ok)
+          return "The campaign could not be checked for personal data. Nothing was saved.";
+        const safeItems: typeof items = [];
+        for (const item of items) {
+          const label = scanText(item.label);
+          const brief = scanText(item.kind === "image" ? item.prompt : item.brief);
+          if (!label.ok || !brief.ok)
+            return "The campaign could not be checked for personal data. Nothing was saved.";
+          safeItems.push(
+            item.kind === "image"
+              ? { kind: "image", label: label.value.safeText, prompt: brief.value.safeText }
+              : { kind: "video", label: label.value.safeText, brief: brief.value.safeText },
+          );
+        }
+        const threadId = toolCtx.threadId as string;
+        const rootRequestId = toolCtx.rootRequestId as string;
+        const videoCount = items.filter((item) => item.kind === "video").length;
+        const remaining = await ctx.runQuery(internal.guardrails.remainingDailyCents, { tenantId });
+        const share = videoCount ? Math.floor((remaining * ENVELOPE_FRACTION) / videoCount) : 0;
+        // Each director is admitted through the existing durable dispatch rail. These are only
+        // storyboard turns; generation remains a human-only campaign mutation.
+        if (videoCount && share < 1)
+          return "Today's AI budget cannot prepare these video storyboards. Nothing was saved or generated. Try a smaller batch later.";
+        await ctx.runMutation(internal.mediaCampaign.stage, {
+          tenantId,
+          threadId,
+          title: checkedTitle.value.safeText,
+          items: safeItems,
+          maxCostCents,
+          directorContext: { rootRequestId, envelopeCents: share, skillVersions, tenantSkillIds },
+        });
+        return `Prepared ${items.length} media items in a batch. Video storyboards arrive in the background. Review the batch in the workspace before generating; nothing was published.`;
+      },
+    }),
     createVariants: tool({
       // Split literal: every chunk under the 200-char §5 source-scan ceiling (skills.test.ts).
       description:
@@ -2278,15 +2385,23 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
     // tables to 2–4 columns so they fit the page"), and it is GATED, so `spreadsheet-drafter` is a
     // new ungated row rather than an edit to it (the Phase 18 content-drafter precedent).
     const drafter = format === "xlsx" ? SPREADSHEET_DRAFTER_SKILL : DOCUMENT_DRAFTER_SKILL;
-    const drafted = await ctx.runAction(internal.llm.draftDocument, {
-      evalBudgetId,
-      tenantId,
-      safeText,
-      safeTextHash: await contentHash(safeText),
-      // The eval runner's drafter pin rides HERE (EVAL-01) — undefined = active skill.
-      skillName: drafter,
-      skillVersion: skillVersions?.[drafter],
-    });
+    const drafted =
+      format === "pptx"
+        ? await ctx.runAction(internal.llm.draftPresentation, {
+            evalBudgetId,
+            tenantId,
+            safeText,
+            skillVersion: skillVersions?.[PRESENTATION_DRAFTER_SKILL],
+          })
+        : await ctx.runAction(internal.llm.draftDocument, {
+            evalBudgetId,
+            tenantId,
+            safeText,
+            safeTextHash: await contentHash(safeText),
+            // The eval runner's drafter pin rides HERE (EVAL-01) — undefined = active skill.
+            skillName: drafter,
+            skillVersion: skillVersions?.[drafter],
+          });
     // 43-02: the money rail can now refuse this, and it refuses by RETURNING. This function has
     // no catch of its own, so a throw would have escaped as a raw SDK tool-error instead of a
     // sentence — and the attachment plane already speaks `{ ok: false, message }`.
@@ -2295,11 +2410,11 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
     // The tool schema's `enum` is advertising, not enforcement: the AI SDK's `jsonSchema()` carries
     // no validator, so an out-of-enum `format` would fall through the render ternary to the HTML
     // branch and then die in `formatSpec(format)`. Refuse it in the tool's own voice instead.
-    if (format !== "pdf" && format !== "html" && format !== "xlsx") {
+    if (format !== "pdf" && format !== "html" && format !== "xlsx" && format !== "pptx") {
       return {
         ok: false,
         message:
-          "I couldn't generate the attachment — that format isn't available. Offer a PDF, a web page (html) or a spreadsheet (xlsx).",
+          "I couldn't generate the attachment — that format isn't available. Offer PDF, HTML, XLSX or PowerPoint (PPTX).",
       };
     }
     const setError = async (message: string): Promise<{ ok: false; message: string }> => {
@@ -2329,8 +2444,10 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         format === "pdf"
           ? await markdownToPdf(draft.title, draft.markdown)
           : format === "xlsx"
-            ? sheetsToXlsx(sheets)
-            : new TextEncoder().encode(renderHtmlDocument(draft.title, draft.markdown));
+            ? await reportToXlsx(reportFromSheets(sheets, draft.title))
+            : format === "pptx" && "spec" in drafted
+              ? await presentationToPptx(drafted.spec)
+              : new TextEncoder().encode(renderHtmlDocument(draft.title, draft.markdown));
     } catch {
       return setError(
         "I couldn't generate the attachment — the document failed to render. Tell the user and offer to try again.",
@@ -2876,9 +2993,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           },
           format: {
             type: "string",
-            enum: ["pdf", "html", "xlsx"],
+            enum: ["pdf", "html", "xlsx", "pptx"],
             description:
-              "Output format. Omit for a PDF; html only when the user asks for a web page; xlsx for a real spreadsheet they will work in — a price list, a schedule, a tracker, a comparison they will edit.",
+              "Output format. Omit for PDF; html for a web page; xlsx for a styled Excel workbook; pptx for an editable PowerPoint presentation.",
           },
         },
         required: ["topic"],
@@ -4232,7 +4349,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // The FORMAT clause. There is no format argument and there is no pptx, docx or slides
         // path; asked for one, say what this writes instead of agreeing. Observed live: the agent
         // reported creating a deck "in PowerPoint format" that never existed.
-        "It writes markdown with a PDF (`long`) or a real .xlsx workbook (`sheet`) — never PowerPoint, Word or slides. " +
+        "It writes a PDF report (`long`), a styled Excel workbook (`sheet`), or an editable PowerPoint deck (`presentation`). " +
         "The finished document appears in the workspace as well as the vault. " +
         // The trigger rule. It is a rule for THIS surface, where an unasked-for document is a
         // surprise — and it is one reason no workflow pack holds this tool: for a pack whose output
@@ -4242,7 +4359,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         "would write and wait for a yes.",
       inputSchema: jsonSchema<{
         topic: string;
-        form: "short" | "long" | "sheet";
+        form: "short" | "long" | "sheet" | "presentation";
         replace?: number;
       }>({
         type: "object",
@@ -4252,9 +4369,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           // and the PDF branch, which keeps the short/long split in code rather than a heuristic.
           form: {
             type: "string",
-            enum: ["short", "long", "sheet"],
+            enum: ["short", "long", "sheet", "presentation"],
             description:
-              "long = proposal, one-pager, report. short = post, ad copy, headline. sheet = a spreadsheet they will work in (price list, schedule, tracker, comparison).",
+              "long = PDF report. short = post or ad copy. sheet = styled Excel workbook. presentation = editable PowerPoint slide deck.",
           },
           // The locked replace-in-place revision. 1-based #index over what this conversation has
           // already created — the regenerateAttachment idiom. NEVER a raw id: the index resolves
@@ -4269,6 +4386,8 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         additionalProperties: false,
       }),
       execute: async ({ topic, form, replace }): Promise<string> => {
+        if (!["short", "long", "sheet", "presentation"].includes(form))
+          return "That document format is unavailable. Choose PDF, Excel, PowerPoint or short text.";
         const plan = await readPlan(); // threadId + the cross-tenant guard — NEVER from the model
         const scan = scanText(topic);
         // Fail-closed, but as a SENTENCE: a governed stop is a paused conversation, never a throw
@@ -4291,21 +4410,38 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         let draft: { title: string; markdown: string };
         let storageId: Id<"_storage"> | undefined;
         let sheetRows: { name: string; rows: string[][] }[] = [];
+        let presentation: PresentationSpec | undefined;
         try {
-          const drafted = await ctx.runAction(internal.llm.draftDocument, {
-            evalBudgetId,
-            tenantId,
-            safeText,
-            safeTextHash: await contentHash(safeText),
-            skillName,
-            skillVersion: skillVersions?.[skillName],
-          });
+          const drafted =
+            form === "presentation"
+              ? await ctx.runAction(internal.llm.draftPresentation, {
+                  evalBudgetId,
+                  tenantId,
+                  safeText,
+                  skillVersion: skillVersions?.[PRESENTATION_DRAFTER_SKILL],
+                })
+              : await ctx.runAction(internal.llm.draftDocument, {
+                  evalBudgetId,
+                  tenantId,
+                  safeText,
+                  safeTextHash: await contentHash(safeText),
+                  skillName,
+                  skillVersion: skillVersions?.[skillName],
+                });
           // 43-02. RETURNED from inside the try, deliberately: the catch below would otherwise
           // be the thing that answered, and its sentence tells the agent to try again — the one
           // instruction an exhausted rail must never receive.
           if (!drafted.ok) return DRAFT_BLOCKED_MESSAGE;
           draft = drafted;
-          if (form === "long") {
+          if (form === "presentation" && "spec" in drafted) {
+            presentation = validatePresentationSpec(drafted.spec);
+            const bytes = await presentationToPptx(presentation);
+            if (exceedsByteCap(bytes.byteLength))
+              return "The presentation exceeds the file size limit. Ask for fewer slides.";
+            storageId = await ctx.storage.store(
+              new Blob([bytes as BlobPart], { type: formatSpec("pptx").mimeType }),
+            );
+          } else if (form === "long") {
             // ponytail: cast — a Uint8Array IS a valid BlobPart at runtime; the DOM lib types
             // Uint8Array<ArrayBufferLike> too strictly (it may be SharedArrayBuffer-backed).
             const bytes = (await markdownToPdf(draft.title, draft.markdown)) as BlobPart;
@@ -4321,7 +4457,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
             if (sheetRows.length === 0) {
               return "I couldn't build the spreadsheet — the draft came back with no table in it. Tell the user and ask which columns they want.";
             }
-            const bytes = sheetsToXlsx(sheetRows) as BlobPart;
+            const bytes = (await reportToXlsx(
+              reportFromSheets(sheetRows, draft.title),
+            )) as BlobPart;
             storageId = await ctx.storage.store(
               new Blob([bytes], { type: formatSpec("xlsx").mimeType }),
             );
@@ -4390,8 +4528,10 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           });
           // A refusal (no such #index, foreign tenant, a user upload) is a SENTENCE — the mutation
           // never throws, and neither does this.
-          if (!res.ok)
+          if (!res.ok) {
+            if (storageId) await ctx.storage.delete(storageId);
             return `There's no document #${effectiveReplace} I can rewrite in this conversation — nothing was changed. Tell the user which documents are here and ask which one they mean.`;
+          }
           // Drop the SUPERSEDED bytes only AFTER the patch persists, and only when they really were
           // superseded (the regenerateAttachment ordering — never orphan a live ref).
           if (res.oldStorageId && res.oldStorageId !== storageId)
@@ -4400,6 +4540,40 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         }
         const vaultDocId =
           docIds[effectiveReplace === undefined ? docIds.length - 1 : effectiveReplace - 1];
+        if (!vaultDocId) throw new Error("created_document_missing");
+        // Previews are optional views. Their failure must not hide a successfully saved original
+        // or invite a paid redraft. Re-read XLSX bytes through the existing capped grid parser.
+        let presentationPreviewAvailable = false;
+        try {
+          if (form === "sheet" && storageId) {
+            const original = await ctx.storage.get(storageId);
+            if (!original) throw new Error("workbook_preview_original_missing");
+            const preview = workbookPreviewRows(new Uint8Array(await original.arrayBuffer()));
+            await ctx.runMutation(internal.vault.upsertSheets, {
+              tenantId,
+              docId: vaultDocId,
+              expectedStorageId: storageId,
+              ...preview,
+            });
+          }
+          if (presentation) {
+            const spec = JSON.stringify(presentation);
+            if (new TextEncoder().encode(spec).length <= 128 * 1024) {
+              await ctx.runMutation(internal.vaultPresentations.upsert, {
+                tenantId,
+                docId: vaultDocId,
+                expectedStorageId: storageId,
+                spec,
+              });
+              presentationPreviewAvailable = true;
+            } else {
+              console.warn("[createDocument] optional presentation preview exceeded its byte cap");
+            }
+          }
+        } catch {
+          // Error messages can carry model/source content; keep diagnostics code-owned.
+          console.warn("[createDocument] optional artifact preview unavailable");
+        }
         // ONE refs-only audit, from the TOOL (cockpit.ts emits exactly two events and a test pins
         // that count). Hashes, ids, a closed enum and a boolean — never the topic, never the prose.
         await ctx.runMutation(internal.audit.log, {
@@ -4455,11 +4629,16 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
             : `rewritten as #${effectiveReplace}`;
         const shown = " It is already open in the workspace for the user to read.";
         const asFormat =
-          form === "sheet"
-            ? " Written as a spreadsheet — a real .xlsx workbook to download."
-            : storageId
-              ? " Written as markdown, with a PDF to download."
-              : " Written as markdown.";
+          form === "presentation"
+            ? " Written as an editable .pptx PowerPoint deck." +
+              (presentationPreviewAvailable
+                ? " A slide preview is available in the workspace."
+                : " The slide preview is unavailable; the editable original is ready to download.")
+            : form === "sheet"
+              ? " Written as a spreadsheet — a real .xlsx workbook to download."
+              : storageId
+                ? " Written as markdown, with a PDF to download."
+                : " Written as markdown.";
         return `Created "${draft.title}" — ${saved}.${shown}${asFormat}`;
       },
     }),
@@ -6820,6 +6999,71 @@ const documentSchema = jsonSchema<{ title: string; markdown: string }>({
  */
 const DRAFT_BLOCKED_MESSAGE =
   "I couldn't draft that — the AI spending limit has been reached, so nothing was generated and nothing was charged. Tell the user their budget is used up and do NOT try again this turn.";
+
+/** Presentation drafting stays on the same registry, tenant and paid-call rails as documents. */
+export const draftPresentation = internalAction({
+  args: {
+    tenantId: v.string(),
+    safeText: v.string(),
+    skillVersion: v.optional(v.number()),
+    evalBudgetId: v.optional(v.id("spendEvents")),
+  },
+  handler: async (
+    ctx,
+    { tenantId, safeText, skillVersion, evalBudgetId },
+  ): Promise<
+    | { ok: true; title: string; markdown: string; spec: PresentationSpec }
+    | {
+        ok: false;
+        reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+      }
+  > => {
+    const skill =
+      skillVersion === undefined
+        ? await ctx.runQuery(internal.skills.getActiveSkill, { name: PRESENTATION_DRAFTER_SKILL })
+        : await ctx.runQuery(internal.skills.getSkillVersion, {
+            name: PRESENTATION_DRAFTER_SKILL,
+            version: skillVersion,
+          });
+    const gate = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+    if (!gate.ok) return { ok: false, reason: gate.reason };
+    const finish = (value: unknown) => {
+      const spec = validatePresentationSpec(value);
+      return { ok: true as const, title: spec.title, markdown: presentationToMarkdown(spec), spec };
+    };
+    if (parseSmoke(safeText, tenantId))
+      return finish({
+        title: "Smoke Presentation",
+        theme: "teal",
+        slides: [
+          { kind: "cover", title: "Smoke Presentation", subtitle: "An editable business review" },
+          {
+            kind: "bullets",
+            title: "Next steps",
+            bullets: ["Review the source evidence", "Choose the next action"],
+          },
+        ],
+      });
+    const draft = async (model: string) => {
+      const result = await generateObject({
+        model: goldenModel(ctx, tenantId, model, evalBudgetId, true),
+        schema: jsonSchema<PresentationSpec>(presentationJsonSchema as never),
+        system: skill.body,
+        prompt: safeText,
+        abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        maxRetries: 0,
+        maxOutputTokens: 8000,
+      });
+      return finish(result.object);
+    };
+    try {
+      return await draft(DEFAULT_MODEL);
+    } catch (error) {
+      if (!isFallbackEligible(error)) throw error;
+      return await draft(CHEAP_MODEL);
+    }
+  },
+});
 
 export const draftDocument = internalAction({
   args: {

@@ -93,6 +93,8 @@ import type * as lib_toolContextArgs from "../lib/toolContextArgs.js";
 import type * as lib_webResearchTools from "../lib/webResearchTools.js";
 import type * as llm from "../llm.js";
 import type * as media from "../media.js";
+import type * as mediaCampaign from "../mediaCampaign.js";
+import type * as vaultPresentations from "../vaultPresentations.js";
 import type * as mediaComplete from "../mediaComplete.js";
 import type * as mediaIntent from "../mediaIntent.js";
 import type * as microsoftAuth from "../microsoftAuth.js";
@@ -273,6 +275,8 @@ declare const fullApi: ApiFromModules<{
   "lib/webResearchTools": typeof lib_webResearchTools;
   "llm": typeof llm;
   "media": typeof media;
+  "mediaCampaign": typeof mediaCampaign;
+  "vaultPresentations": typeof vaultPresentations;
   "mediaComplete": typeof mediaComplete;
   "mediaIntent": typeof mediaIntent;
   "microsoftAuth": typeof microsoftAuth;
