@@ -270,3 +270,16 @@ release, a new versioned handoff and fresh paid approval must precede another at
 No evaluation or source-deployment retry is authorized by the consumed approval.
 
 Original certified artifacts and checkpoints remain immutable. No eval-result, public B refusal or lifecycle closure is certified. Phase 23 stays 6/9, 23-07 partial, 23-08/09 pending, SKILL-02 open, Phase 48 partial and49 not started.
+
+## Current PR82 input — staging/readiness only
+
+PR82 source `821b097ceae440730bc51988af0425fb878687fb` passed CI `39663077579` and release
+`39668142870`/job `119458556492`. [Current handoff](handoffs/2026-10-21-pr82/23-LIVE-HANDOFF.json), SHA256
+`e7ee9d75acf644ab20d8e72e708b92941649b20b026b8778738b3f371ebf4b62`, and [refresh](handoffs/2026-10-21-pr82/23-HANDOFF-REFRESH.json), SHA256
+`f94d17cf0457952c3c035755d23683f55374bfbf682f7dd9677afd98fb62f59c`, passed schema/private-canary/live-state checks
+with fresh A owner/B non-owner, NOT_STARTED, native keyboard, measured 1280x720/390x900
+views and six matching reads. The 825ef/5dbe 46-case suite is now released; older source
+observations above remain historical. This completes no paid gate or owner action: new paid
+consent, full exact-row evidence and public B refusal remain pending. Phase 23 stays 6/9,
+Phase 48 partial and Phase 49 not started. See 23-07-SUMMARY for the exact release/approval
+chain; immutable predecessors, both closed bills and the PR81 startup record are preserved.

@@ -4,6 +4,19 @@ Researched: 2026-10-19 from source at b4deef8bba42347e31df638b828443eb11407138. 
 
 ## Current findings
 
+PR82 is the current released input: source `821b097ceae440730bc51988af0425fb878687fb`, CI `39663077579`,
+release `39668142870`/job `119458556492`. [Release receipt](48-STAGING-PR82-RELEASE-2026-10-21.json)
+has SHA256 `3113664464004c54d805023d965fcbdd59e1a77cfa4f43e09f94f7cc7872b60f`; [handoff](../23-agent-authored-skills/handoffs/2026-10-21-pr82/23-LIVE-HANDOFF.json)
+has SHA256 `e7ee9d75acf644ab20d8e72e708b92941649b20b026b8778738b3f371ebf4b62` and [refresh](../23-agent-authored-skills/handoffs/2026-10-21-pr82/23-HANDOFF-REFRESH.json)
+has SHA256 `f94d17cf0457952c3c035755d23683f55374bfbf682f7dd9677afd98fb62f59c`. Fresh native A owner/B non-owner and
+NOT_STARTED, keyboard review, actual 1280x720/390x900 views and six stable reads passed for
+released 825ef/5dbe, 46 cases. Configuration/registry/retention and historical bills remain
+unchanged. No new paid consent/evaluation result/B mutation/activation/production deployment
+exists; Phase 23 stays 6/9, Phase 48 partial and Phase 49 not started. Earlier PR81 source and
+startup dispositions below retain their historical scope.
+
+### Historical PR81 findings
+
 Phase 21's 2026-08-20 verification accepts SKILL-01 despite its stronger synthetic-author runtime-attribution limitation. At the initial research boundary, Phase 23's September 14 native sign-in failure had produced no certified handoff; that observation remains historical. The later approved staging work completed 23-06 and the current handoff refresh below. Phase 27's dated September 10 reconciliation leaves six-pack behavioral browser acceptance open; seven pack ids now exist. Current library starts independent conversations; ordinary-user draft entry is UI-restricted although backend publication is tenant-scoped. Six vertical candidates remain unqualified. No production rows were re-read during this planning review.
 
 The [PR81 staging release](48-STAGING-PR81-RELEASE-2026-10-21.json), SHA256
@@ -27,7 +40,7 @@ admission checks are required for another23-07 run. Phase23 remains6/9, Phase48p
 Phase49notstarted pending48-04's readiness seal. Existing Buffer publishing and Zernio reporting
 exceptions remain bounded; unqualified verticals stay excluded.
 
-## Latest PR81 startup disposition
+## Historical PR81 startup disposition
 
 [The separate immutable startup observation](../23-agent-authored-skills/23-07-STARTUP-2026-10-21-PR81.json) (SHA256 `8815857b7e559e24c4daf42a2092f0e0ae7b163d329ea0c12b67e3abb851bb2c`)
 records consumed authorization c663, the first read-only candidate-inspection fetch failure,
