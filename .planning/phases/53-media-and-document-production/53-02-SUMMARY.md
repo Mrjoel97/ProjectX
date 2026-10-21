@@ -114,15 +114,30 @@ and concurrent unrelated work; only this worktree's build was stopped to seriali
 Graphify CLI remains unavailable. Convex graph fixup completed with no additional edges/table
 nodes and reported unresolved references. This is not a refreshed AST graph.
 
+### Serialized recovery checks
+
+After stopping only this worktree's overlapping build, the final backend typecheck passed.
+The unchanged controller/PDF reader selection then passed all 12 checks with normal timeouts,
+and all eight backend inventory cases passed, including the case that had timed out. No timeout
+was raised and no assertion was weakened. The corrected format-receipt file passed all 11 checks;
+the tab-state file passed all eight. The earlier full frontend run's sole behavioral assertion
+failure is therefore resolved; its two existing skipped tests remain skipped.
+
+The production build then ran alone against committed source `bdd71ecd2c5505b8e3e3bd691f59c100f67f98a2`
+and exited zero, including TypeScript, page data, static generation and final optimization. The
+exact PDF.js local assets synchronized successfully. It used GOMAXPROCS=2 and a 2048 MiB Node heap
+limit to avoid overlapping memory-heavy checks on the 8 GB host. The final backend typecheck and
+frontend build/typecheck are green. No product source changed after this validation; this final
+documentation update does not alter the evaluator identity.
+
 ## Remaining acceptance
 
-1. Record the integration owner's actual final tests/typechecks/build/free gates after source settles.
-2. Exercise authenticated hosted multi-chat isolation, restored references, new-result arrivals,
+1. Exercise authenticated hosted multi-chat isolation, restored references, new-result arrivals,
    selected downloads, deleted/foreign references, keyboard/expanded focus and responsive layouts.
-3. Preserve current Office originals and qualify representative layout/chart/data edits in the
+2. Preserve current Office originals and qualify representative layout/chart/data edits in the
    intended applications. Local synthetic results narrow this gap; they do not close ARTF-01/02.
-4. Qualify current registry candidates through existing admission/activation rules before release.
-5. Obtain separately authorized representative image and 30/60-second reel outputs with measured
+3. Qualify current registry candidates through existing admission/activation rules before release.
+4. Obtain separately authorized representative image and 30/60-second reel outputs with measured
    fidelity, B-roll/captions/audio/pacing/credits and owner review; a policy/fixture is not that run.
-6. Retain hosted campaign recovery, uncertain outcomes, selected retries, lifecycle/erasure and
+5. Retain hosted campaign recovery, uncertain outcomes, selected retries, lifecycle/erasure and
    complete collection-download gaps from 53-01. ARTF-01..04 and Phase 53 remain open, 0/2 complete.
