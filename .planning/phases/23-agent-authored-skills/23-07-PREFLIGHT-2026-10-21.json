@@ -1,0 +1,11 @@
+{
+  "observedAt": "2026-10-21T13:07:46.389Z",
+  "schema": "phase23-preflight.v1",
+  "artifactSha256": "ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61",
+  "candidateId": "qn73f3q6zcs1fsjpm9x2vwykc58gm09j",
+  "status": "candidate",
+  "matchingReads": 6,
+  "authSessionVerified": false,
+  "paidReady": false,
+  "paidBlocker": "provider_billing_and_authenticated_exact_candidate_approval_unverified"
+}

@@ -425,3 +425,20 @@ physical-device testing. The new directory is the current next input only; origi
 partial observation and their source pins are unchanged. PaidReady/paidAuthorized remain
 false. No new eval-result, paid run, public B mutation, activation or production release
 occurred; Phase 23 stays 6/9, Phase 48 partial and Phase 49 not started.
+## October21 continuation: budget admission observed and repair prepared offline
+
+The separately approved exact-source full evaluation stopped after28passes/0fails/0retries;
+native logs prove EVAL_BUDGET_EXHAUSTED. One normal guarded close retained198settled calls,
+zero holds and$0.14551101 actual charges. The whole-cent enforcement path consumed198 of200
+capacity cents. See [23-07's full reconciliation](../23-agent-authored-skills/23-07-SUMMARY.md)
+and [immutable partial observation](../23-agent-authored-skills/23-07-PARTIAL-2026-10-21.json),
+SHA256 `64a1edc5b7843212673e119679da0eba1bc7993fe6343ce712fb821534399062`.
+Candidate/effective/global/foreign/registry/retention remained unchanged. No passing evidence,
+public B mutation, owner activation, cleanup, budget replenishment or second run followed.
+
+The narrow new-golden-envelope ledger precision repair is implemented offline with63focused
+regressions/independent review and passing free gates; all legacy/probe/pack/vertical accounting
+and independent rails remain. Source identities were refreshed without changing either corpus.
+Reviewed staging release, a new exact handoff and fresh paid consent are separate next gates.
+Phase23 remains6/9,48-02partial/SKILL-02open, Phase49notstarted. Existing earlier observations
+above remain historical and are not relabeled as new-source proof.

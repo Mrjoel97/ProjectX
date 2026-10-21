@@ -1,0 +1,69 @@
+{
+  "schema": "phase23-preparation-observation.v1",
+  "observedAt": "2026-10-21T13:04:34.586Z",
+  "target": "woozy-wren-368",
+  "runtimeSourceSha": "b10740d6466db155c48519aba6323d5b0c27c406",
+  "handoffSha256": "ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61",
+  "candidateId": "qn73f3q6zcs1fsjpm9x2vwykc58gm09j",
+  "suite": {
+    "revision": "2026-09-11.budgeted-evaluator.d122dad4d5610f14a4934962b82d7a8c30acd8444cc3694a41b008705e8d210f",
+    "sha256": "5dbe6fdbd447ab2a152ccf928d195ed404ca3bf431f5240397f6be3b627e55fd",
+    "caseCount": 46
+  },
+  "readback": {
+    "observedAt": "2026-10-21T12:51:18.032Z",
+    "sha256": "a0b02af9b88e262ff49a54b9394a6a75ff2cdee157753756cf7a11b748ad2d3e",
+    "matchingSourceCandidateProvenanceReads": 6,
+    "registryPreserved": true,
+    "retentionPreserved": true,
+    "evidence": "absent",
+    "ownerApproval": null
+  },
+  "native": {
+    "observedAt": "2026-10-21T12:55:42.393Z",
+    "sha256": "955b1f653a75ff7823b4191777b1c22ad9366980c54241746eec9f51c138fdb0",
+    "primaryResult": "A_IDENTITY_MATCH",
+    "foreignResult": "B_IDENTITY_MATCH",
+    "publicCheckResult": "NOT_STARTED"
+  },
+  "validation": {
+    "observedAt": "2026-10-21T13:02:40.871Z",
+    "sha256": "f45005a74216f436bb8685dc94e8fa54213d573ed95483788d2253710988517c",
+    "sharedSchemaPassed": true,
+    "privateNeedleScanPassed": true,
+    "sharedLiveMatchAppliedToCapturedReadbacks": true,
+    "additionalLiveReadsPerformedByValidator": 0,
+    "standaloneLiveOperatorInvocationPassed": false
+  },
+  "catalog": {
+    "observedAt": "2026-10-21T12:58:07.529Z",
+    "sha256": "8e6d84cd85eff6a2bff29907073707d45571dc317dbc14353b74b8130369cc85",
+    "allRequestedRoutesListed": true,
+    "accountQuotaVerified": false,
+    "paidInferencePerformed": false
+  },
+  "freeChecks": {
+    "goldenSelfCheck": {
+      "passed": true,
+      "fixtureCount": 57,
+      "gatedSkillCount": 12
+    },
+    "skillsTests": {
+      "passed": true,
+      "testCount": 187
+    },
+    "artifactAndOperatorTestsPassed": true
+  },
+  "oldBudget": {
+    "id": "p57067hpjwen71yc4vhx5txav98gmnat",
+    "closed": true,
+    "actualUsd": 0.06160618000000002,
+    "unsettledCount": 0
+  },
+  "paidReady": false,
+  "paidAuthorized": false,
+  "newPaidCalls": 0,
+  "newPublicRefusalCall": false,
+  "activationPerformed": false,
+  "productionChanged": false
+}

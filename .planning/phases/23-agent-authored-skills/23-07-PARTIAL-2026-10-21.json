@@ -1,0 +1,93 @@
+{
+  "schema": "phase23-partial-evaluation-observation.v1",
+  "observedAt": "2026-10-21T13:55:25.289Z",
+  "target": "woozy-wren-368",
+  "sourceSha": "b10740d6466db155c48519aba6323d5b0c27c406",
+  "authorizationSha256": "944728bd84721c101713df0d4f91e08880f6782f8b30e39b3acc552d1d0faeba",
+  "checkpointSha256": "76e6fa096f9c6d73dc540e80765a120138ca7ecb87edd06f7ac38e0fe4546b96",
+  "handoffSha256": "ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61",
+  "candidateId": "qn73f3q6zcs1fsjpm9x2vwykc58gm09j",
+  "candidateBodySha256": "4ec9235c1d0ccce418e54e2adcc2393aa2e778fb8d0968047053f6e5473c12e0",
+  "suite": {
+    "revision": "2026-09-11.budgeted-evaluator.d122dad4d5610f14a4934962b82d7a8c30acd8444cc3694a41b008705e8d210f",
+    "sha256": "5dbe6fdbd447ab2a152ccf928d195ed404ca3bf431f5240397f6be3b627e55fd",
+    "caseCount": 46
+  },
+  "runId": "31a81b38",
+  "tenantId": "eval-31a81b38",
+  "budgetId": "p5763r5x30jrpfkbqf94zv75ps8gpbdh",
+  "attemptedAt": "2026-10-21T13:20:49.330Z",
+  "finishedAt": "2026-10-21T13:37:56.964Z",
+  "exitCode": 2,
+  "reportedPassed": 28,
+  "reportedFailed": 0,
+  "reportedRetries": 0,
+  "totalCases": 46,
+  "nextFixtureByRunnerOrder": "30-gap-dispatch-money-model",
+  "nextFixtureVerdictRecorded": false,
+  "unattemptedAfterNext": 17,
+  "runnerStopCode": "GOLDEN_PAID_CALL_UNRESOLVED",
+  "nativeErrorCode": "EVAL_BUDGET_EXHAUSTED",
+  "nativeErrors": [
+    {
+      "identifier": "guardrails:reserveEvalCall",
+      "timestamp": 1792589876.6980748,
+      "requestId": "2d70ceb67a61eb5b",
+      "executionId": "f24ae9c7-6fba-405b-ae9c-3042074f1ef2",
+      "codes": [
+        "EVAL_BUDGET_EXHAUSTED"
+      ]
+    },
+    {
+      "identifier": "llm:runCockpitAgent",
+      "timestamp": 1792589877.057777,
+      "requestId": "2d70ceb67a61eb5b",
+      "executionId": "e38922a5-3d6c-47f4-a544-6782f49dec4f",
+      "codes": [
+        "EVAL_BUDGET_EXHAUSTED"
+      ]
+    }
+  ],
+  "paidReceipts": {
+    "started": 63,
+    "returned": 62,
+    "unresolved": 1,
+    "unresolvedAttemptId": "9f16ec7d-8c11-47ca-99f9-45a082988ff3",
+    "unresolvedFunction": "llm:runCockpitAgent",
+    "unresolvedRequestSha256": "7c827865bfa7ca971c35f9f2636807e5be6ceb11dba63ba28bcde50ae9de6d68"
+  },
+  "budgetAtClosure": {
+    "actualUsd": 0.14551101,
+    "breached": false,
+    "budgetId": "p5763r5x30jrpfkbqf94zv75ps8gpbdh",
+    "callCount": 198,
+    "capCents": 200,
+    "closed": true,
+    "expired": false,
+    "remainingCents": 2,
+    "settledCount": 198,
+    "unresolvedCents": 0,
+    "unsettledCount": 0
+  },
+  "normalClosureObservedAt": "2026-10-21T13:47:31.744Z",
+  "normalClosureForced": false,
+  "spendRetained": true,
+  "registrySha256": "faac155d8c90d9205f2aa95072a520e50e727964974e64a6f62676bea73480e3",
+  "protectedRetentionSha256": "2ecc1945e018a9af66614a2dfceb8a71209f8b480c8015e73eed9b08d9590163",
+  "candidateEvidence": "absent",
+  "candidateStatus": "candidate",
+  "ownerApproval": null,
+  "publicNonOwnerMutationPerformed": false,
+  "activationPerformed": false,
+  "tenantCleanupPerformed": false,
+  "evalResultWritten": false,
+  "paidRerunPerformed": false,
+  "productionChanged": false,
+  "receiptSha256": {
+    "attempt": "e9568671d89dc185fa9a6c6e0cd4a18ad04127cde6ba1c0037f74e849d5fc922",
+    "processResult": "9169451398bee0c7680e347f30785cbf6d061aee3922dc77952dcac323d8e6db",
+    "postrun": "eb4d6a39ec981b61553802467d8c0df38a4a995a119f80ce04e14dc8540f1f7e",
+    "closure": "7618c4ee7b35d45327b587b41d0a50e3aa653e689476383d92ce9ccffaee6d04",
+    "serverCodes": "bed5d991c7ce1a22133438e5fecd47ad55d37a56a1dd8ca5c603a2f5e38fbf78"
+  }
+}

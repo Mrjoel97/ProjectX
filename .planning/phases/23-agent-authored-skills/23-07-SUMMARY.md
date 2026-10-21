@@ -174,3 +174,110 @@ silently rewrite the original handoff. No paid-consent request is part of this r
 
 Plan 23-06 stays complete; Phase 23 remains 6/9 with 23-07/08/09 open. SKILL-02 and Phase 48
 remain open/partial, Phase 21 stays accepted and Phase 49 has not started.
+
+## October21 free continuation and next checkpoint
+
+Three agents reconciled the executable23-07/08/09 current input/result paths and stale Phase48
+inventories without changing runtime or historical artifacts. Today's [preparation observation](23-07-PREPARATION-2026-10-21.json),
+SHA256 `5ebb281e37def7c71927bbcc1a7587c987360e93022613d3060076cdca899a35`, binds source
+`b10740d6466db155c48519aba6323d5b0c27c406`, current ce31 handoff and d122/5dbe46-case suite.
+Readbacks at12:51:18.032Z preserved candidate/source/provenance/baseline/effective/global/foreign,
+registry/protected retention, declared standard/free/0 billing and the closed old budget. Native
+observations at12:55:42.393Z confirmed A_IDENTITY_MATCH, B_IDENTITY_MATCH and NOT_STARTED after
+routine reauthentication of the same approved test accounts. No access grant was made.
+
+Shared schema/private-canary scan and assertLiveMatches accepted these captured readbacks at
+13:02:40.871Z; that validation process performed no additional live reads. A redundant standalone
+operator invocation exited1 without a passing receipt; its cause was not established and it is
+not substituted for or described as a fresh successful end-to-end CLI preflight. PaidReady remains
+false; immediate pre-spend prerequisites must pass anew.
+
+Subsequently the shared operator passed through the authorized developer CLI at13:07:46.389Z:
+[separate immutable preflight](23-07-PREFLIGHT-2026-10-21.json), SHA256
+`6b7f112d3e4544625e56a299004083a4345d9a31da7bfe0faaf5696052ac2915`, records six matching
+reads/current ce31 handoff and candidate status. This separate receipt preserves the earlier
+preparation observation rather than rewriting it. The later CLI used a public secondary canary;
+original private-canary scanning passed in the separate captured-readback validation. Native
+identity checks are likewise separate; retain the operator's authSessionVerified:false and
+paidReady:false rather than upgrading its scope. No paid call or public B mutation followed.
+
+Fresh local golden self-check passed57 fixtures/12 gated skills; skills.test.ts passed187 tests.
+Focused validator/operator/planning checks passed. Unauthenticated October21 public catalogs list
+all proposed chat/embedding routes; they establish neither provider account quota nor inference.
+
+[The new proposed scope](23-07-CHECKPOINT-2026-10-21.md) requests one complete current46-case
+evaluation under a new aggregate$2/one-hour envelope, preserving existing retry/stop/cleanup and
+non-owner-refusal gates. Evidence cost stays equal to candidate evidenceSummary; aggregate provider
+spend is separately bound to the closed budget in a refs-only accounting companion. No schema or
+runtime equality was weakened. This document and general continuation grant no new paid consent.
+Old checkpoint/handoff/partial/budget remain historical; no eval result, B mutation, activation or
+production change followed. Phase23 remains6/9,48 partial,49 not started.
+
+## October21 separately approved attempt: precise stop cause observed
+
+The owner subsequently answered verbatim **“Approve this new $2 staging evaluation”** for
+[the exact October21 scope](23-07-CHECKPOINT-2026-10-21.md). Private authorization SHA256
+`944728bd84721c101713df0d4f91e08880f6782f8b30e39b3acc552d1d0faeba` binds checkpoint SHA256
+`76e6fa096f9c6d73dc540e80765a120138ca7ecb87edd06f7ac38e0fe4546b96`, ce31 handoff, exact
+candidate/body/current46-case suite, sourceb107,200-cent cap/one-hour lifetime and one full run.
+The sole runner used an isolated cleanb107 checkout and external immutable current handoff;
+sanitized exact-stage selection, six stable readbacks, provider-presence/billing declarations,
+native A/B witnesses and private scanner/shared live matching passed immediately beforehand.
+
+Run`31a81b38`, root`eval-31a81b38`, budget`p5763r5x30jrpfkbqf94zv75ps8gpbdh`, started
+13:20:49.330Z and exited2 at13:37:56.964Z.28cases reported PASS, including repaired fixture08;
+zero FAIL/zero retries. Next fixture by runner order,30-gap-dispatch-money-model, has no verdict;
+17later cases were unattempted.63exclusive paid-action starts have62returned receipts and1
+unresolved llm:runCockpitAgent attempt`9f16ec7d-8c11-47ca-99f9-45a082988ff3`. No replay occurred.
+
+Runner code was GOLDEN_PAID_CALL_UNRESOLVED. Bounded private server-log inspection identified
+EVAL_BUDGET_EXHAUSTED in both reserveEvalCall and runCockpitAgent under request
+`2d70ceb67a61eb5b`. Unlike the October20 attempt's uncertain generic exception, this native
+admission cause is observed. The action still lacked a certified return and is not retried.
+The ledger had198calls/198settlements/zero holds, actual$0.14551101 and2remaining enforcement
+cents under the200-cent cap. Per-call ceil(actualUSD*100) explains how sub-cent calls consume
+nearly the entire enforcement allowance without spending that many provider dollars.
+
+Normal closeEvalBudget ran once with its own ledger/durable-work guards; closure passed at
+13:47:31.744Z, preserving actual cost and all spend/test records. Post-close readback confirmed
+closed/unbreached/198settled/0holds and unchanged candidate/source/provenance/baseline/effective/
+global/foreign/registry/protected-retention state. The private postrun helper initially compared
+caller expectation metadata; only that non-live metadata was excluded in the corrected helper.
+Original failed postrun-1 was retained; successful postrun-2/3 are separate observations.
+
+[The new immutable partial record](23-07-PARTIAL-2026-10-21.json), SHA256
+`64a1edc5b7843212673e119679da0eba1bc7993fe6343ce712fb821534399062`, binds exact source,
+approval, handoff, suite, native errors and receipt hashes. It is not23-EVAL-RESULT. No passing
+evidence, B public call, activation, cleanup, budget reset/top-up or second full run followed.
+The earlier October20 artifacts/budget remain unchanged.
+
+The accounting repair is being prepared offline, retaining the approved dollar cap and full
+unknown-call holds while using integer nanodollars for aggregate admission in new isolated golden
+envelopes only. Legacy envelopes, authoring probes, packs/verticals and independent rails remain.
+New source needs its own CI/reviewed staging release, refreshed handoff and fresh paid checkpoint;
+this authorization is consumed. Existing private result writer remains unexecuted and refuses
+this incomplete run. Phase23 remains6/9,48partial,SKILL-02open and49notstarted.
+
+## Offline accounting repair prepared after terminal reconciliation
+
+The implementation opts only new isolated golden runs without authoring probes into immutable
+ledger-nanos-v1 aggregate accounting. The pure cost helper conservatively rounds each settled
+provider dollar charge upward to integer nanodollars, retains every unknown call's whole-cent
+ceiling, and rejects invalid/duplicate/orphan/overflow ledgers. Native reservation reads and append
+remain one indexed transaction. Legacy envelopes, new probes/packs/verticals, per-call bounds,
+daily/deployment rails, expiry, breach checks,500-call bound and native closure remain unchanged.
+The exact marker is mirrored in schema and the existing append-only movement validator; there is
+no caller-selected migration, reset, top-up, reopening or retry path.
+
+Focused tests passed14cost/provider cases plus49native/legacy/authoring/admission/ledger cases.
+Independent review found no material precision, race or migration issue. The repository free
+gates passed; source review and CI remain the release boundary. ProposedADR061 and the watched
+playbooks disclose that no live billing/qualification acceptance follows from these tests.
+
+Both pinned source identities were refreshed deliberately: golden
+`2026-09-11.budgeted-evaluator.5867c6e86ad02677493c5b238d206965704761cf7eac8b7561078afac91d8d4d`,
+same46-case5dbe corpus; vertical
+`e4174daf40d9477487ae28a45b3a7412c5f30223bdbdeb1dfcb9137de98a20f4`, same6lanes/40cases/dc21
+corpus. The current deployedb107/ce31 input and all prior immutable records retain their historical
+meaning. A reviewed new staging release and a new source-bound handoff must precede any new paid
+checkpoint. No staging or production deployment, further evaluation or activation occurred.
