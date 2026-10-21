@@ -479,3 +479,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 
 **Managed-service coverage (2026-10-19):**14 requirements mapped to Phases48–52; MSVC-01 inventory only is complete. Implementation and live qualification remain open.
+
+
+## Agentic online presence — Phase53 isolated lane
+
+- [ ] **OPRES-01**: Agent uses authoritative business Foundation, confirmed Blueprint, selected owned documents and real user answers to prepare private landing pages and multi-page websites without customer JSON/code authoring. (open: local implementation under validation; actual hosted model acceptance is53-02.)
+- [ ] **OPRES-02**: Immutable version review, human exact-hash approval/publication, later drafts, unpublish, restoration and consented inquiries preserve tenant isolation and erasure. (open: local checks do not certify hosted lifecycle.)
+- [ ] **OPRES-03**: Fresh exact-source recipe/model/browser qualification and existing release admission support an operational hosted workflow. (open: not run or deployed.)
+- [ ] **OPRES-04**: Agent-prepared shops support merchant-direct Stripe and PayPal, inventory/payment/refund/delivery/digital lifecycle and owner policy. (open: checkout remains code-owned unavailable; old private foundations do not qualify the full service.)
+
+| OPRES-01 | Phase 53 | Partial — local source; hosted acceptance open |
+| OPRES-02 | Phase 53 | Partial — local source; hosted lifecycle open |
+| OPRES-03 | Phase 53 | Pending |
+| OPRES-04 | Phase 53 | Pending |

@@ -28,6 +28,11 @@ export type TenantTableCategory =
 export const TENANT_TABLE_CLASSIFICATION = {
   authRevocations: "global", // Opaque security metadata: durable erasure fence, expiring reset-session fence; never business content.
   users: "tenant_owned",
+  onlinePresenceSessions: "tenant_owned",
+  webSubmissions: "tenant_owned",
+  webMetrics: "tenant_owned",
+  webProjectVersions: "tenant_owned",
+  webProjects: "tenant_owned",
   uploadReceipts: "tenant_owned",
   audit: "audit_immutable",
   // The DLQ shares the refs-only compliance plane and is never user-content export/deletion data.
@@ -317,6 +322,7 @@ export const STORAGE_ID_FIELDS = {
   attachments: ["storageId"],
   intakeArtifacts: ["storageId"],
   vaultDocuments: ["storageId", "transcriptionStorageId"],
+  webProjectVersions: ["artifactStorageId"],
   funnels: ["storageId"], // Fixed artifact bytes can outlive a changed/deleted Vault reference.
   mediaJobs: ["assetStorageId"],
 } as const satisfies Record<string, readonly string[]>;

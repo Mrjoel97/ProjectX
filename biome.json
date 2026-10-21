@@ -17,6 +17,7 @@
       "!.worktrees",
       "!docs/design/mockups",
       "!graphify-out",
+      "!packages/core/src/designKnowledge.generated.ts",
       "!packages/core/src/__fixtures__/assembly/empty.json",
       "!packages/core/src/__fixtures__/assembly/malformed.json"
     ]
@@ -59,7 +60,12 @@
     {
       "includes": [
         "packages/backend/convex/lib/functions.ts",
-        "packages/backend/convex/invites.ts"
+        "packages/backend/convex/invites.ts",
+        "packages/backend/convex/webHttp.ts",
+        "packages/backend/convex/webProjects.ts",
+        "packages/backend/convex/webRuntime.ts",
+        "packages/backend/convex/webForms.ts",
+        "packages/backend/convex/onlinePresence.ts"
       ],
       "linter": {
         "rules": {

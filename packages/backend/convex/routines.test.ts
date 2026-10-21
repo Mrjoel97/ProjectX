@@ -175,6 +175,7 @@ const CONVEX_MODULES = [
   "lib/markdownPdf.ts",
   "lib/mediaRead.ts",
   "lib/models.ts",
+  "lib/onlinePresenceTools.ts",
   "lib/paidBudgetModel.ts",
   "lib/planRow.ts",
   "lib/tenantLifecycle.ts",
@@ -191,6 +192,8 @@ const CONVEX_MODULES = [
   "notifications.ts",
   "notifyExternal.ts",
   "onboarding.ts",
+  "onlinePresence.ts",
+  "onlinePresenceRun.ts",
   "ops.ts",
   "opsSignals.ts",
   "optimizerConfig.ts",
@@ -263,6 +266,12 @@ const CONVEX_MODULES = [
   "voiceControl.ts",
   "voiceDoc.ts",
   "voiceToken.ts",
+  "webForms.ts",
+  "webHttp.ts",
+  "webProjects.ts",
+  "webRecipeEvals.ts",
+  "webRecipes.ts",
+  "webRuntime.ts",
   "workflowPackBinding.ts",
   "workflowPackDiscovery.ts",
   "workflowPackEventLog.ts",
@@ -320,6 +329,9 @@ const SCHEDULER_CALL_SITES = [
   "voice.ts",
   // Server-owned voice control starts once per explicitly admitted browser session.
   "voiceToken.ts",
+  // Phase53: bounded expiry-backlog deletion, recovered by a fixed hourly privacy sweep.
+  // The continuation stops when the expired batch drains; it never starts tenant work.
+  "webForms.ts",
   // ADR-060: bounded daily read-only reports explicitly enabled by the tenant.
   "zernio.ts",
 ];
@@ -419,6 +431,8 @@ describe("the scheduling primitives have a CLOSED, PINNED call-site set", () => 
       // Owner-authorized, selected-channel reporting; it never approves or repeats posts.
       "buffer-engagement-reports",
       "zernio-engagement-reports",
+      // Fixed deployment-wide privacy retention; no user-authored recurring work.
+      "web-form-retention",
     ]);
   });
 });

@@ -1757,3 +1757,16 @@ Plans:
 - [x] 25.1-05-PLAN.md — Memo-card markdown + research sources block (D11) — done 2026-08-21, commits 876c5ad/b3e7052/bf99f70/e1d9aa3
 - [x] 25.1-06-PLAN.md — Hygiene: env manifest, dead fal removal, Sora-cutover ADR, DLQ listing (D12-D14) — done 2026-08-21, commits 483d0ed/e8dc04f/c21b0f9/f5a032e/2abbfc5/d1ae47e
 - [x] 25.1-07-PLAN.md — CHECKPOINT: owner-adjudicated live reel end-to-end — **PARTIAL PASS** 2026-08-21. The reel half is proven in PRODUCTION by data, not assertion: `renderStatus:"rendered"`, all TEN assembler gates incl. `full_decode` (the decoded-frame proof MEDIA-01 said was never obtained), and a `kind:"reel"` vault doc carrying `video/mp4` bytes, created 30.6 min AFTER the deploy. The other five checkpoint items (D5/D8 image vault, D9 approve feedback, D11 memo card, D13 DLQ page) were NOT exercised and are recorded as un-attested, not assumed — see 25.1-07-SUMMARY.md.
+
+
+### Phase 53: Agentic online presence — isolated selective recovery
+
+Owner authorized after the October21 deep discovery. Preserve the distinct historical PR36 website/recipe/merchant phase directories and current managed-service phases48–52.
+
+- 53-01: selective website/runtime recovery, agent-prepared brief/private pages and exact-version review; local implementation/validation.
+- 53-02: actual hosted model, recipe/browser qualification and release admission — not run.
+- 53-03: complete merchant-direct Stripe plus PayPal test-mode commerce and fulfillment — open.
+
+Requirements: OPRES-01..04. See `.planning/phases/53-agentic-online-presence/53-VALIDATION.md`.
+
+| 53. Agentic online presence | 1/3 | Partial — isolated source integration and local verification; hosted qualification and commerce open | - |

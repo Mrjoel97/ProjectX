@@ -1,3 +1,5 @@
+> Last verified: 2026-10-21 — Five Phase53 web/session tables join the tenant export/deletion registry. Web artifact storage IDs join the existing storage walker. Public forms persist bounded consented inquiry receipts with fixed hourly expired-row deletion. Site/session audit payloads are refs, counts and hashes, not business copy or messages. Existing audit retention and WORM policy remain unchanged.
+
 > Last verified: 2026-10-19 — Review-first voice transcription emits `intake.dictation_draft`; the audit viewer projects only its character count and existing correlation reference. Transcript text, filenames and nested PII counts remain outside the projection. A focused regression covers this boundary; no recording is sent as an agent turn until the user explicitly sends the written prompt.
 
 > Last verified: 2026-10-19 — Zernio connections export as credential summaries; the latest report exports as tenant-owned data. Both ride the existing erasure walk. Erasure reports local deletion with upstream revocation unsupported, requiring key revocation in Zernio; no provider grant is automatically deleted.

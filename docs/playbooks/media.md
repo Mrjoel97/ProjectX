@@ -1,3 +1,5 @@
+> Last verified: 2026-10-21 — The reliability sweep cron count explicitly includes the fixed hourly web-form privacy-retention job. Its inventory grows from12 to13; media watchdog behavior and scheduling remain unchanged. The existing reliability sweep tests pass in the isolated integration recheck.
+
 > Last verified: 2026-10-19 — The fixed cron inventory is now twelve jobs because ADR-060 adds the opt-in Zernio read-only report dispatcher. Reliability sweep and media scheduling behavior are unchanged.
 
 > Last verified: 2026-10-19 — The pinned cron count increases from ten to eleven for the owner-authorized Buffer engagement snapshot and OAuth-retention driver (ADR-058). Media reliability sweep implementation, thresholds, arming and provider calls are unchanged. See buffer.md for the separate marketing workflow.

@@ -1,3 +1,4 @@
+import { ONLINE_PRESENCE_TOOLS } from "./onlinePresence";
 // The ONE derivation of a cockpit tool set's capability grants. Pure TS, Convex-free (CLAUDE.md
 // §1) — `llm.ts`'s `buildCockpitTools` is the thin consumer.
 //
@@ -17,6 +18,7 @@ import { SPECIALISTS } from "./specialists";
 
 export type ToolGrants = Readonly<{
   webResearch: boolean;
+  onlinePresence: boolean;
   dispatch: boolean;
   skillAuthoring: boolean;
   revenueReads: boolean;
@@ -30,6 +32,7 @@ export type ToolGrants = Readonly<{
  *  nothing granted. NOT the executive — the executive is `grantsFor({})`, i.e. no allow-list. */
 export const NO_GRANTS: ToolGrants = Object.freeze({
   webResearch: false,
+  onlinePresence: false,
   dispatch: false,
   skillAuthoring: false,
   revenueReads: false,
@@ -58,6 +61,7 @@ export function grantsFor(input: {
   const evalSeam = input.evalRevenueFixtureId !== undefined;
   return Object.freeze({
     webResearch: toolNames?.includes("webResearch") ?? false,
+    onlinePresence: executive || toolNames === ONLINE_PRESENCE_TOOLS,
     dispatch: executive,
     skillAuthoring: executive,
     revenueReads: isRevenueToolGrant(toolNames) || evalSeam,

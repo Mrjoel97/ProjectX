@@ -96,4 +96,6 @@ crons.interval("voice-transient-retention", { hours: 1 }, internal.voice.sweepTr
 // Claims due opt-in reports in small batches; Buffer refresh and metrics reads remain tenant-scoped.
 crons.interval("buffer-engagement-reports", { minutes: 15 }, internal.buffer.tickReports, {});
 crons.interval("zernio-engagement-reports", { minutes: 60 }, internal.zernio.tickReports, {});
+// Fixed bounded form-coordination cleanup; not a user-authored recurring service.
+crons.hourly("web-form-retention", { minuteUTC: 45 }, internal.webForms.cleanupAll, {});
 export default crons;

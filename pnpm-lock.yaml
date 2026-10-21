@@ -239,6 +239,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@pikar/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       ai:
         specifier: 7.0.20
         version: 7.0.20(zod@4.4.3)

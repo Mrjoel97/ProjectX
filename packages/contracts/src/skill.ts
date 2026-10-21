@@ -734,7 +734,7 @@ export function hasPassingTenantEvidence(
  */
 export const AGENT_EVAL_SUITE = {
   revision:
-    "2026-09-11.budgeted-evaluator.5867c6e86ad02677493c5b238d206965704761cf7eac8b7561078afac91d8d4d",
+    "2026-09-11.budgeted-evaluator.d2ff5053a85dfc857dcfc8566b91ceb15bafaf95ae409704ee6cc5f81e6012c4",
   casesHash: "5dbe6fdbd447ab2a152ccf928d195ed404ca3bf431f5240397f6be3b627e55fd",
   caseCount: 46,
 } as const;

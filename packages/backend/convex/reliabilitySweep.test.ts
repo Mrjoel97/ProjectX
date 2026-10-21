@@ -203,7 +203,7 @@ describe("the cron actually registers the sweep", () => {
     expect((await getJob(t, jobId))?.status).toBe("failed");
   });
 
-  test("crons.ts holds exactly TWELVE jobs — additions require a deliberate edit here", () => {
+  test("crons.ts holds exactly THIRTEEN jobs — additions require a deliberate edit here", () => {
     // A COUNT, not a ">= 1". A cron is unattended spend and unattended writes; the number of them
     // is a fact worth having to change on purpose.
     const jobs = [
@@ -212,7 +212,8 @@ describe("the cron actually registers the sweep", () => {
     // Six operational jobs plus bounded auth, foundation transcript, upload and voice-control retention.
     // ADR-058 adds bounded Buffer report/retention work; existing sweep jobs are preserved.
     // ADR-060 adds the bounded, explicitly opted-in Zernio daily-report dispatcher.
-    expect(jobs).toHaveLength(12);
+    // Phase53 adds fixed hourly expired web inquiry retention, never a tenant business routine.
+    expect(jobs).toHaveLength(13);
   });
 });
 

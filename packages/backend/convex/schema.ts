@@ -1,5 +1,6 @@
 import { authTables } from "@convex-dev/auth/server";
 import { CONTRACTS_PACKAGE_NAME } from "@pikar/contracts";
+import { WEB_RECIPE_SKILL_NAMES } from "@pikar/contracts/webRecipeSkill";
 import {
   AUTHORITY_CLASSES,
   CONFIDENCE_LABELS,
@@ -34,8 +35,10 @@ void CONTRACTS_PACKAGE_NAME;
 const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
+const webRecipeName = literals(WEB_RECIPE_SKILL_NAMES);
+
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 73 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 78 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -48,7 +51,8 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │                                                                            │
 // │ ── Content & Pipeline ──────────────────────────────────── ~L334           │
 // │   requests, plans, briefings, intakeArtifacts, attachments,                │
-// │   telemetry, demoItems, funnels                                            │
+// │   webProjects, webProjectVersions, webMetrics, webSubmissions,             │
+// │   onlinePresenceSessions, telemetry, demoItems, funnels                                            │
 // │                                                                            │
 // │ ── Agent ───────────────────────────────────────────────── ~L998           │
 // │   evaluations, agenda, agentSteps, researchControls                        │
@@ -596,6 +600,44 @@ export default defineSchema({
     // only `isWorkflowPackSkill` names ever require them.
     provenance: v.optional(v.string()),
     browserEvidence: v.optional(v.string()),
+    browserQualification: v.optional(
+      v.object({
+        runId: v.string(),
+        challengeHash: v.string(),
+        ownerId: v.string(),
+        route: v.string(),
+        revision: v.number(),
+        candidateName: v.string(),
+        candidateVersion: v.number(),
+        bodyHash: v.string(),
+        definitionHash: v.string(),
+        bundleHash: v.string(),
+        rendererVersion: v.string(),
+        lanes: v.array(
+          v.object({
+            viewport: v.union(v.literal("desktop"), v.literal("mobile")),
+            observations: v.array(
+              v.object({
+                outcome: v.union(
+                  v.literal("selected"),
+                  v.literal("partial"),
+                  v.literal("refusal"),
+                  v.literal("recovery"),
+                  v.literal("edit"),
+                  v.literal("preview"),
+                ),
+                inputHash: v.optional(v.string()),
+                documentHash: v.optional(v.string()),
+                artifactHash: v.optional(v.string()),
+                byteLength: v.optional(v.number()),
+              }),
+            ),
+          }),
+        ),
+        finalizedHash: v.optional(v.string()),
+        updatedAt: v.number(),
+      }),
+    ),
     createdAt: v.number(),
   })
     .index("by_name_status", ["name", "status"])
@@ -1907,6 +1949,9 @@ export default defineSchema({
       // NoSuchToolError before execute on a hallucinated name), so this can never legitimately
       // fail — and it turns "the model can't inject a label" from an argument into a constraint.
       // Precedent: the PINNED status enum on `plans` (03.1-01).
+      v.literal("readOnlinePresenceContext"),
+      v.literal("saveOnlinePresenceBrief"),
+      v.literal("buildOnlinePresenceProject"),
       v.literal("thinking"),
       v.literal("resolveContacts"),
       v.literal("addRecipients"),
@@ -4054,4 +4099,184 @@ export default defineSchema({
     // `isolation.test.ts`: the rollup is deployment-wide and has no tenant in hand until it reads
     // a row. Every consumer is an internalMutation reached only from the cron.
     .index("by_status_dueAt", ["status", "dueAt"]),
+  webProjects: defineTable({
+    tenantId: v.string(),
+    kind: v.union(v.literal("site"), v.literal("landing"), v.literal("storefront")),
+    slug: v.string(),
+    title: v.string(),
+    publicHost: v.string(),
+    domainMode: v.union(
+      v.literal("platform_path"),
+      v.literal("custom_pending"),
+      v.literal("custom_active"),
+    ),
+    hostingDeclaration: v.object({
+      hosting: v.union(
+        v.literal("pikar_platform_path"),
+        v.literal("tenant_custom_domain_pending"),
+        v.literal("tenant_custom_domain_verified"),
+      ),
+      source: v.literal("tenant_structured_content"),
+    }),
+    draftVersion: v.optional(v.number()),
+    approvedVersion: v.optional(v.number()),
+    approvedContentHash: v.optional(v.string()),
+    publishedVersion: v.optional(v.number()),
+    publishedContentHash: v.optional(v.string()),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_slug", ["tenantId", "slug"])
+    .index("by_tenant_host_slug", ["tenantId", "publicHost", "slug"])
+    // Public routing begins with no tenant identity. These two indexes are the declared exception:
+    // they resolve a host/path to one tenant-owned coordination head before any content is read.
+    .index("by_host_slug", ["publicHost", "slug"])
+    .index("by_slug", ["slug"]),
+  /** Immutable structured version and its deterministic rendered artifact. */
+
+  webProjectVersions: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    version: v.number(),
+    document: v.any(),
+    contentHash: v.string(),
+    rendererVersion: v.string(),
+    artifactStorageId: v.optional(v.id("_storage")),
+    artifactHtml: v.optional(v.string()),
+    artifacts: v.optional(
+      v.array(
+        v.object({
+          pageSlug: v.string(),
+          html: v.string(),
+          byteLength: v.number(),
+        }),
+      ),
+    ),
+    artifactByteLength: v.number(),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    basedOnVersion: v.optional(v.number()),
+    sourceRefs: v.array(v.string()),
+    // Immutable disclosure warnings belong to this exact rendered version, never today's brief.
+    sourceWarnings: v.optional(
+      v.array(v.object({ code: v.string(), sourceRef: v.optional(v.string()) })),
+    ),
+    /**
+     * Server-owned origin identity. This is optional for legacy/manual versions and immutable
+     * once written; later edits copy it while `contentHash` follows the edited document.
+     */
+    recipeRef: v.optional(
+      v.object({
+        name: webRecipeName,
+        version: v.number(),
+        skillId: v.string(),
+        bodyHash: v.string(),
+        definitionHash: v.string(),
+        inputHash: v.string(),
+        rendererVersion: v.optional(v.string()),
+        designProfile: v.object({
+          bundleHash: v.string(),
+          compilerHash: v.string(),
+          patternId: v.string(),
+          styleId: v.string(),
+          paletteId: v.string(),
+          typographyId: v.string(),
+          formProfileId: v.string(),
+          dials: v.object({
+            variance: v.number(),
+            motion: v.number(),
+            density: v.number(),
+          }),
+          pageOverride: v.optional(v.string()),
+        }),
+      }),
+    ),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project_version", ["tenantId", "projectId", "version"])
+    .index("by_tenant_project_hash", ["tenantId", "projectId", "contentHash"]),
+  /** Aggregate raw-request counters; never unique-person or conversion claims. */
+
+  webMetrics: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    version: v.number(),
+    kind: v.union(
+      v.literal("page_view"),
+      v.literal("cta_click"),
+      v.literal("form_accepted"),
+      v.literal("form_rejected"),
+    ),
+    count: v.number(),
+    windowStartedAt: v.number(),
+    windowEndsAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project_kind_window", ["tenantId", "projectId", "kind", "windowStartedAt"]),
+  /** Short-lived idempotency and abuse state; no raw IP, user-agent, email, or form body. */
+
+  webSubmissions: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    version: v.number(),
+    formId: v.string(),
+    idempotencyKeyHash: v.string(),
+    outcome: v.union(
+      v.literal("accepted"),
+      v.literal("duplicate"),
+      v.literal("invalid"),
+      v.literal("consent_required"),
+      v.literal("suppressed"),
+      v.literal("rate_limited"),
+      v.literal("unavailable"),
+    ),
+    outcomeRef: v.optional(v.string()),
+    /** Bounded, publisher-authored campaign metadata copied from the immutable form version. */
+    attribution: v.optional(
+      v.object({
+        source: v.optional(v.string()),
+        medium: v.optional(v.string()),
+        campaign: v.optional(v.string()),
+      }),
+    ),
+    abuseBucketHash: v.optional(v.string()),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    abuseWindowExpiresAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_expires_at", ["tenantId", "expiresAt"])
+    .index("by_expires_at", ["expiresAt"])
+    .index("by_tenant_idempotency", ["tenantId", "projectId", "formId", "idempotencyKeyHash"])
+    .index("by_tenant_abuse_bucket", ["tenantId", "abuseBucketHash", "abuseWindowExpiresAt"]),
+  /** Tenant-owned product/variant authority; display text is never payment authority. */
+
+  onlinePresenceSessions: defineTable({
+    tenantId: v.string(),
+    threadId: v.string(),
+    planId: v.id("plans"),
+    revision: v.number(),
+    humanMessages: v.array(v.object({ ref: v.string(), text: v.string(), sequence: v.number() })),
+    status: v.union(
+      v.literal("collecting"),
+      v.literal("ready"),
+      v.literal("awaiting_review"),
+      v.literal("blocked"),
+    ),
+    brief: v.optional(v.any()),
+    sourceSnapshots: v.optional(v.array(v.object({ ref: v.string(), revision: v.string() }))),
+    builtBriefHash: v.optional(v.string()),
+    projectId: v.optional(v.id("webProjects")),
+    projectVersion: v.optional(v.number()),
+    projectContentHash: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant_thread", ["tenantId", "threadId"])
+    .index("by_tenant_plan", ["tenantId", "planId"])
+    .index("by_tenant_project", ["tenantId", "projectId"])
+    .index("by_tenant", ["tenantId"]),
 });

@@ -16,6 +16,28 @@ const read = (root, path) => readFileSync(resolve(root, path), "utf8").replace(/
 // Closed source inventory, deliberately excluding generated output to avoid a circular hash.
 // Changes to qualification, accounting, source interpretation or model execution invalidate pins.
 export const EVALUATOR_FILES = [
+  // Phase53: shared service/tool/render dependencies must retire exact-source evidence.
+  "packages/backend/convex/onlinePresence.ts",
+  "packages/backend/convex/onlinePresenceRun.ts",
+  "packages/backend/convex/lib/onlinePresenceTools.ts",
+  "packages/backend/convex/webProjects.ts",
+  "packages/backend/convex/webRuntime.ts",
+  "packages/backend/convex/webForms.ts",
+  "packages/backend/convex/webRecipes.ts",
+  "packages/backend/convex/webRecipeEvals.ts",
+  "packages/core/src/onlinePresence.ts",
+  "packages/core/src/toolGrants.ts",
+  "packages/core/src/webRuntime.ts",
+  "packages/core/src/webRecipes.ts",
+  "packages/core/src/webForms.ts",
+  "packages/core/src/webRecipeFixtures.ts",
+  "packages/core/src/webDesignRenderer.ts",
+  "packages/core/src/designKnowledge.ts",
+  "packages/core/src/designKnowledge.generated.ts",
+  "packages/contracts/src/webRuntime.ts",
+  "packages/contracts/src/webRecipeSkill.ts",
+  "packages/contracts/src/webPublication.ts",
+  "packages/contracts/src/skills/onlinePresenceSpecialist.ts",
   "pnpm-lock.yaml",
   "packages/backend/scripts/vertical-eval-corpus.mjs",
   "packages/backend/scripts/vertical-eval-collect.mjs",

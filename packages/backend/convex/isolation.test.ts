@@ -160,6 +160,12 @@ function indexesOf(table: string): { indexDescriptor: string; fields: string[] }
  * Adding an index without adding it here fails the suite. That is the whole mechanism.
  */
 const NON_TENANT_LEADING: Record<string, string> = {
+  "webProjects.by_host_slug":
+    "public route resolves host/slug; only published exact versions pass tenant lifecycle checks",
+  "webProjects.by_slug":
+    "global public slug allocation, internal creation helper; tenant readers use by_tenant",
+  "webSubmissions.by_expires_at":
+    "fixed system privacy retention sweep; deletes only expired bounded batches",
   "zernioConnections.by_ticket":
     "one-use HTTP credential intake; the authenticated beginConnect mutation binds tenant and profile before minting the capability",
   "zernioConnections.by_report_due":
@@ -377,6 +383,32 @@ const OWNER_SURFACE = PUBLIC_SURFACE.filter((f) =>
  * anyway — but nothing is flipped on the way past.
  */
 const OWNER_ARGS: Record<string, Record<string, unknown>> = {
+  "webRecipes.qualifyStorefront": {
+    recipeId: "storefront-catalogue",
+    slug: "owner-fixture",
+    title: "Fixture",
+    values: {},
+  },
+  "webRecipes.previewWebRecipeCandidate": {
+    candidateId: "id:skills",
+    runId: "fixture",
+    revision: 1,
+    viewport: "desktop",
+    values: {},
+  },
+  "webRecipes.getStorefrontQualification": { projectId: "id:webProjects" },
+  "skills.beginWebRecipeBrowserQualification": { candidateId: "id:skills" },
+  "skills.advanceWebRecipeBrowserQualification": {
+    candidateId: "id:skills",
+    runId: "fixture",
+    revision: 1,
+    viewport: "desktop",
+  },
+  "skills.finalizeWebRecipeBrowserQualification": {
+    candidateId: "id:skills",
+    runId: "fixture",
+    revision: 1,
+  },
   "finance.setMasterKillSwitch": { on: false },
   "finance.setMediaKillSwitch": { on: false },
   "finance.setPerRequestBudget": { budgetUsd: 1 },
@@ -466,6 +498,7 @@ describe("owner endpoints reject a non-owner, and the list grows by itself", () 
       "verticalData",
       "verticalEvalEvidence",
       "verticalPacks",
+      "webRecipes",
       "workflowPackDiscovery",
     ]);
     // The kill switches specifically: the highest-consequence owner endpoints in the repo.
@@ -505,48 +538,76 @@ describe("owner endpoints reject a non-owner, and the list grows by itself", () 
                   requestedAt: 0,
                 }),
               )
-            : value === "id:vaultDocuments"
+            : value === "id:webProjects"
               ? await t.run((ctx) =>
-                  ctx.db.insert("vaultDocuments", {
+                  ctx.db.insert("webProjects", {
                     tenantId: "someone-else",
-                    title: "owner fixture",
-                    kind: "upload",
-                    category: "my-uploads",
-                    source: "upload",
-                    mimeType: "text/csv",
-                    size: 0,
-                    contentHash: "fixture",
-                    status: "ready",
+                    kind: "site",
+                    slug: "owner-fixture",
+                    title: "Fixture",
+                    publicHost: "example.test",
+                    domainMode: "platform_path",
+                    hostingDeclaration: {
+                      hosting: "pikar_platform_path",
+                      source: "tenant_structured_content",
+                    },
+                    revision: 1,
                     createdAt: 0,
+                    updatedAt: 0,
                   }),
                 )
-              : value === "id:audit"
+              : value === "id:skills"
                 ? await t.run((ctx) =>
-                    ctx.db.insert("audit", {
-                      tenantId: "someone-else",
-                      correlationId: "owner-boundary-fixture",
-                      eventType: "owner-boundary-fixture",
-                      actor: "system",
-                      payload: {},
-                      ts: 0,
-                    }),
-                  )
-                : await t.run((ctx) =>
-                    ctx.db.insert("tenantSkills", {
-                      tenantId: "someone-else",
-                      name: "seed",
+                    ctx.db.insert("skills", {
+                      name: "web-recipe-business-site",
                       version: 1,
-                      body: "seed",
-                      authoredBody: "seed",
+                      body: "fixture",
                       status: "candidate",
-                      author: "user",
-                      basedOnScope: "global",
-                      basedOnName: "seed",
-                      basedOnVersion: 1,
-                      rollbackEligible: false,
                       createdAt: 0,
                     }),
-                  );
+                  )
+                : value === "id:vaultDocuments"
+                  ? await t.run((ctx) =>
+                      ctx.db.insert("vaultDocuments", {
+                        tenantId: "someone-else",
+                        title: "owner fixture",
+                        kind: "upload",
+                        category: "my-uploads",
+                        source: "upload",
+                        mimeType: "text/csv",
+                        size: 0,
+                        contentHash: "fixture",
+                        status: "ready",
+                        createdAt: 0,
+                      }),
+                    )
+                  : value === "id:audit"
+                    ? await t.run((ctx) =>
+                        ctx.db.insert("audit", {
+                          tenantId: "someone-else",
+                          correlationId: "owner-boundary-fixture",
+                          eventType: "owner-boundary-fixture",
+                          actor: "system",
+                          payload: {},
+                          ts: 0,
+                        }),
+                      )
+                    : await t.run((ctx) =>
+                        ctx.db.insert("tenantSkills", {
+                          tenantId: "someone-else",
+                          name: "seed",
+                          version: 1,
+                          body: "seed",
+                          authoredBody: "seed",
+                          status: "candidate",
+                          author: "user",
+                          basedOnScope: "global",
+                          basedOnName: "seed",
+                          basedOnVersion: 1,
+                          rollbackEligible: false,
+                          createdAt: 0,
+                        }),
+                      );
       }
 
       // Branch the CALL, not the function reference: `query` and `mutation` are separately

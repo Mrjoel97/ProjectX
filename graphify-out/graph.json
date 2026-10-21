@@ -111245,6 +111245,56 @@
       "id": "packages_backend_convex_schema_zernioreports_table",
       "community": 460,
       "norm_label": "zernioReports (table)"
+    },
+    {
+      "label": "webProjects (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4103",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_webprojects_table",
+      "community": 460,
+      "norm_label": "webProjects (table)"
+    },
+    {
+      "label": "webProjectVersions (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4139",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_webprojectversions_table",
+      "community": 460,
+      "norm_label": "webProjectVersions (table)"
+    },
+    {
+      "label": "webMetrics (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4198",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_webmetrics_table",
+      "community": 460,
+      "norm_label": "webMetrics (table)"
+    },
+    {
+      "label": "webSubmissions (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4217",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_websubmissions_table",
+      "community": 460,
+      "norm_label": "webSubmissions (table)"
+    },
+    {
+      "label": "onlinePresenceSessions (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4253",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_onlinepresencesessions_table",
+      "community": 460,
+      "norm_label": "onlinePresenceSessions (table)"
     }
   ],
   "links": [
@@ -306046,6 +306096,56 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_proactivereview",
       "target": "packages_backend_convex_tenantprofile_fortenant"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4103",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_webprojects_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4139",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_webprojectversions_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4198",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_webmetrics_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4217",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_websubmissions_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4253",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_onlinepresencesessions_table"
     }
   ],
   "hyperedges": [],

@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { ONLINE_PRESENCE_TOOLS } from "./onlinePresence";
 import { SPECIALISTS } from "./specialists";
 import { grantsFor, isRevenueToolGrant, NO_GRANTS, type ToolGrants } from "./toolGrants";
 
@@ -7,6 +8,7 @@ import { grantsFor, isRevenueToolGrant, NO_GRANTS, type ToolGrants } from "./too
 
 const base = {
   webResearch: false,
+  onlinePresence: false,
   dispatch: false,
   skillAuthoring: false,
   revenueReads: false,
@@ -20,7 +22,7 @@ const table: ReadonlyArray<[string, readonly string[] | undefined, Partial<ToolG
   [
     "executive (no allow-list)",
     undefined,
-    { dispatch: true, skillAuthoring: true, invoiceReminderStage: true },
+    { dispatch: true, skillAuthoring: true, invoiceReminderStage: true, onlinePresence: true },
   ],
   ["empty allow-list", [], {}],
   ["webResearch by name", ["webResearch"], { webResearch: true }],
@@ -29,6 +31,9 @@ const table: ReadonlyArray<[string, readonly string[] | undefined, Partial<ToolG
   ["revenue tuple COPY", [...SPECIALISTS.revenue.tools], {}],
   ["stageInvoiceReminder by name", ["stageInvoiceReminder"], {}],
   ["executive names in a list", ["authorSkillCandidate", "dispatchResearch"], {}],
+  ["online presence tuple identity", ONLINE_PRESENCE_TOOLS, { onlinePresence: true }],
+  ["online presence tuple copy", [...ONLINE_PRESENCE_TOOLS], {}],
+  ["online presence writes by name", ["saveOnlinePresenceBrief", "buildOnlinePresenceProject"], {}],
 ];
 
 for (const [label, toolNames, expected] of table) {
@@ -66,16 +71,34 @@ test("isRevenueToolGrant is identity, not value equality", () => {
 test("NO_GRANTS is the bare caller, NOT the executive", () => {
   expect(NO_GRANTS).toEqual(base);
   const executive = grantsFor({});
-  // Exactly these three bits separate a bare caller from the executive.
+  // Only the executive and the exact code-owned service tuple receive presence authority.
   expect(executive).toEqual({
     ...NO_GRANTS,
     dispatch: true,
     skillAuthoring: true,
     invoiceReminderStage: true,
+    onlinePresence: true,
   });
   expect(NO_GRANTS.dispatch).toBe(false);
   expect(NO_GRANTS.skillAuthoring).toBe(false);
   expect(NO_GRANTS.invoiceReminderStage).toBe(false);
+  expect(NO_GRANTS.onlinePresence).toBe(false);
+});
+
+test("the presence tuple grants only the bounded service and copies cannot grant writes", () => {
+  expect(Object.isFrozen(ONLINE_PRESENCE_TOOLS)).toBe(true);
+  const service = grantsFor({ toolNames: ONLINE_PRESENCE_TOOLS });
+  expect(service).toEqual({ ...base, onlinePresence: true });
+  expect(service.dispatch).toBe(false);
+  expect(service.skillAuthoring).toBe(false);
+  expect(service.invoiceReminderStage).toBe(false);
+  expect(grantsFor({ toolNames: Object.freeze([...ONLINE_PRESENCE_TOOLS]) }).onlinePresence).toBe(
+    false,
+  );
+  expect(
+    grantsFor({ toolNames: [...ONLINE_PRESENCE_TOOLS], evalRevenueFixtureId: "fixture" })
+      .onlinePresence,
+  ).toBe(false);
 });
 
 test("results are frozen", () => {

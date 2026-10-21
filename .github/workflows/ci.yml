@@ -75,6 +75,7 @@ jobs:
         run: |
           node scripts/check-free-gates.mjs --self-test
           node scripts/check-free-gates.mjs
+          node scripts/compile-design-knowledge.mjs --check
 
       - name: Test
         run: pnpm test

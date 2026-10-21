@@ -55,6 +55,7 @@ const FREE_FLAGS = ["--self-test", "--self-check", "--fixtures-only"];
  * `packages/backend`.
  */
 const GATES = [
+  { path: "scripts/verify-design-knowledge-provenance.mjs", flag: "--self-test" },
   { path: "scripts/check-absence-guards.mjs", flag: "--self-test" },
   { path: "scripts/check-audit-payloads.mjs", flag: "--self-test" },
   { path: "scripts/check-phase23-artifacts.mjs", flag: "--self-check" },

@@ -8,14 +8,18 @@ status: in_progress
 stopped_at: "2026-10-21 — separately approved23-07 run31a81b38 exited2 after28passes/0fails/0retries. ServerconfirmedEVAL_BUDGET_EXHAUSTED; normalclose13:47:31.744Z,198settled/0holds/$0.14551101. Noeval-result/Bmutation/activation/cleanup/rerun. Phase23 sixofnine/48partial/49notstarted."
 last_updated: "2026-10-21"
 progress:
-  total_phases: 79
+  total_phases: 80
   completed_phases: 54
-  total_plans: 477
-  completed_plans: 421
+  total_plans: 480
+  completed_plans: 422
   percent: 88
 ---
 
 # Project State
+
+## Isolated online-presence lane — 2026-10-21
+
+The owner authorized discovery, a separate folder/GitHub branch, then implementation with multiple agents. Phase53 at `codex/online-presence-discovery-20261021` selectively recovers PR36 website source and adds an attended agent workflow. This local lane does not change the readiness programme or close phases48–52. See [design](design/online-presence-service-recovery.md), [discovery](audits/2026-10-21-online-presence-discovery.md), and [validation](phases/53-agentic-online-presence/53-VALIDATION.md). Hosted qualification and merchant commerce remain open. No shared deployment, live activation, paid call or publication follows from this source work.
 
 ## Current execution order
 

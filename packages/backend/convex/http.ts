@@ -15,9 +15,11 @@ import { verifyState } from "./gmailAuth";
 import { MICROSOFT_TOKEN_ENDPOINT, verifyMicrosoftState } from "./microsoftAuth";
 
 import { uploadHttp } from "./uploads";
+import { registerPublicWebRoutes } from "./webHttp";
 import { connectHttp as zernioConnectHttp } from "./zernioActions";
 
 const http = httpRouter();
+registerPublicWebRoutes(http);
 http.route({ path: "/uploads", method: "POST", handler: uploadHttp });
 http.route({ path: "/uploads", method: "OPTIONS", handler: uploadHttp });
 http.route({ path: "/zernio/connect", method: "POST", handler: zernioConnectHttp });

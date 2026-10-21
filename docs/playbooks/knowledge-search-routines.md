@@ -1,3 +1,5 @@
+> Last verified: 2026-10-21 — Phase53 explicitly inventories nine new website/service modules and webForms.ts as a scheduler caller. Its only new cron, web-form-retention, deletes expired privacy receipts; bounded backlog continuation drains then stops. General tenant recurrence remains deferred, with existing schema/token/closed-namespace guards retained.
+
 > Last verified: 2026-10-19 — ADR-060 adds two explicitly inventoried Zernio modules, one bounded opt-in daily-read scheduler caller and one hourly system dispatcher. No generic recurrence engine, standing publish approval or business-write loop is introduced.
 
 > Last verified: 2026-10-19 — ADR-058 adds four explicitly inventoried Buffer modules, buffer.ts as a scheduler caller and one fixed Buffer snapshot/retention cron. The owner requested this selected-channel reporting workflow. The daily driver reads opt-in metrics and reconciles already-approved post status; it never approves or republishes posts. This is a narrow exception to the historical system-jobs-only inventory, not release of the deferred generic recurrence engine. Existing DST/standing-approval gates remain unchanged.

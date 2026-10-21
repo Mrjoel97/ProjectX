@@ -6,6 +6,28 @@ import { fileURLToPath } from "node:url";
 // Reuse the existing server-enforced suite revision to retire evidence when evaluator
 // execution changes. Exclude the contracts constant and generated manifests to avoid cycles.
 export const EVALUATOR_FILES = [
+  // Phase53: shared service/tool/render dependencies must retire exact-source evidence.
+  "packages/backend/convex/onlinePresence.ts",
+  "packages/backend/convex/onlinePresenceRun.ts",
+  "packages/backend/convex/lib/onlinePresenceTools.ts",
+  "packages/backend/convex/webProjects.ts",
+  "packages/backend/convex/webRuntime.ts",
+  "packages/backend/convex/webForms.ts",
+  "packages/backend/convex/webRecipes.ts",
+  "packages/backend/convex/webRecipeEvals.ts",
+  "packages/core/src/onlinePresence.ts",
+  "packages/core/src/toolGrants.ts",
+  "packages/core/src/webRuntime.ts",
+  "packages/core/src/webRecipes.ts",
+  "packages/core/src/webForms.ts",
+  "packages/core/src/webRecipeFixtures.ts",
+  "packages/core/src/webDesignRenderer.ts",
+  "packages/core/src/designKnowledge.ts",
+  "packages/core/src/designKnowledge.generated.ts",
+  "packages/contracts/src/webRuntime.ts",
+  "packages/contracts/src/webRecipeSkill.ts",
+  "packages/contracts/src/webPublication.ts",
+  "packages/contracts/src/skills/onlinePresenceSpecialist.ts",
   "pnpm-lock.yaml",
   "packages/backend/scripts/goldenEvaluatorIdentity.mjs",
   "packages/backend/scripts/goldenPaidAttempt.mjs",

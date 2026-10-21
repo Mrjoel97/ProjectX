@@ -33,6 +33,12 @@ export const RAW_BUILDER_ALLOWLIST: readonly string[] = [
   "smokeAssert.ts",
   "auth.ts",
   "http.ts",
+  // Narrow public page boundary and internal tenant-validated readers.
+  "webHttp.ts",
+  "webProjects.ts",
+  "webRuntime.ts",
+  "webForms.ts",
+  "onlinePresence.ts",
   // Gmail token store + delivery readers (internalQuery/internalMutation + two
   // tenantQueries). Internal-only surfaces around the crown-jewel refresh tokens.
   "gmailAuth.ts",

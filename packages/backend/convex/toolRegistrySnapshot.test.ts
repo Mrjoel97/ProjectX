@@ -73,6 +73,7 @@ function buildOld(o: {
       webResearch: a.grantWebResearch ?? false,
       dispatch: a.grantDispatch ?? false,
       skillAuthoring: a.grantSkillAuthoring ?? false,
+      onlinePresence: false,
       revenueReads: a.grantRevenueReads ?? false,
       invoiceReminderStage: a.grantInvoiceReminderStage ?? false,
       documentIsDeliverable: a.documentIsDeliverable ?? false,
