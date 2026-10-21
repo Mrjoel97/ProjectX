@@ -10,7 +10,8 @@ created: 2026-08-12
 # Phase 23 — Validation Strategy
 
 > Per-phase validation contract for agent-authored candidates, exact held-out evidence, independent
-> owner approval, tenant runtime attribution, and immutable rollback.
+> owner approval, read-only tenant isolation, and immutable rollback. Runtime attribution remains
+> an explicit limitation rather than a paid requirement of Plans 23-07/08.
 
 ---
 
@@ -65,10 +66,12 @@ created: 2026-08-12
 | 23-07-01 | 07 | 7 | SKILL-02 | zero-spend recheck | native readiness/exact handoff preflight and free gates passed for original source06060d2/CI39432731681; not future changed source | ✅ | ✅ green, original attempt |
 | 23-07-02 | 07 | 7 | SKILL-02 | spend authorization | exact candidate/full 46-case suite/$2 one-attempt approval bbe9dea3…d2e64; no extra attribution turn | manual | ✅ green 2026-10-20 |
 | 23-07-03 | 07 | 7 | SKILL-02 | paid held-out gate | run 0b8d825d interrupted:7 reported passes/0 fails, case 08 no verdict; normally closed budget/no passing evidence or result artifact | ✅ | ⚠️ partial 2026-10-20 |
+| 23-07-03 (October21 attempt) | 07 | 7 | SKILL-02 | paid held-out gate | separate run31a81b38 on b107/d122:28 reported passes/0 fails/0 retries; next fixture no verdict/17 later cases unattempted; native EVAL_BUDGET_EXHAUSTED; guarded closure198 settled/0 holds/$0.14551101; no passing evidence | ✅ | ⚠️ partial 2026-10-21, historical suite |
+| 23-07 startup (PR81) | 07 | 7 | SKILL-02 | startup transport / native zero-work reconciliation | consumed c663 approval; first read-only skills:inspectTenantSkill failed with TypeError fetch failed;0 case verdicts, no budget/root/run/evidence; complete bounded native window0new spend/envelopes/movements; historical bills preserved | read-only/manual | ⚠️ terminal startup abort; no semantic gate |
 | 23-07-04 | 07 | 7 | SKILL-02 | public non-owner refusal | fresh native authenticated B app/client public mutation without token extraction + exact eval-result validation | ✅/manual | ⬜ pending |
 | 23-08-01 | 08 | 8 | SKILL-02 | immutable recheck | handoff+eval validators, state/auth/cap comparison | ✅/❌ W0 | ⬜ pending |
 | 23-08-02 | 08 | 8 | SKILL-02 | owner UI activation | blocking owner human-action + exact readback | manual | ⬜ pending |
-| 23-08-03 | 08 | 8 | SKILL-02 | paid runtime/isolation | exactly one A + one B turn under remaining cap | ✅ | ⬜ pending |
+| 23-08-03 | 08 | 8 | SKILL-02 | read-only isolation | exact active/effective/global/B snapshots under the same native identities; no model or runtime-attribution turn | ✅ | ⬜ pending |
 | 23-08-04 | 08 | 8 | SKILL-02 | rollback/final artifact | exact owner rollback + live-result validator | ❌ W0 | ⬜ pending |
 | 23-09-01 | 09 | 9 | SKILL-02 | closure | evidence hash chain + full repository gate + playbooks/requirements/roadmap | mixed | ⬜ pending |
 
@@ -197,7 +200,7 @@ fresh responsive proof/versioned handoff subsequently completed at 17:01:27.296Z
 Phase48 PR79 release observation. This staging approval authorizes no paid evaluation,
 activation or production deployment and does not relabel historical proof or close 23-07.
 
-Current next input is `handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json`, SHA256
+At the PR79 boundary, the next input was `handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json`, SHA256
 `ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61`, with companion
 `23-HANDOFF-REFRESH.json`, SHA256 `6b86ddbe2ad61dc4f331024a0e08b3fdb3420c0771bdbb28a5a38c3161cc31c8`.
 Immutable writer/scanner/live matching passed after six stable reads. Actual 1440x900/390x900
@@ -207,3 +210,63 @@ non-owner remain verified. Old handoff/partial bytes stay unchanged. This refres
 mark new-source paid preflight or evaluation green: paidReady/paidAuthorized false, no new
 eval-result/public B mutation/activation/production release. Phase 23 remains 6/9, 48 partial,
 49 not started.
+
+## October21 partial evaluation and later PR81 current-input boundary
+
+The separately approved October21 b107/d122 evaluation reported28 passes, zero fails/retries,
+then stopped before a verdict for `30-gap-dispatch-money-model`;17 later cases were unattempted.
+Native errors under request `2d70ceb67a61eb5b` establish `EVAL_BUDGET_EXHAUSTED` for that run.
+One normal guarded close retained198 settled calls, zero holds and `$0.14551101` actual cost.
+See the separate immutable `23-07-PARTIAL-2026-10-21.json`, SHA256
+`64a1edc5b7843212673e119679da0eba1bc7993fe6343ce712fb821534399062`.
+It supplies no complete gate, passing evidence, B public refusal or reusable paid approval.
+The October20 partial record and its uncertain exact stop branch remain unchanged.
+
+PR81 staging release `39618889468`/job `119286711355` passed for exact source
+`cafde7c6c7d65924b7a48433cf4938983d91707c` and CI `39615369973`. Its source-bound handoff is
+now `handoffs/2026-10-21-pr81/23-LIVE-HANDOFF.json`, SHA256
+`39dfb14558a96cdbede3ca7d0641ee33ed09edaec0526510950528a19a48a930`.
+Its separate `handoffs/2026-10-21-pr81/23-HANDOFF-REFRESH.json` observation has SHA256
+`32ca4afd73d5aece2b645acae84f4739234c65cf231c4ef2c7a3146b28cbdc60`. Current proposed paid scope
+is `23-07-CHECKPOINT-2026-10-21-PR81.md`, SHA256
+`deb8215f29b273c0d7a5509b25b41c75cf209c9fba0ff5c7b58f0123323172d4`; it is not approved.
+The prior October21 b107 checkpoint remains consumed historical authorization.
+The new `5867c6e86ad02677493c5b238d206965704761cf7eac8b7561078afac91d8d4d` evaluator revision
+uses the unchanged 46-case `5dbe6f…e55fd` corpus. Final post-UI six-read matching, actual-canary
+scan/shared validation and immutable write passed at the new boundary. Candidate/governance,
+effective/global/foreign/baseline/registry/retention and both closed historical bills were preserved.
+
+Fresh native A-owner/B-non-owner witnesses and direct-native keyboard review accompany actual
+1280x720 desktop and390x900 read-only embedded views, each with visible candidate/disabled
+activation. No current1440-pixel desktop, embedded keyboard, touch/device or new authoring/refusal
+claim follows. Both original112ce and PR79ce31 handoff bytes remain immutable historical inputs.
+PR81 stage/handoff approval includes no paid evaluation, activation or production authority;
+paidReady/paidAuthorized stay false. New exact-source preflight and fresh paid consent remain
+pending. No complete eval-result, public B refusal, activation or lifecycle closure is certified.
+Phase23 remains6/9, 23-07 partial, 23-08/09 pending, SKILL-02 open, Phase48 partial and49 not started.
+
+## PR81 terminal startup and offline helper source
+
+See [the separate immutable startup observation](23-07-STARTUP-2026-10-21-PR81.json) (SHA256 `8815857b7e559e24c4daf42a2092f0e0ae7b163d329ea0c12b67e3abb851bb2c`).
+The separately approved PR81 attempt consumed authorization SHA256
+`c663e7a1b3dbe2f6060a41d2beb152de4578b0e12a86839419a456041ce2de1d` when its exclusive once record
+was written and the runner started at`2026-10-21T17:11:44.900Z`. It stopped at startup
+with`skills:inspectTenantSkill` reporting`TypeError: fetch failed`, before budget opening,
+fixture writes or provider work; zero cases were judged. The earlier wrapper admission-only
+exit had no once record or runner start and is not a second full attempt. A complete bounded
+native creation-time window, including a two-minute pre-attempt margin through server
+observation, returned zero spend rows, zero new envelopes and zero evaluation movements.
+Both historical closed budgets and bills are unchanged. No new budget, run/root identity,
+evidence, public B mutation, activation, cleanup or production change was observed.
+The consumed once record is not reset; native zero-work reconciliation permits no replay.
+
+The narrow helper repair is offline only: golden revision
+`2026-09-11.budgeted-evaluator.825ef5cab4634d8560249094e8e6db1ad841732d72545bcf8fa57214f5965b51`
+and vertical revision`01d6d6908bd0eecac14bc30b1f90a88edb0db8f14c4cc46fc8fa2f036a724425`
+retain the unchanged 46-case golden and 40-case vertical corpora. The deployed source remains
+`cafde7c6c7d65924b7a48433cf4938983d91707c` with 5867/5dbe suite and immutable 39df
+handoff; that chain does not qualify the new helper source. Exact-source CI, reviewed staging
+release, a new versioned handoff and fresh paid approval must precede another attempt.
+No evaluation or source-deployment retry is authorized by the consumed approval.
+
+Original certified artifacts and checkpoints remain immutable. No eval-result, public B refusal or lifecycle closure is certified. Phase 23 stays 6/9, 23-07 partial, 23-08/09 pending, SKILL-02 open, Phase 48 partial and49 not started.

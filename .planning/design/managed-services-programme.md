@@ -1,7 +1,7 @@
 # Managed business services programme
 
 Owner-approved: 2026-10-19. Planning baseline: b4deef8bba42347e31df638b828443eb11407138.
-Status reconciled from existing evidence 2026-10-21: Phase 48 inventory executed and qualification partial; Phase 23 is 6/9 with a current staging handoff but no completed eval/live-result chain. Phases 49–52 remain blocked by their preceding verification gates.
+Status reconciled from existing evidence2026-10-21: PR81 c663 once attempt is terminal on its first read-only startup fetch failure, with complete bounded native zero new work. The helper repair is offline/unstaged; deployed caf/5867/39df is old-source evidence only. Phase 48 qualification remains partial and Phase 23 is 6/9 without a completed eval/live-result chain. Phases 49–52 remain blocked by their preceding verification gates.
 
 ## Product outcome
 
@@ -21,14 +21,26 @@ Planning and read-only research may run in parallel. Implementation/release admi
 
 ## What remains authoritative
 
+- The current [PR81 refresh](../phases/23-agent-authored-skills/handoffs/2026-10-21-pr81/23-HANDOFF-REFRESH.json) records exact source, preserved history and measured browser scope. The unchanged [PR81 checkpoint](../phases/23-agent-authored-skills/23-07-CHECKPOINT-2026-10-21-PR81.md) later received c663 approval, now consumed by the terminal startup attempt; neither its bytes nor the old once record is reset.
 - Phase 21 SKILL-01 is accepted by its 2026-08-20 VERIFICATION. The stronger synthetic-author runtime-attribution limitation is not reopened or repurchased.
-- Phase 23 plans 06–09 retain the sole handoff → exact-row evaluation → actual owner activation/isolation/rollback → closure chain. September 14's missing handoff is historical; 23-06 later completed. PR79 staging source `b10740d6466db155c48519aba6323d5b0c27c406` and its [current versioned handoff](../phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json), SHA256 `ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61`, are recorded in the [refresh observation](../phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-HANDOFF-REFRESH.json), SHA256 `6b86ddbe2ad61dc4f331024a0e08b3fdb3420c0771bdbb28a5a38c3161cc31c8`. The original 23-07 attempt remains partial and normally closed; paidReady/paidAuthorized remain false. Revalidate the current exact state before a separately authorized next evaluation; preserve all historical bytes and do not replay authoring or owner bootstrap.
+- Phase 23 plans 06–09 retain the sole handoff → exact-row evaluation → actual owner activation/isolation/rollback → closure chain. September 14's missing handoff is historical; 23-06 later completed. PR81 staging source `cafde7c6c7d65924b7a48433cf4938983d91707c` now has the [current versioned handoff](../phases/23-agent-authored-skills/handoffs/2026-10-21-pr81/23-LIVE-HANDOFF.json), SHA256 `39dfb14558a96cdbede3ca7d0641ee33ed09edaec0526510950528a19a48a930`. The [PR81 release observation](../phases/48-readiness-and-qualification-closure/48-STAGING-PR81-RELEASE-2026-10-21.json), SHA256 `499a08b00c0bf5e64927351782fb4bc1b982afcb0c6b629768850dadaba19f73`, records successful staging run `39618889468` under CI `39615369973`. The [PR79 predecessor](../phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json) and its [refresh observation](../phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-HANDOFF-REFRESH.json) retain their original source/evidence meaning. Both 23-07 attempts remain partial and normally closed; paidReady/paidAuthorized remain false. A new source-bound handoff is not new paid consent. Revalidate current exact state before any separately authorized next evaluation; preserve all historical bytes and do not replay authoring or owner bootstrap.
 - Phase 27 plan 09 remains partial. Six historical pilot activations are not a completed per-pack behavioral browser protocol. The seventh offer-and-lead-plan needs separate inclusion evidence or explicit exclusion.
 - Six Phase 30 vertical candidates and connector variants stay unavailable until independently qualified. This programme does not expose all verticals.
 - ADR-046 remains binding: unattended reads/preparation only. An exact approved post can be scheduled; future unknown content has no standing publishing grant.
 - ADR-059 supersedes hosted Buffer MCP insights assumptions. Use registered app OAuth/GraphQL publishing and ADR-060's optional customer-owned Zernio reporting.
 - Stage 2 introduces no generic schedule under another name. The old defer record and absence guards remain until Stage 3's new earned decision explicitly admits recurrence.
 - Existing weekly review, provider reporting and operational scheduler exceptions stay supported and cannot become a shortcut to arbitrary recurring work.
+
+## Latest startup and source boundary
+
+[The separate immutable PR81 startup observation](../phases/23-agent-authored-skills/23-07-STARTUP-2026-10-21-PR81.json) (SHA256 `8815857b7e559e24c4daf42a2092f0e0ae7b163d329ea0c12b67e3abb851bb2c`)
+records zero cases, zero new budget/root/run/evidence and a complete bounded native window
+with zero spend rows/envelopes/evaluation movements. Both prior paid partials/bills remain
+unchanged. The new read-only helper repair changes golden source identity to 825ef and
+vertical identity to 01d6 without changing either corpus; it is not staged or semantically
+qualified. Require exact-source CI, reviewed release, a new handoff and fresh exact-run
+approval. No replay, paid gate, public B refusal, owner activation or later-stage admission
+follows from zero-work reconciliation. Phase 23 stays 6/9, 48 partial and49 not started.
 
 ## Shared boundaries
 

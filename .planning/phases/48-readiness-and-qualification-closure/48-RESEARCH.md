@@ -6,18 +6,38 @@ Researched: 2026-10-19 from source at b4deef8bba42347e31df638b828443eb11407138. 
 
 Phase 21's 2026-08-20 verification accepts SKILL-01 despite its stronger synthetic-author runtime-attribution limitation. At the initial research boundary, Phase 23's September 14 native sign-in failure had produced no certified handoff; that observation remains historical. The later approved staging work completed 23-06 and the current handoff refresh below. Phase 27's dated September 10 reconciliation leaves six-pack behavioral browser acceptance open; seven pack ids now exist. Current library starts independent conversations; ordinary-user draft entry is UI-restricted although backend publication is tenant-scoped. Six vertical candidates remain unqualified. No production rows were re-read during this planning review.
 
-The [PR79 staging release](48-STAGING-PR79-RELEASE-2026-10-20.json) passed on source
-`b10740d6466db155c48519aba6323d5b0c27c406`, CI `39446162910`, release `39460078883`.
-The [current versioned handoff](../23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json)
-has SHA256 `ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61`;
-its [refresh observation](../23-agent-authored-skills/handoffs/2026-10-20-pr79/23-HANDOFF-REFRESH.json)
-has SHA256 `6b86ddbe2ad61dc4f331024a0e08b3fdb3420c0771bdbb28a5a38c3161cc31c8`.
-It records six stable current reads, native existing A owner/B non-owner, measured responsive
-views and direct native keyboard review; embedded controls, touch/device tests and new
-authoring/refusal replay are not claimed. Historical handoff/partial bytes retain their original
-meaning. The [23-07 attempt](../23-agent-authored-skills/23-07-SUMMARY.md) remains partial and
-normally closed; no passing eval/live-result or new paid consent is supplied by the refresh.
-Phase 23 remains 6/9, Phase 48 partial and Phase 49 blocked pending 48-04's readiness seal.
+The [PR81 staging release](48-STAGING-PR81-RELEASE-2026-10-21.json), SHA256
+`499a08b00c0bf5e64927351782fb4bc1b982afcb0c6b629768850dadaba19f73`, passed on source
+`cafde7c6c7d65924b7a48433cf4938983d91707c`, CI`39615369973`,
+release`39618889468`/job`119286711355`; merge`821c3206e47eb4cec0ebcf3d99cf943358f2910a`
+did not promote production. Configuration, shared registry and protected retention were preserved.
+The [current PR81 handoff](../23-agent-authored-skills/handoffs/2026-10-21-pr81/23-LIVE-HANDOFF.json)
+has SHA256`39dfb14558a96cdbede3ca7d0641ee33ed09edaec0526510950528a19a48a930` and pins
+the unchanged exact candidate/provenance with current5867/5dbe46-case suite. Fresh native
+existing A owner/B non-owner and NOT_STARTED, direct1280x720/embedded390x900 views, native
+keyboard draft/diff and six stable final reads are recorded. Embedded controls, touch/device
+tests and new authoring/refusal replay are not claimed.
+
+The [PR79 release](48-STAGING-PR79-RELEASE-2026-10-20.json) and
+[PR79 handoff](../23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json)
+remain historical oldb107/d122 evidence, alongside the original handoff and both normally
+closed partial23-07 attempts. The new handoff supplies neither passing eval/live results nor
+new paid authority; paidReady/paidAuthorized remain false. Fresh explicit consent and current
+admission checks are required for another23-07 run. Phase23 remains6/9, Phase48partial and
+Phase49notstarted pending48-04's readiness seal. Existing Buffer publishing and Zernio reporting
+exceptions remain bounded; unqualified verticals stay excluded.
+
+## Latest PR81 startup disposition
+
+[The separate immutable startup observation](../23-agent-authored-skills/23-07-STARTUP-2026-10-21-PR81.json) (SHA256 `8815857b7e559e24c4daf42a2092f0e0ae7b163d329ea0c12b67e3abb851bb2c`)
+records consumed authorization c663, the first read-only candidate-inspection fetch failure,
+zero judged cases and a complete bounded native window with zero new spend rows, envelopes
+or evaluation movements. No budget/root/run/evidence or public B mutation was produced.
+Both prior closed paid attempts remain unchanged. The caf/5867/39df handoff qualifies only
+the deployed old source; offline golden 825ef/vertical 01d6 need exact-source CI, reviewed
+staging release, a new versioned handoff and fresh consent before another attempt. Neither
+existing approval nor zero-work reconciliation permits replay. Phase 23 stays 6/9, 48 partial
+and49 not started; no eval/live result, activation or production authority is created.
 
 ## Reuse and dependencies
 
