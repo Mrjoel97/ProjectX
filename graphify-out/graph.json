@@ -111245,6 +111245,16 @@
       "id": "packages_backend_convex_schema_zernioreports_table",
       "community": 460,
       "norm_label": "zernioReports (table)"
+    },
+    {
+      "label": "managedServices (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L210",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_managedservices_table",
+      "community": 460,
+      "norm_label": "managedServices (table)"
     }
   ],
   "links": [
@@ -306046,6 +306056,16 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_proactivereview",
       "target": "packages_backend_convex_tenantprofile_fortenant"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L210",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_managedservices_table"
     }
   ],
   "hyperedges": [],

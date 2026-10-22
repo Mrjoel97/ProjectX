@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: "Platform -> Private Beta"
 current_phase: 48
-current_plan: "48-02 — PR82 helper repair released to staging; validated source-bound handoff e7ee ready for separate paid checkpoint. Phase 23 six of nine, 48 partial, 49 not started."
+current_plan: "48-02 — PR82 qualification input frozen; independent49-01/02 local policy/setup implementation begun. Phase23 six ofnine;48 and49 release admission remain open."
 status: in_progress
-stopped_at: "2026-10-22 — Approved PR82 staging release 39668142870 and new handoff e7ee/refresh f94d validated with fresh native UI and six matching reads. Prior c663 startup remains terminal with zero new work. No new paid consent/evaluation result/B mutation/activation/production deployment."
+stopped_at: "2026-10-22 — Delivery correction permits parallel offline implementation while retaining release order. Local service policy/setup and pack fixture preparation under review. Frozen PR82 qualification input retained; no new paid evaluation, activation or production deployment."
 last_updated: "2026-10-22"
 progress:
   total_phases: 79
@@ -19,7 +19,7 @@ progress:
 
 ## Current execution order
 
-The owner approved the managed-service programme on 2026-10-19: **48 readiness → 49 shared boundary → 50 recurring read/prepare → 51 brain outcomes → 52 complete social pilot**. Planning/read-only investigations ran in parallel; implementation and release admission follow that order.
+The owner approved the managed-service programme on 2026-10-19: **48 readiness → 49 shared boundary → 50 recurring read/prepare → 51 brain outcomes → 52 complete social pilot**. Release/live admission retain that order. Following the owner's 2026-10-22 instruction to correct the delivery hindrance and get the engine built, independent reversible offline implementation may run in parallel; unfinished capabilities remain unavailable. See the programme's execution correction. This changes development sequencing, not qualification results, spending consent or release readiness.
 
 - Programme scope: [managed-services-programme.md](design/managed-services-programme.md).
 - Current source/evidence inventory: [48-CAPABILITY-INVENTORY.md](phases/48-readiness-and-qualification-closure/48-CAPABILITY-INVENTORY.md).
@@ -70,7 +70,7 @@ paid attempts, the consumed PR81 startup approval/once record and its bounded ze
 receipt remain unchanged. No new paid checkpoint or consent, evaluation result, public B
 mutation, activation, cleanup or production deployment followed. Fresh exact-source admission
 and separate concrete paid approval remain required. Phase 23 stays 6/9, SKILL-02 open,
-Phase 48 partial and Phase 49 not started.
+Phase 48 partial. Phase 49 now has separate local policy/setup work under the execution correction; its trusted runtime, tool-scope integration, UI and release acceptance are not complete.
 
 ### Historical PR81 startup and repair boundary
 

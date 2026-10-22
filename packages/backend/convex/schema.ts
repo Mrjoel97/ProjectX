@@ -35,14 +35,14 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 73 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 74 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
 // │   users, betaWaitlist, betaInvites, authRevocations                                         │
 // │                                                                            │
 // │ ── Governance & Audit ──────────────────────────────────── ~L150           │
-// │   audit, deadLetters, skills, tenantSkills, savedPrompts,                  │
+// │   audit, deadLetters, skills, tenantSkills, savedPrompts, managedServices, │
 // │   knowledgeSearches, pendingTimeouts, exportCursors, guardrailConfig       │
 // │   auditExportQueue                                                       │
 // │                                                                            │
@@ -206,6 +206,45 @@ export default defineSchema({
     .index("by_tenant", ["tenantId"])
     .index("by_state_hash", ["stateHash"])
     .index("by_expiry", ["expiresAt"]),
+  // Inert tenant setup only. No cadence, credentials, execution history or spend copy.
+  managedServices: defineTable({
+    tenantId: v.string(),
+    serviceId: v.string(),
+    revision: v.number(),
+    controlState: v.union(v.literal("active"), v.literal("paused"), v.literal("stopped")),
+    controlRevision: v.number(),
+    goal: v.string(),
+    operationIds: v.array(
+      v.union(
+        v.literal("social.prepare"),
+        v.literal("social.report"),
+        v.literal("business.review"),
+        v.literal("workflow.pack.run"),
+      ),
+    ),
+    accounts: v.array(
+      v.object({
+        provider: v.union(v.literal("buffer"), v.literal("zernio")),
+        connectionId: v.string(),
+        accountId: v.string(),
+        connectionRevision: v.number(),
+      }),
+    ),
+    skills: v.array(
+      v.object({
+        skillId: v.string(),
+        name: v.string(),
+        version: v.number(),
+        bodyHash: v.string(),
+        tenantId: v.union(v.string(), v.null()),
+      }),
+    ),
+    budgetLimitCents: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_service", ["tenantId", "serviceId"]),
   zernioConnections: defineTable({
     tenantId: v.string(),
     connectionId: v.string(),
