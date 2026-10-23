@@ -21,7 +21,8 @@ export async function captureServiceObservation(
   connection: Doc<"zernioConnections">,
   report: ZernioReport,
 ) {
-  const snapshotHash = await contentHash(`${connection.revision}:${serviceReportIdentity(report)}`);
+  const connectionRevision = connection.grantRevision ?? connection.revision;
+  const snapshotHash = await contentHash(`${connectionRevision}:${serviceReportIdentity(report)}`);
   const existing = await ctx.db
     .query("serviceOutcomeObservations")
     .withIndex("by_connection_createdAt", (q) =>
@@ -33,7 +34,7 @@ export async function captureServiceObservation(
   const id = await ctx.db.insert("serviceOutcomeObservations", {
     tenantId: connection.tenantId,
     connectionId: connection.connectionId,
-    connectionRevision: connection.revision,
+    connectionRevision,
     snapshotHash,
     report,
     createdAt: Date.now(),
@@ -142,7 +143,7 @@ export const historyPage = tenantQuery({
       ...result,
       page: result.page.filter(
         (row) =>
-          row.connectionRevision === connection.revision &&
+          row.connectionRevision === (connection.grantRevision ?? connection.revision) &&
           row.report.accounts.every(
             (a) =>
               connection.selectedAccountIds.includes(a.accountId) &&
@@ -172,7 +173,7 @@ async function readRunOutcome(
         (a) =>
           a.provider === "zernio" &&
           a.connectionId === connection?.connectionId &&
-          a.connectionRevision === connection.revision,
+          a.connectionRevision === (connection.grantRevision ?? connection.revision),
       )
     : [];
   const pin = pins[0];
@@ -197,7 +198,8 @@ async function readRunOutcome(
   const scoped = history
     .filter(
       (row) =>
-        row.connectionRevision === connection?.revision &&
+        connection !== null &&
+        row.connectionRevision === (connection.grantRevision ?? connection.revision) &&
         row.report.accounts.every((a) => connection.selectedAccountIds.includes(a.accountId)),
     )
     .slice(0, 2);

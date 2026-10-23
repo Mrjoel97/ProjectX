@@ -1,3 +1,5 @@
+> Last verified: 2026-10-23 — Selected Zernio account pins and observation lineage use the stable connection permission generation (grantRevision, with legacy revision fallback). Saving the same accounts or changing the daily-report preference preserves configured service readiness and history; an actual selected-account change invalidates the old scope. Zernio execution revision and lease fences remain independent.
+
 # Playbook: Managed services
 
 > Last verified: 2026-10-23 — Goal linkage, user usefulness feedback, trusted report history and the cited brain view pass local pure/native tests. Execution completion, usefulness and metric movement remain separate; business improvement is not established by any of them. Read-only projections preserve unknown attribution and source clocks. No hosted service cycle, activation or release is certified by these checks.

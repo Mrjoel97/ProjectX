@@ -413,6 +413,8 @@ export default defineSchema({
     connectionId: v.string(),
     profileId: v.string(),
     revision: v.number(),
+    // Selection permission generation; execution revision also fences scheduling edits.
+    grantRevision: v.optional(v.number()),
     status: v.union(
       v.literal("connecting"),
       v.literal("connected"),

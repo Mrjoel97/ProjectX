@@ -234,6 +234,8 @@ export const selectAccounts = tenantMutation({
       dailyReports: a.dailyReports,
       nextReportAt: Date.now(),
       revision: row.revision + 1,
+      // Scheduling edits cancel old workers without changing the configured account scope.
+      grantRevision: (row.grantRevision ?? row.revision) + (changed ? 1 : 0),
       lease: undefined,
       leaseUntil: undefined,
       updatedAt: Date.now(),
