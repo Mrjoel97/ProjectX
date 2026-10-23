@@ -348,6 +348,90 @@ describe("bounded shop operator entry", () => {
     expect(row?.evidence).toBeUndefined();
     expect(row?.status).toBe("candidate");
   });
+  test("shop model proof uses settled case-budget chats across turns and refuses incomplete or foreign ledger claims", async () => {
+    const { readShopModels, assertRanModel } = await import(
+      "../scripts/run-workflow-pack-evals.mjs"
+    );
+    const { t, args, budgetId } = await setup();
+    installPricedSpecialist();
+    await t.action(internal.workflowPackBinding.runShopPreparationEval, args);
+    await t.action(internal.workflowPackBinding.runShopPreparationEval, {
+      ...args,
+      runId: crypto.randomUUID(),
+    });
+    const rows = await t.query(internal.spendLedger.listEvents, {
+      tenantId: TENANT,
+      sinceMs: 0,
+      untilMs: Number.MAX_SAFE_INTEGER,
+      rail: "reasoning",
+      limit: 500,
+    });
+    const proof = (input: typeof rows) =>
+      readShopModels(
+        {
+          budgetId,
+          invoke: (fn: string, readArgs: unknown) => {
+            expect(fn).toBe("spendLedger:listEvents");
+            expect(readArgs).toEqual({
+              tenantId: TENANT,
+              sinceMs: 0,
+              untilMs: Number.MAX_SAFE_INTEGER,
+              rail: "reasoning",
+              limit: 500,
+            });
+            return JSON.stringify(input);
+          },
+        },
+        TENANT,
+      );
+    expect(proof(rows)).toEqual({ models: ["openai/gpt-4o-mini"], rowCount: 2 });
+    expect(provider).toHaveBeenCalledTimes(2);
+    expect(
+      rows.filter((row) => row.kind === "eval_provider" && row.evalActualUsd !== undefined),
+    ).toHaveLength(2);
+    const settled = rows.find(
+      (row) => row.kind === "eval_model" && row.evalActualUsd !== undefined,
+    );
+    if (!settled) throw new Error("missing native chat settlement");
+    const corruptions = [
+      rows.filter((row) => row.kind !== "eval_model"),
+      rows.filter((row) => row._id !== settled._id),
+      rows.map((row) =>
+        row.kind === "eval_model" ? { ...row, evalBudgetId: "foreign-budget" } : row,
+      ),
+      rows.map((row) =>
+        row._id === settled._id ? { ...row, tenantId: "packeval-12345678-c1" } : row,
+      ),
+      [...rows, settled],
+      rows.map((row) =>
+        row._id === settled._id ? { ...row, model: "or/google/unexpected" } : row,
+      ),
+      rows.map((row) =>
+        row.kind === "eval_model" && row.evalActualUsd !== undefined
+          ? { ...row, phase: "refunded", evalActualUsd: 0 }
+          : row,
+      ),
+      Array.from({ length: 500 }, () => settled),
+    ];
+    for (const corrupted of corruptions)
+      expect(() => proof(corrupted as typeof rows)).toThrow("SHOP_EVAL_MODEL_PROOF_INVALID");
+    const extraModel = rows.map((row) => {
+      if (row.correlationId !== settled.correlationId) return row;
+      return {
+        ...row,
+        model: "or/google/unexpected",
+        ...(row.evalActualUsd === undefined
+          ? {}
+          : { phase: "refunded" as const, evalActualUsd: 0 }),
+      };
+    });
+    expect(() =>
+      assertRanModel(
+        [{ id: "case", ranModels: proof(extraModel).models, spendRows: 2 }],
+        "openai/gpt-4o-mini",
+      ),
+    ).toThrow("the runs executed model(s)");
+  });
   test("legacy unmarked envelopes retain concurrent reservations", async () => {
     const { t } = await setup();
     const budgetId = await t.mutation(internal.guardrails.openEvalBudget, {

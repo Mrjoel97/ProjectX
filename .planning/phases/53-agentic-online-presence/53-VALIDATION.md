@@ -2,7 +2,26 @@
 
 ## Quality and commerce preparation continuation — 2026-10-23
 
-See [53-06 actual continuation](53-06-SUMMARY.md) for renderer v5, actual three-width browser checks, exact source identities, sixteen reviewed developer skills and the candidate-only private shop preparation pack. Hosted owner UI preparation creates no independent browser evidence or activation. Provider key names, sender and confirmed standard billing are configured. Both separate native staging accounts are verified, with exact approved A owner/B ordinary readback. The embedding-budget gap is repaired under a fixed100c envelope with33 tests; paid testing remains paused pending final checks/release and model cost is zero. Historical October22 receipts below are preserved as dated observations.
+See [53-06 actual continuation](53-06-SUMMARY.md) for renderer v5, actual three-width
+browser checks, exact source identities, sixteen reviewed developer skills and the
+candidate-only private shop preparation pack. All baseline package typechecks/build,
+final changed-cut web typecheck and13 Shell tests passed. Source
+`df0286d53a09c055572e14aa982a6d3361111b1f` subsequently passed dedicated-stage backend
+strict checking/apply and frontend cloud TypeScript/build/promotion. See the
+[October23 release receipt](../../../docs/releases/2026-10-23-online-presence-staging.json).
+
+Provider key names, sender and confirmed standard billing are configured. Both separate
+native staging accounts are verified, with exact approved A owner/B ordinary readback.
+The embedding-budget gap is repaired under a fixed100-cent envelope with33 native tests.
+One approved paid attempt exited2 with five failed fixture verdicts and refused model-spend
+attribution evidence; diagnosis remains open. Its envelope is closed with43 settled calls,
+zero holds, no breach and$0.01474832 actual ledger cost. Both kill switches are restored
+true. There is no automatic retry or passing model qualification from this result.
+
+The delivered operator UI and local browser suite create no independent hosted browser
+evidence or activation. Native owner/recipe/model/lifecycle acceptance remains pending;
+53-06 and53-02 stay partial. Historical October22 receipts below are preserved as dated
+observations, including their then-empty account/configuration state.
 
 
 ## Hosted staging continuation — 2026-10-22

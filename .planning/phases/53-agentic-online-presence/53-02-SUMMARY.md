@@ -2,7 +2,7 @@
 phase: 53-agentic-online-presence
 plan: "02"
 status: partial
-updated: 2026-10-22
+updated: 2026-10-23
 requirements-completed: []
 ---
 
@@ -12,7 +12,7 @@ The owner answered **"Create a separate staging environment"**. Created a new Ve
 project and Convex project/deployment exclusively for this branch. Existing production
 and Phase48 staging resources were not selected or modified.
 
-## Deployed resources and source
+## Original October22 deployed resources and source
 
 - Frontend: https://pikar-presence-stg.vercel.app, project `prj_O01HZIZVy4rg8u3W91W7bPjTSDQB`.
 - Backend: `joel-feruzi:pikar-presence-stg:dev/presence`, deployment `third-gecko-977`;
@@ -59,7 +59,7 @@ checks and Git whitespace checks passed. Graphify remains unavailable; the exist
 Convex-edge fixup ran with79 tables and zero edge changes. No full AST regeneration is
 claimed. No handwritten runtime source changed after the actual cloud typechecks/build.
 
-## What remains open
+## What remained open at the October22 observation
 
 No native account verification, authenticated A/B tenant test, actual model/media call,
 recipe browser qualification/activation, public website publication, inquiry/rollback
@@ -77,4 +77,24 @@ readiness programme and historical53-05 observations remain unchanged.
 
 ## Separate continuation — 2026-10-23
 
-See [53-06](53-06-SUMMARY.md) for current source and actual checks. Both separate staging accounts are now verified; exact approved A is the only owner, B ordinary, with one audited/idempotent grant. Production accounts were not copied. Sender/provider key names and confirmed standard billing are configured under a new5USD maximum; no paid call has run. The new100c shop evaluator covers seed/search/chat and refuses unknown holds. Browser control recovered; signed-in onboarding was observed and the fresh-owner operator redirect is fixed in source. Final changed-cut types/release/independent recipe and native workflow qualification remain pending. Historical October22 deployed-source receipts above are unchanged.
+See [53-06](53-06-SUMMARY.md) for current source and actual checks. Both separate staging
+accounts are verified; exact approved A is the only owner, B ordinary, with one audited,
+idempotent grant. Production accounts were not copied. Sender/provider key names and
+confirmed standard billing are configured under the approved$5 maximum.
+
+The actual current source `df0286d53a09c055572e14aa982a6d3361111b1f` passed the staging
+backend strict check/apply and frontend cloud TypeScript/build. Dedicated frontend
+deployment `dpl_7EotyeRNHrgWUdoSV397z1ZKTnNY` reached READY and was promoted to the staging
+alias. See the [October23 release receipt](../../../docs/releases/2026-10-23-online-presence-staging.json).
+Historical October22 deployed-source receipts above are unchanged.
+
+The one bounded100-cent shop-preparation evaluation exited2: five failed fixture verdicts
+and refused model-spend attribution evidence remain under diagnosis. Its authoritative
+envelope closed with43 settled calls, zero holds, no breach and$0.01474832 ledger cost;
+both model/media kill switches are restored true. Budget closure is not model qualification.
+No retry or activation followed.
+
+Native browser control recovered and signed-in onboarding was observed. The fresh-owner
+redirect is fixed and13 real Shell tests pass, but the actual owner recipe review protocol,
+authenticated A/B workflow/lifecycle acceptance and exact-source browser qualification
+remain pending. No full hosted acceptance or merchant checkout is claimed;53-02 stays partial.

@@ -148,7 +148,7 @@ export const COMMERCE_PACK_PROVENANCE = {
       "ecommerce-landing-page/SKILL.md",
       "conversion-rate-optimization/SKILL.md",
     ],
-    bodySha256: "2f573380d2c8d023c80d7e8081988725da1c62fb658812bd401d1d3103fa98a3",
+    bodySha256: "e028c25ffd4bc001118d691a7b3eef036dc7b360d860e6067072cc404c4dae15",
     license: "MIT",
     modificationNotice:
       "Adapted for Pikar: buyer-question-led private listing drafts and preparation checklist only. Product claims require inspected owner evidence; live marketplace access, checkout, operational writes, sending, paid generation and automatic publication are excluded. MIT licence and exact source snapshots remain in third_party/design-knowledge.",

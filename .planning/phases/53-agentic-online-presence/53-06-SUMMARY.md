@@ -9,7 +9,8 @@ requirements-completed: []
 # 53-06 — Improved page composition and bounded private shop preparation
 
 Three parallel agents improved the isolated source using Taste and UI UX guidance.
-Hosted deployment and final qualification remain separate from these local results.
+The implementation is delivered to dedicated staging; paid-test diagnosis and native
+qualification remain open, so this plan stays partial.
 
 ## Result and limits
 
@@ -86,7 +87,7 @@ they are not universal semantic truth verification. Native artifact/source revie
 | Fresh-owner Shell |13/13 real jsdom cases passed |
 | Free gates |22/24 in aggregate; two null timeouts passed standalone with unchanged assertions. Owner proof clean0→mutant1→restored0, exact child timeout180s→600s only; recurrence direct exit0 |
 | Identity/design checks |26-source recipe selfcheck, golden57fixtures/12skills, vertical6lanes/40cases, design8records and3immutableMIT provenance checks passed |
-| Types/build |all four package baseline typechecks and production frontend build passed; final web check after the Shell change passed; final backend strict check is delegated to the staging deploy before apply |
+| Types/build |all four package baseline typechecks and production frontend build passed; final web check after the Shell change passed; actual staging backend strict check and frontend cloud TypeScript/build passed before apply/promotion |
 | Planning/playbooks/graph |earlier planning/playbook/whitespace checks passed; final documentation recheck follows. Graphify unavailable; existing edge fixup79tables/zero edge changes |
 
 An earlier integrated website run failed14 checks because pattern width lost real effect.
@@ -109,7 +110,8 @@ timeouts remain historical failures rather than being relabelled aggregate green
 Only third-gecko-977 / pikar-presence-stg is in scope. Key names and sender are configured;
 owner confirmed standard credit-funded OpenRouter billing and that declaration is saved.
 Approved aggregate maximum is$5: ordinary reasoning2, ingest1, one bounded shop evaluation1,
-and1 unallocated. Both switches remain paused outside a bounded test; model-test spend0.
+and1 unallocated. Both switches remain paused outside a bounded test. The actual bounded
+attempt below incurred$0.01474832; it did not qualify the candidate.
 
 After clarifying existing accounts belonged to production, the owner created both separate
 staging accounts and verified their emails. Exact approved A grant gives one owner; B is
@@ -121,5 +123,31 @@ Automatic review first rejected an owner mutation for missing explicit privilege
 a strictly read-only fallback ran. Later exact human approval authorized and completed only
 the designated staging grant. Save/push approval twice timed out before commands started;
 the owner subsequently explicitly approved isolated branch save/push and dedicated staging
-deployment after checks. No current-source release, paid evaluation, activation, public site
-or production change is asserted without its separate actual receipt.53-02/53-03 remain partial.
+deployment after checks. The dated observations below record the resulting staging release
+and paid attempt. No activation, public site or production change is claimed.53-02/53-03
+remain partial.
+
+## Actual dedicated-stage continuation — 2026-10-23
+
+Source `df0286d53a09c055572e14aa982a6d3361111b1f` was saved on the isolated branch and
+deployed to `third-gecko-977` and the dedicated `pikar-presence-stg` frontend. Backend
+strict TypeScript/code generation passed before apply. Frontend cloud TypeScript/build
+passed, generated40 pages, and deployment `dpl_7EotyeRNHrgWUdoSV397z1ZKTnNY` reached READY
+before promotion to the dedicated staging alias. The immutable frontend is
+https://pikar-presence-mw3ajamk7-joelferuzi-gmailcoms-projects.vercel.app.
+See the [dated release receipt](../../../docs/releases/2026-10-23-online-presence-staging.json).
+These are staging resources; the frontend platform's deployment target label does not
+establish a production application release.
+
+One approved100-cent shop-preparation attempt ran14:12:53.936–14:18:45.483Z and exited2.
+All five fixture verdicts failed and model-spend attribution evidence was refused.
+Diagnosis remains open; neither those verdicts nor the safe budget closure prove a
+qualified model workflow. The authoritative envelope was closed with43 settled calls,
+zero outstanding holds, no breach and$0.01474832 actual ledger cost. Both model/media
+kill switches were restored true; no automatic retry, replacement budget or activation
+followed. Private account/budget identifiers and raw traces remain outside this summary.
+
+The source implementation and staging release are delivered. Plan53-06 remains partial
+while this paid result is diagnosed and native owner/recipe workflow observations remain
+pending. Hosted source qualification under53-02 and merchant operations under53-03 are
+separate unfinished acceptance work; local test success does not close them.

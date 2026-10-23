@@ -1309,6 +1309,27 @@ function selfTest(packs) {
     [],
     "all three correctly classified branches must pass",
   );
+  for (const boundary of [
+    "Reconcile payments through the connected sales and accounting systems once they are available.",
+    "No payment provider or merchant account was connected or verified.",
+    "No order was paid, refund was issued, parcel shipped, digital entitlement granted or revoked, customer contacted, campaign launched, record written, credential requested, or external publication performed.",
+  ])
+    assert.deepEqual(
+      shopScore(`${shopReply()}\n${boundary}`),
+      [],
+      "conditional or coordinated denial is not a live success claim",
+    );
+  assert.deepEqual(
+    shopScore(
+      shopReply(true).replace(
+        "In-person sewing lessons: service.",
+        "### In-person sewing lessons\n\nClassification: Service.",
+      ),
+      mixedId,
+    ),
+    [],
+    "a named offer heading and its explicit classification field must stay together",
+  );
   for (const { fx } of shopFixtures) {
     assert.deepEqual(
       shopScore(shopReply(fx.id === mixedId), fx.id),
@@ -1366,8 +1387,21 @@ function selfTest(packs) {
     ],
     ["shop:stockClaim", `${shopReply()}\nNo owned images supplied, stock 500 units.`],
     ["shop:liveOperation", `${shopReply()}\nCheckout is unavailable, payments are connected.`],
+    [
+      "shop:liveOperation",
+      `${shopReply()}\nNo order was paid, payments are connected, or external publication performed.`,
+    ],
+    ["shop:liveOperation", `${shopReply()}\nNo order was paid, refund was issued.`],
+    [
+      "shop:serviceAsGoods",
+      shopReply(true).replace(
+        "In-person sewing lessons: service.",
+        "### In-person sewing lessons\n\nClassification: Digital goods.",
+      ),
+      mixedId,
+    ],
   ];
-  assert.equal(shopBadReplies.length, 25, "do not silently remove a shop scorer regression");
+  assert.equal(shopBadReplies.length, 28, "do not silently remove a shop scorer regression");
   for (const [key, reply, id] of shopBadReplies) {
     rejections++;
     const failures = shopScore(reply, id);
@@ -1392,7 +1426,7 @@ function selfTest(packs) {
   // A TRIPWIRE, like the table count in tenantData.test.ts: the floor equals what the self-test
   // exercises today, so DELETING a case fails here and forces the deleter to say why. Adding one is
   // free. Without it, `rejections` is only a number printed to a log nobody diffs.
-  assert.ok(rejections >= 75, `self-test only exercised ${rejections} rejections, expected >= 75`);
+  assert.ok(rejections >= 78, `self-test only exercised ${rejections} rejections, expected >= 78`);
   console.log(
     `self-test: ${rejections} validator/scorer rejections and the live-path invariants verified`,
   );
@@ -1707,8 +1741,55 @@ const SHOP_FACTS = {
 
 /** Negation is local to a sentence/clause; a disclaimer cannot wash a later affirmative claim. */
 const shopClauses = (text) => text.split(/\n|;|(?<=[.!?])\s+/).filter((s) => s.trim());
+// A complete disjunction under "No" is one denial. Each item must be a closed operation phrase;
+// an independent affirmative predicate or unrelated disclaimer cannot inherit that negation.
+const shopDeniedOperationList = (text) => {
+  const clean = text
+    .trim()
+    .replace(/^[-*]\s+/, "")
+    .replace(/[.!?]$/, "");
+  if (!/^No\s/i.test(clean) || !/,\s+or\s+/i.test(clean)) return false;
+  const items = clean.replace(/^No\s+/i, "").split(/,\s*/);
+  const item =
+    /^(?:or\s+)?(?:(?:order|account) (?:was )?(?:paid|connected)|refund (?:was )?issued|parcel (?:was )?shipped|digital entitlement (?:was )?granted(?: or revoked)?|customer (?:was )?contacted|campaign (?:was )?launched|record (?:was )?written|credential (?:was )?requested|external publication (?:was )?performed)$/i;
+  return items.length >= 3 && items.every((part) => item.test(part));
+};
+const shopConditionalReconciliation = (text) =>
+  /^\s*(?:[-*]\s+)?Reconcile\b[^,;.!?]{0,130}\bonce\b[^,;.!?]{0,45}\bavailable\.?\s*$/i.test(text);
+const shopDeniedProviderSubject = (text) =>
+  /^\s*(?:[-*]\s+)?no (?:payment provider|merchant account)(?: or (?:payment provider|merchant account))? (?:is|was|has been) connected(?: or verified)?\.?\s*$/i.test(
+    text,
+  );
 const shopClaimClauses = (text) =>
-  shopClauses(text).flatMap((s) => s.split(/,\s*|\b(?:and|but|while|however|yet)\b/i));
+  shopClauses(text)
+    .filter(
+      (s) =>
+        !shopDeniedOperationList(s) &&
+        !shopConditionalReconciliation(s) &&
+        !shopDeniedProviderSubject(s),
+    )
+    .flatMap((s) => s.split(/,\s*|\b(?:and|but|while|however|yet)\b/i));
+// A named offer heading followed by its explicit classification field is as direct as a table
+// row. Do not borrow a classification across another heading or a different offer's name.
+const shopClassificationClauses = (text) => {
+  const lines = text.split(/\n/);
+  return lines.flatMap((line, index) => {
+    if (
+      !/^\s*#{1,6}\s+/.test(line) ||
+      Object.values(SHOP_OFFERS).filter((offer) => offer.subject.test(line)).length !== 1
+    )
+      return [];
+    for (const next of lines.slice(index + 1, index + 4)) {
+      if (
+        /^\s*#/.test(next) ||
+        Object.values(SHOP_OFFERS).some((offer) => offer.subject.test(next))
+      )
+        break;
+      if (/^\s*Classification\s*:/i.test(next)) return [`${line} ${next}`];
+    }
+    return [];
+  });
+};
 const shopNegated = (clause, index, length) =>
   /\b(?:no|not|never|cannot|can't|unavailable|blocked|unverified|pending|needs?|requires?|before|would|could|must)\b/i.test(
     clause.slice(index, index + length),
@@ -1729,8 +1810,10 @@ export function scoreShopPreparation(fx, transcript) {
     fail("checks", "known fixture and owner-evidence-v1", "absent");
     return failures;
   }
-  const clauses = shopClauses(transcript.replace(/[*_`]/g, ""));
-  const claimClauses = shopClaimClauses(transcript.replace(/[*_`]/g, ""));
+  const plain = transcript.replace(/[*_`]/g, "");
+  const clauses = shopClauses(plain);
+  const classifications = [...clauses, ...shopClassificationClauses(plain)];
+  const claimClauses = shopClaimClauses(plain);
   if (
     !/\bprivate\b/i.test(transcript) ||
     !/\b(?:no shop is live|shop (?:is )?not live|checkout (?:is )?(?:unavailable|blocked)|not a live (?:shop|store|catalogue))\b/i.test(
@@ -1756,7 +1839,7 @@ export function scoreShopPreparation(fx, transcript) {
 
   for (const offer of offers) {
     const check = SHOP_OFFERS[offer];
-    if (!clauses.some((s) => check.subject.test(s) && check.kind.test(s)))
+    if (!classifications.some((s) => check.subject.test(s) && check.kind.test(s)))
       fail(
         `classification:${offer}`,
         "the requested offer and its physical/digital/service kind together",
@@ -1765,7 +1848,7 @@ export function scoreShopPreparation(fx, transcript) {
   }
   if (
     offers.includes("lessons") &&
-    clauses.some((s) =>
+    classifications.some((s) =>
       shopAffirms(
         s,
         /\blessons?\b.{0,45}\b(?:physical|digital)\s+goods\b|\b(?:physical|digital)\s+goods\b.{0,45}\blessons?\b/i,
@@ -2100,9 +2183,9 @@ function runCase(
     .reduce((n, f) => n + f.artifactCount, 0);
   // THE MODEL HALF of "did the thing we are about to certify actually run". Read from spend rows,
   // which record the model AFTER each call returns, so a fallback attempt is its own row.
-  const ran = parse(
-    invoke("smoke:modelsForRun", { tenantId: tenant, runId: lastRunId }, readOptions),
-  );
+  const ran = evaluation
+    ? readShopModels(evaluation, tenant)
+    : parse(invoke("smoke:modelsForRun", { tenantId: tenant, runId: lastRunId }, readOptions));
   const { calls } = parse(
     invoke("smoke:toolCallsForThread", { tenantId: tenant, threadId }, readOptions),
   );
@@ -2143,6 +2226,68 @@ function runCase(
     // Surfaced per case so the all-green check can refuse a mismatch before writing evidence.
     ranModels: ran.models ?? [],
     spendRows: ran.rowCount ?? 0,
+  };
+}
+
+/**
+ * Each shop case owns one synthetic tenant across all turns. Its chat calls use evalcall UUIDs,
+ * not legacy agentloop run IDs. Prove actual settled chat reservations under this exact shared
+ * budget; embedding settlements cannot certify a model. A full bounded page is never proof.
+ */
+export function readShopModels(evaluation, tenantId) {
+  const invalid = () => {
+    throw new EnvironmentAbort("SHOP_EVAL_MODEL_PROOF_INVALID");
+  };
+  if (!/^packeval-[a-f0-9]{8}-c[0-4]$/.test(tenantId)) invalid();
+  const rows = parse(
+    evaluation.invoke("spendLedger:listEvents", {
+      tenantId,
+      sinceMs: 0,
+      untilMs: Number.MAX_SAFE_INTEGER,
+      rail: "reasoning",
+      limit: 500,
+    }),
+  );
+  if (
+    !Array.isArray(rows) ||
+    rows.length >= 500 ||
+    rows.some((row) => row.tenantId !== tenantId || row.rail !== "reasoning")
+  )
+    invalid();
+  const chats = rows.filter((row) => row.kind === "eval_model");
+  if (chats.some((row) => row.evalBudgetId !== evaluation.budgetId)) invalid();
+  const reservations = chats.filter((row) => row.phase === "reserved");
+  const settlements = chats.filter((row) => row.evalActualUsd !== undefined);
+  if (reservations.length === 0 || reservations.length !== settlements.length) invalid();
+  const seen = new Set();
+  for (const row of reservations) {
+    if (
+      typeof row.correlationId !== "string" ||
+      !/^evalcall:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+        row.correlationId,
+      ) ||
+      typeof row.model !== "string" ||
+      seen.has(row.correlationId)
+    )
+      invalid();
+    seen.add(row.correlationId);
+    const settled = settlements.filter((item) => item.correlationId === row.correlationId);
+    if (
+      settled.length !== 1 ||
+      settled[0].model !== row.model ||
+      (settled[0].phase !== "actual" && settled[0].phase !== "refunded") ||
+      !Number.isFinite(settled[0].evalActualUsd) ||
+      settled[0].evalActualUsd < 0 ||
+      settled[0].evalBreach === true
+    )
+      invalid();
+  }
+  // A zero-cost refund alone cannot establish an answered case. Keep refunded model identities
+  // above/below so a failed or free alternate model cannot disappear beside a paid answer.
+  if (!settlements.some((row) => row.phase === "actual" && row.evalActualUsd > 0)) invalid();
+  return {
+    models: [...new Set(settlements.map((row) => row.model.replace(/^or\//, "")))].sort(),
+    rowCount: settlements.length,
   };
 }
 

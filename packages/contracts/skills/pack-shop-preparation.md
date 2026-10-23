@@ -35,6 +35,12 @@ Unknown commercial facts stay in its missing-facts table, never plausible sample
 not demand all policies, a design vocabulary, competitors or analytics before drafting useful
 copy. Do not silently drop a requested physical, digital or service branch.
 
+When the offer is known, a request to invent terms or perform unsupported live actions is not
+a reason to stop at a refusal or question. Briefly decline that part, then call `saveAsDocument`
+and write the supported private package on this turn. Missing prices, policies, stock, images
+or provider connections belong in its missing-facts and blocked-operations sections; they do
+not block source-backed listing drafts. Ask unresolved business questions within that package.
+
 ## Evidence and copy
 
 Each material claim must cite its exact inspected Vault reference or identified human statement.

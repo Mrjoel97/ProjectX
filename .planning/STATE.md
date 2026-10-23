@@ -19,7 +19,25 @@ progress:
 
 ## Online-presence quality continuation — 2026-10-23
 
-53-06 improves page composition, installs16 reviewed developer skills and adds private shop preparation, bounded100c evaluation and owner qualification UI. See [actual continuation](phases/53-agentic-online-presence/53-06-SUMMARY.md). New budget33 and Shell13 tests pass with independent review; final changed-cut web typecheck passed; the staging deploy performs the final strict backend check before apply, following passing baseline full checks/build. Both separate staging accounts are verified, exactly A is owner after explicit consent, and native browser access recovered. The owner approved isolated branch save/push and staging deployment after checks; standard OpenRouter billing is confirmed/configured. Total model-test limit5USD, spend0 and switches paused. No current-source release/recipe activation/publication is asserted yet. Phase48/production scopes remain unchanged.
+53-06 delivers improved page composition, sixteen reviewed developer skills, private shop
+preparation, bounded100-cent evaluation and owner qualification UI. See the
+[actual continuation](phases/53-agentic-online-presence/53-06-SUMMARY.md) and
+[dated staging release](../docs/releases/2026-10-23-online-presence-staging.json).
+New budget33 and Shell13 tests pass with independent review; final changed-cut web
+typecheck passed. Actual source `df0286d53a09c055572e14aa982a6d3361111b1f` passed backend
+strict checking/apply and frontend cloud TypeScript/build/promotion on the dedicated stage.
+Both separate accounts are verified, exactly A is owner after explicit consent, and native
+browser access recovered. Standard OpenRouter billing is confirmed/configured under the
+approved$5 aggregate test limit.
+
+One bounded shop-preparation attempt exited2 with five failed fixture verdicts and refused
+model-spend attribution evidence, still under diagnosis. The authoritative envelope closed
+with43 settled calls, zero holds, no breach and$0.01474832 actual ledger cost; both kill
+switches are restored true. No retry, recipe activation or public website publication
+followed. The implementation and dedicated-stage release are delivered, but53-06 stays
+partial while paid diagnosis and native owner/recipe/model workflow observations remain
+pending;53-02/53-03 and OPRES requirements remain open. Phase48/production scopes and
+historical receipts are unchanged.
 
 ## Isolated online-presence lane — 2026-10-22
 
