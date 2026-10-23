@@ -1660,3 +1660,7 @@ cannot see:
   instruction so one call covers the last turn. A backend change; plan 15.1-07 did not own it.
 
 Verification 2026-10-15: foundation flag-off direct RPC tests cover unset and explicit-off configuration, no provider calls or content writes, preserved reads/discard, and read-only UI without save/publish controls.
+
+### Last verified: 2026-10-23 — Existing profile source authority
+
+The profile's existing Blueprint panel now includes the Business Ledger, using native field/source/review references and explicit unknown observation times. Synthesis witnesses and later confirmation fences reject changed sources; old title-only values remain visible as unverified and are excluded from assured standing context. Original values/files and unchanged review clocks are retained. This adds no onboarding step, provider call, new fact store or automatic confirmation. Source/native/UI tests are local; authenticated release acceptance remains separate.

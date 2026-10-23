@@ -370,3 +370,7 @@ Last verified: 2026-10-15 — Native evaluator source identity now includes paid
 ### 2026-10-23 — Managed-service outcomes and inert construction identities
 
 The closed golden/vertical evaluator inventories now include the service brain/history/projection policy dependencies and named inert recurrence construction. Refresh generated fingerprints only after final formatting; corpus bytes and historical handoffs remain unchanged. This mechanical retirement prevents prior evidence silently qualifying new runtime/schema dependencies. It does not run an evaluator, spend money or supply qualification. ADR063 keeps recurrence activation deferred.
+
+### Last verified: 2026-10-23 — Shared context fingerprint
+
+The evaluator inventory explicitly includes native/core Blueprint source authority and service outcome reads. Golden legacy-seed preflight now proves both the native synthetic fixture's presence and its exclusion from assured standing context; no user review is fabricated. Corpora remain46golden/40vertical cases. Fingerprint regeneration retires old-source applicability only and supplies no vertical qualification, activation or paid execution.

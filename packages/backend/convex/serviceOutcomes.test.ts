@@ -132,7 +132,9 @@ test("stale completion and duplicate native accounts cannot invent accepted hist
   const h = await setup();
   expect(await complete(h, report(1), 2)).toBe(false);
   const malformed = report(1);
-  malformed.accounts.push(malformed.accounts[0]);
+  const duplicateAccount = malformed.accounts[0];
+  if (!duplicateAccount) throw new Error("missing fixture account");
+  malformed.accounts.push(duplicateAccount);
   await expect(complete(h, malformed)).rejects.toThrow();
   expect(await h.t.run((ctx) => ctx.db.query("serviceOutcomeObservations").collect())).toHaveLength(
     0,

@@ -89,6 +89,8 @@ test("routing and shared CLI edits retire both evaluator identities without chan
     "packages/core/src/serviceOutcomes.ts",
     "packages/core/src/socialServiceOutcome.ts",
     "packages/backend/convex/serviceOutcomes.ts",
+    "packages/backend/convex/blueprint.ts",
+    "packages/core/src/blueprint.ts",
     "packages/backend/convex/managedServiceRecurrence.ts",
   ];
   for (const relativePath of dependencies) {

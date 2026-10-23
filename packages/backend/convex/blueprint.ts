@@ -11,7 +11,10 @@ import {
   BLUEPRINT_SEGMENTS,
   type BlueprintDiffRow,
   type BlueprintField,
+  type BlueprintFieldProvenance,
+  type BlueprintLedgerField,
   type BusinessBlueprint,
+  blueprintEntryIdentity,
   type DerivedCandidate,
   deserializeBlueprint,
   deserializeProfile,
@@ -21,7 +24,9 @@ import {
   PULSE_WINDOW_MS,
   type PulseGlobals,
   type PulseStep,
+  parseBlueprintProvenance,
   probesFor,
+  projectBlueprintLedger,
   renderSpine,
   type SegmentPulse,
   serializeBlueprint,
@@ -36,6 +41,7 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalQuery, type QueryCtx } from "./_generated/server";
+import { appendAudit } from "./audit";
 import { toGoal } from "./goals";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
@@ -61,7 +67,7 @@ type DeriveCandidatesResult =
     }
   | { ok: true; candidates: DerivedCandidate[] };
 
-type GroundedSource = { docId: string; title: string; text: string };
+type GroundedSource = { docId: string; title: string; text: string; passages: string[] };
 type HydratedGround = { docIds: string[]; titles: string[]; chunks: string[] };
 type Probe = { field: BlueprintField; query: string };
 type BuildBlueprintDraftResult =
@@ -84,6 +90,7 @@ type BlueprintDraft = {
   blueprint: BusinessBlueprint;
   diff: BlueprintDiffRow[];
   sourceDocIds: string[];
+  fieldProvenance?: string;
 };
 type ConfirmBlueprintResult =
   | { ok: false; reason: "no_draft" }
@@ -100,6 +107,150 @@ type BlueprintStateResult = {
 const BLUEPRINT_KIND = "business_blueprint";
 const BLUEPRINT_TITLE = "Business blueprint";
 const BLUEPRINT_FIELD_SET = new Set<string>(BLUEPRINT_FIELDS);
+
+type SourceSnapshot = { docId: string; hash: string; createdAt: number };
+type TextWitness = { docId: string; text: string; kind: "profile" | "chunks" };
+async function sourceSnapshot(
+  ctx: QueryCtx,
+  tenantId: string,
+  id: string,
+  witnesses: readonly TextWitness[] = [],
+): Promise<SourceSnapshot | null> {
+  const nativeId = ctx.db.normalizeId("vaultDocuments", id);
+  const doc = nativeId ? await ctx.db.get(nativeId) : null;
+  if (
+    !doc ||
+    doc.tenantId !== tenantId ||
+    doc.status !== "ready" ||
+    !doc.text ||
+    !Number.isSafeInteger(doc.createdAt) ||
+    doc.createdAt < 0 ||
+    (await sealedIn(ctx, [doc])).has(doc._id)
+  )
+    return null;
+  // Hydrated passages may precede this transaction. Only cite this version when every byte
+  // actually supplied to synthesis is still present in the native snapshot being hashed.
+  const sourceText = doc.text;
+  for (const witness of witnesses) {
+    if (!witness.text.trim()) return null;
+    if (witness.kind === "profile") {
+      if (!sourceText.startsWith(witness.text)) return null;
+    } else if (!sourceText.includes(witness.text)) return null;
+  }
+  const hash = await contentHash(doc.text);
+  // A pending or stale ingest hash does not certify the text that was actually read.
+  return hash === doc.contentHash ? { docId: doc._id, hash, createdAt: doc.createdAt } : null;
+}
+
+export const sourceSnapshotsForTenant = internalQuery({
+  args: {
+    tenantId: v.string(),
+    docIds: v.array(v.string()),
+    textWitnesses: v.optional(
+      v.array(
+        v.object({
+          docId: v.string(),
+          text: v.string(),
+          kind: v.union(v.literal("profile"), v.literal("chunks")),
+        }),
+      ),
+    ),
+  },
+  handler: async (ctx, { tenantId, docIds, textWitnesses = [] }): Promise<SourceSnapshot[]> => {
+    if (
+      docIds.length > 64 ||
+      textWitnesses.length > 128 ||
+      textWitnesses.reduce((n, w) => n + w.text.length, 0) > 256_000 ||
+      textWitnesses.some((w) => !docIds.includes(w.docId))
+    )
+      throw new Error("INVALID_BLUEPRINT_SOURCES");
+    const snapshots = await Promise.all(
+      [...new Set(docIds)].map((id) =>
+        sourceSnapshot(
+          ctx,
+          tenantId,
+          id,
+          textWitnesses.filter((w) => w.docId === id),
+        ),
+      ),
+    );
+    return snapshots.filter((row): row is SourceSnapshot => row !== null);
+  },
+});
+
+export type BusinessLedgerResult = {
+  blueprintDocId: string | null;
+  fields: BlueprintLedgerField[];
+};
+/** Shared by the profile Ledger and Executive context; neither can refresh or confirm a source. */
+export async function readBusinessLedgerForTenant(
+  ctx: QueryCtx,
+  tenantId: string,
+): Promise<BusinessLedgerResult> {
+  const profile = await ctx.db
+    .query("tenantProfiles")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .unique();
+  const doc = profile?.blueprintDocId ? await ctx.db.get(profile.blueprintDocId) : null;
+  if (
+    !doc ||
+    doc.tenantId !== tenantId ||
+    doc.kind !== BLUEPRINT_KIND ||
+    doc.status !== "ready" ||
+    !doc.text
+  )
+    return { blueprintDocId: null, fields: [] };
+  const blueprint = deserializeBlueprint(doc.text);
+  const blueprintHash = await contentHash(doc.text);
+  const metadata = parseBlueprintProvenance(profile?.blueprintFieldProvenance);
+  const validMetadata = metadata?.blueprintHash === blueprintHash ? metadata : null;
+  const sources = await Promise.all(
+    [
+      ...new Set(
+        validMetadata?.fields.flatMap((row) => (row.sourceDocId ? [row.sourceDocId] : [])) ?? [],
+      ),
+    ].map(async (docId) => {
+      const snapshot = await sourceSnapshot(ctx, tenantId, docId);
+      return { docId, hash: snapshot?.hash ?? "", available: snapshot !== null };
+    }),
+  );
+  const reviewRefs: string[] = [];
+  for (const row of validMetadata?.fields ?? []) {
+    const id = row.reviewAuditId ? ctx.db.normalizeId("audit", row.reviewAuditId) : null;
+    const audit = id ? await ctx.db.get(id) : null;
+    if (
+      audit?.tenantId === tenantId &&
+      audit.eventType === "blueprint.confirmed" &&
+      audit.actor === "user" &&
+      audit.payload.docId === doc._id &&
+      audit.ts === row.reviewedAt &&
+      Array.isArray(audit.payload.fieldRefs) &&
+      audit.payload.fieldRefs.some((ref: unknown) => ref === `${row.field}:${row.entryHash}`)
+    )
+      reviewRefs.push(`${row.field}:${row.entryHash}:${audit._id}`);
+  }
+  const entryHashes: Partial<Record<BlueprintField, string>> = {};
+  for (const field of BLUEPRINT_FIELDS) {
+    const entry = blueprint[field];
+    if (entry) entryHashes[field] = await contentHash(blueprintEntryIdentity(entry));
+  }
+  return {
+    blueprintDocId: doc._id,
+    fields: projectBlueprintLedger({
+      blueprint,
+      blueprintHash,
+      provenance: profile?.blueprintFieldProvenance,
+      entryHashes,
+      sources,
+      reviewRefs,
+    }),
+  };
+}
+export const businessLedger = tenantQuery({
+  args: {},
+  handler: async (ctx): Promise<BusinessLedgerResult> =>
+    readBusinessLedgerForTenant(ctx, ctx.tenantId),
+});
 
 const candidatesSchema = jsonSchema<{ candidates: DerivedCandidate[] }>({
   type: "object",
@@ -186,11 +337,12 @@ export async function __collectGroundedSources(
         const existing = sources[existingIndex];
         if (existing && text && !existing.text.includes(text)) {
           existing.text = `${existing.text}\n\n${text}`.trim();
+          existing.passages.push(text);
         }
         continue;
       }
       indexByDocId.set(docId, sources.length);
-      sources.push({ docId, title: titles[index] ?? "", text });
+      sources.push({ docId, title: titles[index] ?? "", text, passages: text ? [text] : [] });
     }
   }
   return sources;
@@ -324,15 +476,83 @@ export const deriveCandidates = internalAction({
 
 /** Persist a draft on an EXISTING tier row. Never inserts, replaces, or touches live source ids. */
 export const writeDraft = internalMutation({
-  args: { tenantId: v.string(), draftJson: v.string() },
-  handler: async (ctx, { tenantId, draftJson }): Promise<void> => {
+  args: {
+    tenantId: v.string(),
+    draftJson: v.string(),
+    sourceBindings: v.optional(
+      v.array(
+        v.object({
+          field: v.string(),
+          entryHash: v.string(),
+          docId: v.string(),
+          sourceHash: v.string(),
+        }),
+      ),
+    ),
+  },
+  handler: async (ctx, { tenantId, draftJson, sourceBindings = [] }): Promise<void> => {
     const existing = await ctx.db
       .query("tenantProfiles")
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
       .unique();
     if (!existing) throw new ConvexError({ code: "NO_TENANT_PROFILE" });
+    if (sourceBindings.length > BLUEPRINT_FIELDS.length * 2)
+      throw new Error("INVALID_BLUEPRINT_SOURCES");
+    const draft = JSON.parse(draftJson) as BlueprintDraft;
+    // All metadata is minted here from native rows. draftJson cannot supply a review or source.
+    const live = await readLiveForTenant(ctx, tenantId);
+    const previous = parseBlueprintProvenance(existing.blueprintFieldProvenance);
+    const carried =
+      live && previous?.blueprintHash === (await contentHash(live.text)) ? previous.fields : [];
+    const fields: BlueprintFieldProvenance[] = [];
+    for (const field of BLUEPRINT_FIELDS) {
+      const entries = [
+        draft.blueprint[field],
+        ...draft.diff.filter((row) => row.field === field).map((row) => row.derived),
+      ];
+      for (const entry of entries) {
+        if (!entry) continue;
+        const entryHash = await contentHash(blueprintEntryIdentity(entry));
+        if (fields.some((row) => row.field === field && row.entryHash === entryHash)) continue;
+        const binding = sourceBindings.find(
+          (row) => row.field === field && row.entryHash === entryHash,
+        );
+        const snapshot = binding ? await sourceSnapshot(ctx, tenantId, binding.docId) : null;
+        if (binding && snapshot?.hash !== binding.sourceHash)
+          throw new ConvexError({ code: "BLUEPRINT_SOURCE_CHANGED" });
+        const source = snapshot?.hash === binding?.sourceHash ? snapshot : null;
+        const old = carried.find((row) => row.field === field && row.entryHash === entryHash);
+        if (
+          old &&
+          (!binding || (old.sourceDocId === source?.docId && old.sourceHash === source?.hash))
+        ) {
+          fields.push(old);
+          continue;
+        }
+        fields.push({
+          field,
+          entryHash,
+          sourceDocId: source?.docId ?? null,
+          sourceHash: source?.hash ?? null,
+          sourceCreatedAt: source?.createdAt ?? null,
+          firstRecordedAt: old?.firstRecordedAt ?? Date.now(),
+          reviewedAt: null,
+          reviewAuditId: null,
+        });
+      }
+    }
+    const fieldProvenance = JSON.stringify({
+      version: 1,
+      blueprintHash: await contentHash(serializeBlueprint(draft.blueprint)),
+      fields,
+    });
     await ctx.db.patch(existing._id, {
-      blueprintDraft: draftJson,
+      blueprintDraft: JSON.stringify({
+        blueprint: draft.blueprint,
+        diff: draft.diff,
+        sourceDocIds: draft.sourceDocIds,
+        fieldProvenance,
+      }),
       blueprintDraftAt: Date.now(),
     });
   },
@@ -373,6 +593,21 @@ export const confirmBlueprint = tenantMutation({
 
     const text = serializeBlueprint(final);
     const hash = await contentHash(text);
+    const draftMetadata = parseBlueprintProvenance(draft.fieldProvenance);
+    const candidateMetadata =
+      draftMetadata?.blueprintHash === (await contentHash(serializeBlueprint(draft.blueprint)))
+        ? draftMetadata.fields
+        : [];
+    // A new proposal cannot acquire a fresh citation after its source changes during review.
+    for (const item of candidateMetadata) {
+      if (item.reviewAuditId !== null || !item.sourceDocId) continue;
+      const selected = final[item.field];
+      if (!selected || (await contentHash(blueprintEntryIdentity(selected))) !== item.entryHash)
+        continue;
+      const current = await sourceSnapshot(ctx, ctx.tenantId, item.sourceDocId);
+      if (current?.hash !== item.sourceHash)
+        throw new ConvexError({ code: "BLUEPRINT_SOURCE_CHANGED" });
+    }
     const size = new TextEncoder().encode(text).length;
     const pointedDoc = row.blueprintDocId ? await ctx.db.get(row.blueprintDocId) : null;
 
@@ -402,20 +637,18 @@ export const confirmBlueprint = tenantMutation({
       });
     }
 
-    await ctx.db.patch(row._id, {
-      blueprintDocId: docId,
-      blueprintConfirmedAt: Date.now(),
-      blueprintSourceDocIds: draft.sourceDocIds,
-      blueprintDraft: undefined,
-      blueprintDraftAt: undefined,
-    });
     const sourceDocCount = draft.sourceDocIds.length;
     const fieldCount = BLUEPRINT_FIELDS.filter((field) => final[field] !== null).length;
     const additionsApplied = draft.diff.filter((diffRow) => diffRow.kind === "addition").length;
     const contradictionsAccepted = draft.diff.filter(
       (diffRow) => diffRow.kind === "contradiction" && accepted.has(diffRow.field),
     ).length;
-    await ctx.runMutation(internal.audit.log, {
+    const fieldRefs: string[] = [];
+    for (const field of BLUEPRINT_FIELDS) {
+      const entry = final[field];
+      if (entry) fieldRefs.push(`${field}:${await contentHash(blueprintEntryIdentity(entry))}`);
+    }
+    const reviewAuditId = await appendAudit(ctx, {
       tenantId: ctx.tenantId,
       correlationId: crypto.randomUUID(),
       eventType: "blueprint.confirmed",
@@ -428,7 +661,40 @@ export const confirmBlueprint = tenantMutation({
         fieldCount,
         additionsApplied,
         contradictionsAccepted,
+        fieldRefs: fieldRefs.sort(),
       },
+    });
+    const review = await ctx.db.get(reviewAuditId);
+    if (!review) throw new Error("BLUEPRINT_REVIEW_UNAVAILABLE");
+    const candidates = candidateMetadata;
+    const fields: BlueprintFieldProvenance[] = [];
+    for (const field of BLUEPRINT_FIELDS) {
+      const entry = final[field];
+      if (!entry) continue;
+      const entryHash = await contentHash(blueprintEntryIdentity(entry));
+      const prior = candidates.find((item) => item.field === field && item.entryHash === entryHash);
+      fields.push(
+        prior?.reviewAuditId
+          ? prior
+          : {
+              field,
+              entryHash,
+              sourceDocId: prior?.sourceDocId ?? null,
+              sourceHash: prior?.sourceHash ?? null,
+              sourceCreatedAt: prior?.sourceCreatedAt ?? null,
+              firstRecordedAt: prior?.firstRecordedAt ?? review.ts,
+              reviewedAt: review.ts,
+              reviewAuditId,
+            },
+      );
+    }
+    await ctx.db.patch(row._id, {
+      blueprintDocId: docId,
+      blueprintConfirmedAt: review.ts,
+      blueprintSourceDocIds: draft.sourceDocIds,
+      blueprintFieldProvenance: JSON.stringify({ version: 1, blueprintHash: hash, fields }),
+      blueprintDraft: undefined,
+      blueprintDraftAt: undefined,
     });
     return { ok: true, docId };
   },
@@ -537,9 +803,62 @@ export const buildBlueprintDraft = tenantAction({
         : stated;
     const probes = probesFor(probeBase);
 
-    const sources = await __collectGroundedSources(probes, async (query) =>
-      ctx.runAction(internal.vaultGround.vaultGroundHydrated, { tenantId, query }),
+    const sources = (
+      await __collectGroundedSources(probes, async (query) =>
+        ctx.runAction(internal.vaultGround.vaultGroundHydrated, { tenantId, query }),
+      )
+    ).filter((source) => source.text.trim());
+    const snapshots: SourceSnapshot[] = await ctx.runQuery(
+      internal.blueprint.sourceSnapshotsForTenant,
+      {
+        tenantId,
+        docIds: [
+          ...sources.map((source) => source.docId),
+          ...(profileDocs[0] ? [profileDocs[0].docId] : []),
+        ],
+        textWitnesses: [
+          ...sources.flatMap((source) =>
+            source.passages.map((text) => ({ docId: source.docId, text, kind: "chunks" as const })),
+          ),
+          ...(profileDocs[0]
+            ? [{ docId: profileDocs[0].docId, text: profileDocs[0].text, kind: "profile" as const }]
+            : []),
+        ],
+      },
     );
+    if (
+      [
+        ...sources.map((source) => source.docId),
+        ...(profileDocs[0] ? [profileDocs[0].docId] : []),
+      ].some((id) => !snapshots.some((snapshot) => snapshot.docId === id))
+    )
+      throw new ConvexError({ code: "BLUEPRINT_SOURCE_CHANGED" });
+    const sourceBindings: {
+      field: string;
+      entryHash: string;
+      docId: string;
+      sourceHash: string;
+    }[] = [];
+    const bind = async (
+      field: BlueprintField,
+      entry: NonNullable<BusinessBlueprint[BlueprintField]>,
+      docId: string,
+    ) => {
+      const source = snapshots.find((row) => row.docId === docId);
+      if (source)
+        sourceBindings.push({
+          field,
+          entryHash: await contentHash(blueprintEntryIdentity(entry)),
+          docId,
+          sourceHash: source.hash,
+        });
+    };
+    if (profileDocs[0])
+      for (const field of BLUEPRINT_FIELDS) {
+        const entry = stated[field];
+        if (entry && field !== "tier" && field !== "entities")
+          await bind(field, entry, profileDocs[0].docId);
+      }
 
     let derived: ReturnType<typeof validateCandidates>["derived"] = {};
     let dropped: ReturnType<typeof validateCandidates>["dropped"] = [];
@@ -554,6 +873,18 @@ export const buildBlueprintDraft = tenantAction({
       );
       if (!synthesis.ok) return synthesis;
       ({ derived, dropped } = validateCandidates(synthesis.candidates, sources));
+      const bound = new Set<BlueprintField>();
+      for (const candidate of synthesis.candidates) {
+        // Use the same admission rule, including first surviving candidate, as the merge input.
+        const one = validateCandidates([candidate], sources).derived;
+        for (const field of BLUEPRINT_FIELDS) {
+          const entry = one[field];
+          if (!entry || bound.has(field)) continue;
+          bound.add(field);
+          const source = sources[candidate.sourceIndex];
+          if (source) await bind(field, entry, source.docId);
+        }
+      }
     }
 
     const { blueprint, diff } = mergeBlueprint(stated, derived, liveBlueprint);
@@ -562,6 +893,7 @@ export const buildBlueprintDraft = tenantAction({
     await ctx.runMutation(internal.blueprint.writeDraft, {
       tenantId,
       draftJson: JSON.stringify({ blueprint, diff, sourceDocIds }),
+      sourceBindings,
     });
 
     return {
@@ -751,6 +1083,13 @@ export const spineForTenant = internalQuery({
       const live = await readLiveForTenant(ctx, tenantId);
       if (live === null) return null;
       const blueprint = deserializeBlueprint(live.text);
+      const ledger = await readBusinessLedgerForTenant(ctx, tenantId);
+      const verified = new Set(
+        ledger.fields.filter((row) => row.sourceState === "current").map((row) => row.field),
+      );
+      const currentBlueprint = { ...blueprint };
+      for (const field of BLUEPRINT_FIELDS)
+        if (!verified.has(field)) currentBlueprint[field] = null;
       const { count } = await unincorporatedFor(ctx, tenantId, live.sourceDocIds);
       const goalRows = await ctx.db
         .query("goals")
@@ -758,7 +1097,7 @@ export const spineForTenant = internalQuery({
           q.eq("tenantId", tenantId).eq("status", "active").gt("targetDate", undefined),
         )
         .take(3);
-      return renderSpine(blueprint, {
+      return renderSpine(currentBlueprint, {
         unincorporatedCount: count,
         goals: goalRows.map(toGoal),
       });

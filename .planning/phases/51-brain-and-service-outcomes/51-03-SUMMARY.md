@@ -15,3 +15,4 @@ Execution success is not goal achievement. Feedback cannot confirm business fact
 Local source/provenance behavior is covered by core serviceOutcomes (6) and native serviceOutcomes (8) tests. Tool integration and final repository checks are recorded by their owning integration pass; no new paid semantic evaluation or active skill/body change occurred here.
 
 Remaining: actual outcome-grounded agenda/proactive proposal integration, existing rejection/recovery and authenticated behavior acceptance. No universal business-improvement or self-improvement claim follows from this read-only layer.
+The source-aware Business Ledger is now implemented in the existing profile UI and joined into serviceBrainView.businessKnowledge. The Executive standing spine shares its native source/review validation; legacy fixtures stay outside assured context. See51-02-SUMMARY.md and ADR065. Hosted acceptance remains open.

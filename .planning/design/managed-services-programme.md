@@ -27,6 +27,10 @@ Track delivery by working seams (setup, readiness, trusted start, status, stop a
 
 ## What remains authoritative
 
+### Bounded attended delivery amendment, 2026-10-23
+
+[ADR-066](../../docs/decisions/066-attended-built-in-social-admission.md) separates the existing global Executive's attended social draft/report capability from the unrelated authored-skill, pack and vertical qualification families. Its own current-source CI, native readiness and joined public-start acceptance remain required, together with authenticated release checks. The built-in slice may release on that evidence without a composite Phase48 seal; no old qualification is stamped complete. Only social-marketing, social.prepare/social.report, one exact active global cockpit pin, native grants, current owned accounts, active controls and a bounded budget are admitted. Overrides, extra skills, packs, business review, verticals, publishing authority and recurrence remain outside this slice. This deliberately supersedes the earlier blanket release dependency for this narrow attended capability, while the remaining programme and historical evidence retain their meaning.
+
 ### Development amendment, 2026-10-23
 
 The owner's repeated instruction to finish the engine extends independent offline work to a named inert native recurrence adapter, under [ADR-063](../../docs/decisions/063-inert-recurrence-construction.md). Synthetic native tests may construct persisted claims, uniqueness, stale approval/control/account fences, overlap, missed occurrences, whole-run reservation and stop/reconciliation. The callable route remains disabled with no override, cadence, scheduler registration, rearming, unattended dispatch or provider egress. Occurrence accounting is not yet integrated with provider-call consumption. Existing reporting exceptions remain unchanged. Historical `defer` remains the active activation decision; construction does not count as `enable-safe`, live acceptance, paid consent or qualification. This amendment replaces the earlier development-only prohibition on constructing recurrence, not release or activation requirements.

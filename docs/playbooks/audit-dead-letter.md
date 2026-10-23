@@ -1356,3 +1356,7 @@ Independent review, 2026-09-10: synthetic eval teardown now deletes each unexpor
 ## Delivery receipt preservation — 2026-10-15
 
 Last verified: 2026-10-15 — workflow failure handling preserves confirmed delivery receipts and holds uncertain attempts instead of declaring them failed. Delivery reconciliation records user observation separately from provider receipt events and never reopens an attempt for sending.
+
+### 2026-10-23 — Blueprint review identity
+
+blueprint.confirmed retains its reference/count payload and adds bounded fieldRefs containing only closed field identifiers and SHA-256 entry hashes. The existing append-only writer returns the actual review reference/time for the content-plane provenance sidecar. Ledger reads check owned user-review identity, document ID, exact review time and field/hash binding before presenting a reviewed source. The browser audit projection continues dropping non-primitive arrays; business values, text and private source contents never enter these audit payloads.

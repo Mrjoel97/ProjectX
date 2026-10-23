@@ -2273,3 +2273,11 @@ paid-call graph and prerequisites. No new paid evaluation is certified by these 
 > currency budget; live acceptance remains required.
 
 Last verified: 2026-10-15 — Operations evaluation signals inspect at most1000 latest rows per source and at most90days. Results carry complete/rowCap; the dashboard labels partial samples and hides the cross-source DLQ rate when incomplete. Future or invalid time windows refuse.
+
+### 2026-10-23 — Field-level Business Ledger
+
+ADR065 keeps a bounded versioned blueprintFieldProvenance sidecar on the existing tenantProfile. Native synthesis snapshots exact source IDs/hash/time before work, confirmation records the actual immutable user-review audit and field/hash refs, and unchanged fields retain their first recording/review times. Observation time is unknown unless actually supplied. Review is a proposal decision, not verification or userProvided authority. The existing profile now shows the Business Ledger with stated/inferred labels, source availability, source links and optional dates/fingerprint details. The Executive service brain reads the same ledger helper. Assured standing context excludes changed, removed and unverified legacy linkage; the values remain visible for review. No new fact store, migration, source refiling, paid work or goal completion occurs.
+
+### 2026-10-23 — Bounded attended admission
+
+ADR066 replaces the blanket empty admission with the existing built-in attended social draft/report capability. Only social-marketing, social.prepare/social.report, exactly one active global cockpit pin, current native account scopes and Executive grants may be ready; budget/control/identity and per-step fences still apply. Tenant overrides, additional skills, packs, business review and verticals remain outside admission. This source slice is accepted by its own current-source CI/native public-start proof and authenticated release checks, not by qualifying an unrelated offer-architect candidate. No prior phase/evidence is rewritten. Recurrence stays disabled, drafts still need exact-content review for scheduling, and unknown costs/effects block replay. No paid run or deployment occurred during construction.

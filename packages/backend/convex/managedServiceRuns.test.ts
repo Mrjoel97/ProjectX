@@ -19,16 +19,28 @@ import { internalAction } from "./lib/tenantLifecycle";
 import { buildManagedServiceTools } from "./managedServiceTools";
 import schema from "./schema";
 
-// Only the authoritative read-only admission result is mocked for future qualified environments.
-// Native claims, CAS, component workflow, thread store, fences, and accounting stay real.
-const flags = vi.hoisted(() => ({ admitted: false, calls: 0, fail: false, scripted: false }));
-vi.mock("./managedServices", async (original) => ({
-  ...(await original<typeof import("./managedServices")>()),
-  managedServiceReadiness: async () => ({
-    ready: flags.admitted,
-    reasons: flags.admitted ? [] : ["operation_unqualified"],
-  }),
+// Isolated fence fixtures can control admission. The joined public-start acceptance explicitly
+// uses production readiness with real owned accounts and an exact qualified global body.
+const flags = vi.hoisted(() => ({
+  admitted: false,
+  nativeReadiness: false,
+  calls: 0,
+  fail: false,
+  scripted: false,
 }));
+vi.mock("./managedServices", async (original) => {
+  const actual = await original<typeof import("./managedServices")>();
+  return {
+    ...actual,
+    managedServiceReadiness: async (...args: Parameters<typeof actual.managedServiceReadiness>) =>
+      flags.nativeReadiness
+        ? actual.managedServiceReadiness(...args)
+        : {
+            ready: flags.admitted,
+            reasons: flags.admitted ? [] : ["operation_unqualified"],
+          },
+  };
+});
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const agentModules = import.meta.glob(
   "../node_modules/@convex-dev/agent/src/component/**/!(*.test).ts",
@@ -103,6 +115,7 @@ const realSetTimeout = globalThis.setTimeout;
 const realClearTimeout = globalThis.clearTimeout;
 beforeEach(() => {
   flags.admitted = false;
+  flags.nativeReadiness = false;
   flags.calls = 0;
   flags.fail = false;
   flags.scripted = false;
@@ -251,7 +264,11 @@ async function harness() {
 }
 
 test("unqualified production admission stops public start before claims, threads or provider work", async () => {
-  const { t, asA, claimArgs } = await harness();
+  const { t, asA, claimArgs, config } = await harness();
+  flags.nativeReadiness = true;
+  const [cockpit] = config.skills;
+  if (!cockpit) throw new Error("MISSING_NATIVE_COCKPIT_FIXTURE");
+  await t.run((ctx) => ctx.db.patch(cockpit.skillId, { status: "candidate" }));
   const { tenantId: _tenant, ...args } = claimArgs;
   await expect(asA.action(api.managedServiceRuns.start, args)).rejects.toThrow(
     "SERVICE_EXECUTION_UNAVAILABLE",
@@ -505,9 +522,16 @@ test("late workflow terminal cannot overwrite a known terminal or accept a diffe
 });
 
 test("public start binds one owned thread and durable once-only workflow; duplicate start never reruns", async () => {
-  const { t, asA, claimArgs, messages } = await harness();
+  const { t, asA, claimArgs, messages, config } = await harness();
   flags.admitted = true;
+  flags.nativeReadiness = true;
   flags.scripted = true;
+  const [cockpit] = config.skills;
+  if (!cockpit) throw new Error("MISSING_NATIVE_COCKPIT_FIXTURE");
+  await t.run((ctx) => ctx.db.patch(cockpit.skillId, { evidence: undefined }));
+  expect(
+    (await asA.query(api.managedServices.status, { serviceId: config.serviceId }))?.readiness.ready,
+  ).toBe(true);
   const { tenantId: _tenant, ...args } = claimArgs;
   const started = await asA.action(api.managedServiceRuns.start, args);
   const again = await asA.action(api.managedServiceRuns.start, args);

@@ -6,14 +6,14 @@ completed: false
 requirements-completed: []
 ---
 
-# 51-02 — Cited business-source read implemented locally
+# 51-02 — Source-aware Business Ledger implemented locally
 
-serviceBrainView now joins the current tenant-owned goal, ready business-profile source, latest existing foundation revision and latest native service outcome. It creates no second business-fact store. Returned references, hashes, creation/confirmation times and uncertainty preserve the authority of their original records.
+The existing profile now renders actual blueprint fields through blueprint.businessLedger and BusinessLedgerPanel. No new navigation or fact store was introduced. A bounded versioned sidecar on tenantProfiles binds exact blueprint/entry hashes, original owned source IDs/hash/creation times and actual immutable review references. First-recorded/review times survive unchanged carry-forward; unknown observation time remains unknown. The native user review records a proposal decision, not independent verification or userProvided authority.
 
-A business_profile document can be source=agent and can be edited without changing its createdAt. Therefore neither that label, its kind nor its creation timestamp proves confirmed/fresh business facts. Only an exact latest user-published foundation document/reference/hash match with bounded present owned source references supplies user_published_snapshot and the original revision's confirmation time. This is snapshot publication evidence, not promotion of every agent claim to userProvided. Changed/foreign/withdrawn evidence removes confirmation.
+Synthesis preserves original retrieved chunk boundaries and the exact native profile prefix. A bounded snapshot query checks those witnesses against the same owned ready source bytes it hashes before paid work. Changed/withdrawn witnesses refuse synthesis; native write/confirm hash fences cover later races. Reviews add closed field/hash references to the existing count/ref-only audit payload. Reads validate exact native user audit/document/field/hash/time identity, source ownership/readiness/sealing and bytes. No title-based citation or fabricated review exists.
 
-Native serviceOutcomes (8) tests include missing/foreign profile access, source-only agent documents, preserved stale confirmation time, changed hashes and withdrawal. No LLM, provider call, fact overwrite or goal transition was performed.
+Business Ledger and Executive standing context share the projection. The interface retains legacy, changed and withdrawn values with explicit source state and opens only accessible sources. Assured context excludes those unverified claims. The existing origin markers remain statements/inferences; their wording no longer promotes an agent-authored profile into settled user truth. serviceBrainView includes the same bounded cited field view alongside goal, original profile snapshot metadata and operational/usefulness/measurement outcomes.
 
-Remaining: the complete Business Ledger/profile interface, cited field-level dossier/context behavior and authenticated source/erasure journey. This bounded metadata read is partial implementation, not completion of 51-02 or qualification of a hosted business dossier.
+Focused proof: 61 core Blueprint tests, 45 native Blueprint tests and 8 Ledger UI tests passed. Six mounted local Chrome views at390/1440 pixels were captured and inspected without overflow; synthetic data and production CSS/fonts were used. These are source/native/local-browser results, not hosted authenticated acceptance. ADR065 records the decision. Native source changes conservatively refuse noncontiguous prejoined passages that cannot be proven byte-for-byte.
 
-The local outcomes/setup UI checks pass 17/15 tests and expose the real user goal/usefulness seam. They do not implement or qualify the full Business Ledger/profile interface. ADR-064 records source authority and history semantics.
+Remaining: current-source release and authenticated source/erasure journey, plus Phase51-04 end-to-end qualification. No provider call, paid evaluation, registry activation, source refiling, goal transition or production deployment occurred.

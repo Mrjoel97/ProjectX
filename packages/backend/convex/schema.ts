@@ -3068,6 +3068,7 @@ export default defineSchema({
     /** JSON: `{ blueprint: BusinessBlueprint, diff: BlueprintDiffRow[] }`. One optional string
      *  rather than a nested validator — the draft is read whole, parsed once, and replaced whole. */
     blueprintDraft: v.optional(v.string()),
+    blueprintFieldProvenance: v.optional(v.string()),
     blueprintDraftAt: v.optional(v.number()),
     /** The `ready` doc ids the LIVE blueprint was synthesized from. Stage-1 drift is the set
      *  difference against the tenant's current ready docs — a pure comparison, no detector. */

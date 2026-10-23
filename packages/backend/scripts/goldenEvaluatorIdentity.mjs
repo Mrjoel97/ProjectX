@@ -24,6 +24,8 @@ export const EVALUATOR_FILES = [
   "packages/core/src/serviceOutcomes.ts",
   "packages/core/src/socialServiceOutcome.ts",
   "packages/backend/convex/serviceOutcomes.ts",
+  "packages/backend/convex/blueprint.ts",
+  "packages/core/src/blueprint.ts",
   "packages/backend/convex/managedServiceRecurrence.ts",
   "packages/backend/convex/buffer.ts",
   "packages/backend/convex/bufferActions.ts",

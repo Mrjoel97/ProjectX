@@ -1000,3 +1000,7 @@ extended to the one new field that could break it. Plan 14-09 pins it with a mut
 scan.
 
 See `voice.md` § "Voice-doc sessions (Phase 14)" for the voice half.
+
+### 2026-10-23 — Field-level Business Ledger
+
+ADR065 keeps a bounded versioned blueprintFieldProvenance sidecar on the existing tenantProfile. Native synthesis snapshots exact source IDs/hash/time before work, confirmation records the actual immutable user-review audit and field/hash refs, and unchanged fields retain their first recording/review times. Observation time is unknown unless actually supplied. Review is a proposal decision, not verification or userProvided authority. The existing profile now shows the Business Ledger with stated/inferred labels, source availability, source links and optional dates/fingerprint details. The Executive service brain reads the same ledger helper. Assured standing context excludes changed, removed and unverified legacy linkage; the values remain visible for review. No new fact store, migration, source refiling, paid work or goal completion occurs.

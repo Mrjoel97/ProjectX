@@ -3147,3 +3147,13 @@ refusal from `assertEvaluableCandidate`.
 ### 2026-10-23 — Managed-service outcomes and inert construction identities
 
 The closed golden/vertical evaluator inventories now include the service brain/history/projection policy dependencies and named inert recurrence construction. Refresh generated fingerprints only after final formatting; corpus bytes and historical handoffs remain unchanged. This mechanical retirement prevents prior evidence silently qualifying new runtime/schema dependencies. It does not run an evaluator, spend money or supply qualification. ADR063 keeps recurrence activation deferred.
+
+### 2026-10-23 — Legacy fixture preflight
+
+The isolated golden blueprint seed remains a synthetic unreviewed record. Current-source preflight separately proves the owned fixture document/needle exists and that its needle does not leak into assured standing context. No fake user review is inserted. Case37's expectations and all corpus cases remain unchanged; the source fingerprint is refreshed after this real authority-contract change. These offline controls do not authorize or execute another paid evaluation.
+
+### 2026-10-23 — Bounded attended admission
+
+ADR066 replaces the blanket empty admission with the existing built-in attended social draft/report capability. Only social-marketing, social.prepare/social.report, exactly one active global cockpit pin, current native account scopes and Executive grants may be ready; budget/control/identity and per-step fences still apply. Tenant overrides, additional skills, packs, business review and verticals remain outside admission. This source slice is accepted by its own current-source CI/native public-start proof and authenticated release checks, not by qualifying an unrelated offer-architect candidate. No prior phase/evidence is rewritten. Recurrence stays disabled, drafts still need exact-content review for scheduling, and unknown costs/effects block replay. No paid run or deployment occurred during construction.
+
+Registry compatibility: the narrow built-in cockpit slice reuses the ordinary loader's unique already-active global authority, including supported bootstrap/rollback versions. Exact saved row/version/body and no active tenant overlay remain mandatory in both setup options and readiness. It does not require a new evaluation of an unchanged already-live body. Candidate/tenant activation and all existing evaluator/owner-approval transitions are unchanged; no evidence is manufactured.

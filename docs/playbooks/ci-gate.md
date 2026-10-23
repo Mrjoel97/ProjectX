@@ -441,3 +441,7 @@ provider acceptance still require verification.
 ### 2026-10-23 — Managed-service outcomes and inert construction identities
 
 The closed golden/vertical evaluator inventories now include the service brain/history/projection policy dependencies and named inert recurrence construction. Refresh generated fingerprints only after final formatting; corpus bytes and historical handoffs remain unchanged. This mechanical retirement prevents prior evidence silently qualifying new runtime/schema dependencies. It does not run an evaluator, spend money or supply qualification. ADR063 keeps recurrence activation deferred.
+
+### 2026-10-23 — Legacy fixture preflight
+
+The isolated golden blueprint seed remains a synthetic unreviewed record. Current-source preflight separately proves the owned fixture document/needle exists and that its needle does not leak into assured standing context. No fake user review is inserted. Case37's expectations and all corpus cases remain unchanged; the source fingerprint is refreshed after this real authority-contract change. These offline controls do not authorize or execute another paid evaluation.

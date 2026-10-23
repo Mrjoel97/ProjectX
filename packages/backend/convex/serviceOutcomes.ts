@@ -11,6 +11,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { readBusinessLedgerForTenant } from "./blueprint";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 
@@ -200,7 +201,7 @@ async function readRunOutcome(
         row.report.accounts.every((a) => connection.selectedAccountIds.includes(a.accountId)),
     )
     .slice(0, 2);
-  const reports = scoped.map((row) => ({
+  const reports: ZernioReport[] = scoped.map((row) => ({
     ...row.report,
     accounts: row.report.accounts.filter((a) => pins.some((p) => p.accountId === a.accountId)),
   }));
@@ -210,13 +211,18 @@ async function readRunOutcome(
         .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
         .unique()
     : null;
+  const [currentReport, previousReport] = reports;
+  const [currentObservation] = scoped;
   // A deduplicated retrieval keeps the original observation time; expose the current fetch separately.
   if (
-    cached?.connectionId === connection?.connectionId &&
-    reports[0] &&
-    serviceReportIdentity(cached.report) === serviceReportIdentity(scoped[0].report)
+    cached &&
+    connection &&
+    currentReport &&
+    currentObservation &&
+    cached.connectionId === connection.connectionId &&
+    serviceReportIdentity(cached.report) === serviceReportIdentity(currentObservation.report)
   )
-    reports[0].fetchedAt = cached.report.fetchedAt;
+    currentReport.fetchedAt = cached.report.fetchedAt;
   const drafts = await ctx.db
     .query("bufferPosts")
     .withIndex("by_managed_service_run", (q) =>
@@ -230,7 +236,7 @@ async function readRunOutcome(
         .unique()
     : null;
   const retrieval = serviceSourceFreshness({
-    fetchedAt: reports[0]?.fetchedAt ?? Number.NaN,
+    fetchedAt: currentReport?.fetchedAt ?? Number.NaN,
     sourceUpdatedAt: null,
     now: Date.now(),
     maxAgeMs: ZERNIO_DAY_MS,
@@ -263,8 +269,8 @@ async function readRunOutcome(
         capturedAt: row.createdAt,
       })),
       movement:
-        reports.length === 2 && !connection?.lastFailure
-          ? serviceReportMovement(reports[1], reports[0], Date.now(), ZERNIO_DAY_MS)
+        previousReport && currentReport && !connection?.lastFailure
+          ? serviceReportMovement(previousReport, currentReport, Date.now(), ZERNIO_DAY_MS)
           : null,
     },
     social: drafts.slice(0, 10).map((draft) =>
@@ -289,11 +295,11 @@ async function readRunOutcome(
           bufferPostId: draft.bufferPostId,
         },
         report:
-          available && connection && reports[0]
+          available && connection && currentReport
             ? {
                 tenantId: ctx.tenantId,
                 connectionId: connection.connectionId,
-                report: reports[0],
+                report: currentReport,
               }
             : null,
         selectedConnectionId: available && connection ? connection.connectionId : null,
@@ -408,6 +414,7 @@ export const serviceBrainView = tenantQuery({
           }
         : null,
       latestOutcome,
+      businessKnowledge: await readBusinessLedgerForTenant(ctx, ctx.tenantId),
       nextActions: [...new Set(nextActions)].slice(0, 10),
       businessImprovement: "not_established" as const,
     };

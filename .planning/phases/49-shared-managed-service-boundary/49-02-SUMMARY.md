@@ -23,3 +23,9 @@ All service operations remain unadmitted in the server adapter: no client flag o
 ## 2026-10-23 local integration follow-on
 
 The later49-03–05 summaries supersede the initial implementation limits above: native attended start, scoped runtime, per-run budget and service UI are now implemented and locally tested. Explicit Resume changes control revision without starting work. Ordinary Buffer refresh preserves stable permission pins. Operation admission and authenticated release acceptance remain open; no requirement completion is asserted.
+
+### 2026-10-23 integration continuation
+
+ADR066 replaces the blanket placeholder admission with the existing attended built-in social draft/report slice, using actual native registry/account/budget/control readiness. The ordinary loader's already-active global authority includes supported bootstrap/rollback versions; no new evaluation is required merely to wrap an unchanged live body. Candidate activation and all authored/pack/vertical gates remain unchanged. Exact one-global-cockpit scope, current pins and no overlay are still required. This is independent capability delivery rather than a Phase48 composite qualification stamp. Current-source CI, joined native public-start proof and authenticated release checks remain required before release. The recurring adapter remains disabled.
+
+The same continuation adds a field-level Business Ledger and shared standing context under ADR065, with exact native source/review binding, source-race refusal and legacy/withdrawn exclusion from assured context. Phases and requirements are not marked complete by these local source changes.

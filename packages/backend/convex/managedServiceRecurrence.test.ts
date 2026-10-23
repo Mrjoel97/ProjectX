@@ -40,11 +40,12 @@ async function fixture() {
       createdAt: now,
       evidence: JSON.stringify({ pass: true, skillVersions: { "cockpit-agent": 1 } }),
     });
+    const accountId = "aaaaaaaaaaaaaaaaaaaaaaaa";
     const accounts = [
       {
         provider: "buffer" as const,
         connectionId: "connection",
-        accountId: "aaaaaaaaaaaaaaaaaaaaaaaa",
+        accountId,
         connectionRevision: 1,
       },
     ];
@@ -61,10 +62,8 @@ async function fixture() {
       expiresAt: now + 86400_000,
       updatedAt: now,
       organizationId: "org",
-      channels: [
-        { id: accounts[0].accountId, name: "Synthetic", service: "instagram", available: true },
-      ],
-      selectedChannelIds: [accounts[0].accountId],
+      channels: [{ id: accountId, name: "Synthetic", service: "instagram", available: true }],
+      selectedChannelIds: [accountId],
       dailyReports: false,
       nextReportAt: 0,
     });
