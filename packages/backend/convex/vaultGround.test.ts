@@ -13,10 +13,15 @@
 import { type BusinessBlueprint, serializeBlueprint } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { reviewBlueprintFixture } from "../__fixtures__/reviewedBlueprint";
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 
 // The suite-wide offline-fixture consent lives in `vitest.config.mts`; one test below removes it
 // with `vi.stubEnv`. Restoring it HERE rather than as that test's last statement is the point: an
@@ -139,6 +144,7 @@ async function seedConfirmedBlueprint(
   t: ReturnType<typeof convexTest>,
   tenantId = TENANT,
 ): Promise<string> {
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   const docId = await seedDoc(
     t,
     {
@@ -161,9 +167,9 @@ async function seedConfirmedBlueprint(
       derivedAt: Date.now(),
       blueprintDocId: docId,
       blueprintSourceDocIds: [],
-      blueprintConfirmedAt: Date.now(),
     }),
   );
+  await reviewBlueprintFixture(t, tenantId, docId);
   return docId;
 }
 

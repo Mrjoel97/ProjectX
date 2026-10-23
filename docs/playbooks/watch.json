@@ -1,5 +1,6 @@
 {
   "managed-services.md": [
+    "packages/backend/__fixtures__/reviewedBlueprint",
     "packages/core/src/managedService",
     "packages/core/src/serviceOutcomes",
     "packages/core/src/socialServiceOutcome",

@@ -1,11 +1,21 @@
 import { type BusinessBlueprint, serializeBlueprint } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
+import { reviewBlueprintFixture } from "../__fixtures__/reviewedBlueprint";
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
+const newTest = () => {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  return t;
+};
 const sources = import.meta.glob("./**/*.ts", {
   query: "?raw",
   import: "default",
@@ -89,9 +99,9 @@ async function insertConfirmedProfile(
       derivedAt: Date.now(),
       blueprintDocId,
       blueprintSourceDocIds: [],
-      blueprintConfirmedAt: Date.now(),
     });
   });
+  await reviewBlueprintFixture(t, tenantId, blueprintDocId);
 }
 
 const insertFigure = (t: ReturnType<typeof convexTest>, tenantId: string) =>
@@ -108,8 +118,30 @@ const insertFigure = (t: ReturnType<typeof convexTest>, tenantId: string) =>
   });
 
 describe("cockpit business-blueprint turn prompt (BLPR-02, VALIDATION item 24)", () => {
+  test("an unreviewed title-only Blueprint retains its raw values but cannot inject them as assured context", async () => {
+    const t = newTest();
+    const blueprintDocId = await insertBlueprintDocument(t, TENANT_A);
+    await t.run((ctx) =>
+      ctx.db.insert("tenantProfiles", {
+        tenantId: TENANT_A,
+        tier: "startup",
+        tierSource: "derived",
+        derivedAt: Date.now(),
+        blueprintDocId,
+      }),
+    );
+    const planId = await insertPlan(t, TENANT_A);
+    const prompt = await t.action(internal.llm.__cockpitTurnPrompt, {
+      tenantId: TENANT_A,
+      planId,
+      text: TURN_TEXT,
+    });
+    expect(prompt).not.toContain("Acme Water");
+    expect((await t.run((ctx) => ctx.db.get(blueprintDocId)))?.text).toContain("Acme Water");
+    expect(prompt).toContain("Current email plan:");
+  });
   test("a no-tool turn carries the confirmed tenant blueprint through the real read chain", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const docId = await insertBlueprintDocument(t, TENANT_A);
     await insertConfirmedProfile(t, TENANT_A, docId);
     const planId = await insertPlan(t, TENANT_A);
@@ -127,7 +159,7 @@ describe("cockpit business-blueprint turn prompt (BLPR-02, VALIDATION item 24)",
   });
 
   test("a tenant with no blueprint gets the byte-identical legacy prompt", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const planId = await insertPlan(t, TENANT_B);
 
     const prompt = await t.action(internal.llm.__cockpitTurnPrompt, {
@@ -141,7 +173,7 @@ describe("cockpit business-blueprint turn prompt (BLPR-02, VALIDATION item 24)",
   });
 
   test("cross-tenant: tenant B never carries tenant A's blueprint", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const docId = await insertBlueprintDocument(t, TENANT_A);
     await insertConfirmedProfile(t, TENANT_A, docId);
     const planId = await insertPlan(t, TENANT_B);
@@ -157,7 +189,7 @@ describe("cockpit business-blueprint turn prompt (BLPR-02, VALIDATION item 24)",
   });
 
   test("a dangling blueprint pointer fails open to the byte-identical legacy prompt", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const docId = await insertBlueprintDocument(t, TENANT_A);
     await insertConfirmedProfile(t, TENANT_A, docId);
     await t.run(async (ctx) => {
@@ -181,7 +213,7 @@ describe("cockpit business-blueprint turn prompt (BLPR-02, VALIDATION item 24)",
   // as `evaluations.ts`'s grounding chunk and would capture these figures (see
   // `evaluations.test.ts`'s "the finance line never reaches the grounding corpus").
   test("the finance line rides the turn prompt beside the blueprint", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const docId = await insertBlueprintDocument(t, TENANT_A);
     await insertConfirmedProfile(t, TENANT_A, docId);
     await insertFigure(t, TENANT_A);
@@ -203,7 +235,7 @@ describe("cockpit business-blueprint turn prompt (BLPR-02, VALIDATION item 24)",
   // blueprint — the ordinary state of a new account. A single `spineForTenant` string could not
   // express this without also leaking into the grounding corpus.
   test("a tenant with figures and NO blueprint still gets the finance line", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await insertFigure(t, TENANT_B);
     const planId = await insertPlan(t, TENANT_B);
 
@@ -219,7 +251,7 @@ describe("cockpit business-blueprint turn prompt (BLPR-02, VALIDATION item 24)",
   });
 
   test("a tenant with neither is still byte-identical to the legacy prompt", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const planId = await insertPlan(t, TENANT_B);
 
     expect(

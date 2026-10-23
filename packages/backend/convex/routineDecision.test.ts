@@ -682,7 +682,11 @@ describe("the `defer` absence checks, observed FIRING", () => {
     const adrs = readdirSync(join(repoRoot, "docs/decisions"));
     expect(adrs.length).toBeGreaterThan(20);
     expect(adrs).toContain("013-the-render-worker.md");
-    expect(adrs.filter((f) => /routine|recurrence|schedul/i.test(f))).toEqual([]);
+    // ADR-063 permits only disabled construction/testing; the active decision remains defer.
+    // Every other matching filename is still refused by the checks and synthetic controls above.
+    expect(adrs.filter((f) => /routine|recurrence|schedul/i.test(f))).toEqual([
+      "063-inert-recurrence-construction.md",
+    ]);
   });
 });
 
