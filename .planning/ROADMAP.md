@@ -123,7 +123,7 @@ The current execution priority is the five-stage sequence below. [Programme scop
 **Goal:** One tenant-scoped service boundary reuses existing governed execution and gives users setup and supervision instead of manual orchestration.
 **Requirements:** MSVC-03, MSVC-04, MSVC-05, MSVC-06.
 **Depends on:** Phase 48 readiness seal for release/live admission. The October22 execution correction permits independent reversible offline development; no general recurrence is enabled here.
-**Plans:** 0/5 completed; 5/5 authored. 49-01/02 policy and tenant setup are being implemented locally; trusted execution, tool integration, interface and acceptance remain open.
+**Plans:** 0/5 completed; 5/5 authored. Local policy/setup, attended execution, scoped tools and supervision are implemented and tested; arbitrary composition and hosted release acceptance remain open.
 
 - [ ] 49-01-PLAN.md — Define service ownership and policy
 - [ ] 49-02-PLAN.md — Persist tenant setup and bounded service views
@@ -1663,7 +1663,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 48. Readiness and qualification closure | 1/4 | In progress — inventory reconciled; original Phase 23 and Phase 27 qualification gates remain open | - |
-| 49. Shared managed-service boundary | 0/5 | In progress — local policy/setup; release admission blocked | - |
+| 49. Shared managed-service boundary | 0/5 | In progress — attended runtime/UI built locally; acceptance open | - |
 | 50. Recurring read-and-prepare services | 0/4 | Not started — sequential programme dependency | - |
 | 51. Brain and service outcomes | 0/4 | Not started — sequential programme dependency | - |
 | 52. Social marketing service pilot | 0/3 | Not started — sequential programme dependency | - |

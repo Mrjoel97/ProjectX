@@ -35,7 +35,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 74 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 75 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -43,6 +43,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │                                                                            │
 // │ ── Governance & Audit ──────────────────────────────────── ~L150           │
 // │   audit, deadLetters, skills, tenantSkills, savedPrompts, managedServices, │
+// │   managedServiceRuns                                                    │
 // │   knowledgeSearches, pendingTimeouts, exportCursors, guardrailConfig       │
 // │   auditExportQueue                                                       │
 // │                                                                            │
@@ -207,6 +208,42 @@ export default defineSchema({
     .index("by_state_hash", ["stateHash"])
     .index("by_expiry", ["expiresAt"]),
   // Inert tenant setup only. No cadence, credentials, execution history or spend copy.
+  managedServiceRuns: defineTable({
+    tenantId: v.string(),
+    serviceId: v.id("managedServices"),
+    configRevision: v.number(),
+    controlRevision: v.number(),
+    budgetLimitCents: v.number(),
+    requestKey: v.string(),
+    state: v.union(
+      v.literal("claimed"),
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("unknown"),
+      v.literal("stopped"),
+    ),
+    threadId: v.optional(v.string()),
+    planId: v.optional(v.id("plans")),
+    turnId: v.optional(v.string()),
+    workflowId: v.optional(v.string()),
+    terminalCode: v.optional(
+      v.union(
+        v.literal("completed"),
+        v.literal("governed_stop"),
+        v.literal("execution_uncertain"),
+        v.literal("cancelled"),
+        v.literal("setup_incomplete"),
+        v.literal("control_changed"),
+      ),
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_service_request", ["tenantId", "serviceId", "requestKey"])
+    .index("by_service_state", ["tenantId", "serviceId", "state"])
+    .index("by_service_createdAt", ["tenantId", "serviceId", "createdAt"]),
   managedServices: defineTable({
     tenantId: v.string(),
     serviceId: v.string(),
@@ -320,6 +357,8 @@ export default defineSchema({
     tenantId: v.string(),
     connectionId: v.string(),
     revision: v.number(),
+    // Permission generation is independent from rotating an unchanged OAuth credential.
+    grantRevision: v.optional(v.number()),
     ciphertextB64: v.optional(v.string()),
     ivB64: v.optional(v.string()),
     keyVersion: v.union(v.literal("v1"), v.literal("v2")),
@@ -1956,6 +1995,8 @@ export default defineSchema({
       v.literal("readBufferEngagement"),
       v.literal("readZernioEngagement"),
       v.literal("stageBufferPost"),
+      v.literal("readSocialService"),
+      v.literal("startSocialService"),
       v.literal("setMode"),
       v.literal("setSendTime"),
       v.literal("draftBody"),
@@ -3034,6 +3075,7 @@ export default defineSchema({
     kind: v.optional(v.string()),
     // Evaluation uses this same append-only ledger and the existing limiter, never a second bill.
     evalBudgetId: v.optional(v.id("spendEvents")),
+    managedServiceRunId: v.optional(v.id("managedServiceRuns")),
     evalEnvelope: v.optional(
       v.object({
         tenantIds: v.array(v.string()),
@@ -3054,6 +3096,7 @@ export default defineSchema({
     .index("by_tenant_rail_createdAt", ["tenantId", "rail", "createdAt"])
     .index("by_correlation", ["correlationId"])
     .index("by_eval_budget", ["evalBudgetId"])
+    .index("by_managed_service_run", ["managedServiceRunId"])
     .index("by_probe_thread", ["tenantId", "evalAuthoringProbe.threadId"]),
 
   // One durable start per tenant, created before the first paid movement. A missing row means

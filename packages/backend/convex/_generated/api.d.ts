@@ -136,6 +136,8 @@ import type * as revenueTools from "../revenueTools.js";
 import type * as review from "../review.js";
 import type * as savedPrompts from "../savedPrompts.js";
 import type * as managedServices from "../managedServices.js";
+import type * as managedServiceRuns from "../managedServiceRuns.js";
+import type * as managedServiceExecution from "../managedServiceExecution.js";
 import type * as skilloptExport from "../skilloptExport.js";
 import type * as skills from "../skills.js";
 import type * as smoke from "../smoke.js";
@@ -317,6 +319,8 @@ declare const fullApi: ApiFromModules<{
   "review": typeof review;
   "savedPrompts": typeof savedPrompts;
   "managedServices": typeof managedServices;
+  "managedServiceRuns": typeof managedServiceRuns;
+  "managedServiceExecution": typeof managedServiceExecution;
   "skilloptExport": typeof skilloptExport;
   "skills": typeof skills;
   "smoke": typeof smoke;

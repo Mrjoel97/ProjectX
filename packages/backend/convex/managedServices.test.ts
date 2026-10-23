@@ -129,7 +129,7 @@ test("foreign and nonexistent connection references share a refusal; status neve
   expect(JSON.stringify(status)).not.toMatch(/CREDENTIAL_NEEDLE|IV_NEEDLE|PRIVATE_CHANNEL_NAME/);
 });
 
-test("expired, disconnected, unselected, unavailable and reconnected account pins each fail independently", async () => {
+test("disconnected, unselected, unavailable and changed permission pins each fail independently", async () => {
   const { t, a, asA } = await harness();
   const initial = {
     tenantId: a,
@@ -160,7 +160,6 @@ test("expired, disconnected, unselected, unavailable and reconnected account pin
     ).accounts[0]?.connected,
   ).toBe(true);
   for (const patch of [
-    { expiresAt: 0 },
     { status: "disconnected" as const },
     { selectedChannelIds: [] },
     { channels: [{ ...initial.channels[0], available: false }] as typeof initial.channels },
@@ -471,6 +470,81 @@ test("Zernio account source resolves only selected available accounts with local
       })
     ).reasons,
   ).toContain("account_unavailable");
+});
+
+test("Buffer permission pins survive ordinary credential refresh but fail on changed channel selection", async () => {
+  const { t, a, asA } = await harness();
+  const channelId = "a".repeat(24),
+    otherId = "b".repeat(24);
+  const id = await t.run((ctx) =>
+    ctx.db.insert("bufferConnections", {
+      tenantId: a,
+      connectionId: "refreshable",
+      revision: 1,
+      status: "connected",
+      keyVersion: "v1",
+      ciphertextB64: "refreshable-ciphertext",
+      ivB64: "iv",
+      expiresAt: 0,
+      updatedAt: 1,
+      organizationId: "c".repeat(24),
+      channels: [
+        { id: channelId, name: "Selected", service: "linkedin", available: true },
+        { id: otherId, name: "Other", service: "linkedin", available: true },
+      ],
+      selectedChannelIds: [channelId],
+      dailyReports: false,
+      nextReportAt: 0,
+    }),
+  );
+  await asA.mutation(api.managedServices.setup, {
+    ...base,
+    accounts: [
+      {
+        provider: "buffer",
+        connectionId: "refreshable",
+        accountId: channelId,
+        connectionRevision: 1,
+      },
+    ],
+  });
+  const inspect = () =>
+    asA.query(api.managedServices.readiness, { serviceId: base.serviceId, expectedRevision: 1 });
+  // Expired access is refreshable only while the owned encrypted grant remains present.
+  expect((await inspect()).accounts[0]?.connected).toBe(true);
+  expect(
+    await t.mutation(internal.buffer.claimRefresh, {
+      tenantId: a,
+      connectionId: "refreshable",
+      revision: 1,
+      lease: "refresh-once",
+    }),
+  ).toBe(true);
+  expect(
+    await t.mutation(internal.buffer.finishRefresh, {
+      tenantId: a,
+      connectionId: "refreshable",
+      revision: 1,
+      lease: "refresh-once",
+      expiresAt: Date.now() + 100000,
+      credential: { ciphertextB64: "rotated", ivB64: "rotated-iv", keyVersion: "v1" },
+    }),
+  ).toBe(true);
+  expect(await t.run((ctx) => ctx.db.get(id))).toMatchObject({ revision: 2, grantRevision: 1 });
+  expect((await inspect()).accounts[0]?.connectionRevision).toBe(1);
+  expect((await inspect()).reasons).not.toContain("account_unavailable");
+  expect(
+    (await asA.query(api.managedServices.setupOptions, {})).accounts[0]?.connectionRevision,
+  ).toBe(1);
+  await asA.mutation(api.buffer.selectChannels, {
+    channelIds: [channelId, otherId],
+    dailyReports: false,
+  });
+  expect((await inspect()).reasons).toContain("account_unavailable");
+  await t.run((ctx) =>
+    ctx.db.patch(id, { expiresAt: 0, ciphertextB64: undefined, ivB64: undefined }),
+  );
+  expect((await inspect()).accounts[0]?.connected).toBe(false);
 });
 
 test("setup limit and list truncation are explicit and tenant indexed", async () => {

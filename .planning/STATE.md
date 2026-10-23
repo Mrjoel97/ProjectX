@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: "Platform -> Private Beta"
 current_phase: 48
-current_plan: "48-02 — PR82 qualification input frozen; independent49-01/02 local policy/setup implementation begun. Phase23 six ofnine;48 and49 release admission remain open."
+current_plan: "49-01–05 — Local attended social boundary, scoped execution and supervision built; release admission and composition/live acceptance remain open. Phase48 qualification is retained as a separate release prerequisite."
 status: in_progress
-stopped_at: "2026-10-22 — Delivery correction permits parallel offline implementation while retaining release order. Local service policy/setup and pack fixture preparation under review. Frozen PR82 qualification input retained; no new paid evaluation, activation or production deployment."
-last_updated: "2026-10-22"
+stopped_at: "2026-10-23 — Joined local UI/Executive start → durable claim → scoped SDK → draft/result path passes. Budget, isolation and control checks pass. No paid evaluation, activation or production deployment."
+last_updated: "2026-10-23"
 progress:
   total_phases: 79
   completed_phases: 54
@@ -70,7 +70,7 @@ paid attempts, the consumed PR81 startup approval/once record and its bounded ze
 receipt remain unchanged. No new paid checkpoint or consent, evaluation result, public B
 mutation, activation, cleanup or production deployment followed. Fresh exact-source admission
 and separate concrete paid approval remain required. Phase 23 stays 6/9, SKILL-02 open,
-Phase 48 partial. Phase 49 now has separate local policy/setup work under the execution correction; its trusted runtime, tool-scope integration, UI and release acceptance are not complete.
+Phase 48 partial. Phase 49 now has locally implemented attended execution, scoped tools, per-run accounting and setup/supervision under the execution correction. Its arbitrary-composition and hosted release acceptance remain incomplete; see49-03–05 summaries.
 
 ### Historical PR81 startup and repair boundary
 

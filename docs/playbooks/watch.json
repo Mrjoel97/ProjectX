@@ -1,7 +1,9 @@
 {
   "managed-services.md": [
     "packages/core/src/managedServices",
-    "packages/backend/convex/managedServices"
+    "packages/backend/convex/managedService",
+    "packages/backend/convex/lib/managedServiceBudget",
+    "apps/web/app/(app)/dashboard/skills-workflows/ManagedServicesPanel"
   ],
   "zernio.md": [
     "packages/core/src/zernio",

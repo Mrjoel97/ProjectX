@@ -17,3 +17,7 @@ The policy distinguishes future local claims from already accepted provider work
 Executed locally: 12 policy tests plus13 existing tool-grant tests pass; core typecheck and focused formatting pass. Independent review found and corrected missing Executive/pack pin requirements and acceptance of unexpected proposal fields. ADR-062 and the registered managed-services playbook record ownership and the pending integration.
 
 Remaining: preceding readiness seal and current-source release admission; actual trusted start/claims, runtime tool intersection and authenticated service acceptance. No model/provider call, deployment, skill activation, production change or full service execution occurred. This summary records source work, not completed MSVC-03 acceptance.
+
+## 2026-10-23 local integration follow-on
+
+The later49-03–05 summaries supersede the initial implementation limits above: native attended start, scoped runtime, per-run budget and service UI are now implemented and locally tested. Explicit Resume changes control revision without starting work. Ordinary Buffer refresh preserves stable permission pins. Operation admission and authenticated release acceptance remain open; no requirement completion is asserted.

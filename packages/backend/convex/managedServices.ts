@@ -14,6 +14,7 @@ import {
   validateManagedServiceConfig,
 } from "@pikar/core/managedServices";
 import { NO_GRANTS } from "@pikar/core/toolGrants";
+import { EVAL_MAX_BUDGET_CENTS } from "@pikar/cost/evalBudget";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
@@ -93,13 +94,16 @@ export async function managedServiceReadiness(ctx: QueryCtx, row: Doc<"managedSe
     const channel = current?.channels.find((c) => c.id === pin.accountId);
     accounts.push({
       ...pin,
-      connectionRevision: current?.revision ?? 0,
+      connectionRevision: current
+        ? "grantRevision" in current
+          ? (current.grantRevision ?? current.revision)
+          : current.revision
+        : 0,
       connected:
         current?.status === "connected" &&
         Boolean(current.ciphertextB64 && current.ivB64) &&
         selected?.includes(pin.accountId) === true &&
-        channel?.available === true &&
-        (!("expiresAt" in current) || current.expiresAt > Date.now()),
+        channel?.available === true,
     });
   }
   const skills = [];
@@ -176,6 +180,12 @@ export async function managedServiceReadiness(ctx: QueryCtx, row: Doc<"managedSe
     ready: false as const,
     reasons: [
       ...readiness.reasons,
+      ...(!config.operationIds.every((op) => op === "social.prepare" || op === "social.report")
+        ? ["unsupported_service_operation" as const]
+        : []),
+      ...(config.budgetLimitCents < 1 || config.budgetLimitCents > EVAL_MAX_BUDGET_CENTS
+        ? ["budget_limit_unavailable" as const]
+        : []),
       ...(missingSources.length ? ["source_unavailable" as const] : []),
       ...(row.controlState !== "active" ? ["service_paused_or_stopped" as const] : []),
     ],
@@ -267,6 +277,72 @@ export const setup = tenantMutation({
   },
 });
 
+/** Safe owned options, resolved by the server so users never type native IDs or hashes. */
+export const setupOptions = tenantQuery({
+  args: {},
+  handler: async (ctx) => {
+    const accounts: (ServiceAccountPin & { label: string; available: boolean })[] = [];
+    let truncated = false;
+    for (const provider of ["buffer", "zernio"] as const) {
+      const rows =
+        provider === "buffer"
+          ? await ctx.db
+              .query("bufferConnections")
+              .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+              .take(2)
+          : await ctx.db
+              .query("zernioConnections")
+              .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+              .take(2);
+      const row = rows.length === 1 ? rows[0] : undefined;
+      if (!row) continue;
+      const selected =
+        "selectedChannelIds" in row ? row.selectedChannelIds : row.selectedAccountIds;
+      const channels = row.channels.filter((channel) => selected.includes(channel.id));
+      truncated ||= channels.length > 50;
+      for (const channel of channels.slice(0, 50))
+        accounts.push({
+          provider,
+          connectionId: row.connectionId,
+          accountId: channel.id,
+          connectionRevision:
+            "grantRevision" in row ? (row.grantRevision ?? row.revision) : row.revision,
+          label: channel.name,
+          available:
+            row.status === "connected" &&
+            Boolean(row.ciphertextB64 && row.ivB64) &&
+            channel.available,
+        });
+    }
+    const skills: ServiceSkillPin[] = [];
+    const current = await ctx.db
+      .query("skills")
+      .withIndex("by_name_status", (q) => q.eq("name", "cockpit-agent").eq("status", "active"))
+      .take(2);
+    const overlay = await ctx.db
+      .query("tenantSkills")
+      .withIndex("by_tenant_name_status", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("name", "cockpit-agent").eq("status", "active"),
+      )
+      .first();
+    const cockpit = current.length === 1 ? current[0] : undefined;
+    if (
+      cockpit &&
+      !overlay &&
+      (!isGatedSkill(cockpit.name) ||
+        hasPassingEvidence(cockpit.evidence, cockpit.name, cockpit.version))
+    )
+      skills.push({
+        skillId: cockpit._id,
+        name: cockpit.name,
+        version: cockpit.version,
+        bodyHash: await contentHash(cockpit.body),
+        tenantId: null,
+      });
+    return { accounts, skills, budgetLimitCents: 100, truncated };
+  },
+});
+
 export const list = tenantQuery({
   args: {},
   handler: async (ctx) => {
@@ -301,7 +377,7 @@ export const setControl = tenantMutation({
     serviceId: v.string(),
     expectedRevision: v.number(),
     expectedControlRevision: v.number(),
-    action: v.union(v.literal("pause"), v.literal("stop")),
+    action: v.union(v.literal("pause"), v.literal("stop"), v.literal("resume")),
   },
   handler: async (ctx, args) => {
     const row = await serviceFor(ctx, ctx.tenantId, args.serviceId);
@@ -313,13 +389,39 @@ export const setControl = tenantMutation({
     )
       throw new Error("SERVICE_STALE_REVISION");
     if (
-      row.controlState === "stopped" ||
+      (args.action === "resume" && row.controlState === "active") ||
+      (args.action !== "resume" && row.controlState === "stopped") ||
       (row.controlState === "paused" && args.action === "pause")
     )
       throw new Error("SERVICE_INVALID_CONTROL");
-    const controlState = args.action === "pause" ? ("paused" as const) : ("stopped" as const);
+    const controlState =
+      args.action === "resume"
+        ? ("active" as const)
+        : args.action === "pause"
+          ? ("paused" as const)
+          : ("stopped" as const);
     const controlRevision = row.controlRevision + 1;
     await ctx.db.patch(row._id, { controlState, controlRevision, updatedAt: Date.now() });
+    if (args.action !== "resume") {
+      const unbound = await ctx.db
+        .query("managedServiceRuns")
+        .withIndex("by_service_state", (q) =>
+          q.eq("tenantId", ctx.tenantId).eq("serviceId", row._id).eq("state", "claimed"),
+        )
+        .take(2);
+      if (
+        unbound.length === 1 &&
+        unbound[0] &&
+        !unbound[0].workflowId &&
+        !unbound[0].threadId &&
+        !unbound[0].planId
+      )
+        await ctx.db.patch(unbound[0]._id, {
+          state: "stopped",
+          terminalCode: "control_changed",
+          updatedAt: Date.now(),
+        });
+    }
     await appendAudit(ctx, {
       tenantId: ctx.tenantId,
       correlationId: `managed-service:${row._id}:${controlRevision}`,

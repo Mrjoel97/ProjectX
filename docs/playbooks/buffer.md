@@ -1,3 +1,5 @@
+> Last verified: 2026-10-23 — The attended service keeps Buffer grantRevision separate from credential revision: ordinary refresh preserves service pins; changed permissions, selected channels or grant failure invalidate them. Scoped reads filter selected channels and stageAgentPost atomically checks the native service run before saving a draft. Existing exact-content approval and publishing remain unchanged. Buffer15 and managedServices14 local tests pass, including refresh stability; no hosted publication is claimed.
+
 > Last verified: 2026-10-19 — The Zernio cached-read tool uses a concise tool contract with structured report scope and sampling metadata; Buffer publishing and its insights restriction are unchanged.
 
 > Last verified: 2026-10-19 — the executive tool builder also exposes cached Zernio report reads, with separate provider attribution and no provider refresh or publishing capability. Buffer third-party insights remain unavailable; Zernio reports do not imply Buffer publisher provenance.

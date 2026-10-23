@@ -93,6 +93,10 @@ import {
   validateFigureClaim,
 } from "@pikar/core";
 import {
+  type ManagedServiceRuntimeScope,
+  managedServiceToolNames,
+} from "@pikar/core/managedServices";
+import {
   type ResearchClaims,
   renderResearchEvidence,
   researchClaimsSchema,
@@ -153,6 +157,7 @@ import {
 } from "./lib/models";
 import { internalAction } from "./lib/tenantLifecycle";
 import { buildWebResearchTool, sourcesFromToolOutput } from "./lib/webResearchTools";
+import { buildManagedServiceTools } from "./managedServiceTools";
 
 export { markdownToPdf } from "./lib/markdownPdf";
 export {
@@ -1738,7 +1743,50 @@ export type ToolContext = {
   evalBudgetId?: Id<"spendEvents">;
   researchControlId?: Id<"researchControls">;
   researchRequestId?: string;
+  managedServiceRunId?: Id<"managedServiceRuns">;
+  managedServiceScope?: ManagedServiceRuntimeScope;
+  /** Set by the ordinary attended loop; deterministic drivers and leaf calls omit it. */
+  attendedServiceAccess?: boolean;
 };
+
+async function readManagedServiceScope(
+  toolCtx: Pick<ToolContext, "ctx" | "tenantId" | "planId" | "threadId" | "managedServiceRunId">,
+): Promise<ManagedServiceRuntimeScope> {
+  if (!toolCtx.managedServiceRunId) throw new Error("SERVICE_EXECUTION_UNAVAILABLE");
+  return await toolCtx.ctx.runQuery(internal.managedServiceRuns.getExecutionContext, {
+    tenantId: toolCtx.tenantId,
+    runId: toolCtx.managedServiceRunId,
+    planId: toolCtx.planId,
+    threadId: toolCtx.threadId,
+  });
+}
+
+/** Native grants are built first. The service can only remove tools and fence their execution. */
+export function scopeManagedServiceTools<T extends ToolSet>(
+  built: T,
+  scope: ManagedServiceRuntimeScope,
+  check: () => Promise<unknown>,
+): T {
+  const allowed = new Set(managedServiceToolNames(scope.operationIds));
+  return Object.fromEntries(
+    Object.entries(built)
+      .filter(([name]) => allowed.has(name))
+      .map(([name, definition]) => [
+        name,
+        {
+          ...definition,
+          ...(definition.execute
+            ? {
+                execute: async (...args: Parameters<NonNullable<typeof definition.execute>>) => {
+                  await check();
+                  return definition.execute?.(...args);
+                },
+              }
+            : {}),
+        },
+      ]),
+  ) as T;
+}
 
 /**
  * Build the governed tool set for one plan (AGNT-01/02). Each tool wraps its primitive and
@@ -2686,8 +2734,26 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
       ? buildInvoiceReminderTool(ctx, tenantId, planId, evalRevenueFixtureId)
       : ({} as ReturnType<typeof buildInvoiceReminderTool>)),
     ...(grants.dispatch && toolCtx.threadId && toolCtx.rootRequestId && !toolCtx.evalContext
-      ? buildBufferTools(ctx, tenantId)
+      ? buildBufferTools(
+          ctx,
+          tenantId,
+          toolCtx.managedServiceRunId
+            ? {
+                runId: toolCtx.managedServiceRunId,
+                currentScope: () => readManagedServiceScope(toolCtx),
+              }
+            : undefined,
+        )
       : ({} as ReturnType<typeof buildBufferTools>)),
+    ...(toolCtx.attendedServiceAccess &&
+    grants.dispatch &&
+    toolCtx.threadId &&
+    toolCtx.rootRequestId &&
+    !toolCtx.evalContext &&
+    !toolCtx.evalBudgetId &&
+    !toolCtx.managedServiceRunId
+      ? buildManagedServiceTools(ctx, tenantId, toolCtx.rootRequestId)
+      : ({} as ReturnType<typeof buildManagedServiceTools>)),
     setSubject: tool({
       description: "Set the email subject line.",
       inputSchema: jsonSchema<{ subject: string }>({
@@ -4741,7 +4807,12 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
       },
     }),
   };
-  return applyGmailCapability(allTools, grants.gmail);
+  const permitted = applyGmailCapability(allTools, grants.gmail);
+  if (!toolCtx.managedServiceRunId) return permitted;
+  if (!toolCtx.managedServiceScope) throw new Error("SERVICE_EXECUTION_UNAVAILABLE");
+  return scopeManagedServiceTools(permitted, toolCtx.managedServiceScope, () =>
+    readManagedServiceScope(toolCtx),
+  );
 }
 
 // ── The governed Executive-Agent tool-loop (AGNT-01/02) ──────────────────────
@@ -4876,6 +4947,7 @@ async function runAgentLoop(
     visualInput?: ImageInput;
     evalContext?: EvalContext;
     evalBudgetId?: Id<"spendEvents">;
+    managedServiceRunId?: Id<"managedServiceRuns">;
     researchControlId?: Id<"researchControls">;
     researchRequestId?: string;
     primary: PricedModel;
@@ -4986,12 +5058,33 @@ async function runAgentLoop(
     visualInput,
     evalContext,
     evalBudgetId,
+    managedServiceRunId,
     researchControlId,
     researchRequestId,
     maxSteps,
     timeoutMs,
     softCutoffMs,
   } = args;
+  const serviceContext = { ctx, tenantId, planId, threadId, managedServiceRunId };
+  const serviceScope = managedServiceRunId
+    ? await readManagedServiceScope(serviceContext)
+    : undefined;
+  if (serviceScope) {
+    if (
+      toolNames !== undefined ||
+      evalContext !== undefined ||
+      evalBudgetId !== undefined ||
+      researchControlId !== undefined ||
+      researchRequestId !== undefined ||
+      tenantSkillIds !== undefined
+    )
+      throw new Error("SERVICE_EXECUTION_CONTEXT_CONFLICT");
+    const pin = serviceScope.skills.find(
+      (skill) => skill.name === COCKPIT_AGENT_SKILL && skill.tenantId === null,
+    );
+    if (!pin || pin.bodyHash !== (await contentHash(system)))
+      throw new Error("SERVICE_SKILL_CHANGED");
+  }
   if (evalContext && evalBudgetId && evalContext.budgetId !== evalBudgetId)
     throw new Error("EVAL_BUDGET_CONTEXT_MISMATCH");
   const activeBudgetId = evalContext?.budgetId ?? evalBudgetId;
@@ -5021,6 +5114,9 @@ async function runAgentLoop(
       evalBudgetId,
       researchControlId,
       researchRequestId,
+      managedServiceRunId,
+      managedServiceScope: serviceScope,
+      attendedServiceAccess: toolNames === undefined,
     },
     grants,
   );
@@ -5164,6 +5260,7 @@ async function runAgentLoop(
               tenantId,
               model: m.model,
               modelId: m.id,
+              managedServiceRunId,
               onCost: (cost) => {
                 costUsd += cost;
               },
@@ -5187,6 +5284,14 @@ async function runAgentLoop(
           }
         : { prompt }),
       tools,
+      ...(managedServiceRunId
+        ? {
+            prepareStep: async () => {
+              await readManagedServiceScope(serviceContext);
+              return {};
+            },
+          }
+        : {}),
       ...(args.structuredResearch
         ? {
             output: researchOutput,
@@ -5197,7 +5302,7 @@ async function runAgentLoop(
       stopWhen: [stepCountIs(stepBudget), outOfClock],
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       abortSignal: AbortSignal.timeout(budgetMs),
-      maxRetries: activeBudgetId ? 0 : maxRetries,
+      maxRetries: activeBudgetId || managedServiceRunId ? 0 : maxRetries,
       // ── The activity trace (CKPT-05) — this IS the whole emitter ──────────────────────────────
       // ai@7 emits these natively, so not one of the 14 tool wrappers is edited (ponytail rung 4:
       // a native framework feature covers it). Both callbacks are AWAITED by the SDK
@@ -5467,6 +5572,7 @@ async function runAgentLoop(
   try {
     return await run(primary, 1, 0);
   } catch (e) {
+    if (managedServiceRunId) throw e; // A service never replays an uncertain paid turn on another model.
     if (!isFallbackEligible(e)) throw e; // our bug / config → propagate (the driver saves an error turn)
     // 33.2: the rollover is RECORDED. Until now the loop swallowed the primary's failure and the
     // run succeeded on the fallback with nothing in any plane saying so — the 33.2 bake-off scored
@@ -6125,6 +6231,7 @@ export const runCockpitAgent = internalAction({
     threadId: v.string(),
     planId: v.id("plans"),
     text: v.string(),
+    managedServiceRunId: v.optional(v.id("managedServiceRuns")),
     model: v.optional(v.string()),
     // The trusted client's clock+zone for setSendTime (§2-D). Optional — a turn without it simply
     // cannot call setSendTime (it defers to the picker). The SMOKE path pins its own below.
@@ -6169,6 +6276,7 @@ export const runCockpitAgent = internalAction({
       threadId,
       planId,
       text,
+      managedServiceRunId,
       model,
       clientContext,
       skillVersions,
@@ -6188,6 +6296,19 @@ export const runCockpitAgent = internalAction({
     costUsd?: number;
   }> => {
     assertResearchControlContext({ researchControlId, researchRequestId });
+    const serviceScope = managedServiceRunId
+      ? await readManagedServiceScope({ ctx, tenantId, planId, threadId, managedServiceRunId })
+      : undefined;
+    if (
+      managedServiceRunId &&
+      (model !== undefined ||
+        evalBudgetId !== undefined ||
+        researchControlId !== undefined ||
+        researchRequestId !== undefined ||
+        tenantSkillIds !== undefined ||
+        skillVersions !== undefined)
+    )
+      throw new Error("SERVICE_EXECUTION_CONTEXT_CONFLICT");
     // 1. Governed gate BEFORE any reasoning call — a governed stop is a paused reply, never a DLQ.
     const pre:
       | { ok: true }
@@ -6199,7 +6320,11 @@ export const runCockpitAgent = internalAction({
 
     // 2. System = the cockpit-agent skill body (no hardcoded prompt — §5; fails closed unseeded).
     //    A pinned version loads AS ITSELF (EVAL-01 — the eval must observe the candidate body).
-    const pin = skillVersions?.[COCKPIT_AGENT_SKILL];
+    const pin =
+      serviceScope?.skills.find(
+        (skill) => skill.name === COCKPIT_AGENT_SKILL && skill.tenantId === null,
+      )?.version ?? skillVersions?.[COCKPIT_AGENT_SKILL];
+    if (serviceScope && pin === undefined) throw new Error("SERVICE_SKILL_CHANGED");
     const skill: { body: string; version: number } =
       pin !== undefined
         ? await ctx.runQuery(internal.skills.getSkillVersion, {
@@ -6257,7 +6382,7 @@ export const runCockpitAgent = internalAction({
 
     // 4. Offline sentinel path (Plan 05 E2E): one op → one governed tool call, no generateText. The
     //    SMOKE path pins a deterministic clock so sendTime= resolves offline (§2-D — never the model).
-    const smokeOp = parseAgentSmoke(text, tenantId);
+    const smokeOp = managedServiceRunId ? null : parseAgentSmoke(text, tenantId);
     // Code-owned intent routing determines whether this turn may see the Gmail rail. A genuine
     // email action with no grant gets a just-in-time connection request; every other capability
     // continues without Gmail. SMOKE remains the deterministic offline tool harness.
@@ -6266,7 +6391,8 @@ export const runCockpitAgent = internalAction({
         actionTypeOf(plan.kind) === "email" &&
         (plan.recipients?.length || plan.subject || plan.body || plan.candidates?.length),
     );
-    const gmailRequired = shouldUseGmailCapability(text, continuingEmailPlan);
+    const gmailRequired =
+      !managedServiceRunId && shouldUseGmailCapability(text, continuingEmailPlan);
     // Keyed on the eval tenant alone, NOT on whether this run happens to pin a skill. A pin is
     // evidence the harness is driving; it was never the definition, and requiring one made every
     // unpinned run withhold the email rail and measure the harness. See the three paid-for
@@ -6288,7 +6414,8 @@ export const runCockpitAgent = internalAction({
     // structurally absent unless the executive lineage grant is supplied. The old ordering built
     // a record without `dispatchMedia` and then immediately tried to invoke that missing key,
     // turning every direct video request into the driver's generic "nothing was sent" reply.
-    const directVideo = !smokeOp && !gmailRequired && isExplicitVideoCreationRequest(text);
+    const directVideo =
+      !managedServiceRunId && !smokeOp && !gmailRequired && isExplicitVideoCreationRequest(text);
     // A driver-only record: NO_GRANTS plus the two bits this path decides itself. Not `grantsFor`
     // — there is no allow-list here, and the executive's grants would open authoring/reminder
     // staging on a record whose only consumer is the SMOKE op or the direct video dispatch.
@@ -6416,7 +6543,8 @@ export const runCockpitAgent = internalAction({
     // REAL runAgentLoop (no gateway), so the driver's agent.timeout path is exercisable end-to-end.
     // Never a production input — a real turn never carries this exact text (parseAgentSmoke returns
     // null for it, so it falls through here rather than a tool op).
-    const forceTimeout = fixtureSeamFor(tenantId) && text.trim() === "SMOKE::agent::timeout";
+    const forceTimeout =
+      !managedServiceRunId && fixtureSeamFor(tenantId) && text.trim() === "SMOKE::agent::timeout";
     const timeoutModel = (): LanguageModel =>
       new MockLanguageModelV4({
         doGenerate: async () => {
@@ -6453,6 +6581,7 @@ export const runCockpitAgent = internalAction({
           tenantId,
           planId,
           system: skill.body,
+          managedServiceRunId,
           // History ABOVE the plan context; "The user says:" stays the FINAL line (the current turn).
           prompt: buildTurnPrompt({ spine, finance, history, plan, tz: clientContext?.tz, text }),
           primary: {
@@ -6558,6 +6687,7 @@ export const __runCockpitAgentWithScript = internalAction({
     tenantId: v.string(),
     planId: v.id("plans"),
     primary: v.array(v.any()),
+    managedServiceRunId: v.optional(v.id("managedServiceRuns")),
     fallback: v.optional(v.array(v.any())),
     failPrimary: v.optional(v.boolean()),
     // Optional EVAL-01 version pin (mirrors runCockpitAgent) so the pin is testable offline; the
@@ -6583,6 +6713,7 @@ export const __runCockpitAgentWithScript = internalAction({
       tenantId,
       planId,
       primary,
+      managedServiceRunId,
       fallback,
       failPrimary,
       skillVersions,
@@ -6603,7 +6734,16 @@ export const __runCockpitAgentWithScript = internalAction({
     modelId: string;
     fallbackModelId: string;
   }> => {
-    const pin = skillVersions?.[COCKPIT_AGENT_SKILL];
+    const serviceScope = managedServiceRunId
+      ? await readManagedServiceScope({ ctx, tenantId, planId, threadId, managedServiceRunId })
+      : undefined;
+    if (managedServiceRunId && (skillVersions || toolNames))
+      throw new Error("SERVICE_EXECUTION_CONTEXT_CONFLICT");
+    const pin =
+      serviceScope?.skills.find(
+        (skill) => skill.name === COCKPIT_AGENT_SKILL && skill.tenantId === null,
+      )?.version ?? skillVersions?.[COCKPIT_AGENT_SKILL];
+    if (serviceScope && pin === undefined) throw new Error("SERVICE_SKILL_CHANGED");
     const skill: { body: string; version: number } =
       pin !== undefined
         ? await ctx.runQuery(internal.skills.getSkillVersion, {
@@ -6625,6 +6765,7 @@ export const __runCockpitAgentWithScript = internalAction({
         tenantId,
         planId,
         system: skill.body,
+        managedServiceRunId,
         prompt: `${buildAgentContext(plan ?? {})}\n\nThe user says: drive the plan to a proposal.`,
         primary: { model: primaryModel as unknown as LanguageModel, id: DEFAULT_MODEL },
         fallback: { model: fallbackModel as unknown as LanguageModel, id: CHEAP_MODEL },

@@ -42,6 +42,7 @@ type AgentContext = {
   threadId?: string;
   rootRequestId?: string;
   gmailEnabled?: boolean;
+  attendedServiceAccess?: boolean;
 };
 
 // THE one call site: the old positional option object mapped FAITHFULLY onto the Phase 38
@@ -67,6 +68,7 @@ function buildOld(o: {
       tenantSkillIds: o.tenantSkillIds,
       threadId: a.threadId,
       rootRequestId: a.rootRequestId,
+      attendedServiceAccess: a.attendedServiceAccess,
       evalRevenueFixtureId: a.evalRevenueFixtureId,
     },
     {
@@ -112,6 +114,7 @@ function specialistContext(
 }
 
 const EXECUTIVE: AgentContext = {
+  attendedServiceAccess: true,
   grantWebResearch: false,
   grantDispatch: true,
   grantSkillAuthoring: true,
@@ -241,6 +244,7 @@ test("executive via runAgentLoop, lineage present", () => {
     "readBufferChannels",
     "readBufferEngagement",
     "readFinance",
+    "readSocialService",
     "readZernioEngagement",
     "recordScorecardAnswer",
     "regenerateAttachment",
@@ -258,6 +262,7 @@ test("executive via runAgentLoop, lineage present", () => {
     "stageCrmWrite",
     "stageFinanceWrite",
     "stageInvoiceReminder",
+    "startSocialService",
   ]);
 });
 
@@ -326,6 +331,7 @@ test("executive continue turn (omitRecipientEdits)", () => {
     "readBufferChannels",
     "readBufferEngagement",
     "readFinance",
+    "readSocialService",
     "readZernioEngagement",
     "recordScorecardAnswer",
     "regenerateAttachment",
@@ -341,6 +347,7 @@ test("executive continue turn (omitRecipientEdits)", () => {
     "stageCrmWrite",
     "stageFinanceWrite",
     "stageInvoiceReminder",
+    "startSocialService",
   ]);
 });
 
@@ -364,6 +371,7 @@ test("executive, gmail disabled", () => {
     "readBufferChannels",
     "readBufferEngagement",
     "readFinance",
+    "readSocialService",
     "readZernioEngagement",
     "recordScorecardAnswer",
     "searchVault",
@@ -371,6 +379,7 @@ test("executive, gmail disabled", () => {
     "stageCrmWrite",
     "stageFinanceWrite",
     "stageInvoiceReminder",
+    "startSocialService",
   ]);
 });
 

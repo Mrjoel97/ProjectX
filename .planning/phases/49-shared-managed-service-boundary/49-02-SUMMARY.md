@@ -19,3 +19,7 @@ Export/erasure classification includes the new table. The audit viewer explicitl
 Executed locally:13 native managed-service tests plus48 existing isolation,18 report-governance,41 schema and83 recurrence-decision tests pass.14 tenant-data and23 audit-projection tests pass. Initial backend typecheck passed; final integration checks are recorded with the development change. Independent review corrected the source-kind mistake and closed-shape setup projection after the pure contract was tightened.
 
 All service operations remain unadmitted in the server adapter: no client flag or environment switch opens them. Pack qualification is deliberately unavailable until its existing exact acceptance adapter is connected. A saved setup is never reported as a running service. Trusted execution/tool intersection, UI, current-source acceptance and release remain pending. No MSVC requirement or phase is marked complete by these local checks; no new paid run, activation or production change occurred.
+
+## 2026-10-23 local integration follow-on
+
+The later49-03–05 summaries supersede the initial implementation limits above: native attended start, scoped runtime, per-run budget and service UI are now implemented and locally tested. Explicit Resume changes control revision without starting work. Ordinary Buffer refresh preserves stable permission pins. Operation admission and authenticated release acceptance remain open; no requirement completion is asserted.

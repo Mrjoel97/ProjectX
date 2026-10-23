@@ -37,6 +37,7 @@ export const TENANT_TABLE_CLASSIFICATION = {
   tenantSkills: "tenant_owned",
   savedPrompts: "tenant_owned",
   managedServices: "tenant_owned", // Inert setup and goal text export/erase with their owner.
+  managedServiceRuns: "tenant_owned", // Attended run refs; authoritative costs stay in spendEvents.
   // Workflow-engine correlation bookkeeping has no tenant key and is not tenant content.
   pendingTimeouts: "global",
   // Singleton WORM cursor bookkeeping belongs to the deployment, not a tenant.

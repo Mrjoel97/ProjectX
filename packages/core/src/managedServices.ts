@@ -1,4 +1,7 @@
 import type { ToolGrants } from "./toolGrants";
+
+export const MANAGED_SERVICE_RUN_LIFETIME_MS = 60 * 60 * 1000;
+
 import { WORKFLOW_PACKS } from "./workflowPacks";
 
 /** Pure policy only. These operations grant no runtime, publishing or scheduling authority. */
@@ -33,6 +36,22 @@ export type ManagedServiceConfig = Readonly<{
   skills: readonly ServiceSkillPin[];
   budgetLimitCents: number;
 }>;
+export type ManagedServiceRuntimeScope = Pick<
+  ManagedServiceConfig,
+  "operationIds" | "accounts" | "skills"
+>;
+
+/** Intersect these names with native grants; operation text never creates a grant. */
+export function managedServiceToolNames(
+  operations: readonly ManagedServiceOperationId[],
+): readonly string[] {
+  const names = new Set<string>();
+  for (const operation of operations) {
+    if (!isManagedServiceOperationId(operation)) refuse("unknown_operation");
+    for (const name of MANAGED_SERVICE_OPERATIONS[operation].tools) names.add(name);
+  }
+  return [...names];
+}
 
 export type ManagedServicePolicyCode =
   | "invalid_configuration"

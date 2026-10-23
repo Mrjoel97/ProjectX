@@ -9,6 +9,7 @@ import { internal } from "./_generated/api";
 import { internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { assertTenantWritable, internalMutation } from "./lib/tenantLifecycle";
+import { executionContextFor } from "./managedServiceRuns";
 
 const envelope = {
   ciphertextB64: v.string(),
@@ -184,6 +185,7 @@ export const completeConnect = tenantMutation({
       expiresAt: pending.tokenExpiresAt,
       status: "connected" as const,
       revision: (old?.revision ?? 0) + 1,
+      grantRevision: (old?.grantRevision ?? old?.revision ?? 0) + 1,
       updatedAt: Date.now(),
       channels: [],
       selectedChannelIds: [],
@@ -219,6 +221,7 @@ export const claimRefresh = internalMutation({
       if ((row.refreshStartedAt ?? 0) < Date.now() - 60_000) {
         await ctx.db.patch(row._id, {
           status: "reauth_required",
+          grantRevision: (row.grantRevision ?? row.revision) + 1,
           dailyReports: false,
           updatedAt: Date.now(),
         });
@@ -255,6 +258,7 @@ export const finishRefresh = internalMutation({
     if (!a.credential || !a.expiresAt) {
       await ctx.db.patch(row._id, {
         status: "reauth_required",
+        grantRevision: (row.grantRevision ?? row.revision) + 1,
         dailyReports: false,
         refreshLease: undefined,
         refreshStartedAt: undefined,
@@ -265,6 +269,7 @@ export const finishRefresh = internalMutation({
         ...a.credential,
         expiresAt: a.expiresAt,
         revision: row.revision + 1,
+        grantRevision: row.grantRevision ?? row.revision,
         refreshLease: undefined,
         refreshStartedAt: undefined,
         updatedAt: Date.now(),
@@ -291,16 +296,29 @@ export const storeChannels = internalMutation({
       throw new Error("BUFFER_RECONNECT");
     if (a.channels.length > 100 || !BUFFER_ID.test(a.organizationId))
       throw new Error("BUFFER_INVALID_CHANNELS");
+    const selectedChannelIds =
+      row.organizationId === a.organizationId
+        ? row.selectedChannelIds.filter((id) => a.channels.some((c) => c.id === id && c.available))
+        : [];
+    const permissionShape = (channels: typeof a.channels, selected: string[]) =>
+      JSON.stringify(
+        channels
+          .filter((c) => selected.includes(c.id))
+          .map((c) => [c.id, c.service, c.available, c.boards?.map((b) => b.id).sort() ?? []])
+          .sort((x, y) => String(x[0]).localeCompare(String(y[0]))),
+      );
+    const permissionChanged =
+      row.organizationId !== a.organizationId ||
+      JSON.stringify([...row.selectedChannelIds].sort()) !==
+        JSON.stringify([...selectedChannelIds].sort()) ||
+      permissionShape(row.channels, row.selectedChannelIds) !==
+        permissionShape(a.channels, selectedChannelIds);
     await ctx.db.patch(row._id, {
       organizationId: a.organizationId,
       organizationName: a.organizationName.slice(0, 160),
       channels: a.channels,
-      selectedChannelIds:
-        row.organizationId === a.organizationId
-          ? row.selectedChannelIds.filter((id) =>
-              a.channels.some((c) => c.id === id && c.available),
-            )
-          : [],
+      selectedChannelIds,
+      grantRevision: (row.grantRevision ?? row.revision) + (permissionChanged ? 1 : 0),
       dailyReports: row.organizationId === a.organizationId && row.dailyReports,
       updatedAt: Date.now(),
     });
@@ -326,6 +344,11 @@ export const selectChannels = tenantMutation({
       throw new Error("BUFFER_CHANNEL_NOT_ALLOWED");
     await ctx.db.patch(row._id, {
       selectedChannelIds: unique,
+      grantRevision:
+        (row.grantRevision ?? row.revision) +
+        (JSON.stringify([...row.selectedChannelIds].sort()) === JSON.stringify([...unique].sort())
+          ? 0
+          : 1),
       dailyReports: a.dailyReports && unique.length > 0,
       nextReportAt: Date.now(),
       updatedAt: Date.now(),
@@ -346,6 +369,7 @@ export const disconnect = tenantMutation({
         ciphertextB64: undefined,
         ivB64: undefined,
         revision: row.revision + 1,
+        grantRevision: (row.grantRevision ?? row.revision) + 1,
         refreshLease: undefined,
         refreshStartedAt: undefined,
         selectedChannelIds: [],
@@ -412,8 +436,22 @@ export const stagePost = tenantMutation({
   handler: (ctx, a) => stage(ctx, ctx.tenantId, a),
 });
 export const stageAgentPost = internalMutation({
-  args: { tenantId: v.string(), ...draftArgs },
-  handler: (ctx, { tenantId, ...a }) => stage(ctx, tenantId, a),
+  args: {
+    tenantId: v.string(),
+    managedServiceRunId: v.optional(v.id("managedServiceRuns")),
+    ...draftArgs,
+  },
+  handler: async (ctx, { tenantId, managedServiceRunId, ...a }) => {
+    if (managedServiceRunId) {
+      const scope = await executionContextFor(ctx, { tenantId, runId: managedServiceRunId });
+      if (
+        !scope.operationIds.includes("social.prepare") ||
+        !scope.accounts.some((pin) => pin.provider === "buffer" && pin.accountId === a.channelId)
+      )
+        throw new Error("SERVICE_TOOL_NOT_ALLOWED");
+    }
+    return stage(ctx, tenantId, a);
+  },
 });
 
 export const posts = tenantQuery({
