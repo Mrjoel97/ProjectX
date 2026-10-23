@@ -3,7 +3,7 @@
 export const VERTICAL_CORPUS_SHA256 =
   "dc21fea0660d041e0c3ee5ed9b2ea0448f53c4834f9566b6c0180a11578bcc69";
 export const VERTICAL_EVALUATOR_REVISION =
-  "b1f0b856b04c588a4d49c96c6acafcd4cc77cbf05941950e63db797a821c8e32";
+  "997521a7b23f463ea28eca8a47e03d913a5f07136d8c3e91bdcd75028c6e2f73";
 export const VERTICAL_EVALUATOR_SHA256 = VERTICAL_EVALUATOR_REVISION;
 // biome-ignore format: deterministic generated JSON is pinned by the generator.
 export const VERTICAL_CORPUS = {
