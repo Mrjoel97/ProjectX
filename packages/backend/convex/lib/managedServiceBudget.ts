@@ -25,7 +25,9 @@ export async function managedServiceSpend(
   // At most500 reservations +500 actual +500 refund records. Refuse a truncated bill.
   const rows = await ctx.db
     .query("spendEvents")
-    .withIndex("by_managed_service_run", (q) => q.eq("managedServiceRunId", runId))
+    .withIndex("by_managed_service_run", (q) =>
+      q.eq("tenantId", tenantId).eq("managedServiceRunId", runId),
+    )
     .take(1501);
   if (
     rows.length > 1500 ||

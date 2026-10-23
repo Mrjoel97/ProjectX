@@ -3096,7 +3096,7 @@ export default defineSchema({
     .index("by_tenant_rail_createdAt", ["tenantId", "rail", "createdAt"])
     .index("by_correlation", ["correlationId"])
     .index("by_eval_budget", ["evalBudgetId"])
-    .index("by_managed_service_run", ["managedServiceRunId"])
+    .index("by_managed_service_run", ["tenantId", "managedServiceRunId"])
     .index("by_probe_thread", ["tenantId", "evalAuthoringProbe.threadId"]),
 
   // One durable start per tenant, created before the first paid movement. A missing row means
