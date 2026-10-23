@@ -61,7 +61,8 @@ focused real-FFmpeg finalization fixture passed linear/dynamic (using explicitly
 first-pass measurements), intentional-silence mode and absent-statistics refusal. A fake mode
 line outside the actual filter JSON block cannot satisfy the verdict. The unchanged full mixed
 visual fixture timed out at120s on this host; its timeout was not weakened, and that run is not
-a success receipt. New real30/60exports and exact-head CI remain required.
+a success receipt. Actual new exports and current-source CI are recorded below; the long
+mixed-visual fixture is still not a local pass.
 
 The first new30s export disproved the hypothesis that48kHz alone fixes the timestamp defect;
 it was stopped after packet validation, before rendering60s. A short audio-only reproduction
@@ -100,6 +101,45 @@ balanced cues retain all50 words and original take bounds. This is measured tech
 not listening acceptance. At the source-commit boundary the one already-started60s assembly
 still awaited validation during severe host process/filesystem slowdown; it is not counted as
 a successful export. No second invocation or new provider request was started.
+
+That same60s invocation subsequently completed successfully (session92796, exit0). Both final
+exports preserve all40 protected original files. The60s stream reports actual linear mode at
+48kHz,60.010s declared/60.010667s decoded span, zero extended AAC packets, -16.01LUFS/-1.60dBTP
+and no nonfinite/full-scale decoded samples. Its audio packet payload is unchanged through
+caption burn. The30s stream uses actual dynamic mode. Both are720×1280/30fps with36 positive
+cues covering147 exact words; minimum durations are0.76s/0.80s, with zero cues under0.75s
+and three remaining cues over20CPS. This supersedes the pending export status at commit time,
+not the original stopped paid benchmark or its hold.
+
+The local candidate fingerprint is
+`ac4ccfbf8c35939d32c128872e22a46f79871f0ead34b3bbe04aee2deca8b3d5`.
+The30s captioned output SHA256 is
+`c8dd7de185744b715cb46ca0fd75d19a192cac58bab0fa120f16aa969b91affe`.
+The60s captioned output SHA256 is
+`f9188ae95f8ff905973629054c58b469fe3bb42f6cd1e67444ceda4e7d328163`.
+The completed reassembly receipt SHA256 is
+`f5fd668b872da293e951bf1020b53d58dd0ae5234e8dee4f0f96ed3468a1257b`.
+Outputs, input bindings, measurements and credits remain separate local review artifacts under
+`.tmp/phase53-reel-readability-20261023-clockfix`; the purchased originals are not committed.
+The30s B-roll/high-still/endcard frames and an actual cue midpoint were visually inspected.
+The60s cue midpoints at33.056s ("a comfortable reach") and53.173s ("your own routine") were
+also inspected: legible, inside the safe margins and above native player controls.
+
+An additional short synthetic clock-removal negative control is inconclusive: the fixed branch
+ran, while the clock-removed subprocess did not finish its unchanged30s window on this host.
+This is not a demonstrated mutant rejection or proof that the short runtime fixture alone
+detects clock removal. No source edit/retry followed. The actual30s before/after reproduction,
+sample/payload identity, strict source guard and final natural-pipeline measurements retain
+their stated scope.
+
+[Exact-source CI39953265545](https://github.com/Mrjoel97/ProjectX/actions/runs/39953265545)
+passed for implementation commit`afaedd6fffc8e20f5d2f993a130a90ac62ab3412`: typecheck, lint,
+all22 free gates, full unit suite,182 operator regressions, planning evidence and production build.
+The frontend passed1237 tests with two existing skips; backend passed4687 with both optional
+real-FFmpeg fixtures skipped because their required local toolchain was unavailable. Those skips
+are not runtime-render passes. The focused real audio fixture and both natural-pipeline exports
+ran locally; the long synthetic mixed-visual timeout remains an explicit limitation. No runtime
+or fixture timeout was weakened. Final listening and owner creative acceptance remain open.
 
 The ignored one-use rebuild helper has a discovered marker-name mismatch: it checks
 `reassembly-started.json` but writes`render-started.json`. Its hash-bound running bytes are
