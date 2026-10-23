@@ -690,7 +690,9 @@ function replyToMessageBlock(): string {
   // 2026-08-31 — in `runSpecialistTurn`, recording which body a PINNED run loaded — and this test
   // went red for a write that has nothing to do with `replyToMessage`. An over-broad scan is not a
   // safer scan: it fails on innocent code, and the pressure that creates is to delete it.
-  const closeAt = rest.indexOf("\n  };\n  return applyGmailCapability(");
+  // The service-scope intersection now follows the same Gmail capability filter. Pin the
+  // actual end of the tool object; preserve both span assertions and every privacy check.
+  const closeAt = rest.indexOf("\n  };\n  const permitted = applyGmailCapability(");
   expect(closeAt, "buildCockpitTools close not found after replyToMessage").toBeGreaterThan(0);
   const block = rest.slice(0, closeAt).replace(/\/\/[^\n]*/g, "");
   // BOTH ENDS PINNED, so the boundary cannot slide silently again. The span must still reach the

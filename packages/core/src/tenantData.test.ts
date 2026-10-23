@@ -54,7 +54,8 @@ describe("tenant table classification registry", () => {
     // + three foundation tables and expiring auth revocations = 67 with owned upload receipts.
     // + Buffer connections, transient OAuth, campaign posts and reports = 71.
     // + Zernio connection credentials and cached reports = 73.
-    expect(schemaTables).toHaveLength(73);
+    // + tenant-owned managed service setup and attended run refs = 75.
+    expect(schemaTables).toHaveLength(75);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });

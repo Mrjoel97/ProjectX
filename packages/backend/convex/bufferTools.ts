@@ -1,10 +1,28 @@
 import type { BufferDraft } from "@pikar/core/buffer";
+import type {
+  ManagedServiceOperationId,
+  ManagedServiceRuntimeScope,
+} from "@pikar/core/managedServices";
 import { jsonSchema, type ToolSet, tool } from "ai";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 
 /** The agent can read selected evidence and stage drafts. Approval/publishing are absent. */
-export function buildBufferTools(ctx: ActionCtx, tenantId: string): ToolSet {
+export function buildBufferTools(
+  ctx: ActionCtx,
+  tenantId: string,
+  service?: {
+    runId: Id<"managedServiceRuns">;
+    currentScope: () => Promise<ManagedServiceRuntimeScope>;
+  },
+): ToolSet {
+  const current = async (operation: ManagedServiceOperationId) => {
+    if (!service) return undefined;
+    const scope = await service.currentScope();
+    if (!scope.operationIds.includes(operation)) throw new Error("SERVICE_OPERATION_NOT_ALLOWED");
+    return scope;
+  };
   return {
     readZernioEngagement: tool({
       description:
@@ -15,8 +33,21 @@ export function buildBufferTools(ctx: ActionCtx, tenantId: string): ToolSet {
         additionalProperties: false,
       }),
       execute: async () => {
+        const scope = await current("social.report");
         try {
-          return await ctx.runQuery(internal.zernio.agentReport, { tenantId });
+          const report = await ctx.runQuery(internal.zernio.agentReport, { tenantId });
+          if (!scope) return report;
+          await current("social.report");
+          if (!("accounts" in report) || !Array.isArray(report.accounts)) return report;
+          const ids = new Set(
+            scope.accounts
+              .filter((account) => account.provider === "zernio")
+              .map((account) => account.accountId),
+          );
+          return {
+            ...report,
+            accounts: report.accounts.filter((account) => ids.has(account.accountId)),
+          };
         } catch {
           return { state: "unavailable", settingsPath: "/connect-zernio" };
         }
@@ -31,10 +62,23 @@ export function buildBufferTools(ctx: ActionCtx, tenantId: string): ToolSet {
         additionalProperties: false,
       }),
       execute: async () => {
+        const scope = await current("social.prepare");
         try {
+          const evidence = await ctx.runAction(internal.bufferActions.agentChannels, { tenantId });
+          if (scope) await current("social.prepare");
+          const ids = new Set(
+            scope?.accounts
+              .filter((account) => account.provider === "buffer")
+              .map((account) => account.accountId),
+          );
           return {
             state: "ready",
-            evidence: await ctx.runAction(internal.bufferActions.agentChannels, { tenantId }),
+            evidence: scope
+              ? {
+                  ...evidence,
+                  channels: evidence.channels.filter((channel) => ids.has(channel.id)),
+                }
+              : evidence,
           };
         } catch {
           return {
@@ -54,6 +98,7 @@ export function buildBufferTools(ctx: ActionCtx, tenantId: string): ToolSet {
         additionalProperties: false,
       }),
       execute: async () => {
+        if (service) throw new Error("SERVICE_OPERATION_NOT_ALLOWED");
         try {
           return {
             state: "ready",
@@ -92,10 +137,22 @@ export function buildBufferTools(ctx: ActionCtx, tenantId: string): ToolSet {
         required: ["campaign", "channelId", "text", "mode"],
       }),
       execute: async (args) => {
+        const scope = await current("social.prepare");
+        if (
+          scope &&
+          !scope.accounts.some(
+            (account) => account.provider === "buffer" && account.accountId === args.channelId,
+          )
+        )
+          throw new Error("SERVICE_ACCOUNT_NOT_ALLOWED");
         try {
           return {
             state: "draft",
-            postId: await ctx.runMutation(internal.buffer.stageAgentPost, { tenantId, ...args }),
+            postId: await ctx.runMutation(internal.buffer.stageAgentPost, {
+              tenantId,
+              ...args,
+              ...(service ? { managedServiceRunId: service.runId } : {}),
+            }),
             reviewPath: "/dashboard/marketing",
           };
         } catch {

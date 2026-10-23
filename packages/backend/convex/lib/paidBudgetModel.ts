@@ -7,7 +7,7 @@ import {
 import { type LanguageModel, wrapLanguageModel } from "ai";
 import type { GenericActionCtx } from "convex/server";
 import { internal } from "../_generated/api";
-import type { DataModel } from "../_generated/dataModel";
+import type { DataModel, Id } from "../_generated/dataModel";
 
 function refuseCacheWrites(value: unknown): void {
   if (!value || typeof value !== "object") return;
@@ -27,6 +27,8 @@ export function paidBudgetModel(args: {
   model: LanguageModel;
   modelId: string;
   rail?: "ingest";
+  /** Trusted service driver only; native admission rereads the run and exact setup. */
+  managedServiceRunId?: Id<"managedServiceRuns">;
   onCost?: (usd: number) => void;
 }): ReturnType<typeof wrapLanguageModel> {
   const call = {
@@ -65,6 +67,7 @@ export function paidBudgetModel(args: {
           model: args.modelId,
           ceilingCents,
           rail: args.rail,
+          ...(args.managedServiceRunId ? { managedServiceRunId: args.managedServiceRunId } : {}),
         });
         let result: Awaited<ReturnType<typeof doGenerate>>;
         try {

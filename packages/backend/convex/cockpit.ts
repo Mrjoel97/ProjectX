@@ -71,7 +71,7 @@ import { recordRevenueEvent } from "./revenueTelemetry";
 // repo pins ai@7 and drives models via the gateway string (llm.ts DEFAULT_MODEL). Since the model
 // is never called here, cast the config past the version guard. Drop the cast when agent ships
 // v7-compatible types (CLAUDE.md §6 — do not bump to "fix" this).
-const cockpitAgent = new Agent(components.agent, {
+export const cockpitAgent = new Agent(components.agent, {
   name: "email-cockpit",
   languageModel: DEFAULT_MODEL,
 } as unknown as ConstructorParameters<typeof Agent>[1]);
@@ -199,7 +199,7 @@ async function recordPackPlanDecision(
  * `runSpecialistTurn` REQUIRES a `planId` even for an analysis-only run. The row starts at
  * `collecting` with no `kind`, which is exactly right for one: nothing arms and nothing delivers.
  */
-async function ensureThreadAndPlan(
+export async function ensureThreadAndPlan(
   ctx: ActionCtx & { tenantId: string },
   threadId: string | undefined,
   firstMessage: string,

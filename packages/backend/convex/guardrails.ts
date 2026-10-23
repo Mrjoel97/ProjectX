@@ -33,6 +33,7 @@ import { internalQuery } from "./_generated/server";
 import { probeControl } from "./authoringProbe";
 import { dispatchWorkflowLive } from "./dispatchRun";
 import { contentHash } from "./lib/hash";
+import { assertManagedServicePaidAdmission } from "./lib/managedServiceBudget";
 import { internalMutation } from "./lib/tenantLifecycle";
 // The PLAIN-FUNCTION half of the ledger writer, not `ctx.runMutation`: the limiter movement and
 // its ledger row must commit or fail TOGETHER (FIN-01). A second transaction could leave the
@@ -863,10 +864,11 @@ export const reservePaidCall = internalMutation({
     model: v.string(),
     ceilingCents: v.number(),
     rail: vRail,
+    managedServiceRunId: v.optional(v.id("managedServiceRuns")),
   },
   handler: async (
     ctx,
-    { tenantId, callId, model, ceilingCents, rail },
+    { tenantId, callId, model, ceilingCents, rail, managedServiceRunId },
   ): Promise<Id<"spendEvents">> => {
     if (
       !/^[a-f0-9-]{36}$/.test(callId) ||
@@ -876,6 +878,10 @@ export const reservePaidCall = internalMutation({
     )
       throw new Error("PAID_ADMISSION_INVALID");
     if ((await getGuardrailConfig(ctx)).killSwitch) throw new Error("PAID_KILL_SWITCH");
+    if (managedServiceRunId) {
+      if (rail) throw new Error("SERVICE_PAID_RAIL_UNSUPPORTED");
+      await assertManagedServicePaidAdmission(ctx, tenantId, managedServiceRunId, ceilingCents);
+    }
     const [tenantRail, deploymentRail] =
       rail === "ingest"
         ? (["ingestSpendCents", "deploymentIngestSpendCents"] as const)
@@ -902,6 +908,7 @@ export const reservePaidCall = internalMutation({
       amountCents: ceilingCents,
       model,
       kind: "paid_call",
+      ...(managedServiceRunId ? { managedServiceRunId } : {}),
       createdAt: Date.now(),
     });
   },
@@ -969,6 +976,7 @@ export const settlePaidCall = internalMutation({
         amountCents: refund,
         model: held.model,
         kind: held.kind,
+        ...(held.managedServiceRunId ? { managedServiceRunId: held.managedServiceRunId } : {}),
         createdAt: Date.now(),
         ...(actualCents === 0 ? { evalActualUsd: 0 } : {}),
       });
@@ -982,6 +990,9 @@ export const settlePaidCall = internalMutation({
         amountCents: actualCents,
         model: held.model,
         kind: held.kind,
+        ...(held.managedServiceRunId
+          ? { managedServiceRunId: held.managedServiceRunId, evalBreach: difference > 0 }
+          : {}),
         createdAt: Date.now(),
         evalActualUsd: costUsd,
       });

@@ -1,4 +1,10 @@
 {
+  "managed-services.md": [
+    "packages/core/src/managedServices",
+    "packages/backend/convex/managedService",
+    "packages/backend/convex/lib/managedServiceBudget",
+    "apps/web/app/(app)/dashboard/skills-workflows/ManagedServicesPanel"
+  ],
   "zernio.md": [
     "packages/core/src/zernio",
     "packages/backend/scripts/zernioPilot",
@@ -449,6 +455,9 @@
     "scripts/check-release-auth.mjs"
   ],
   "workflow-packs.md": [
+    "apps/web/e2e/workflow-pack-pilot.spec.ts",
+    "apps/web/e2e/workflow-pack-protocol.spec.ts",
+    "apps/web/e2e/workflowPackBrowserProtocol.ts",
     "apps/web/app/(app)/dashboard/skills-workflows/",
     "packages/core/src/workflowPack",
     "packages/backend/convex/workflowPack",

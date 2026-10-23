@@ -1,5 +1,7 @@
 # Phase 49: Shared managed-service boundary
 
+Execution correction, 2026-10-22: independent reversible offline implementation may now proceed while Phase 48 remains partial, following the owner's direction to correct delivery paralysis. Dependency fields continue to gate release/live admission. This permits local policy/setup work, not paid execution, qualification, recurrence or production release. See the programme's execution correction and ADR-062.
+
 Researched: 2026-10-19. Status: planning from source at b4deef8bba42347e31df638b828443eb11407138; no new live qualification.
 
 ## Current findings

@@ -1,7 +1,7 @@
 # Managed business services programme
 
 Owner-approved: 2026-10-19. Planning baseline: b4deef8bba42347e31df638b828443eb11407138.
-Status reconciled from existing evidence 2026-10-22: approved PR82 staging release and validated handoff e7ee now bind released source 821b/825ef. Phase 23 stays 6/9, Phase 48 qualification remains partial, and Phases 49–52 remain blocked by preceding verification. No new paid checkpoint or consent, evaluation result or owner action exists.
+Status reconciled from existing evidence 2026-10-22: approved PR82 staging release and validated handoff e7ee now bind released source 821b/825ef. Phase 23 stays 6/9 and Phase 48 qualification remains partial. Independent Phase 49 policy/setup implementation has begun locally under the execution correction below; Phases 49–52 release/live admission remain blocked by preceding verification. No new paid checkpoint or consent, evaluation result or owner action exists.
 
 ## Product outcome
 
@@ -17,7 +17,13 @@ Users state business outcomes, connect their own accounts, confirm operating bou
 | Brain integration | 51 — Brain and service outcomes | 51-01–04 | Requires Phase 50 verification; goal/service/run/outcome links, bounded history, provenance-preserving ledger and next-action proposals. |
 | Complete social service | 52 — Social marketing service pilot | 52-01–03 | Requires Phases 48–51; setup → preparation → required review → Buffer scheduling → Zernio evidence → next proposal across multiple actual cycles. |
 
-Planning and read-only research may run in parallel. Implementation/release admission follows this order. Shared files have one implementation owner per wave; delegated work must not weaken prerequisites.
+Release and live admission follow this order. Following the owner's 2026-10-22 direction to remove the delivery hindrance and get the engine built, independent, reversible, zero-provider-cost implementation may run in parallel in an unreleased checkout. This corrects the earlier unnecessary serialization of implementation as well as release. It does not declare Phase 48 complete, exclude any promised qualification, authorize paid work, admit recurrence or activate a capability. New service entry points must remain unavailable until their preceding verification and relevant runtime acceptance pass. Shared files have one implementation owner per wave.
+
+## Execution correction, 2026-10-22
+
+The existing Executive already owns the Buffer/Zernio tools; the unfinished agent-authored override and six-pack acceptance are separate capability qualifications. They remain required for their original closure and the approved readiness seal, but need not prevent writing and testing the shared boundary offline. Freeze the current PR82 qualification checkout/handoff while building the later boundary separately; only a real mismatch warrants another release or handoff. Do not replay authoring, reseed accounts or refresh evidence merely because an independent local file changed.
+
+Track delivery by working seams (setup, readiness, trusted start, status, stop and a complete reviewed social cycle), not planning-file percentages, test counts or repeated source observations. A source-only contract or a synthetic fixture check must never be described as a running service or browser acceptance. Concrete financial, owner activation, provider authorization and publication checkpoints retain their exact scopes; routine reversible implementation and previously authorized read-only work do not require another confirmation.
 
 ## What remains authoritative
 
