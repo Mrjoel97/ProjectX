@@ -184,8 +184,15 @@ remain. Twenty-five isolated availability-guard scenarios passed. Existing fixtu
 are unchanged. Actual hosted execution of both FFmpeg fixtures is required before calling this
 gap closed; prior skipped fixtures are not converted into passing evidence.
 
-Current golden source revision is
-`2026-09-11.budgeted-evaluator.7ee16b3ba50a3a704ff825bef6cddc5461914163eacd0af759ff10c7e97ffcfa`.
+CI39967368898 on86db38c7 passed both actual FFmpeg fixtures (14.718 seconds combined), typecheck,
+lint,22 free gates and1260 frontend tests with two existing skips. Its sole backend failure was
+the terminal media-job writer pin: the new batch read made the pre-existing campaign cancellation
+write visible to that inventory. Queued cancellation now calls a synchronous owned-batch helper
+in media.ts within the same transaction; submitted work remains untouched. The two-module writer
+pin is unchanged. A new cancellation regression checks actual job rows; final CI must rerun.
+
+Current golden source revision after that correction is
+`2026-09-11.budgeted-evaluator.36d5c34e09b87bbfb45e0cb53f529b213ed381ebb23dc5c6dc44eefe44d8baf4`.
 The46-case corpus/hash and40-case vertical corpus remain unchanged. Source identity refresh is
 not paid semantic qualification or reusable consent. Phase53 remains0/3 and the primary order
 and all previous financial/qualification receipts remain unchanged.

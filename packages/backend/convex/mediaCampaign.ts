@@ -18,7 +18,11 @@ import { contentHash } from "./lib/hash";
 import { readMediaBatch } from "./lib/mediaRead";
 import { internalMutation } from "./lib/tenantLifecycle";
 import { TOOL_CONTEXT_ARGS } from "./lib/toolContextArgs";
-import { estimateCampaignPlanInner, reserveCampaignPlanInner } from "./media";
+import {
+  cancelQueuedCampaignBatchInner,
+  estimateCampaignPlanInner,
+  reserveCampaignPlanInner,
+} from "./media";
 import { ensureCoverage } from "./spendLedger";
 
 const itemInput = v.union(
@@ -674,19 +678,12 @@ export const cancel = tenantMutation({
     for (const item of items) {
       if (!["ready", "proposal", "reserved"].includes(item.status)) continue;
       if (item.batchId) {
-        const jobs = await readMediaBatch(ctx, ctx.tenantId, item.batchId);
         // A stray external submit has to settle; never call an already submitted purchase cancelled.
-        if (jobs.some((job) => job.status !== "queued")) {
+        if (!(await cancelQueuedCampaignBatchInner(ctx, campaign, item.planId, item.batchId))) {
           item.status = "running";
           item.startedAt ??= Date.now();
           continue;
         }
-        for (const job of jobs)
-          await ctx.db.patch(job._id, {
-            status: "failed",
-            failureReason: "campaign_cancelled",
-            updatedAt: Date.now(),
-          });
       }
       item.status = "cancelled";
     }

@@ -3157,6 +3157,34 @@ export async function reserveCampaignPlanInner(
   return result;
 }
 
+/** Cancel only an untouched owned batch, atomically with its campaign; submitted work must settle. */
+export async function cancelQueuedCampaignBatchInner(
+  ctx: MutationCtx,
+  campaign: Pick<Doc<"mediaCampaigns">, "_id" | "tenantId" | "threadId">,
+  planId: Id<"plans">,
+  batchId: string,
+): Promise<boolean> {
+  const plan = await ownedPlan(ctx, planId, campaign.tenantId);
+  if (!plan || plan.mediaCampaignId !== campaign._id || plan.threadId !== campaign.threadId)
+    throw new Error("CAMPAIGN_PLAN_NOT_OWNED");
+  const jobs = await readMediaBatch(ctx, campaign.tenantId, batchId);
+  if (
+    jobs.some(
+      (job) =>
+        job.tenantId !== campaign.tenantId || job.planId !== planId || job.batchId !== batchId,
+    )
+  )
+    throw new Error("CAMPAIGN_BATCH_NOT_OWNED");
+  if (jobs.some((job) => job.status !== "queued")) return false;
+  for (const job of jobs)
+    await ctx.db.patch(job._id, {
+      status: "failed",
+      failureReason: "campaign_cancelled",
+      updatedAt: Date.now(),
+    });
+  return true;
+}
+
 /** Reserve + schedule, shared by the two paid entry points. Returns the governed refusal rather
  *  than throwing — a refusal is an answer, not an error. */
 async function reserveAndSchedule(

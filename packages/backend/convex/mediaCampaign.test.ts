@@ -834,3 +834,41 @@ test("cancellation stops unstarted reservations while reporting submitted work t
   expect((await row(t, campaignId)).status).toBe("partial");
   expect((await row(t, campaignId)).reservedCents).toBe(campaign.reservedCents);
 });
+
+test("cancellation terminalizes owned queued jobs but leaves a submitted batch untouched", async () => {
+  const t = harness();
+  const { campaignId } = await stage(t);
+  await approve(t, campaignId);
+  const before = await row(t, campaignId);
+  const first = before.items[0];
+  if (!first?.batchId) throw new Error("missing reserved fixture");
+  const batchId = first.batchId;
+  const submitted = await t.run(async (ctx) => {
+    const job = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_batch", (q) =>
+        q.eq("tenantId", tenantId).eq("batchId", batchId),
+      )
+      .first();
+    if (!job) throw new Error("missing reserved job");
+    await ctx.db.patch(job._id, { status: "submitted", providerRequestId: "already-submitted" });
+    return ctx.db.get(job._id);
+  });
+  if (!submitted) throw new Error("missing submitted fixture");
+  await asA(t).mutation(api.mediaCampaign.cancel, { campaignId });
+  expect((await row(t, campaignId)).items.map((item) => item.status)).toEqual([
+    "running",
+    "cancelled",
+    "cancelled",
+  ]);
+  await t.run(async (ctx) => {
+    expect(await ctx.db.get(submitted._id)).toEqual(submitted);
+    const jobs = await ctx.db.query("mediaJobs").collect();
+    expect(jobs.filter((job) => job._id !== submitted._id)).toHaveLength(2);
+    expect(
+      jobs
+        .filter((job) => job._id !== submitted._id)
+        .every((job) => job.status === "failed" && job.failureReason === "campaign_cancelled"),
+    ).toBe(true);
+  });
+});
