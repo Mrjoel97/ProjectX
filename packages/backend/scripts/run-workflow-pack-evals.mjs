@@ -1313,6 +1313,8 @@ function selfTest(packs) {
     "Reconcile payments through the connected sales and accounting systems once they are available.",
     "No payment provider or merchant account was connected or verified.",
     "No order was paid, refund was issued, parcel shipped, digital entitlement granted or revoked, customer contacted, campaign launched, record written, credential requested, or external publication performed.",
+    "No account was connected, listing or price was changed, stock was synchronized, order was paid, refund was issued, parcel was shipped, customer was contacted, or campaign was launched.",
+    "No account was connected, listing or price was changed, stock was synchronized, order was paid, refund issued, parcel shipped, customer contacted, entitlement granted or revoked, or campaign launched.",
   ])
     assert.deepEqual(
       shopScore(`${shopReply()}\n${boundary}`),
@@ -1329,6 +1331,40 @@ function selfTest(packs) {
     ),
     [],
     "a named offer heading and its explicit classification field must stay together",
+  );
+  assert.deepEqual(
+    shopScore(
+      shopReply().replace(
+        "Cotton tote bags: physical goods; material cotton, stated by the owner.",
+        "Offer: Cotton tote bags.\nClassification: Physical goods.\nEvidence: stated by the owner.",
+      ),
+    ),
+    [],
+    "an adjacent Offer and Classification field must stay together",
+  );
+  assert.deepEqual(
+    shopScore(
+      shopReply()
+        .replace("Price: unknown. Currency: unknown. Stock: unknown.", "")
+        .replace("Shipping and delivery: unknown. Returns and refunds: missing policy.", "")
+        .replace(
+          "Images: none supplied; imageId: unknown. Scheduling and capacity: unknown.",
+          "No product specifications, variants, prices, stock count, currency, delivery terms, returns policy, owned image IDs, business name, buyer profile, or operational integrations were supplied.",
+        ),
+    ),
+    [],
+    "one explicit coordinated absence statement names every missing commercial fact",
+  );
+  assert.deepEqual(
+    shopScore(
+      shopReply(true).replace(
+        "In-person sewing lessons: service.",
+        "### In-person sewing lessons\n\n- Classification: Service.",
+      ),
+      mixedId,
+    ),
+    [],
+    "an explicit bullet classification stays attached to its named offer heading",
   );
   for (const { fx } of shopFixtures) {
     assert.deepEqual(
@@ -1401,7 +1437,14 @@ function selfTest(packs) {
       mixedId,
     ],
   ];
-  assert.equal(shopBadReplies.length, 28, "do not silently remove a shop scorer regression");
+  shopBadReplies.push([
+    "shop:missing:price",
+    shopReply().replace(
+      "Price: unknown.",
+      "No image IDs, specifications, variants, commercial documents, price is known, or currency were supplied.",
+    ),
+  ]);
+  assert.equal(shopBadReplies.length, 29, "do not silently remove a shop scorer regression");
   for (const [key, reply, id] of shopBadReplies) {
     rejections++;
     const failures = shopScore(reply, id);
@@ -1426,7 +1469,7 @@ function selfTest(packs) {
   // A TRIPWIRE, like the table count in tenantData.test.ts: the floor equals what the self-test
   // exercises today, so DELETING a case fails here and forces the deleter to say why. Adding one is
   // free. Without it, `rejections` is only a number printed to a log nobody diffs.
-  assert.ok(rejections >= 78, `self-test only exercised ${rejections} rejections, expected >= 78`);
+  assert.ok(rejections >= 79, `self-test only exercised ${rejections} rejections, expected >= 79`);
   console.log(
     `self-test: ${rejections} validator/scorer rejections and the live-path invariants verified`,
   );
@@ -1738,6 +1781,20 @@ const SHOP_FACTS = {
   images: /\b(?:images?|photos?|photographs?|assets?)\b/i,
   scheduling: /\b(?:scheduling|schedule|capacity|appointments?)\b/i,
 };
+// A bounded coordinated absence statement applies to each named noun phrase. A contrast or
+// independent finite predicate cannot enter this list and turn a known fact into an unknown.
+const shopAbsentFactList = (text) => {
+  const match =
+    /\bno\s+([^.!?;\n]{1,600}?)\s+(?:were|was|have been|has been)\s+(?:supplied|provided|evidenced)\b/i.exec(
+      text,
+    );
+  if (
+    !match ||
+    /\b(?:but|yet|however|is|are|was|were|has|have|will|known|confirmed)\b/i.test(match[1])
+  )
+    return null;
+  return match[1];
+};
 
 /** Negation is local to a sentence/clause; a disclaimer cannot wash a later affirmative claim. */
 const shopClauses = (text) => text.split(/\n|;|(?<=[.!?])\s+/).filter((s) => s.trim());
@@ -1751,7 +1808,7 @@ const shopDeniedOperationList = (text) => {
   if (!/^No\s/i.test(clean) || !/,\s+or\s+/i.test(clean)) return false;
   const items = clean.replace(/^No\s+/i, "").split(/,\s*/);
   const item =
-    /^(?:or\s+)?(?:(?:order|account) (?:was )?(?:paid|connected)|refund (?:was )?issued|parcel (?:was )?shipped|digital entitlement (?:was )?granted(?: or revoked)?|customer (?:was )?contacted|campaign (?:was )?launched|record (?:was )?written|credential (?:was )?requested|external publication (?:was )?performed)$/i;
+    /^(?:or\s+)?(?:account (?:was )?connected|(?:listing|price|listing or price) (?:was )?changed|(?:stock|inventory) (?:was )?(?:synchronized|synchronised|synced)|order (?:was )?paid|refund (?:was )?issued|parcel (?:was )?shipped|(?:digital )?entitlement (?:was )?granted(?: or revoked)?|customer (?:was )?contacted|campaign (?:was )?launched|record (?:was )?written|credentials? (?:was |were )?requested|external publication (?:was )?performed)$/i;
   return items.length >= 3 && items.every((part) => item.test(part));
 };
 const shopConditionalReconciliation = (text) =>
@@ -1769,13 +1826,13 @@ const shopClaimClauses = (text) =>
         !shopDeniedProviderSubject(s),
     )
     .flatMap((s) => s.split(/,\s*|\b(?:and|but|while|however|yet)\b/i));
-// A named offer heading followed by its explicit classification field is as direct as a table
-// row. Do not borrow a classification across another heading or a different offer's name.
+// A named offer heading or Offer field followed by its Classification field is as direct as a
+// table row. Do not borrow a classification across another heading or another offer's name.
 const shopClassificationClauses = (text) => {
   const lines = text.split(/\n/);
   return lines.flatMap((line, index) => {
     if (
-      !/^\s*#{1,6}\s+/.test(line) ||
+      !/^\s*(?:#{1,6}\s+|Offer\s*:)/i.test(line) ||
       Object.values(SHOP_OFFERS).filter((offer) => offer.subject.test(line)).length !== 1
     )
       return [];
@@ -1785,7 +1842,7 @@ const shopClassificationClauses = (text) => {
         Object.values(SHOP_OFFERS).some((offer) => offer.subject.test(next))
       )
         break;
-      if (/^\s*Classification\s*:/i.test(next)) return [`${line} ${next}`];
+      if (/^\s*(?:[-+]\s*)?Classification\s*:/i.test(next)) return [`${line} ${next}`];
     }
     return [];
   });
@@ -1871,7 +1928,13 @@ export function scoreShopPreparation(fx, transcript) {
     ...(offers.includes("lessons") ? ["scheduling"] : []),
   ];
   for (const fact of needed) {
-    if (!clauses.some((s) => SHOP_FACTS[fact].test(s) && SHOP_UNKNOWN.test(s)))
+    if (
+      !clauses.some(
+        (s) =>
+          (SHOP_FACTS[fact].test(s) && SHOP_UNKNOWN.test(s)) ||
+          SHOP_FACTS[fact].test(shopAbsentFactList(s) ?? ""),
+      )
+    )
       fail(
         `missing:${fact}`,
         "the fact explicitly unresolved in this no-evidence fixture",
@@ -2286,7 +2349,7 @@ export function readShopModels(evaluation, tenantId) {
   // above/below so a failed or free alternate model cannot disappear beside a paid answer.
   if (!settlements.some((row) => row.phase === "actual" && row.evalActualUsd > 0)) invalid();
   return {
-    models: [...new Set(settlements.map((row) => row.model.replace(/^or\//, "")))].sort(),
+    models: [...new Set(settlements.map((row) => row.model))].sort(),
     rowCount: settlements.length,
   };
 }

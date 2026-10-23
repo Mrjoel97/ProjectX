@@ -30,14 +30,23 @@ Both separate accounts are verified, exactly A is owner after explicit consent, 
 browser access recovered. Standard OpenRouter billing is confirmed/configured under the
 approved$5 aggregate test limit.
 
-One bounded shop-preparation attempt exited2 with five failed fixture verdicts and refused
-model-spend attribution evidence, still under diagnosis. The authoritative envelope closed
-with43 settled calls, zero holds, no breach and$0.01474832 actual ledger cost; both kill
-switches are restored true. No retry, recipe activation or public website publication
-followed. The implementation and dedicated-stage release are delivered, but53-06 stays
-partial while paid diagnosis and native owner/recipe/model workflow observations remain
-pending;53-02/53-03 and OPRES requirements remain open. Phase48/production scopes and
-historical receipts are unchanged.
+Backend repair `84d005d1dce664c3895d530aaf9a5455f600a359` was separately applied. Two
+bounded shop-preparation attempts both exited2; their original failed verdicts remain.
+The first closed43 settled calls/$0.01474832 and the second45/$0.02033942, for88 calls
+and$0.03508774 total, zero holds and no breach. Both kill switches are restored true.
+All five second-run cases have saved artifacts; scorer-grammar false positives were
+identified and model-prefix comparison was corrected locally, without passing evidence
+or retrospective qualification. No further paid attempt is planned.
+
+Auth UI fix `7e86189009f4aafd9c9d7604d68ecd3da33fa2fd` passed15 focused tests and a
+fresh40-page cloud strict build, then deployed/promoted to dedicated staging. Actual
+fresh browser sign-in shows email/password and no unconfigured Google button or OR
+separator. The user's owner login remains pending. See the
+[follow-up receipt](../docs/releases/2026-10-23-online-presence-followup.json).
+The implementation and dedicated-stage releases are delivered, but53-06 stays partial
+with native owner/recipe/model workflow acceptance open;53-02/53-03 and OPRES requirements
+remain open. No activation or publication occurred. Phase48/production scopes, historical
+receipts and state counters are unchanged.
 
 ## Isolated online-presence lane — 2026-10-22
 

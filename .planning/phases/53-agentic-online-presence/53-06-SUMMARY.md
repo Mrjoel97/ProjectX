@@ -9,8 +9,8 @@ requirements-completed: []
 # 53-06 — Improved page composition and bounded private shop preparation
 
 Three parallel agents improved the isolated source using Taste and UI UX guidance.
-The implementation is delivered to dedicated staging; paid-test diagnosis and native
-qualification remain open, so this plan stays partial.
+The implementation is delivered to dedicated staging; both paid attempts remain
+unqualified and native qualification is pending, so this plan stays partial.
 
 ## Result and limits
 
@@ -95,7 +95,7 @@ The consumed-measure fix and controlled counterfactual address that cause; later
 focused results supersede it without deleting the failed observation. Aggregate free-gate
 timeouts remain historical failures rather than being relabelled aggregate green.
 
-## Final frozen source identities
+## Frozen source identities at the df0286d5 release
 
 - Recipe26-source identity:9dcc29ebea307d30fd9f998d34fefa37a2136ab88c2931079c050fac608d3410.
 - Golden revision:2026-09-11.budgeted-evaluator.d08e855de6fddf54ec5eeddb7a28ff7276b298486dcea91e24ad7305e0db01c7;
@@ -109,9 +109,9 @@ timeouts remain historical failures rather than being relabelled aggregate green
 
 Only third-gecko-977 / pikar-presence-stg is in scope. Key names and sender are configured;
 owner confirmed standard credit-funded OpenRouter billing and that declaration is saved.
-Approved aggregate maximum is$5: ordinary reasoning2, ingest1, one bounded shop evaluation1,
-and1 unallocated. Both switches remain paused outside a bounded test. The actual bounded
-attempt below incurred$0.01474832; it did not qualify the candidate.
+Approved aggregate maximum is$5: ordinary reasoning2, ingest1, first shop evaluation1,
+and fresh repaired evaluation1. Both switches remain paused outside a bounded test. The two
+actual bounded attempts incurred$0.03508774 total; neither qualified the candidate.
 
 After clarifying existing accounts belonged to production, the owner created both separate
 staging accounts and verified their emails. Exact approved A grant gives one owner; B is
@@ -141,13 +141,68 @@ establish a production application release.
 
 One approved100-cent shop-preparation attempt ran14:12:53.936–14:18:45.483Z and exited2.
 All five fixture verdicts failed and model-spend attribution evidence was refused.
-Diagnosis remains open; neither those verdicts nor the safe budget closure prove a
+Diagnosis was open at that observation; neither those verdicts nor the safe budget closure prove a
 qualified model workflow. The authoritative envelope was closed with43 settled calls,
 zero outstanding holds, no breach and$0.01474832 actual ledger cost. Both model/media
 kill switches were restored true; no automatic retry, replacement budget or activation
 followed. Private account/budget identifiers and raw traces remain outside this summary.
 
 The source implementation and staging release are delivered. Plan53-06 remains partial
-while this paid result is diagnosed and native owner/recipe workflow observations remain
+with both paid attempts unqualified and native owner/recipe workflow observations still
 pending. Hosted source qualification under53-02 and merchant operations under53-03 are
 separate unfinished acceptance work; local test success does not close them.
+
+## Bounded follow-up repair — 2026-10-23
+
+Diagnosis identified a shop-only legacy model-proof mismatch despite the settled ledger,
+plus unclear preparation language and overbroad fixture checks. Source repair
+`84d005d1dce664c3895d530aaf9a5455f600a359` was saved/pushed and applied to
+`third-gecko-977` in28.8 seconds. The first paid failure and df0286d5 release receipt
+remain unchanged. The repair requires positive-cost actual chat settlement, rejects
+refunded-only proof and mismatched model identities, and clarifies supported commercial
+facts versus unanswered decisions. It grants no merchant operations.
+
+Focused native proof16/16, contracts73/73 and runner8 packs/40 cases/78 rejection controls
+passed. Saved actual replies rescored locally with zero fixture failures. This is offline
+diagnosis, not fresh paid evidence. Only canonical/derived strings, provenance and identity
+constants changed in the backend follow-up; prior strict deployment validation is reused,
+with no new full typecheck or frontend deployment claimed.
+
+The canonical shop body hash is
+`e028c25ffd4bc001118d691a7b3eef036dc7b360d860e6067072cc404c4dae15`.
+Applicable pin refresh and checks passed:
+
+- Golden revision: `2026-09-11.budgeted-evaluator.248d2235e0f29bb466e834ad4de5e98297be96858377758c7bcdf4f0491e62da`.
+- Vertical evaluator: `e7b070967def6f100b6c2943222026193ac031444f3810689515a1a5c723cb43`.
+- Golden46-case hash and vertical six-lane/40-case corpus are unchanged. Recipe26-source
+  identity stays `9dcc29ebea307d30fd9f998d34fefa37a2136ab88c2931079c050fac608d3410`.
+
+After confirmed prior closed/zero holds, one fresh100-cent attempt fits the existing
+approved$5 allocated maxima (reasoning200 + ingest100 + evaluation100 + evaluation100
+cents). Its actual result is recorded below. No top-up, retry on the old envelope,
+passing qualification, native acceptance or activation is inferred from this repair.
+
+## Second paid result and auth UI deployment — 2026-10-23
+
+The fresh repaired attempt ran14:44:15.223–14:51:25.146Z on84d005d1 and exited2. Its
+envelope closed with45 settled calls, zero holds, no breach and$0.02033942 actual ledger
+cost; both switches were restored true. Both attempts total88 settled calls/$0.03508774.
+All five second-run cases have saved artifacts. Read-only diagnosis identified scorer
+grammar false positives; model-prefix comparison was corrected locally. Offline checks do
+not change either failed paid verdict, certify all narrative claims, issue passing
+evaluation/browser evidence or activate a candidate. No further paid attempt is planned.
+See the [follow-up receipt](../../../docs/releases/2026-10-23-online-presence-followup.json).
+
+The user then encountered unconfigured Google OAuth on staging. Auth UI fix
+`7e86189009f4aafd9c9d7604d68ecd3da33fa2fd` reads the existing `invites.authProviders`
+query and renders Google only for explicit availability. Both sign-in/signup keep
+email/password accessible while the query is loading or Google is absent. All15 focused
+checks passed. Fresh cloud strict TypeScript/build passed with40 pages; deployment
+`dpl_2QjtcxFRcGxQHK5P61A87iraq1ep` reached READY and was promoted to the stable dedicated
+stage. The immutable frontend is
+https://pikar-presence-j5esn3fel-joelferuzi-gmailcoms-projects.vercel.app.
+
+A fresh actual browser reload shows email/password and verification/recovery controls,
+with no Google button or OR separator. Google login was not configured or exercised.
+The user's owner sign-in and authenticated recipe/lifecycle qualification remain pending;
+53-06/53-02 remain partial. No activation, publication or working checkout is claimed.

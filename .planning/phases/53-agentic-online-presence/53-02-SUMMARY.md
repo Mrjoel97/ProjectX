@@ -82,19 +82,28 @@ accounts are verified; exact approved A is the only owner, B ordinary, with one 
 idempotent grant. Production accounts were not copied. Sender/provider key names and
 confirmed standard billing are configured under the approved$5 maximum.
 
-The actual current source `df0286d53a09c055572e14aa982a6d3361111b1f` passed the staging
+The first October23 source `df0286d53a09c055572e14aa982a6d3361111b1f` passed the staging
 backend strict check/apply and frontend cloud TypeScript/build. Dedicated frontend
 deployment `dpl_7EotyeRNHrgWUdoSV397z1ZKTnNY` reached READY and was promoted to the staging
 alias. See the [October23 release receipt](../../../docs/releases/2026-10-23-online-presence-staging.json).
 Historical October22 deployed-source receipts above are unchanged.
 
-The one bounded100-cent shop-preparation evaluation exited2: five failed fixture verdicts
-and refused model-spend attribution evidence remain under diagnosis. Its authoritative
-envelope closed with43 settled calls, zero holds, no breach and$0.01474832 ledger cost;
-both model/media kill switches are restored true. Budget closure is not model qualification.
-No retry or activation followed.
+Backend repair `84d005d1dce664c3895d530aaf9a5455f600a359` was applied separately. The first
+bounded100-cent evaluation exited2 and closed43 settled calls/$0.01474832; the fresh
+repaired100-cent attempt also exited2 and closed45/$0.02033942. Both have zero holds,
+no breach and restored model/media kill switches: total88 calls/$0.03508774. All five
+second-run cases have saved artifacts. Scorer-grammar false positives were identified and
+exact model-prefix comparison corrected locally; neither original paid verdict is changed, and no
+passing evidence or activation exists. No further paid attempt is planned. See the
+[follow-up receipt](../../../docs/releases/2026-10-23-online-presence-followup.json).
+
+Auth UI source `7e86189009f4aafd9c9d7604d68ecd3da33fa2fd` then passed15 focused tests
+and a fresh strict cloud build with40 pages. Deployment `dpl_2QjtcxFRcGxQHK5P61A87iraq1ep`
+was promoted to the stable dedicated-stage alias. Actual fresh native browser sign-in
+shows email/password, verification/recovery controls, and no unconfigured Google button
+or OR separator. This is anonymous UI observation, not a completed owner sign-in.
 
 Native browser control recovered and signed-in onboarding was observed. The fresh-owner
-redirect is fixed and13 real Shell tests pass, but the actual owner recipe review protocol,
+redirect is fixed and13 real Shell tests pass, but the user's owner login, actual recipe review protocol,
 authenticated A/B workflow/lifecycle acceptance and exact-source browser qualification
 remain pending. No full hosted acceptance or merchant checkout is claimed;53-02 stays partial.

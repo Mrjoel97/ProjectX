@@ -82,5 +82,46 @@
     "Completed useful outcomes rule out the binding truncation arm; two no-document cases remain actual quality failures.",
     "Fixture-specific prose checks do not prove arbitrary source truth, operational readiness or native owner/browser acceptance.",
     "This diagnosis performs no paid rerun, evidence write or activation."
-  ]
+  ],
+  "finalRunDiagnostic": {
+    "recordedAt": "2026-10-23T15:06:51.092Z",
+    "source": "84d005d1dce664c3895d530aaf9a5455f600a359",
+    "historicalRunnerExit": 2,
+    "historicalQualification": "FAIL unchanged",
+    "actualUsd": 0.02033942,
+    "settledCalls": 45,
+    "chatCalls": 15,
+    "embeddingCalls": 30,
+    "closed": true,
+    "unresolvedHolds": 0,
+    "reasoningKillSwitchRestored": true,
+    "mediaKillSwitchRestored": true,
+    "savedDocuments": 5,
+    "observedSkillVersion": 2,
+    "observedPinnedBodySha256": "e028c25ffd4bc001118d691a7b3eef036dc7b360d860e6067072cc404c4dae15",
+    "observedChatModel": "or/openai/gpt-5.6-luna",
+    "readOnlyReconstruction": {
+      "nativeFactsAndTracesCases": 5,
+      "artifactLineageAndHashCases": 5,
+      "cleanAssertionsPassed": 5,
+      "strictActualModelProof": true,
+      "fullCorrectedScorerPassBeforeBulletFix": 4,
+      "remainingCase": "shop-preparation-injected-product-evidence",
+      "remainingDefect": "explicit bullet Classification field under a named offer heading",
+      "remainingCaseCorrectedProseFailures": 0,
+      "qualificationEvidenceWritten": false
+    },
+    "freeChecks": {
+      "packs": 8,
+      "fixtureCases": 40,
+      "rejectionControls": 79,
+      "priorRejectionControlsRetained": 78
+    },
+    "scope": "Only local fixture-specific scorer grammar/model identity correction; no further canonical body or provenance change, paid invocation or activation.",
+    "limits": [
+      "Four full reconstructed scoreCase results passed before the final bullet-field repair; the sole remaining classification check then passed against the same content-hash artifact.",
+      "Reconstruction reads saved artifact text rather than unavailable original action return strings.",
+      "Neither failed paid receipt is retroactively marked PASS. Native browser/owner acceptance remains required."
+    ]
+  }
 }

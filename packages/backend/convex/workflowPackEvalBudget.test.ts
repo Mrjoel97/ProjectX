@@ -81,7 +81,7 @@ async function setup() {
   return { t, budgetId, args };
 }
 
-function installPricedSpecialist(unknownEmbedding = false) {
+function installPricedSpecialist(unknownEmbedding = false, modelId = "or/openai/gpt-4o-mini") {
   vi.mocked(runSpecialistTurn).mockImplementation(async (ctx, args) => {
     expect(args.skillName).toBe("pack-shop-preparation");
     expect(args.skillVersions).toEqual({ "pack-shop-preparation": 1 });
@@ -108,7 +108,7 @@ function installPricedSpecialist(unknownEmbedding = false) {
       tenantId: args.tenantId,
       budgetId: args.evalBudgetId,
       model,
-      modelId: "or/openai/gpt-4o-mini",
+      modelId,
       mode: "golden",
       onCost: () => {},
     });
@@ -353,7 +353,7 @@ describe("bounded shop operator entry", () => {
       "../scripts/run-workflow-pack-evals.mjs"
     );
     const { t, args, budgetId } = await setup();
-    installPricedSpecialist();
+    installPricedSpecialist(false, PACK_MODEL);
     await t.action(internal.workflowPackBinding.runShopPreparationEval, args);
     await t.action(internal.workflowPackBinding.runShopPreparationEval, {
       ...args,
@@ -384,7 +384,10 @@ describe("bounded shop operator entry", () => {
         },
         TENANT,
       );
-    expect(proof(rows)).toEqual({ models: ["openai/gpt-4o-mini"], rowCount: 2 });
+    expect(proof(rows)).toEqual({ models: [PACK_MODEL], rowCount: 2 });
+    expect(() =>
+      assertRanModel([{ id: "case", ranModels: proof(rows).models, spendRows: 2 }], PACK_MODEL),
+    ).not.toThrow();
     expect(provider).toHaveBeenCalledTimes(2);
     expect(
       rows.filter((row) => row.kind === "eval_provider" && row.evalActualUsd !== undefined),
@@ -428,7 +431,7 @@ describe("bounded shop operator entry", () => {
     expect(() =>
       assertRanModel(
         [{ id: "case", ranModels: proof(extraModel).models, spendRows: 2 }],
-        "openai/gpt-4o-mini",
+        PACK_MODEL,
       ),
     ).toThrow("the runs executed model(s)");
   });

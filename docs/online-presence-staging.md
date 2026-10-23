@@ -64,19 +64,77 @@ plus `X-Pikar-Environment: online-presence-staging`. Verify missing unpublished 
 routes on the Convex HTTP origin return404. Check the real browser for runtime errors.
 Do not treat anonymous sign-in rendering as authenticated account acceptance.
 
+## Current release and bounded repair — 2026-10-23
+
+Source `df0286d53a09c055572e14aa982a6d3361111b1f` passed dedicated-stage backend strict
+checking/apply and frontend cloud TypeScript/build. Frontend deployment
+`dpl_7EotyeRNHrgWUdoSV397z1ZKTnNY` reached READY and was promoted to this staging project.
+The [dated release receipt](releases/2026-10-23-online-presence-staging.json) preserves
+that source and its first paid attempt: runner exit2, five failed fixture verdicts and
+refused model-spend attribution evidence. Its envelope closed with43 settled calls,
+zero holds, no breach and$0.01474832 actual cost; both kill switches were restored true.
+That observation remains a failure receipt.
+
+Repair `84d005d1dce664c3895d530aaf9a5455f600a359` was saved/pushed and applied only to
+`third-gecko-977` in28.8 seconds. It fixes the shop-only ledger/model-proof mismatch and
+clarifies evidence-grounded commercial preparation. Focused native proof16/16,
+contracts73/73 and the runner's8 packs/40 cases/78 rejection controls passed. Local
+rescoring of saved actual replies found zero fixture failures; it is offline diagnosis,
+not a new paid pass or a rewrite of the first verdicts. This strings/provenance/constants
+follow-up reuses the previous strict deployment validation; no new full typecheck or
+frontend deployment is claimed for that backend-only apply. Its frontend was then the
+df0286d5 build; the later auth deployment is recorded below.
+
+Golden revision is now
+`2026-09-11.budgeted-evaluator.248d2235e0f29bb466e834ad4de5e98297be96858377758c7bcdf4f0491e62da`;
+vertical evaluator is `e7b070967def6f100b6c2943222026193ac031444f3810689515a1a5c723cb43`.
+Both offline identity checks pass, with unchanged46-case golden and six-lane/40-case
+vertical corpora. Recipe26-source identity remains
+`9dcc29ebea307d30fd9f998d34fefa37a2136ab88c2931079c050fac608d3410`.
+Refreshing these pins creates no passing evaluation evidence.
+
+### Final paid attempt and deployed sign-in repair
+
+The fresh100-cent attempt on84d005d1 ran14:44:15.223–14:51:25.146Z and exited2. Its
+authoritative envelope closed with45 settled calls, zero holds, no breach and$0.02033942
+actual cost, with both kill switches restored true. Across both attempts the observed
+total is88 settled calls/$0.03508774. All five second-run cases have saved artifacts;
+scorer-grammar false positives were identified and model-prefix comparison was corrected
+locally. Those diagnoses do not rewrite either failed verdict or issue passing evidence.
+No more paid runs are planned. See the
+[follow-up receipt](releases/2026-10-23-online-presence-followup.json).
+
+Actual sign-in exposed Google OAuth before it was configured. Auth UI repair
+`7e86189009f4aafd9c9d7604d68ecd3da33fa2fd` reuses `invites.authProviders` and offers
+Google only after an explicit configured response. It passed15 focused tests and a new
+strict cloud TypeScript/build with40 pages. Deployment `dpl_2QjtcxFRcGxQHK5P61A87iraq1ep`
+was promoted to the stable staging alias; its immutable URL is
+https://pikar-presence-j5esn3fel-joelferuzi-gmailcoms-projects.vercel.app.
+The backend remains84d005d1. A fresh native browser reload actually shows email/password,
+verification and recovery controls, with no Google button or OR separator. No Google
+credentials, provider or production configuration changed. The user's owner sign-in
+and authenticated recipe protocol remain pending.
+
 ## Admission and remaining acceptance
 
-Both global model and media kill switches are **on**. Canonical skills were seeded;
-three v1 web recipes remain **candidates**. Each has hosted deterministic20-case,
-zero-model-cost evidence and lacks browser qualification. A storefront recipe does not
+Both global model and media kill switches stay on outside an explicitly bounded test
+window. Canonical skills were seeded; the original October22 three v1 recipe candidates
+had hosted deterministic20-case, zero-model-cost evidence without browser qualification.
+Those dated observations do not qualify a newer source. A storefront recipe does not
 establish working checkout; merchant adapters and fulfillment remain open under53-03.
 
 The owner approved a maximum total model-test spend of$5 for this environment.
-Reasoning's deployment rail is$2 and ingest's is$1; $1 is allocated to the single shop evaluation envelope and$1 remains unallocated. These daily rails do not authorize future-day runs.
+Reasoning's deployment rail is$2 and ingest's is$1; the first and fresh follow-up shop
+evaluation envelopes are each capped at$1. Allocated maxima total$5, not$6. These caps
+are distinct from actual spend and do not authorize future-day runs.
 Both kill switches remain on outside an explicitly bounded test window. The new shop-only operator harness uses a fixed100c envelope before seeding, covers
 seed/query/chat, refuses outstanding reservations and disables paid/seed replay.
 Require unbreached settled status and normal close plus authoritative closed/zero-hold
-readback before evidence; retain unknown holds and never open a replacement budget.
+readback before evidence; retain unknown holds and never replace or top up an unresolved
+budget. The fresh repaired attempt follows confirmed closure/zero holds of the first,
+uses its own fixed100-cent envelope within the existing$5 total and does not replay paid
+work on the old envelope. Both attempts are now closed with zero holds and restored
+switches; neither qualified. Unspent actual cost is not authorization for another run.
 The historic runner's post-call cap alone does not provide this bound.
 
 The owner completed two native staging signups and email verifications on2026-10-23.

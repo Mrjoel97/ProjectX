@@ -14,7 +14,7 @@ Provider key names, sender and confirmed standard billing are configured. Both s
 native staging accounts are verified, with exact approved A owner/B ordinary readback.
 The embedding-budget gap is repaired under a fixed100-cent envelope with33 native tests.
 One approved paid attempt exited2 with five failed fixture verdicts and refused model-spend
-attribution evidence; diagnosis remains open. Its envelope is closed with43 settled calls,
+attribution evidence; the diagnosed repair is recorded below. Its envelope is closed with43 settled calls,
 zero holds, no breach and$0.01474832 actual ledger cost. Both kill switches are restored
 true. There is no automatic retry or passing model qualification from this result.
 
@@ -22,6 +22,39 @@ The delivered operator UI and local browser suite create no independent hosted b
 evidence or activation. Native owner/recipe/model/lifecycle acceptance remains pending;
 53-06 and53-02 stay partial. Historical October22 receipts below are preserved as dated
 observations, including their then-empty account/configuration state.
+
+### Diagnosed repair and final paid observation — 2026-10-23
+
+Repair source `84d005d1dce664c3895d530aaf9a5455f600a359` was saved/pushed and applied to
+the dedicated backend in28.8 seconds. It corrects shop-only ledger/model-proof matching
+and clarifies evidence-grounded commercial preparation. Native proof16/16, contracts73/73
+and the runner's8 packs/40 cases/78 rejection controls passed. Saved actual replies
+rescored locally with zero fixture failures; the original paid FAIL remains unchanged.
+The previous df0286d5 strict deployment is preserved; no new full typecheck or frontend
+deployment is claimed for this strings/provenance/constants follow-up.
+
+Golden revision is now
+`2026-09-11.budgeted-evaluator.248d2235e0f29bb466e834ad4de5e98297be96858377758c7bcdf4f0491e62da`;
+vertical evaluator is `e7b070967def6f100b6c2943222026193ac031444f3810689515a1a5c723cb43`.
+Offline self-checks pass; both fixture corpora and recipe26-source identity9dcc29eb…3410
+are unchanged. These identity refreshes create no live pass.
+
+After confirmed first-envelope closure/zero holds, the separately bounded fresh100-cent
+attempt ran within the existing$5 allocated maxima (200 +100 +100 +100 cents). It exited2
+and closed45 settled calls/$0.02033942 with zero holds, no breach and both switches restored
+true. The two attempts total88 calls/$0.03508774. All five second-run cases have saved
+artifacts; scorer-grammar false positives were identified and exact model-prefix comparison
+was corrected locally. This is not passing paid evidence or a change to either failed verdict.
+No more paid attempts are planned. See the
+[follow-up receipt](../../../docs/releases/2026-10-23-online-presence-followup.json).
+
+Auth UI source `7e86189009f4aafd9c9d7604d68ecd3da33fa2fd` subsequently passed15 focused
+checks and a new cloud strict TypeScript/build with40 pages. Deployment
+`dpl_2QjtcxFRcGxQHK5P61A87iraq1ep` was promoted to dedicated staging. Fresh actual browser
+sign-in shows email/password plus verification/recovery and no unconfigured Google button
+or OR separator. No provider credential/configuration was changed. Owner login and the
+authenticated recipe/model/lifecycle protocol remain pending;53-06 and53-02 remain partial.
+No activation, publication or merchant checkout is claimed.
 
 
 ## Hosted staging continuation — 2026-10-22
