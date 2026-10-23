@@ -19,6 +19,7 @@ const state = vi.hoisted(() => ({
   setup: vi.fn(),
   start: vi.fn(),
   control: vi.fn(),
+  reconcile: vi.fn(),
   query: vi.fn(),
 }));
 vi.mock("convex/react", () => ({
@@ -32,6 +33,10 @@ vi.mock("convex/react", () => ({
         return state.service;
       case "managedServiceRuns:list":
         return { items: state.runs, truncated: false };
+      case "serviceOutcomes:runOutcome":
+        return null;
+      case "goals:listGoals":
+        return [];
       case "buffer:status":
         return { connected: state.buffer };
       case "zernio:status":
@@ -41,7 +46,11 @@ vi.mock("convex/react", () => ({
     }
   },
   useMutation: (ref: FunctionReference<"mutation">) =>
-    getFunctionName(ref) === "managedServices:setup" ? state.setup : state.control,
+    getFunctionName(ref) === "managedServices:setup"
+      ? state.setup
+      : getFunctionName(ref) === "managedServiceRuns:reconcile"
+        ? state.reconcile
+        : state.control,
   useAction: () => state.start,
   useConvex: () => ({ query: state.query }),
 }));
@@ -97,7 +106,8 @@ beforeEach(() => {
   state.runs = [];
   state.buffer = true;
   state.zernio = true;
-  for (const fn of [state.setup, state.start, state.control, state.query]) fn.mockReset();
+  for (const fn of [state.setup, state.start, state.control, state.query, state.reconcile])
+    fn.mockReset();
   state.setup.mockResolvedValue({ revision: 1, controlRevision: 1 });
   state.start.mockResolvedValue({ runId: "new-run", state: "running", existing: false });
   state.control.mockResolvedValue({ providerCancellationRequested: false });
@@ -308,6 +318,108 @@ test("unknown outcomes block new work even when a later completed run is display
   await render();
   expect(button("Start one run").disabled).toBe(true);
   expect(state.start).not.toHaveBeenCalled();
+});
+
+test("checking interrupted work uses the pending run and current revisions, retaining holds until native readback", async () => {
+  state.service = saved(true, "active", 7, 11);
+  state.services = [state.service];
+  state.runs = [
+    { runId: "latest-completed", state: "completed" },
+    { runId: "older-interrupted", state: "unknown" },
+  ];
+  state.reconcile
+    .mockResolvedValueOnce({ resolved: false, reason: "unsettled_cost" })
+    .mockResolvedValueOnce({ resolved: true, state: "stopped" });
+  await render();
+  expect(state.reconcile).not.toHaveBeenCalled();
+  expect(button("Start one run").disabled).toBe(true);
+  await click("Check interrupted work");
+  expect(state.reconcile).toHaveBeenCalledExactlyOnceWith({
+    runId: "older-interrupted",
+    expectedRevision: 7,
+    expectedControlRevision: 11,
+  });
+  expect(host.textContent).toContain(
+    "The final cost is not confirmed yet. The service stays on hold.",
+  );
+  expect(button("Start one run").disabled).toBe(true);
+  expect(state.start).not.toHaveBeenCalled();
+  await click("Check interrupted work");
+  expect(host.textContent).toContain(
+    "Interrupted work closed. Review any saved drafts before starting a new run.",
+  );
+  // A successful check is not an optimistic unlock: the authoritative run query must settle too.
+  expect(button("Start one run").disabled).toBe(true);
+  expect(state.start).not.toHaveBeenCalled();
+  expect(state.control).not.toHaveBeenCalled();
+  state.runs = [
+    { runId: "latest-completed", state: "completed" },
+    { runId: "older-interrupted", state: "stopped" },
+  ];
+  await render();
+  expect(button("Start one run").disabled).toBe(false);
+  expect(
+    [...host.querySelectorAll("button")].some(
+      (item) => item.textContent === "Check interrupted work",
+    ),
+  ).toBe(false);
+  expect(state.start).not.toHaveBeenCalled();
+  await click("Start one run");
+  expect(state.start).toHaveBeenCalledExactlyOnceWith({
+    serviceId: "social-marketing",
+    expectedRevision: 7,
+    expectedControlRevision: 11,
+    requestKey: expect.any(String),
+  });
+});
+
+test("an active run remains active after checking, with no duplicate start or automatic retry", async () => {
+  state.service = saved(true, "active", 3, 6);
+  state.services = [state.service];
+  state.runs = [{ runId: "still-working", state: "running" }];
+  state.reconcile.mockResolvedValueOnce({ resolved: false, reason: "still_running" });
+  await render();
+  await click("Check interrupted work");
+  expect(host.textContent).toContain("Pikar is still working. No additional run was started.");
+  expect(state.reconcile).toHaveBeenCalledExactlyOnceWith({
+    runId: "still-working",
+    expectedRevision: 3,
+    expectedControlRevision: 6,
+  });
+  expect(button("Start one run").disabled).toBe(true);
+  await render();
+  expect(state.reconcile).toHaveBeenCalledTimes(1);
+  expect(state.start).not.toHaveBeenCalled();
+});
+
+test("a rejected recovery keeps the run blocked and an explicit retry uses refreshed revision pins", async () => {
+  state.service = saved(true, "active", 4, 8);
+  state.services = [state.service];
+  state.runs = [{ runId: "interrupted-run", state: "unknown" }];
+  state.reconcile
+    .mockRejectedValueOnce(new Error("PRIVATE_STALE_RECOVERY"))
+    .mockResolvedValueOnce({ resolved: false, reason: "workflow_unknown" });
+  await render();
+  await click("Check interrupted work");
+  expect(host.textContent).toContain(
+    "Could not check this run. Refresh to check its latest state.",
+  );
+  expect(host.textContent).not.toContain("PRIVATE_STALE_RECOVERY");
+  expect(button("Start one run").disabled).toBe(true);
+  state.service = saved(true, "active", 5, 9);
+  await render();
+  expect(state.reconcile).toHaveBeenCalledTimes(1);
+  await click("Check interrupted work");
+  expect(state.reconcile).toHaveBeenLastCalledWith({
+    runId: "interrupted-run",
+    expectedRevision: 5,
+    expectedControlRevision: 9,
+  });
+  expect(host.textContent).toContain(
+    "Could not confirm the job status. The service stays on hold.",
+  );
+  expect(state.start).not.toHaveBeenCalled();
+  expect(state.control).not.toHaveBeenCalled();
 });
 
 test("pause and stop use current control revisions and disclose Buffer’s existing queue", async () => {

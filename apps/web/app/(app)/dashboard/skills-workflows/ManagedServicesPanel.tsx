@@ -5,6 +5,7 @@ import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { type CSSProperties, useRef, useState } from "react";
+import { ServiceGoalLink, ServiceOutcomesPanel } from "./ServiceOutcomesPanel";
 
 type Service = NonNullable<FunctionReturnType<typeof api.managedServices.status>>;
 type Options = FunctionReturnType<typeof api.managedServices.setupOptions>;
@@ -409,6 +410,7 @@ function ServiceCard({
   const service = useQuery(api.managedServices.status, { serviceId });
   const runs = useQuery(api.managedServiceRuns.list, { serviceId });
   const start = useAction(api.managedServiceRuns.start);
+  const reconcile = useMutation(api.managedServiceRuns.reconcile);
   const setControl = useMutation(api.managedServices.setControl);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -422,6 +424,7 @@ function ServiceCard({
   const blockedByRun = runs?.items.some((run) =>
     ["claimed", "running", "unknown"].includes(run.state),
   );
+  const pending = runs?.items.find((run) => ["claimed", "running", "unknown"].includes(run.state));
   const canStart =
     service.readiness.ready &&
     service.controlState === "active" &&
@@ -477,6 +480,13 @@ function ServiceCard({
         </span>
       </div>
       <p style={{ margin: 0, overflowWrap: "anywhere" }}>{service.goal}</p>
+      <ServiceGoalLink
+        serviceId={service.id}
+        revision={service.revision}
+        controlRevision={service.controlRevision}
+        goalId={service.goalId}
+        disabled={Boolean(pending) || busy}
+      />
       <p style={muted}>
         {service.operationIds
           .map((id) => operations.find((op) => op.id === id)?.label ?? "Other service activity")
@@ -520,11 +530,45 @@ function ServiceCard({
           </Link>
         )}
       </div>
+      {latest && <ServiceOutcomesPanel key={latest.runId} runId={latest.runId} />}
       {blockedByRun && (
         <p style={muted}>
           A run is still active or has an uncertain outcome. Another run cannot start until it is
           resolved.
         </p>
+      )}
+      {pending && (
+        <button
+          type="button"
+          style={controlStyle(busy)}
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setNotice("");
+            void reconcile({
+              runId: pending.runId,
+              expectedRevision: service.revision,
+              expectedControlRevision: service.controlRevision,
+            })
+              .then((result) =>
+                setNotice(
+                  result.resolved
+                    ? "Interrupted work closed. Review any saved drafts before starting a new run."
+                    : result.reason === "still_running"
+                      ? "Pikar is still working. No additional run was started."
+                      : result.reason === "unsettled_cost"
+                        ? "The final cost is not confirmed yet. The service stays on hold."
+                        : "Could not confirm the job status. The service stays on hold.",
+                ),
+              )
+              .catch(() =>
+                setNotice("Could not check this run. Refresh to check its latest state."),
+              )
+              .finally(() => setBusy(false));
+          }}
+        >
+          Check interrupted work
+        </button>
       )}
       <div style={row}>
         <button

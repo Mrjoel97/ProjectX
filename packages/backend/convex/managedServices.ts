@@ -204,6 +204,7 @@ const serviceFor = (ctx: QueryCtx, tenantId: string, serviceId: string) =>
     .unique();
 const view = (row: Doc<"managedServices">) => ({
   id: row._id,
+  goalId: row.goalId ?? null,
   ...managedServiceConfig(row),
   controlState: row.controlState,
   controlRevision: row.controlRevision,

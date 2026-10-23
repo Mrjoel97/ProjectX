@@ -30,6 +30,36 @@ const row = (over: Partial<Row> = {}): Row => ({
 });
 
 describe("audit viewer projection — the payload boundary", () => {
+  test("service recovery, goals and feedback expose references without private content", () => {
+    for (const [eventType, refs] of [
+      [
+        "managed_service.run_reconciled",
+        { serviceRef: "service_1", runRef: "run_1", revision: 2, controlRevision: 3 },
+      ],
+      [
+        "managed_service.goal_linked",
+        { serviceRef: "service_1", goalRef: "goal_1", revision: 2, controlRevision: 3 },
+      ],
+      ["managed_service.usefulness_recorded", { runRef: "run_1", usefulness: "accepted" }],
+    ] as const) {
+      const projected = projectAuditRow(
+        row({
+          eventType,
+          payload: {
+            ...refs,
+            text: "Private business goal",
+            apiKey: "private-secret",
+            email: "owner@example.com",
+          },
+        }),
+      );
+      expect(projected.known).toBe(true);
+      expect(projected.refs).toEqual(refs);
+      expect(JSON.stringify(projected)).not.toMatch(
+        /Private business goal|private-secret|owner@example/,
+      );
+    }
+  });
   test("dictation drafts expose only the character count, never transcript or PII details", () => {
     const p = projectAuditRow(
       row({

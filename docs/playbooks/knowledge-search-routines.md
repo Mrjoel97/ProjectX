@@ -1556,3 +1556,7 @@ cd apps/web && pnpm vitest run PinnedWorkflowButton
   only. The money is joinable through the pack's own `workflowPackEvents`/`spendEvents` `runId`.
   Upgrade path: return the `runId` from `startWorkflowPack` — a `cockpit.ts` change this plan did
   not own.
+
+### 2026-10-23 — Named inert construction exception
+
+See ADR-063 and the programme development amendment. The historical Phase29 defer decision remains active. `managedServiceRecurrence.ts` and the two named managed-service approval/occurrence tables are now explicit reviewed construction exceptions, rather than pretending recurrence-shaped persistence is absent. The sole native claim passes a literal false capability with no native argument or environment bypass. Plain transaction helpers are tested only with synthetic fixtures. No production consumer, cron, scheduler call, arming/rearming or unattended provider dispatch was added. Closed module, schema and token checks separately pin the exception and preserve scheduler call sites. The arithmetic budget spike remains unimported. Existing reporting exceptions remain unchanged. Genuine lifecycle/DST/browser-closed evidence and a separate activation decision remain open.

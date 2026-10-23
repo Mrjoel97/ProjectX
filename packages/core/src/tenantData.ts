@@ -38,6 +38,8 @@ export const TENANT_TABLE_CLASSIFICATION = {
   savedPrompts: "tenant_owned",
   managedServices: "tenant_owned", // Inert setup and goal text export/erase with their owner.
   managedServiceRuns: "tenant_owned", // Attended run refs; authoritative costs stay in spendEvents.
+  managedServiceStandingApprovals: "tenant_owned", // Inert structured permission; no credential/arming.
+  managedServiceOccurrences: "tenant_owned", // Inert occurrence refs; costs remain in spendEvents.
   // Workflow-engine correlation bookkeeping has no tenant key and is not tenant content.
   pendingTimeouts: "global",
   // Singleton WORM cursor bookkeeping belongs to the deployment, not a tenant.
@@ -62,6 +64,7 @@ export const TENANT_TABLE_CLASSIFICATION = {
   bufferConnections: "tenant_credential",
   zernioConnections: "tenant_credential",
   zernioReports: "tenant_owned",
+  serviceOutcomeObservations: "tenant_owned", // Bounded native report history; never credentials.
   bufferOAuthStates: "tenant_credential",
   bufferPosts: "tenant_owned",
   bufferReports: "tenant_owned",

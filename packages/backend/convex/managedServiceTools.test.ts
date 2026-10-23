@@ -15,12 +15,21 @@ function fixture(userId: string | null = "tenant-a") {
     readiness: { ready: true, reasons: [] },
   };
   const keys = new Set<string>();
+  const brainState = { runId: "prior-run" };
   const runQuery = vi.fn(async (reference: unknown, _args: unknown) => {
     if (getFunctionName(reference as never) === "managedServices:status") return config;
     if (getFunctionName(reference as never) === "managedServiceRuns:list")
       return {
         items: [{ runId: "prior-run", state: "completed", threadId: "prior-thread" }],
         truncated: false,
+      };
+    if (getFunctionName(reference as never) === "serviceOutcomes:serviceBrainView")
+      return {
+        latestOutcome: {
+          runId: brainState.runId,
+          businessImprovement: "not_established",
+          usefulness: "unreviewed",
+        },
       };
     throw new Error("unexpected_query");
   });
@@ -43,9 +52,18 @@ function fixture(userId: string | null = "tenant-a") {
     if (!definition?.execute) throw new Error("tool_absent");
     return definition.execute({}, { toolCallId: name, messages: [], context: {} });
   };
-  return { ctx, tools, execute, runQuery, runAction, config };
+  return { ctx, tools, execute, runQuery, runAction, config, brainState };
 }
 describe("attended Executive service access", () => {
+  test("separate native reads cannot attach a newer outcome to an older run", async () => {
+    const h = fixture();
+    h.brainState.runId = "newer-run";
+    expect(await h.execute("readSocialService")).toMatchObject({
+      brain: { latestOutcome: { runId: "newer-run" } },
+      latestRun: { runId: "prior-run", outcome: null },
+    });
+    expect(h.runAction).not.toHaveBeenCalled();
+  });
   test("reads the owned saved setup and latest native run without starting work", async () => {
     const h = fixture();
     expect(await h.execute("readSocialService")).toMatchObject({
@@ -55,13 +73,16 @@ describe("attended Executive service access", () => {
     });
     expect(h.runAction).not.toHaveBeenCalled();
     expect(h.runQuery.mock.calls.map(([reference]) => getFunctionName(reference as never))).toEqual(
-      ["managedServices:status", "managedServiceRuns:list"],
+      ["managedServices:status", "managedServiceRuns:list", "serviceOutcomes:serviceBrainView"],
     );
     expect(
-      h.runQuery.mock.calls.every(
-        ([, args]) => JSON.stringify(args) === JSON.stringify({ serviceId: "social-marketing" }),
-      ),
+      h.runQuery.mock.calls
+        .slice(0, 2)
+        .every(
+          ([, args]) => JSON.stringify(args) === JSON.stringify({ serviceId: "social-marketing" }),
+        ),
     ).toBe(true);
+    expect(h.runQuery.mock.calls[2]?.[1]).toEqual({ serviceId: "social-marketing" });
   });
   test("uses the same public start action and stable trusted-root key with no model-owned authority", async () => {
     const h = fixture();

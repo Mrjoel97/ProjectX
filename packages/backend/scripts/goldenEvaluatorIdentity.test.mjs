@@ -85,6 +85,11 @@ test("routing and shared CLI edits retire both evaluator identities without chan
     "packages/backend/convex/managedServiceTools.ts",
     "packages/backend/convex/lib/managedServiceBudget.ts",
     "packages/core/src/managedServices.ts",
+    "packages/core/src/managedServicePolicy.ts",
+    "packages/core/src/serviceOutcomes.ts",
+    "packages/core/src/socialServiceOutcome.ts",
+    "packages/backend/convex/serviceOutcomes.ts",
+    "packages/backend/convex/managedServiceRecurrence.ts",
   ];
   for (const relativePath of dependencies) {
     assert.ok(EVALUATOR_FILES.includes(relativePath));

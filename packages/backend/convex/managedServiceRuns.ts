@@ -5,9 +5,11 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { internalQuery } from "./_generated/server";
+import { appendAudit } from "./audit";
 import { cockpitAgent, ensureThreadAndPlan } from "./cockpit";
+import { dispatchWorkflowLive } from "./dispatchRun";
 import { workflow } from "./index";
-import { tenantAction, tenantQuery } from "./lib/functions";
+import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { managedServiceSpend } from "./lib/managedServiceBudget";
 import { internalMutation } from "./lib/tenantLifecycle";
 import { managedServiceConfig, managedServiceReadiness } from "./managedServices";
@@ -167,6 +169,7 @@ export const claim = internalMutation({
       configRevision: service.revision,
       controlRevision: service.controlRevision,
       budgetLimitCents: service.budgetLimitCents,
+      ...(service.goalId ? { goalId: service.goalId } : {}),
       requestKey: args.requestKey,
       state: "claimed",
       createdAt: now,
@@ -408,5 +411,75 @@ export const list = tenantQuery({
       .order("desc")
       .take(21);
     return { items: rows.slice(0, 20).map(view), truncated: rows.length > 20 };
+  },
+});
+
+/** Explicit recovery only: never turns an uncertain attempt into success or repeats its action. */
+export const reconcile = tenantMutation({
+  args: {
+    runId: v.id("managedServiceRuns"),
+    expectedRevision: v.number(),
+    expectedControlRevision: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const run = await ctx.db.get(args.runId);
+    if (!run || run.tenantId !== ctx.tenantId) return unavailable();
+    const service = await ctx.db.get(run.serviceId);
+    if (
+      !service ||
+      service.tenantId !== ctx.tenantId ||
+      service.revision !== args.expectedRevision ||
+      service.controlRevision !== args.expectedControlRevision
+    )
+      throw new Error("SERVICE_STALE_REVISION");
+    if (["completed", "failed", "stopped"].includes(run.state))
+      return { resolved: true, state: run.state, reason: "already_terminal" as const };
+    const abandonedClaim =
+      run.state === "claimed" &&
+      !run.workflowId &&
+      !run.threadId &&
+      !run.planId &&
+      Number.isSafeInteger(run.createdAt) &&
+      Date.now() - run.createdAt >= MANAGED_SERVICE_RUN_LIFETIME_MS;
+    if (!abandonedClaim) {
+      if (!run.workflowId)
+        return { resolved: false, state: run.state, reason: "status_unavailable" as const };
+      const live = await dispatchWorkflowLive(ctx, run.workflowId);
+      if (live !== false)
+        return {
+          resolved: false,
+          state: run.state,
+          reason: live === true ? ("still_running" as const) : ("status_unavailable" as const),
+        };
+    }
+    try {
+      const spend = await managedServiceSpend(ctx, ctx.tenantId, run._id);
+      if (
+        spend.breached ||
+        spend.outstandingNanos !== 0 ||
+        spend.reservationCount !== spend.settledCount
+      )
+        return { resolved: false, state: run.state, reason: "unsettled_cost" as const };
+    } catch {
+      return { resolved: false, state: run.state, reason: "unsettled_cost" as const };
+    }
+    await ctx.db.patch(run._id, {
+      state: "stopped",
+      terminalCode: "reconciled_interruption",
+      updatedAt: Date.now(),
+    });
+    await appendAudit(ctx, {
+      tenantId: ctx.tenantId,
+      correlationId: `managed-service-recovery:${run._id}`,
+      eventType: "managed_service.run_reconciled",
+      actor: "user",
+      payload: {
+        serviceRef: service._id,
+        runRef: run._id,
+        revision: run.configRevision,
+        controlRevision: run.controlRevision,
+      },
+    });
+    return { resolved: true, state: "stopped" as const, reason: "interruption_closed" as const };
   },
 });

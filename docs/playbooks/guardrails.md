@@ -789,3 +789,7 @@ actual dollars; a zero known total does not mean an unresolved request was free.
 - **Media economics live in `media.md`, not here.** This playbook owns the *mechanism*; the job cap,
   the price tables, the §4.1 arithmetic and the reservation contract are `docs/playbooks/media.md`.
   A change to the media rail's NUMBERS bumps both.
+
+### 2026-10-23 — Disabled recurrence construction
+
+ADR-063 permits synthetic native testing of the named inert adapter while the active decision remains defer. Occurrence claims reserve the whole configured cap against the existing tenant/deployment rails and append a `standing_service` reservation to spendEvents. Settlements derive cumulative actual/refunded totals from native receipt references; unknown costs retain separate held-reservation metadata, including late overruns. Unknown effects remain unresolved even after costs settle. This ledger is disjoint from attended paid-call reservations; provider consumption is not wired into the inert adapter. Its callable claim is disabled and cannot reserve funds; there is no scheduler, arming, provider call or live cadence. Current-source synthetic evidence is not enable-safe or production acceptance.

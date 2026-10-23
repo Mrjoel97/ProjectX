@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
@@ -13,8 +14,9 @@ import {
 //
 // `check-routine-gate.mjs --validate-decision` says `defer` (recorded in
 // `.planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md`), so 29-12's job
-// is the affirmative proof that recurrence is ABSENT from the tree, and to make no implementation
-// edit at all.
+// remains the affirmative proof that recurrence cannot execute. ADR-063 explicitly permits
+// the named inert native adapter and its storage for development-only transaction tests;
+// this exception does not change defer, scheduler sites, cron registrations or activation.
 //
 // ═══ WHY THIS FILE IS AN ALLOWLIST AND NOT A BLOCKLIST ═══════════════════════════════════════
 //
@@ -184,6 +186,7 @@ const CONVEX_MODULES = [
   "lib/ws.d.ts",
   "llm.ts",
   "managedServiceExecution.ts",
+  "managedServiceRecurrence.ts",
   "managedServiceRuns.ts",
   "managedServiceTools.ts",
   "managedServices.ts",
@@ -231,6 +234,7 @@ const CONVEX_MODULES = [
   "review.ts",
   "savedPrompts.ts",
   "schema.ts",
+  "serviceOutcomes.ts",
   "skilloptExport.ts",
   "skills.ts",
   "smoke.ts",
@@ -460,6 +464,37 @@ const BANNED_TOKENS = [
   "standingApproval",
 ];
 
+// ADR-063: exact declaration/use lines in the inert adapter, never a file-level exemption.
+// Other banned tokens and any additional expression on these lines still fail this scan.
+const DEVELOPMENT_ADAPTER_LINES = new Set([
+  "standingOccurrenceKey,",
+  'approvalId: Id<"managedServiceStandingApprovals">;',
+  "const rawKey = standingOccurrenceKey(occurrence);",
+  "const occurrenceKey = await contentHash(rawKey);",
+  '.eq("occurrenceKey", occurrenceKey),',
+  "previousOccurrenceKeys: [],",
+  "occurrenceKey,",
+  "reservationKey: occurrenceKey,",
+  `correlationId: \`standing:\${occurrenceKey}\`,`,
+  `reservation.correlationId !== \`standing:\${row.occurrenceKey}\` ||`,
+  `!receipt.correlationId.startsWith(\`standing:\${row.occurrenceKey}:\`) ||`,
+  "reservationKey: row.occurrenceKey,",
+  `const correlationId = \`standing:\${row.occurrenceKey}:\${row.receiptIds.length}\`;`,
+  'approvalId: v.id("managedServiceStandingApprovals"),',
+]);
+const DEVELOPMENT_SCHEMA_TABLES = ["managedServiceStandingApprovals", "managedServiceOccurrences"];
+const developmentSchemaLine = (lines: string[], n: number, token: string) => {
+  if (!["standingApproval", "occurrenceKey"].includes(token)) return false;
+  if (/^\s*\/\/ │\s+managedServiceRuns, managedServiceStandingApprovals,\s+│$/.test(lines[n] ?? ""))
+    return true;
+  let table: string | undefined;
+  for (const line of lines.slice(0, n + 1)) {
+    const declaration = /^ {2}([A-Za-z][A-Za-z0-9]*): defineTable\(/.exec(line);
+    if (declaration) table = declaration[1];
+  }
+  return table !== undefined && DEVELOPMENT_SCHEMA_TABLES.includes(table);
+};
+
 /**
  * `file:line` for every banned token in a corpus, minus the exempted lines. Factored out of the
  * test so the EXEMPTION ITSELF can be driven with a synthetic corpus — round 3's exemption test
@@ -477,9 +512,14 @@ const tokenHits = (corpus: Array<{ file: string; lines: string[] }>) => [
       const needle = token.toLowerCase();
       return corpus.flatMap(({ file, lines }) =>
         lines
-          .map((text, n) => ({ at: `${file}:${n + 1}`, text: text.trim() }))
+          .map((text, n) => ({ at: `${file}:${n + 1}`, text: text.trim(), n }))
           .filter(({ text }) => text.toLowerCase().includes(needle))
           .filter(({ text }) => ALLOWED.get(file) !== text)
+          .filter(
+            ({ text, n }) =>
+              !(file === "managedServiceRecurrence.ts" && DEVELOPMENT_ADAPTER_LINES.has(text)) &&
+              !(file === "schema.ts" && developmentSchemaLine(lines, n, token)),
+          )
           .map(({ at }) => at),
       );
     }),
@@ -516,7 +556,7 @@ describe("the ten-token convenience scan", () => {
     );
   });
 
-  test("the ten banned tokens are these, and none appears in the convex namespace", () => {
+  test("the ten bans remain intact outside the ADR-063 exact inert declarations and uses", () => {
     // PINNED, like every other closed set in 29-11/29-12. Round 3's list was an inline array, so
     // dropping a token from it was invisible in review.
     expect(BANNED_TOKENS).toEqual([
@@ -539,6 +579,133 @@ describe("the ten-token convenience scan", () => {
     ]);
     // The claim.
     expect(tokenHits(code)).toEqual([]);
+    expect(
+      tokenHits([
+        {
+          file: "managedServiceRecurrence.ts",
+          lines: [
+            "const occurrenceKey = await contentHash(rawKey);",
+            "const occurrenceKey = Date.now();",
+            "const nextRunAt = 1;",
+          ],
+        },
+      ]),
+    ).toEqual(["managedServiceRecurrence.ts:3", "managedServiceRecurrence.ts:2"]);
+    expect(
+      tokenHits([
+        {
+          file: "schema.ts",
+          lines: [
+            "  managedServiceOccurrences: defineTable({",
+            "    occurrenceKey: v.string(),",
+            "    nextRunAt: v.number(),",
+            "  elsewhere: defineTable({ occurrenceKey: v.string() }),",
+          ],
+        },
+      ]),
+    ).toEqual(["schema.ts:3", "schema.ts:4"]);
+  });
+});
+
+const disabledAdapterErrors = (text: string) => {
+  const errors = [];
+  if (!/^export const MANAGED_SERVICE_RECURRENCE_ENABLED = false;$/m.test(text))
+    errors.push("enabled");
+  if (/process\.env|import\.meta\.env/.test(text)) errors.push("environment_override");
+  if (/ctx\.scheduler|cronJobs\s*\(|\bcrons\.|ctx\.runAction\s*\(|\bfetch\s*\(/.test(text))
+    errors.push("runtime_effect");
+  const native = text.slice(text.indexOf("export const claim = internalMutation("));
+  if (
+    !native ||
+    /admitted\s*:\s*v\./.test(native) ||
+    !/handler:\s*\(ctx,\s*args\)\s*=>\s*claimStandingOccurrence\(\s*ctx,\s*args,\s*\{\s*admitted:\s*MANAGED_SERVICE_RECURRENCE_ENABLED,?\s*\},?\s*\)/.test(
+      native,
+    )
+  )
+    errors.push("native_bypass");
+  if (
+    [
+      ...text.matchAll(
+        /export const \w+ = (?:internalMutation|internalQuery|internalAction|tenantMutation|tenantQuery|tenantAction)\(/g,
+      ),
+    ].length !== 1
+  )
+    errors.push("extra_endpoint");
+  return errors;
+};
+const adapterConsumers = (corpus: Array<{ file: string; text: string }>) =>
+  corpus
+    .filter(
+      ({ file, text }) =>
+        file !== "managedServiceRecurrence.ts" &&
+        file !== "_generated/api.d.ts" &&
+        /(?:from\s*["'][^"']*managedServiceRecurrence["']|(?:internal|api)\.managedServiceRecurrence\.)/.test(
+          text,
+        ),
+    )
+    .map(({ file }) => file);
+
+describe("ADR-063 allows construction, never recurrence activation", () => {
+  test("only the exact development ADR is exempt, and scheduling dependencies remain forbidden", () => {
+    const prefix = join(tmpdir(), "pikar-defer-guard-");
+    const root = mkdtempSync(prefix);
+    if (!root.startsWith(prefix)) throw new Error("UNSAFE_FIXTURE_CLEANUP");
+    try {
+      const decisions = join(root, "docs", "decisions");
+      mkdirSync(decisions, { recursive: true });
+      writeFileSync(
+        join(decisions, "063-inert-recurrence-construction.md"),
+        "Development only; decision remains defer.",
+      );
+      writeFileSync(join(root, "package.json"), "{}");
+      expect(deferAbsenceChecks({ repoRoot: root }).errors).toEqual([]);
+      writeFileSync(join(decisions, "064-recurrence-other.md"), "Not authorized by ADR063.");
+      expect(deferAbsenceChecks({ repoRoot: root }).errors).toEqual([
+        expect.stringContaining("064-recurrence-other.md"),
+      ]);
+      writeFileSync(
+        join(root, "package.json"),
+        JSON.stringify({ dependencies: { "node-cron": "1" } }),
+      );
+      expect(deferAbsenceChecks({ repoRoot: root }).errors).toEqual([
+        expect.stringContaining("064-recurrence-other.md"),
+        expect.stringContaining("scheduling dependency (node-cron)"),
+      ]);
+    } finally {
+      // Only the directory created above may be removed, never another computed target.
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+  test("native admission is hard false, has no bypass, effects or runtime consumer", () => {
+    const adapter = code.find(({ file }) => file === "managedServiceRecurrence.ts");
+    expect(adapter).toBeDefined();
+    const text = adapter?.text ?? "";
+    expect(disabledAdapterErrors(text)).toEqual([]);
+    expect(adapterConsumers(code)).toEqual([]);
+    expect(
+      disabledAdapterErrors(
+        text.replace(
+          "MANAGED_SERVICE_RECURRENCE_ENABLED = false",
+          "MANAGED_SERVICE_RECURRENCE_ENABLED = true",
+        ),
+      ),
+    ).toContain("enabled");
+    expect(
+      disabledAdapterErrors(`${text}\nctx.scheduler.runAfter(1, internal.x.y, {});`),
+    ).toContain("runtime_effect");
+    expect(
+      disabledAdapterErrors(
+        text.replace("tenantId: v.string(),", "tenantId: v.string(), admitted: v.boolean(),"),
+      ),
+    ).toContain("native_bypass");
+    expect(
+      adapterConsumers([
+        {
+          file: "hidden.ts",
+          text: 'import { claimStandingOccurrence } from "./managedServiceRecurrence";',
+        },
+      ]),
+    ).toEqual(["hidden.ts"]);
   });
 });
 

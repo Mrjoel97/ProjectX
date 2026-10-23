@@ -3143,3 +3143,7 @@ neuter the `row.tenantId !== tenantId` comparison in `runPackTurn`; drop the `te
 into `runSpecialistTurn`; hardcode `const name = "pack-business-pulse"` in
 `publishPackCustomization`; delete the `template_not_active` early return; remove the `pack-`
 refusal from `assertEvaluableCandidate`.
+
+### 2026-10-23 — Managed-service outcomes and inert construction identities
+
+The closed golden/vertical evaluator inventories now include the service brain/history/projection policy dependencies and named inert recurrence construction. Refresh generated fingerprints only after final formatting; corpus bytes and historical handoffs remain unchanged. This mechanical retirement prevents prior evidence silently qualifying new runtime/schema dependencies. It does not run an evaluator, spend money or supply qualification. ADR063 keeps recurrence activation deferred.

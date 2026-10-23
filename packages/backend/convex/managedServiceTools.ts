@@ -38,13 +38,22 @@ export function buildManagedServiceTools(
         if (!service) return { state: "not_configured", settingsPath: SETTINGS_PATH };
         const runs = await ctx.runQuery(api.managedServiceRuns.list, { serviceId: SERVICE_ID });
         const latest = runs.items[0];
+        const brain = await ctx.runQuery(api.serviceOutcomes.serviceBrainView, {
+          serviceId: SERVICE_ID,
+        });
         return {
           state: service.readiness.ready ? "ready" : "needs_setup",
           goal: service.goal,
           controlState: service.controlState,
           reasons: service.readiness.reasons,
+          brain,
           latestRun: latest
-            ? { runId: latest.runId, state: latest.state, workspacePath: path(latest.threadId) }
+            ? {
+                runId: latest.runId,
+                state: latest.state,
+                workspacePath: path(latest.threadId),
+                outcome: brain?.latestOutcome?.runId === latest.runId ? brain.latestOutcome : null,
+              }
             : null,
           settingsPath: SETTINGS_PATH,
         };

@@ -6,6 +6,7 @@ import {
 } from "@pikar/core/buffer";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { assertTenantWritable, internalMutation } from "./lib/tenantLifecycle";
@@ -401,6 +402,7 @@ async function stage(
     boardId?: string;
     isAiGenerated?: boolean;
   },
+  managedServiceRunId?: Id<"managedServiceRuns">,
 ) {
   validateBufferDraft(a, Date.now());
   if (!a.campaign.trim() || a.campaign.length > 120) throw new Error("BUFFER_INVALID_CAMPAIGN");
@@ -422,9 +424,11 @@ async function stage(
     throw new Error("BUFFER_PINTEREST_BOARD_REQUIRED");
   return ctx.db.insert("bufferPosts", {
     ...a,
+    ...(managedServiceRunId ? { managedServiceRunId } : {}),
     tenantId,
     connectionId: row.connectionId,
     organizationId: row.organizationId,
+    platform: target.service,
     revision: 1,
     status: "draft",
     createdAt: Date.now(),
@@ -450,7 +454,7 @@ export const stageAgentPost = internalMutation({
       )
         throw new Error("SERVICE_TOOL_NOT_ALLOWED");
     }
-    return stage(ctx, tenantId, a);
+    return stage(ctx, tenantId, a, managedServiceRunId);
   },
 });
 

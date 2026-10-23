@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 import { internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { assertTenantWritable, internalMutation } from "./lib/tenantLifecycle";
+import { captureServiceObservation } from "./serviceOutcomes";
 
 export const zernioChannelValue = v.object({
   id: v.string(),
@@ -337,6 +338,7 @@ export const finishReport = internalMutation({
       const snapshot = { tenantId: a.tenantId, connectionId: a.connectionId, report: a.report };
       if (previous) await ctx.db.replace(previous._id, snapshot);
       else await ctx.db.insert("zernioReports", snapshot);
+      await captureServiceObservation(ctx, row, a.report);
     }
     await ctx.db.patch(row._id, {
       lease: undefined,

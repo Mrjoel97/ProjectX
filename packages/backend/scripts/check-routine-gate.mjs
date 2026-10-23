@@ -539,13 +539,16 @@ export const SCHEDULING_DEPENDENCY_RE =
  * unrelated future ADR (`0NN-scheduled-worm-export.md`) would trip it. That direction is
  * deliberate — a governance gate should fail closed and make a human look — and the
  * alternative (scanning ADR bodies for the topic) is more code with more false negatives.
- * Upgrade path if it ever fires falsely: rename the ADR, or lift the defer.
+ * ADR063 is the explicit development-only construction exception. Every other matching
+ * filename still fails; the exception does not lift the active activation decision.
  */
 export function deferAbsenceChecks({ repoRoot = repoRootDefault } = {}) {
   const errors = [];
   const adrDir = resolve(repoRoot, "docs/decisions");
   if (existsSync(adrDir)) {
-    const stray = readdirSync(adrDir).filter((f) => /routine|recurrence|schedul/i.test(f));
+    const stray = readdirSync(adrDir).filter(
+      (f) => /routine|recurrence|schedul/i.test(f) && f !== "063-inert-recurrence-construction.md",
+    );
     for (const f of stray) {
       errors.push(`decision is \`defer\` but docs/decisions/${f} exists — no ADR may be minted`);
     }

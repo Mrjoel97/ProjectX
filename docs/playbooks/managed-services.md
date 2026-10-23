@@ -1,7 +1,9 @@
 # Playbook: Managed services
 
+> Last verified: 2026-10-23 — Goal linkage, user usefulness feedback, trusted report history and the cited brain view pass local pure/native tests. Execution completion, usefulness and metric movement remain separate; business improvement is not established by any of them. Read-only projections preserve unknown attribution and source clocks. No hosted service cycle, activation or release is certified by these checks.
+
 > Last verified: 2026-10-23 — Attended setup, durable execution, scoped SDK tools, per-run ledger admission and the service UI pass focused local tests. The scripted native path creates one owned thread/workflow, stages a draft, saves its reply and rejects duplicate execution. Release/live admission remains closed; local proof is not hosted acceptance.
-> Build history: `.planning/phases/49-shared-managed-service-boundary/` · Related ADRs: [062](../decisions/062-managed-service-boundary.md), [046](../decisions/046-a-standing-approval-reads-and-prepares-it-never-sends.md)
+> Build history: `.planning/phases/49-shared-managed-service-boundary/` · Related ADRs: [062](../decisions/062-managed-service-boundary.md), [064](../decisions/064-service-outcomes-preserve-source-authority.md), [046](../decisions/046-a-standing-approval-reads-and-prepares-it-never-sends.md)
 
 ## Purpose
 
@@ -17,6 +19,8 @@ Let a user save an objective, selected accounts and operating boundaries once, t
 - `apps/web/app/(app)/dashboard/skills-workflows/ManagedServicesPanel.tsx`: plain-language goal/account setup and real server-backed supervision.
 - `packages/backend/convex/schema.ts`: tenant-owned setup storage.
 - `packages/core/src/tenantData.ts`: export/erasure classification; credentials remain in their existing stores.
+- `packages/core/src/serviceOutcomes.ts` and `socialServiceOutcome.ts`: native-post comparison, separate retrieval/upstream clocks and conservative publication/report projections.
+- `packages/backend/convex/serviceOutcomes.ts`: user-owned goal/feedback writes, trusted report history, bounded outcome reads and the cited service brain view.
 - Corresponding `managedServices.test.ts` files: pure policy and native local adapter checks.
 
 ## Data and authority
@@ -31,7 +35,7 @@ Preserve tenant wrappers, bounded indexed reads, revision compare-and-set, code-
 
 An attended start persists one idempotent native claim and binds its owned conversation before the existing workflow starts one action with retry:false. The Executive reads its exact registry pin and intersects tools with the fixed social operations; unrelated email, media, authoring and publishing tools are absent. Each new model step/tool rereads authoritative configuration/control, while native provider admission and local draft staging check the fence in their write transactions. Pause/Stop prevents future work; explicit Resume updates control revision without starting work. Old callbacks remain fenced. Unknown outcomes and cost holds block replay; existing Buffer approval and provider queue ownership remain authoritative.
 
-The 1–1000-cent attended run ceiling is enforced per provider attempt using the existing spendEvents reservation/settlement rows. The spend index leads with tenantId and the native bill read constrains that tenant before the run id. Precise settled USD and full unknown holds share one indexed transaction; ordinary tenant/deployment rails remain additional constraints. Settlement remains permitted after Stop or the one-hour attended-run lifetime, so accepted usage is not lost. This is not Phase50's whole-run unattended reservation or recurrence admission.
+The 1–1000-cent attended run ceiling is enforced per provider attempt using the existing spendEvents reservation/settlement rows. The spend index leads with tenantId and the native bill read constrains that tenant before the run id. Precise settled USD and full unknown holds share one indexed transaction; ordinary tenant/deployment rails remain additional constraints. Settlement remains permitted after Stop or the one-hour attended-run lifetime, so accepted usage is not lost. This is not Phase 50's whole-run unattended reservation or recurrence admission.
 
 The user goal and actual reply live in the existing Agent conversation store, never audit/run metadata. Reply publication and a completed terminal require a fresh scope and clean cost ledger in one native mutation. A workflow returning without its expected terminal is unknown; it never automatically repeats the model action.
 
@@ -41,6 +45,20 @@ Before changing scope, try `graphify query "managed services"`; if unavailable, 
 
 Run the owning pure and native `managedServices.test.ts` suites and package typechecks. Native adapter tests must exercise two authenticated tenants, stale edits, changed connection/skill references, missing sources, credential-safe views and export/erasure classification. Preserve the recurrence absence tests and existing audit projection tests. Local tests perform no provider calls or deployment.
 
+## Goal, evidence and brain view
+
+`bindGoal` validates both tenant-owned references and configuration/control revisions, increments both revisions and preserves pause/stop. A new run copies the goal reference; later setup edits cannot rewrite that run's goal. Only the authenticated user's `recordUsefulness` writes accepted/rejected feedback for a resolved terminal run. Neither operation changes a goal's active/achieved/dropped status. `spendEvents` and `agentSteps` remain the cost and activity authorities; outcomes return their join references rather than a second numeric ledger.
+
+Accepted `zernio.finishReport` completion captures native metric history using the actual current connection/revision/lease. Canonical identity excludes retrieval time and normalizes ordering. Only repetition of the latest identical snapshot deduplicates: returning to an earlier value after a change creates a new observation. Retention keeps at most 30 distinct observations across the tenant; history reads paginate at most 20, check the current connection revision and selected available accounts, and disappear from the view after source withdrawal. Export/erasure uses the existing tenant data walk.
+
+Lifetime metric comparisons join exact account, platform, native post and source. Missing is not zero. Null, zoneless, invalid or future upstream timestamps stay unknown; fetching an old observation does not make it fresh. Conflicting values at the same upstream time do not establish movement. The current connection failure suppresses a confident comparison. No account-level reach/rate aggregation, campaign attribution or business improvement is inferred.
+
+`serviceBrainView` reuses the existing goal, ready business-profile document, foundation revisions and latest run. It exposes original source/confirmation references and times, not a rewritten fact store. A profile document's `source: agent`, kind or row creation time cannot confirm facts. Only an exact latest user-published foundation document/reference/hash match with present owned source references supplies `user_published_snapshot`; this does not convert every claim to `userProvided`. Changed or withdrawn evidence removes that confirmation. Next-action codes follow missing/stale sources, uncertain work, user feedback and the supported social projection. They do not create plans, change goals, activate skills or start another cycle.
+
+Verify with core `serviceOutcomes.test.ts` and backend `serviceOutcomes.test.ts`/`zernio.test.ts`. Local evidence includes two tenants, stale CAS and overflow refusal, source failure/withdrawal, original confirmation times, deduplication/reversion, native lineage, pagination and retention. Publisher attribution remains unverified because no trusted Buffer-to-native-platform receipt producer exists.
+
+The local social projection has 19 focused tests. The outcomes panel has 17 and the managed-services panel 15, covering user-only usefulness, optional owned goal linkage, current revision checks, missing/stale/unknown evidence and explicit recovery without automatic restart. These local checks introduce no provider work and do not replace hosted authenticated acceptance.
+
 ## Remaining work
 
-Current-source release acceptance, real account/provider execution and the full social publication/report cycle remain required. The local interface and scripted native tests do not establish hosted production behavior. Arbitrary agent-composed DAG persistence/execution remains unavailable; the initial executor handles only the fixed social operations. Recurrence, historical business evidence and the complete social cycle belong to Phases50–52. Successful execution is not proof of business improvement.
+Current-source release acceptance, real account/provider execution and the full social publication/report cycle remain required. The local interface and scripted native tests do not establish hosted production behavior. Arbitrary agent-composed DAG persistence/execution remains unavailable; the initial executor handles only the fixed social operations. Phases50–52 retain their remaining unattended, authenticated and repeated-cycle acceptance. Bounded history and a cited read view are implemented locally; a complete Business Ledger/profile interface and business improvement are not thereby established.

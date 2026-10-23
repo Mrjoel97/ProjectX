@@ -1,6 +1,10 @@
 {
   "managed-services.md": [
-    "packages/core/src/managedServices",
+    "packages/core/src/managedService",
+    "packages/core/src/serviceOutcomes",
+    "packages/core/src/socialServiceOutcome",
+    "packages/backend/convex/serviceOutcomes",
+    "apps/web/app/(app)/dashboard/skills-workflows/ServiceOutcomesPanel",
     "packages/backend/convex/managedService",
     "packages/backend/convex/lib/managedServiceBudget",
     "apps/web/app/(app)/dashboard/skills-workflows/ManagedServicesPanel"

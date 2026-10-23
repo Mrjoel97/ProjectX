@@ -366,3 +366,7 @@ Actual complete six-lane semantic reviews, responsive UAT and release/rollback d
 offline SDK transport shims and authorization tests are implementation verification only.
 
 Last verified: 2026-10-15 — Native evaluator source identity now includes paid model admission, erased-identity admission and shared JWT lifetime. Regenerated the six-lane, 40-case pins after runtime changes. The case corpus is unchanged; prior evaluator evidence is retired. Offline pin checks pass, with no new live/provider evaluation claimed.
+
+### 2026-10-23 — Managed-service outcomes and inert construction identities
+
+The closed golden/vertical evaluator inventories now include the service brain/history/projection policy dependencies and named inert recurrence construction. Refresh generated fingerprints only after final formatting; corpus bytes and historical handoffs remain unchanged. This mechanical retirement prevents prior evidence silently qualifying new runtime/schema dependencies. It does not run an evaluator, spend money or supply qualification. ADR063 keeps recurrence activation deferred.

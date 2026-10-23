@@ -525,8 +525,12 @@ test("public start binds one owned thread and durable once-only workflow; duplic
   expect(await t.run((ctx) => ctx.db.query("plans").collect())).toHaveLength(1);
   const posts = await t.run((ctx) => ctx.db.query("bufferPosts").collect());
   expect(posts).toHaveLength(1);
-  expect(posts[0]).toMatchObject({ status: "draft", text: "Prepared draft for human review" });
-  expect(posts[0]).not.toHaveProperty("managedServiceRunId");
+  expect(posts[0]).toMatchObject({
+    status: "draft",
+    text: "Prepared draft for human review",
+    managedServiceRunId: started.runId,
+    platform: "linkedin",
+  });
 });
 
 test("attended run age bounds reject expired/future starts without blocking accounting or status", async () => {

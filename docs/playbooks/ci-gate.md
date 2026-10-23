@@ -437,3 +437,7 @@ provider acceptance still require verification.
 - **A local pass is not the merge verdict.** The four gate commands were verified locally on
   2026-08-04, but every pushed change still requires its own successful GitHub Actions run before
   the gate can be called green for that commit.
+
+### 2026-10-23 — Managed-service outcomes and inert construction identities
+
+The closed golden/vertical evaluator inventories now include the service brain/history/projection policy dependencies and named inert recurrence construction. Refresh generated fingerprints only after final formatting; corpus bytes and historical handoffs remain unchanged. This mechanical retirement prevents prior evidence silently qualifying new runtime/schema dependencies. It does not run an evaluator, spend money or supply qualification. ADR063 keeps recurrence activation deferred.

@@ -2159,3 +2159,7 @@ as a gate: it reads stdin at module top and every terminal path is `process.exit
 - **No rollback-to-dark path exists.** `skills.ts` has one active-patch site and no owner-facing
   deactivate; the only dark path is `archiveSkill` via `npx convex run`, which ends a browser
   session. 27-09 owns that decision.
+
+### 2026-10-23 — Service supervision
+
+The Skills and Workflows service card links an owned business goal using current configuration/control revisions. The results panel separates completed work, the user's usefulness feedback, supported account measurements and unproven business improvement. Feedback cannot complete a goal or approve a post. Pending work disables goal edits. Check interrupted work asks the native workflow and ledger before closing an interrupted claim; unresolved cost or unavailable liveness keeps it blocked. Closing never automatically starts another run. Synthetic interface states were reviewed at390/768/1440 pixels without horizontal overflow; this is not hosted authenticated acceptance.
