@@ -29,7 +29,7 @@ export function buildManagedServiceTools(
   const path = (threadId: string | null) =>
     threadId ? `/dashboard/workspace?thread=${encodeURIComponent(threadId)}` : null;
   return {
-    readSocialService: tool<Record<string, never>, unknown>({
+    readSocialService: tool<Record<string, never>, unknown, Record<string, never>>({
       description:
         "Read your saved social service setup, readiness and latest run. Does not start work, connect accounts or change settings.",
       inputSchema: noArguments,
@@ -50,7 +50,7 @@ export function buildManagedServiceTools(
         };
       },
     }),
-    startSocialService: tool<Record<string, never>, unknown>({
+    startSocialService: tool<Record<string, never>, unknown, Record<string, never>>({
       description:
         "Start your saved social service once when requested. Uses saved accounts, goals and budget; drafts still need human approval before scheduling.",
       inputSchema: noArguments,
