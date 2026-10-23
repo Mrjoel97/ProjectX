@@ -353,12 +353,26 @@ export const openEvalBudget = internalMutation({
     tenantIds: v.array(v.string()),
     capCents: v.number(),
     family: v.optional(v.literal("golden")),
+    purpose: v.optional(v.literal("shop-preparation")),
     authoringProbe: v.optional(v.object({ threadId: v.string(), authorizationSha256: v.string() })),
   },
   handler: async (
     ctx,
-    { tenantIds, capCents, family, authoringProbe },
+    { tenantIds, capCents, family, authoringProbe, purpose },
   ): Promise<Id<"spendEvents">> => {
+    if (purpose === "shop-preparation") {
+      const prefix = /^packeval-([a-f0-9]{8})-c0$/.exec(tenantIds[0] ?? "");
+      if (
+        capCents !== 100 ||
+        family !== undefined ||
+        authoringProbe !== undefined ||
+        !prefix ||
+        JSON.stringify(tenantIds) !==
+          JSON.stringify(Array.from({ length: 5 }, (_, i) => `packeval-${prefix[1]}-c${i}`)) ||
+        process.env.GOLDEN_OPENROUTER_BILLING !== "standard"
+      )
+        throw new Error("SHOP_EVAL_ENVELOPE_INVALID");
+    }
     if (family === "golden") {
       try {
         if (process.env.GOLDEN_OPENROUTER_BILLING !== "standard") throw new Error();
@@ -435,6 +449,7 @@ export const openEvalBudget = internalMutation({
       evalEnvelope: {
         tenantIds,
         expiresAt: now + EVAL_BUDGET_LIFETIME_MS,
+        ...(purpose ? { purpose } : {}),
         // Only new isolated golden runs opt in. Existing envelopes, authoring probes and
         // pack/vertical budgets retain their original component accounting with no migration.
         ...(family === "golden" && !authoringProbe
@@ -540,6 +555,16 @@ export const reserveEvalCall = internalMutation({
     if (rows.some((row) => row.kind === "eval_budget_closed"))
       throw new Error("EVAL_BUDGET_CLOSED");
     if (rows.some((row) => row.evalBreach)) throw new Error("EVAL_BUDGET_BREACHED");
+    // Only the new operator shop lane refuses concurrent outstanding calls. A failed source may be
+    // rendered as no-match by the ordinary tool, but its unknown hold must stop the next provider
+    // before egress. Existing golden/vertical/authoring envelopes retain their concurrency.
+    if (envelope.evalEnvelope?.purpose === "shop-preparation") {
+      const settled = new Set(
+        rows.filter((row) => row.evalActualUsd !== undefined).map((row) => row.correlationId),
+      );
+      if (rows.some((row) => row.phase === "reserved" && !settled.has(row.correlationId)))
+        throw new Error("EVAL_BUDGET_UNRESOLVED");
+    }
     if (
       envelope.evalAuthoringProbe &&
       (await probeControl(ctx, budgetId)).some((row) => row.eventType === "authoring_probe.failed")

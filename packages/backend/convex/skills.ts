@@ -75,6 +75,7 @@ import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
 import { knowledgeQueryPlannerSkillBody } from "@pikar/contracts/skills/knowledgeQueryPlanner";
 import { knowledgeSynthesizerSkillBody } from "@pikar/contracts/skills/knowledgeSynthesizer";
 import {
+  COMMERCE_PACK_PROVENANCE,
   IN_HOUSE_PACK_PROVENANCE,
   KNOWLEDGE_WORK_PINNED_AT,
   KNOWLEDGE_WORK_PROVENANCE,
@@ -93,6 +94,7 @@ import { packCustomerComplaintSkillBody } from "@pikar/contracts/skills/packCust
 import { packOfferAndLeadPlanSkillBody } from "@pikar/contracts/skills/packOfferAndLeadPlan";
 import { packProcessSopSkillBody } from "@pikar/contracts/skills/packProcessSop";
 import { packSalesCallPrepSkillBody } from "@pikar/contracts/skills/packSalesCallPrep";
+import { packShopPreparationSkillBody } from "@pikar/contracts/skills/packShopPreparation";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { researchSpecialistSkillBody } from "@pikar/contracts/skills/researchSpecialist";
 import { revenueSkillBodies } from "@pikar/contracts/skills/revenueBodies";
@@ -1111,7 +1113,7 @@ async function publishPack(
     );
   }
 
-  if (verticalIdForSkill(name) !== null) {
+  if (verticalIdForSkill(name) !== null || name === "pack-shop-preparation") {
     const manifest = JSON.parse(provenance) as { bodySha256: string };
     if ((await contentHash(body)) !== manifest.bodySha256) throw new Error("BODY_HASH_MISMATCH");
   }
@@ -1147,6 +1149,7 @@ const PACK_BODIES: Readonly<Record<string, string>> = {
   "pack-brand-review": packBrandReviewSkillBody,
   // 35-02: the original body. Same channel — a CANDIDATE through `seedPackCandidates`, never SEEDS.
   "pack-offer-and-lead-plan": packOfferAndLeadPlanSkillBody,
+  "pack-shop-preparation": packShopPreparationSkillBody,
 };
 
 /**
@@ -1165,9 +1168,10 @@ function packProvenanceFor(name: string, version: number): string {
       ts: KNOWLEDGE_WORK_PINNED_AT,
     });
   }
-  // 35-02: an ORIGINAL body pins a commit of this repository instead of the vendor's; its `ts` is
-  // that commit's timestamp for the same no-clock reason.
-  const own = IN_HOUSE_PACK_PROVENANCE[name];
+  // Original and separately licensed adaptations keep their own fixed provenance timestamp.
+  const own =
+    IN_HOUSE_PACK_PROVENANCE[name] ??
+    COMMERCE_PACK_PROVENANCE[name as keyof typeof COMMERCE_PACK_PROVENANCE];
   if (own === undefined) throw new Error(`${NOT_A_PACK_ERROR}: no provenance for ${name}`);
   const { pinnedAt, ...record } = own;
   return JSON.stringify({ ...record, skillVersions: { [name]: version }, ts: pinnedAt });
@@ -1482,6 +1486,13 @@ async function assertPackActivationEvidence(
   name: string,
   version: number,
 ): Promise<void> {
+  // The MIT permission is for this exact adaptation, including its actual immutable bytes.
+  if (
+    name === "pack-shop-preparation" &&
+    (await contentHash(target.body)) !== COMMERCE_PACK_PROVENANCE[name].bodySha256
+  ) {
+    throw new Error(`${PACK_GATE_ERROR}: ${name} v${version} lacks body provenance evidence`);
+  }
   const missing = [
     hasValidPackProvenance(target.provenance, name, version) ? null : "provenance",
     // The PACK predicate, not the global one: a global-scope evidence blob carries no suite

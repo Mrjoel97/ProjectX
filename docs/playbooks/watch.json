@@ -15,7 +15,10 @@
     "apps/web/app/(app)/dashboard/marketing/BufferPanel.tsx",
     "apps/web/app/(app)/dashboard/marketing/bufferPanel.test.tsx"
   ],
-  "_unassigned": ["packages/backend/vitest.diag.setup.ts", "packages/backend/convex/schema.ts"],
+  "_unassigned": [
+    "packages/backend/vitest.diag.setup.ts",
+    "packages/backend/convex/schema.ts"
+  ],
   "marketing.md": [
     "apps/web/e2e/marketing-uat.spec.ts",
     "packages/core/src/marketing",
@@ -204,7 +207,8 @@
     "apps/web/app/layout.tsx",
     "apps/web/app/fonts.css",
     "apps/web/app/fonts.test.ts",
-    "apps/web/public/fonts/"
+    "apps/web/public/fonts/",
+    "apps/web/app/(app)/layout.test.tsx"
   ],
   "cockpit.md": [
     "scripts/check-phase23-probe-controls",
@@ -454,7 +458,8 @@
     "packages/backend/convex/workflowPack",
     "packages/backend/scripts/run-workflow-pack-evals.mjs",
     "packages/backend/scripts/workflow-pack-fixtures/",
-    "apps/web/app/(app)/dashboard/workflows/"
+    "apps/web/app/(app)/dashboard/workflows/",
+    "packages/backend/convex/workflowPackEvalBudget.test.ts"
   ],
   "revenue-connectors.md": [
     "apps/web/app/connectors",
@@ -550,13 +555,18 @@
     "apps/web/app/(app)/dashboard/profile/VerticalPackRecommendations.tsx",
     "apps/web/app/(app)/dashboard/profile/verticalPackRecommendations"
   ],
-  "revenue-crm.md": ["packages/revenue/src/crm", "packages/backend/convex/revenueCrm"],
+  "revenue-crm.md": [
+    "packages/revenue/src/crm",
+    "packages/backend/convex/revenueCrm"
+  ],
   "revenue-finance.md": [
     "packages/revenue/src/money",
     "packages/revenue/src/finance",
     "packages/backend/convex/revenueFinance"
   ],
   "online-presence.md": [
+    "apps/web/app/(app)/ops/web-recipes/",
+    "packages/backend/convex/webRecipeQualification.test.ts",
     "packages/core/src/onlinePresence",
     "packages/core/src/webRuntime",
     "packages/core/src/webForms",
@@ -596,6 +606,7 @@
     "packages/contracts/src/tenantCommerce",
     "packages/core/src/tenantCommerce",
     "packages/core/src/tenantInventory",
-    "packages/core/src/tenantOrder"
+    "packages/core/src/tenantOrder",
+    "apps/web/app/(app)/layout.test.tsx"
   ]
 }

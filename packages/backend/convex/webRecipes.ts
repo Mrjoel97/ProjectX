@@ -152,6 +152,87 @@ function discoveryRow(
   } as const;
 }
 
+/** Closed owner diagnostics: current code-owned families only, never arbitrary registry bodies. */
+export const listQualificationCandidates = ownerQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await Promise.all(
+      WEB_RECIPE_DEFINITIONS.map(async (definition) => {
+        const row = await ctx.db
+          .query("skills")
+          .withIndex("by_name_version", (q) => q.eq("name", definition.registryName))
+          .order("desc")
+          .filter((q) => q.eq(q.field("status"), "candidate"))
+          .first();
+        if (!row)
+          return { recipeId: definition.id, name: definition.registryName, candidate: null };
+        let current = false;
+        let definitionHash: string | null = null;
+        let provenanceReady = false;
+        let evaluationReady = false;
+        let browserReady = false;
+        try {
+          const { identity } = identityFor(row, definition);
+          current = true;
+          definitionHash = identity.definitionHash;
+          provenanceReady = hasValidWebRecipeProvenance(row.provenance, identity, {
+            bundleHash: WEB_RECIPE_BUNDLE_HASH,
+            compilerId: WEB_RECIPE_COMPILER_ID,
+          });
+          evaluationReady = hasPassingWebRecipeEvidence(row.evidence, identity);
+          browserReady = hasPassingWebRecipeBrowserEvidence(row.browserEvidence, identity);
+        } catch {
+          /* A stale candidate stays visible but cannot begin a run. */
+        }
+        const bodyHash = sha256Bytes(new TextEncoder().encode(row.body));
+        const run = row.browserQualification;
+        const runCurrent =
+          current &&
+          run !== undefined &&
+          run.candidateName === row.name &&
+          run.candidateVersion === row.version &&
+          run.bodyHash === bodyHash &&
+          run.definitionHash === definitionHash &&
+          run.bundleHash === WEB_RECIPE_BUNDLE_HASH &&
+          run.rendererVersion === WEB_DESIGN_RENDERER_VERSION &&
+          run.route === "/ops";
+        return {
+          recipeId: definition.id,
+          name: definition.registryName,
+          candidate: {
+            id: row._id,
+            version: row.version,
+            bodyHash,
+            definitionHash,
+            current,
+            bundleHash: WEB_RECIPE_BUNDLE_HASH,
+            rendererVersion: WEB_DESIGN_RENDERER_VERSION,
+            fields: definition.fields,
+            provenanceReady,
+            evaluationReady,
+            browserReady,
+            run:
+              run && runCurrent
+                ? {
+                    runId: run.runId,
+                    revision: run.revision,
+                    ownedByViewer: run.ownerId === ctx.userId,
+                    route: run.route,
+                    lanes: run.lanes.map((lane) => ({
+                      viewport: lane.viewport,
+                      outcomes: lane.observations.map((observation) => observation.outcome),
+                    })),
+                    finalizedHash: run.finalizedHash ?? null,
+                  }
+                : null,
+            staleRun: run !== undefined && !runCurrent,
+          },
+        };
+      }),
+    );
+  },
+});
+
 /** Active, exact, still-evidenced site/landing recipes only. Storefront is intentionally absent. */
 export const listAvailable = tenantQuery({
   args: {},

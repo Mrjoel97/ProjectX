@@ -91,15 +91,30 @@ function assertSourceInfluence(family: string): void {
   // selected composition and consumed CSS values, without attributing these presets upstream.
   const direction = output.designProfile.artDirection ?? "editorial";
   const palettes = { editorial: "#254e72", studio: "#ad2247", technical: "#71e1c2" };
-  const radii = { editorial: 0, studio: 16, technical: 6 };
   if (
     !designed.includes(`data-art-direction="${direction}"`) ||
     !designed.includes(`data-pattern="${output.designProfile.patternId}"`)
   )
     throw new Error("WEB_RECIPE_SOURCE_ROLE_HAS_NO_INFLUENCE:pattern");
-  if (!css.includes("body[data-pattern=hero-features-cta] .hero-copy{max-width:700px}"))
+  if (!designed.includes('class="hero-copy"'))
     throw new Error("WEB_RECIPE_PATTERN_STYLE_NOT_CONSUMED");
-  assertStyle(css, /--radius:(\d+)px;/, String(radii[direction]), "style");
+  assertPatternStyle(css, output.designProfile.patternId);
+  // A profile marker alone is not influence. Hold document, direction and dials fixed and
+  // require the other valid pattern to change the value actually consumed by the copy layout.
+  const otherPattern =
+    output.designProfile.patternId === "hero-features-cta" ? "landing-proof" : "hero-features-cta";
+  const otherCss = styleFrom(
+    renderDesignedWebDocument(output.document, {
+      ...output.designProfile,
+      patternId: otherPattern,
+    }),
+  );
+  assertPatternStyle(otherCss, otherPattern);
+  if (css.match(/--copy-measure:([^;]+);/)?.[1] === otherCss.match(/--copy-measure:([^;]+);/)?.[1])
+    throw new Error("WEB_RECIPE_PATTERN_DID_NOT_CHANGE_RENDERED_STYLE");
+  assertStyle(css, /--radius:(\d+)px;/, "0", "style");
+  if (!css.includes("border-radius:var(--radius)"))
+    throw new Error("WEB_RECIPE_SOURCE_ROLE_HAS_NO_INFLUENCE:style");
   assertStyle(css, /font:400 1rem\/1\.6 ([^;]+);/, "system-ui,sans-serif", "typography");
   assertStyle(css, /--control-height:(\d+)px;/, "44", "form");
   if (!css.includes("min-height:var(--control-height)"))
@@ -130,6 +145,17 @@ function assertSourceInfluence(family: string): void {
     String(output.designProfile.dials.motion <= 2 ? 0 : output.designProfile.dials.motion * 12),
     "motion",
   );
+}
+
+function assertPatternStyle(css: string, patternId: string): void {
+  assertStyle(
+    css,
+    /--copy-measure:([^;]+);/,
+    patternId === "hero-features-cta" ? "700px" : "100%",
+    "pattern",
+  );
+  if (!css.includes(".hero-copy{max-width:var(--copy-measure)}"))
+    throw new Error("WEB_RECIPE_PATTERN_STYLE_NOT_CONSUMED");
 }
 
 function styleFrom(html: string): string {
@@ -280,7 +306,6 @@ function assertArtDirectionQualification(family: string): void {
       studio: '"Arial Black",Arial,sans-serif',
       technical: "Arial,Helvetica,sans-serif",
     };
-    const radii = { editorial: 0, studio: 16, technical: 6 };
     if (
       output.designProfile.artDirection !== artDirection ||
       output.document.brand.primaryColor !== "#243B53" ||
@@ -294,12 +319,7 @@ function assertArtDirectionQualification(family: string): void {
       headings[artDirection],
       "direction-typography",
     );
-    assertStyle(
-      styleFrom(html),
-      /--radius:(\d+)px;/,
-      String(radii[artDirection]),
-      "direction-style",
-    );
+    assertStyle(styleFrom(html), /--radius:(\d+)px;/, "0", "direction-style");
     rendered.add(html);
     hashes.add(designedWebDocumentHash(output.document, output.designProfile));
     inputs.add(output.inputHash);

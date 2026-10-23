@@ -127,8 +127,9 @@ function ApprovalsBadge() {
 
 // ONBD-01 first-run gate. Lives HERE in the client shell (never middleware.ts — that has no DB
 // access and would re-introduce the eternal-spinner class of bug this component was built to kill).
-// A tenant with no committed business_profile is force-redirected to onboarding and can't reach any
-// other (app) route until they commit one; navigating away re-fires the redirect (pathname changes →
+// A tenant with no committed business_profile is force-redirected to onboarding on customer routes;
+// verified owners may use the two explicit operator routes without inventing business information.
+// Navigating away re-fires the redirect (pathname changes →
 // off-onboarding again → effect runs). `undefined` = status still loading → hold the shell on the
 // existing loader rather than flash the cockpit before the redirect.
 const ONBOARDING_PATH = "/dashboard/onboarding";
@@ -143,11 +144,23 @@ function Shell({ children }: { children: ReactNode }) {
   const viewer = useQuery(api.owner.viewer, {});
   const isOwner = viewer?.isOwner === true;
   const onOnboarding = pathname === ONBOARDING_PATH;
+  const onOperatorRoute = pathname === "/ops" || pathname === "/ops/web-recipes";
+  const operatorOwnerLoading = onOperatorRoute && viewer === undefined;
+  const ownerOperatorRoute = onOperatorRoute && isOwner;
   useEffect(() => {
-    if (onboarding?.needsOnboarding && !onOnboarding) router.replace(ONBOARDING_PATH);
-  }, [onboarding, onOnboarding, router]);
+    if (
+      onboarding?.needsOnboarding &&
+      !onOnboarding &&
+      !operatorOwnerLoading &&
+      !ownerOperatorRoute
+    )
+      router.replace(ONBOARDING_PATH);
+  }, [onboarding, onOnboarding, operatorOwnerLoading, ownerOperatorRoute, router]);
   // Loading the gate signal, or a redirect is in flight: show the shell's own loader, not children.
-  const gateBusy = onboarding === undefined || (onboarding.needsOnboarding && !onOnboarding);
+  const gateBusy =
+    operatorOwnerLoading ||
+    (!ownerOperatorRoute &&
+      (onboarding === undefined || (onboarding.needsOnboarding && !onOnboarding)));
   // Collapsed state persists per browser. Read after mount (SSR has no localStorage);
   // the brief expanded-first paint is acceptable.
   const [collapsed, setCollapsed] = useState(false);

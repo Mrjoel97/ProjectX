@@ -3046,6 +3046,7 @@ export default defineSchema({
         tenantIds: v.array(v.string()),
         expiresAt: v.number(),
         accountingMode: v.optional(v.literal("ledger-nanos-v1")),
+        purpose: v.optional(v.literal("shop-preparation")),
       }),
     ),
     evalAuthoringProbe: v.optional(
@@ -3433,6 +3434,7 @@ export default defineSchema({
       v.literal("process-sop"),
       v.literal("brand-review"),
       v.literal("offer-and-lead-plan"),
+      v.literal("shop-preparation"),
       // Measurement-only Phase 28 stream; not a discoverable Phase 27 workflow pack.
       v.literal("revenue"),
     ),

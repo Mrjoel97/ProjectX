@@ -85,6 +85,7 @@ const movementArgs = {
       tenantIds: v.array(v.string()),
       expiresAt: v.number(),
       accountingMode: v.optional(v.literal("ledger-nanos-v1")),
+      purpose: v.optional(v.literal("shop-preparation")),
     }),
   ),
   evalAuthoringProbe: v.optional(

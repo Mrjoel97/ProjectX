@@ -94,6 +94,7 @@ for (const direction of ["editorial", "studio", "technical"] as const) {
     test(`${direction} renders real hero and gallery image bytes at ${width}px`, async ({
       page,
     }, testInfo) => {
+      test.setTimeout(60_000);
       const files = ["design-study", "color-study", "booklet-study"].map((name) => {
         const bytes = readFileSync(
           new URL(`./fixtures/online-presence/${name}.png`, import.meta.url),
@@ -137,16 +138,22 @@ for (const direction of ["editorial", "studio", "technical"] as const) {
         },
       });
       const home = result.document.pages[0]!;
-      const html = renderDesignedWebDocument(result.document, result.designProfile, {
-        slug: "media-site",
-        page: home.slug,
-      });
       const unexpected: string[] = [];
       const loadedAssets: string[] = [];
       const rootUrl = `https://design-fixture.test/p/media-site/${home.slug}`;
       await page.route("**/*", async (route) => {
         const url = route.request().url();
-        if (url === rootUrl) return route.fulfill({ contentType: "text/html", body: html });
+        const targetPage = result.document.pages.find(
+          (candidate) => url === `https://design-fixture.test/p/media-site/${candidate.slug}`,
+        );
+        if (targetPage)
+          return route.fulfill({
+            contentType: "text/html",
+            body: renderDesignedWebDocument(result.document, result.designProfile, {
+              slug: "media-site",
+              page: targetPage.slug,
+            }),
+          });
         const file = files.find(
           (candidate) => url === `https://design-fixture.test${candidate.path}`,
         );
@@ -171,9 +178,17 @@ for (const direction of ["editorial", "studio", "technical"] as const) {
         const box = await image.boundingBox();
         expect(box!.width).toBeGreaterThan(100);
         expect(box!.height).toBeGreaterThan(100);
+        const figure = await image.locator("..").boundingBox();
+        expect(figure!.width / figure!.height).toBeCloseTo(1.6, 1);
         expect(box!.x).toBeGreaterThanOrEqual(0);
         expect(box!.x + box!.width).toBeLessThanOrEqual(width);
       }
+      const heroMedia = await images.first().boundingBox();
+      const frame = await page.locator("main").boundingBox();
+      if (width === 1440)
+        expect(heroMedia!.width / frame!.width).toBeGreaterThan(
+          direction === "editorial" ? 0.9 : 0.35,
+        );
       expect(new Set(loadedAssets).size).toBe(3);
       expect(unexpected).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
@@ -195,6 +210,22 @@ for (const direction of ["editorial", "studio", "technical"] as const) {
         path: testInfo.outputPath(`media-${direction}-${width}.png`),
         fullPage: true,
       });
+      await page
+        .getByRole("navigation", { name: "Primary", exact: true })
+        .getByRole("link", { name: "About", exact: true })
+        .click();
+      await expect(page.locator("h1")).toHaveText("About");
+      await expect(
+        page
+          .getByRole("navigation", { name: "Primary", exact: true })
+          .locator('a[aria-current="page"]'),
+      ).toHaveText("About");
+      await page
+        .getByRole("navigation", { name: "Footer", exact: true })
+        .getByRole("link", { name: "Home", exact: true })
+        .click();
+      await expect(page.locator("h1")).toHaveText("Make the useful beautiful.");
+      expect(unexpected).toEqual([]);
     });
   }
 }
@@ -237,6 +268,9 @@ for (const fixture of fixtures) {
         );
         for (const heading of headings)
           expect(heading.lines, heading.text ?? "heading").toBeLessThan(2.2);
+        for (const service of await page.locator(".hero-rail #services>p").all()) {
+          expect((await service.boundingBox())!.width).toBeGreaterThan(200);
+        }
         const fontSize = await page
           .locator("body")
           .evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
@@ -301,7 +335,11 @@ test("a light customer brand colour still produces a readable, keyboard-accessib
       channels
         .map((value) => value / 255)
         .map((value) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4))
-        .reduce((total, value, index) => total + value * [0.2126, 0.7152, 0.0722][index], 0);
+        .reduce((total, value, index) => {
+          const weight = [0.2126, 0.7152, 0.0722][index];
+          if (weight === undefined) throw new Error("Unsupported RGB channel count");
+          return total + value * weight;
+        }, 0);
     const style = getComputedStyle(el);
     const text = luminance(rgb(style.color));
     const fill = luminance(rgb(style.backgroundColor));

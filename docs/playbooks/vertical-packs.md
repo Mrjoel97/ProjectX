@@ -1,3 +1,5 @@
+> Last verified: 2026-10-23 — Shared source inventories additionally bind the private shop preparation body, exact MIT provenance and reused pack/customization runtime. Native vertical pins are regenerated after integration; six lanes and40 corpus cases remain unchanged. Source identity bookkeeping supplies no new semantic qualification, activation or connector authority.
+
 > Last verified: 2026-10-22 — Shared website imagery dependencies now participate in exact-source vertical/golden identities. Fixture/corpus bytes are unchanged. Local media integration and browser tests do not qualify a vertical candidate or activate a shared skill.
 
 > Last verified: 2026-10-21 —53-04 Online-presence art direction and recipe evidence contract changes retire current exact-source evaluator identities through the existing shared inventories. Native vertical source pins are regenerated mechanically; all existing lanes/cases and historical evidence remain unchanged.

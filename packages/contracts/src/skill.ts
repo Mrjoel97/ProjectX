@@ -734,7 +734,7 @@ export function hasPassingTenantEvidence(
  */
 export const AGENT_EVAL_SUITE = {
   revision:
-    "2026-09-11.budgeted-evaluator.ebbf92903e1ff6a58bde80b5d5618367e23e369a0fdd3314b3566f89f2b277d4",
+    "2026-09-11.budgeted-evaluator.d08e855de6fddf54ec5eeddb7a28ff7276b298486dcea91e24ad7305e0db01c7",
   casesHash: "5dbe6fdbd447ab2a152ccf928d195ed404ca3bf431f5240397f6be3b627e55fd",
   caseCount: 46,
 } as const;
@@ -795,6 +795,11 @@ export const PACK_EVAL_SUITE = {
     // evidence already recorded against them stays valid; this pack has no evidence yet to retire.
     "pack-offer-and-lead-plan": {
       casesHash: "730479b3de1bb018b907abbab53e7daf5a90ac00c57101bf628bd4634168edb7",
+      caseCount: 5,
+    },
+    // New pack only: existing corpus identities and evidence remain unchanged.
+    "pack-shop-preparation": {
+      casesHash: "046b5c939ada27720add840aa560382ad8c9d7525308830ecc6010a7807eec77",
       caseCount: 5,
     },
   },

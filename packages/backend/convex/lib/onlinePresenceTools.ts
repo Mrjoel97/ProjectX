@@ -69,7 +69,7 @@ export function buildOnlinePresenceTools(context: {
     }),
     prepareOnlinePresenceAssets: tool({
       description:
-        "Prepare selected existing Vault images for this private website. Use exact image source references returned by context. Validates owned raster bytes and freezes a copy; returns opaque asset refs, never publishes or generates an image.",
+        "Freeze owned Vault images for this private website using exact context source refs. Validates raster bytes and returns opaque asset refs; never publishes or generates imagery.",
       inputSchema: jsonSchema<{ sourceRefs: string[] }>({
         type: "object",
         properties: {

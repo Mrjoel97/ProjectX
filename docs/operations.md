@@ -1,5 +1,10 @@
 # Current operations guide
 
+## Online-presence continuation — 2026-10-23
+
+Page quality and a private shop preparation candidate are recorded in [53-06](../.planning/phases/53-agentic-online-presence/53-06-SUMMARY.md). Use only [dedicated staging operations](online-presence-staging.md). The new $5 test maximum, sender setup and native-account checks belong to this environment; historical production/Phase48 scopes and receipts remain unchanged.
+
+
 ## Isolated online-presence staging — 2026-10-22
 
 A new, separate environment is deployed at https://pikar-presence-stg.vercel.app with Convex `third-gecko-977`. See [dedicated staging operations](online-presence-staging.md) for exact target IDs, deployment configuration and remaining native/model/browser acceptance. This does not change production status or the Phase48 staging environment described elsewhere.

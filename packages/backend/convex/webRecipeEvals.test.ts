@@ -136,6 +136,40 @@ describe("web recipe deterministic evaluator", () => {
     }
   });
 
+  test("a correct pattern marker cannot hide frozen pattern layout or an unconsumed measure", () => {
+    const original = core.renderDesignedWebDocument;
+    const frozen = vi
+      .spyOn(core, "renderDesignedWebDocument")
+      .mockImplementation((document, profile, route) =>
+        original(document, { ...profile, patternId: "landing-proof" }, route).replace(
+          'data-pattern="landing-proof"',
+          `data-pattern="${profile.patternId}"`,
+        ),
+      );
+    try {
+      expect(() => evaluateWebRecipeCandidate(probeRow(), "frozen-pattern", 1)).toThrow(
+        /WEB_RECIPE_SOURCE_ROLE_HAS_NO_INFLUENCE:pattern/,
+      );
+    } finally {
+      frozen.mockRestore();
+    }
+    const unused = vi
+      .spyOn(core, "renderDesignedWebDocument")
+      .mockImplementation((document, profile, route) =>
+        original(document, profile, route).replace(
+          ".hero-copy{max-width:var(--copy-measure)}",
+          ".hero-copy{max-width:100%}",
+        ),
+      );
+    try {
+      expect(() => evaluateWebRecipeCandidate(probeRow(), "unused-pattern", 1)).toThrow(
+        /WEB_RECIPE_PATTERN_STYLE_NOT_CONSUMED/,
+      );
+    } finally {
+      unused.mockRestore();
+    }
+  });
+
   test("dropping art direction or leaving density as an unused token cannot qualify", () => {
     const original = core.renderDesignedWebDocument;
     const directionSpy = vi

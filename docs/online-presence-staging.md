@@ -35,8 +35,10 @@ There is no Convex deployment step in the frontend build.
 The backend has fresh, staging-only RSA authentication keys (`JWT_PRIVATE_KEY`, `JWKS`)
 and `SITE_URL=https://pikar-presence-stg.vercel.app`. Convex supplies its built-in URLs.
 Keys were generated in memory and passed over stdin; none belong in source or receipts.
-No production or sibling-staging environment was copied. No email, model, media or
-merchant provider credentials have been configured in this new deployment.
+No production or sibling-staging environment was copied. On2026-10-23, a names-only
+check confirmed staging-only AUTH_RESEND_KEY and OPENROUTER_API_KEY are present.
+AUTH_EMAIL_FROM is the owner's supplied joel@pikar-ai.com. Secret values were not read.
+Media and merchant integrations remain unconfigured.
 
 Before any future backend apply, clear inherited deploy/self-hosted credentials and
 explicitly select `joel-feruzi:pikar-presence-stg:dev/presence` with the installed
@@ -69,15 +71,31 @@ three v1 web recipes remain **candidates**. Each has hosted deterministic20-case
 zero-model-cost evidence and lacks browser qualification. A storefront recipe does not
 establish working checkout; merchant adapters and fulfillment remain open under53-03.
 
-Next prerequisites are a staging-only verified email sender and Resend credential,
-fresh native owner/non-owner signup/verification, and a bounded model access setup.
+The owner approved a maximum total model-test spend of$5 for this environment.
+Reasoning's deployment rail is$2 and ingest's is$1; $1 is allocated to the single shop evaluation envelope and$1 remains unallocated. These daily rails do not authorize future-day runs.
+Both kill switches remain on outside an explicitly bounded test window. The new shop-only operator harness uses a fixed100c envelope before seeding, covers
+seed/query/chat, refuses outstanding reservations and disables paid/seed replay.
+Require unbreached settled status and normal close plus authoritative closed/zero-hold
+readback before evidence; retain unknown holds and never open a replacement budget.
+The historic runner's post-call cap alone does not provide this bound.
+
+The owner completed two native staging signups and email verifications on2026-10-23.
+Exact server readback confirms both verified; the explicitly approved A owner grant
+produced one audit and idempotent readback, with B ordinary and exactly one owner.
+Browser control recovered and the signed-in onboarding page was observed directly.
+Production accounts were not copied. These facts are not full feature/browser qualification.
 Create real email-bound invites; grant owner authority only to the exact verified owner.
 Do not bootstrap an existing unrelated owner or substitute CLI identities for native
 browser witnesses. Google login is also unconfigured in this environment.
 
+Fresh owners use the exact /ops or /ops/web-recipes exception to business onboarding;
+ordinary users and customer routes retain setup. Page/server owner checks remain.
+
 Then earn exact-source hosted recipe browser evidence through the existing gates before
-activation. The current source has qualification endpoints but no complete hosted browser
-runner/operator interface. Finish that integration, exercise the actual Foundation/documents
+activation. Current source adds an owner-only operator interface at `/ops?view=web-recipes`
+for the existing qualification endpoints. Its sandboxed inert preview disables images
+and cannot issue independent passing browser evidence or activation. The independent
+runner and native browser witness remain required. Exercise the actual Foundation/documents
 → questions → image-backed private draft → revision → exact review → explicit publication
 → inquiries → offline/rollback flow, and verify tenant isolation at phone/desktop sizes.
 Local design fixtures and scripted models do not satisfy those gates. Publication still

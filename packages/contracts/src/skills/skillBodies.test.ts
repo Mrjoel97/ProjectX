@@ -35,6 +35,7 @@ import { packCustomerComplaintSkillBody } from "./packCustomerComplaint";
 import { packOfferAndLeadPlanSkillBody } from "./packOfferAndLeadPlan";
 import { packProcessSopSkillBody } from "./packProcessSop";
 import { packSalesCallPrepSkillBody } from "./packSalesCallPrep";
+import { packShopPreparationSkillBody } from "./packShopPreparation";
 import { researchSpecialistSkillBody } from "./researchSpecialist";
 import { revenueSkillBodies } from "./revenueBodies";
 import { spreadsheetDrafterSkillBody } from "./spreadsheetDrafter";
@@ -309,6 +310,7 @@ const bodies: [string, string][] = [
   ["pack-brand-review", packBrandReviewSkillBody],
   // 35-02: the original (non-vendor) pack body. Same rule — no generator, so this row is the guard.
   ["pack-offer-and-lead-plan", packOfferAndLeadPlanSkillBody],
+  ["pack-shop-preparation", packShopPreparationSkillBody],
   // Phase 29 (KNOW-01): the two toolless knowledge bodies. There is NO generator for the derived
   // `.ts`, so this row is the only thing that turns an edit to one side into a failure instead of
   // a silently stale seeded prompt — and it matters more here than usual because both bodies are

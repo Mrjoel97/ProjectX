@@ -1768,7 +1768,8 @@ Owner authorized after the October21 deep discovery. Preserve the distinct histo
 - 53-03: partial — pure goods quote/inventory/order foundations recovered; merchant-direct Stripe plus PayPal, persistent adapters and fulfillment remain open.
 - 53-04: complete locally — Taste/UI UX Pro Max quality, business-directed rendering and offline browser checks; see53-04-SUMMARY.md.
 - 53-05: complete locally — owned logo/hero/gallery assets, agent preparation, protected review and exact published image delivery; see53-05-SUMMARY.md.
+- 53-06: in progress — visual refinements, reviewed eCommerce skill adoption, private shop-preparation candidate and hosted owner qualification interface.
 
 Requirements: OPRES-01..04. See `.planning/phases/53-agentic-online-presence/53-VALIDATION.md`.
 
-| 53. Agentic online presence | 3/5 | Partial — website/design/imagery verified locally and dedicated staging deployed; hosted qualification and complete commerce open | - |
+| 53. Agentic online presence | 3/6 | Partial — website/design/imagery verified locally and dedicated staging deployed; hosted qualification and complete commerce open | - |

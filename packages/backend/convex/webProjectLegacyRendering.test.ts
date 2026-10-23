@@ -7,14 +7,23 @@ import schema from "./schema";
 const modules = import.meta.glob("./**/*.*s");
 
 describe("legacy recipe artifact compatibility", () => {
-  test("editing an old profile uses the current renderer and leaves prior public bytes and origin intact", async () => {
+  test.each([
+    "web-design-renderer-v1",
+    "web-design-renderer-v2",
+    "web-design-renderer-v3",
+    "web-design-renderer-v4",
+  ])("editing %s keeps prior public bytes and origin intact", async (rendererVersion) => {
     const t = convexTest(schema, modules);
     const userId = await t.run((ctx) => ctx.db.insert("users", {}));
     const materialized = materializeWebRecipeWithProvenance("business-site", {
       brandName: "Legacy Studio",
       headline: "Original legacy offer",
     });
-    const { artDirection: _direction, ...legacyProfile } = materialized.designProfile;
+    const { artDirection: _direction, ...oldProfile } = materialized.designProfile;
+    const legacyProfile =
+      rendererVersion === "web-design-renderer-v4"
+        ? { ...oldProfile, artDirection: "studio" as const }
+        : oldProfile;
     const legacyHtml = "<!doctype html><title>Legacy</title><p>Exact prior publication bytes</p>";
     const byteLength = new TextEncoder().encode(legacyHtml).byteLength;
     const ids = await t.run(async (ctx) => {
@@ -41,7 +50,7 @@ describe("legacy recipe artifact compatibility", () => {
         version: 1,
         document: materialized.document,
         contentHash: "legacy-hash",
-        rendererVersion: "web-design-renderer-v1",
+        rendererVersion,
         artifactHtml: legacyHtml,
         artifactByteLength: byteLength,
         artifacts: [{ pageSlug: "home", html: legacyHtml, byteLength }],
@@ -55,7 +64,7 @@ describe("legacy recipe artifact compatibility", () => {
           bodyHash: "legacy-body-hash",
           definitionHash: "legacy-definition-hash",
           inputHash: "legacy-input-hash",
-          rendererVersion: "web-design-renderer-v1",
+          rendererVersion,
           designProfile: legacyProfile,
         },
       });
@@ -80,8 +89,12 @@ describe("legacy recipe artifact compatibility", () => {
     });
     expect(next?.rendererVersion).toBe(WEB_DESIGN_RENDERER_VERSION);
     expect(next?.recipeRef).toEqual(before?.recipeRef);
-    expect(next?.recipeRef?.designProfile.artDirection).toBeUndefined();
-    expect(next?.artifactHtml).toContain('data-art-direction="editorial"');
+    expect(next?.recipeRef?.designProfile.artDirection).toBe(
+      rendererVersion === "web-design-renderer-v4" ? "studio" : undefined,
+    );
+    expect(next?.artifactHtml).toContain(
+      `data-art-direction="${rendererVersion === "web-design-renderer-v4" ? "studio" : "editorial"}"`,
+    );
     expect(await t.run((ctx) => ctx.db.get(ids.versionId))).toEqual(before);
     expect(await t.query(internal.webRuntime.resolvePage, resolveArgs)).toMatchObject({
       state: "published",

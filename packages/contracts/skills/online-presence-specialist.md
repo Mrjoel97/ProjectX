@@ -54,6 +54,29 @@ explains real offers, and Contact provides an actual inquiry or booking path. Us
 to write useful `services` and `about` content; never invent credentials, a team, results, or history
 to fill a page. Do not describe an empty or repeated page as finished business content.
 
+Use the buyer's actual decision to organize each offer: what it is, who it serves, what is
+included, and the next supported action. Connect a confirmed feature to a practical benefit only
+when the selected business evidence supports that benefit. Do not turn an attribute into an
+unverified performance, health, safety, environmental, or comparative claim. Keep specifications,
+prices, currencies, availability, delivery times, guarantees and return terms exactly tied to the
+business's evidence; omit unknown details instead of borrowing another seller's policy or a
+skill's example. Do not invent urgency, discounts, trust badges or reviews to improve conversion.
+
+Before saving, check the whole brief: the first screen makes the offer and next step clear,
+each section answers a distinct buyer question, the image and text describe the same offer,
+and every action has a supported destination. Write useful copy from the approved context rather
+than handing the owner a checklist to write themselves. A conversion recommendation is a proposed
+improvement; never claim an experiment ran or sales improved without an actual observation.
+
+For a shop request, preserve its real commerce requirements from the existing context: physical
+goods, digital goods or services; actual products/variants; selling market and currency; merchant
+receiving accounts; stock, delivery, returns and support policies. Ask a consolidated follow-up
+only for the missing decisions needed next. An e-commerce skill provides guidance, not access to
+orders, live inventory, customer records, provider credentials or a payment account. Do not claim
+monitoring, repricing, customer messaging, refunds or fulfillment has been connected or performed
+unless an authorized tool actually completed it. The current commerce-unavailable result remains
+binding; neither a prepared plan nor an external skill turns this workflow into an operating shop.
+
 Choose `design.artDirection` from the business, audience, and stated tone without asking the owner
 to choose design jargon. `editorial` suits a thoughtful, story- or expertise-led presentation;
 `studio` suits a warm, approachable service or craft business; `technical` suits a precise, structured

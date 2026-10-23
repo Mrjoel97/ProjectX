@@ -1,3 +1,4 @@
+import { COMMERCE_PACK_PROVENANCE } from "@pikar/contracts/skills/knowledgeWorkProvenance";
 // 27-09 (PACK-02/PACK-04): the discovery plane.
 //
 // The property this file exists for is ACTIVE-ONLY. The pilot ships dark, six candidates are
@@ -311,4 +312,54 @@ describe("listPacks resolves this tenant's base version per PACK, not from a rec
     expect(pack.myCustomizationValues, "a system baseline has no form values").toBe(null);
     expect((await as.query(api.skills.myUserSkills, {})).length).toBe(0);
   });
+});
+
+test("the new shop preparation remains hidden until the existing evidence gates pass", async () => {
+  const t = convexTest(schema, modules);
+  await t.mutation(internal.skills.seedPackCandidates, {});
+  const row = await t.run((ctx) =>
+    ctx.db
+      .query("skills")
+      .filter((q) => q.eq(q.field("name"), "pack-shop-preparation"))
+      .first(),
+  );
+  expect(row?.status).toBe("candidate");
+  expect(row?.evidence).toBeUndefined();
+  expect(row?.browserEvidence).toBeUndefined();
+  expect(await asTenant(t).query(api.workflowPackDiscovery.listPacks, {})).toEqual([]);
+  await expect(
+    t.mutation(internal.skills.activateSkill, { name: "pack-shop-preparation", version: 1 }),
+  ).rejects.toThrow(/PACK_GATE/);
+  expect((await t.run((ctx) => ctx.db.get(row!._id)))?.status).toBe("candidate");
+});
+
+test("the shop preparation permission cannot attest substituted candidate bytes", async () => {
+  const t = convexTest(schema, modules);
+  const name = "pack-shop-preparation";
+  const { pinnedAt, ...record } = COMMERCE_PACK_PROVENANCE[name];
+  await expect(
+    t.mutation(internal.skills.publishPackCandidate, {
+      name,
+      body: "# substituted model instructions",
+      provenance: JSON.stringify({ ...record, ts: pinnedAt, skillVersions: { [name]: 1 } }),
+    }),
+  ).rejects.toThrow("BODY_HASH_MISMATCH");
+  expect(await t.run((ctx) => ctx.db.query("skills").collect())).toEqual([]);
+});
+
+test("the shop activation gate refuses substituted stored bytes even beside the exact MIT manifest", async () => {
+  const t = convexTest(schema, modules);
+  await t.mutation(internal.skills.seedPackCandidates, {});
+  const row = await t.run((ctx) =>
+    ctx.db
+      .query("skills")
+      .filter((q) => q.eq(q.field("name"), "pack-shop-preparation"))
+      .first(),
+  );
+  if (row === null) throw new Error("missing seeded shop-preparation candidate");
+  await t.run((ctx) => ctx.db.patch(row._id, { body: "# substituted runtime instructions" }));
+  await expect(
+    t.mutation(internal.skills.activateSkill, { name: row.name, version: row.version }),
+  ).rejects.toThrow(/PACK_GATE.*body provenance/);
+  expect((await t.run((ctx) => ctx.db.get(row._id)))?.status).toBe("candidate");
 });

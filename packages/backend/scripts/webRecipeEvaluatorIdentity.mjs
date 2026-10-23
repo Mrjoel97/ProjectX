@@ -9,6 +9,12 @@ const root = fileURLToPath(new URL("../../../", import.meta.url));
 const contract = "packages/contracts/src/webRecipeSkill.ts";
 const declaration = /(export const WEB_RECIPE_EVAL_IMPLEMENTATION_HASH =\s*)"([a-f0-9]{64})"/;
 export const WEB_RECIPE_EVALUATOR_FILES = [
+  "apps/web/app/(app)/layout.tsx",
+  "apps/web/app/(app)/ops/page.tsx",
+  "apps/web/app/(app)/ops/web-recipes/page.tsx",
+  "apps/web/app/(app)/ops/web-recipes/RecipeQualification.tsx",
+  "apps/web/app/(app)/ops/web-recipes/preview.ts",
+  "apps/web/app/(app)/ops/web-recipes/qualification.module.css",
   "packages/backend/scripts/webRecipeEvaluatorIdentity.mjs",
   "packages/backend/convex/webRecipeEvals.ts",
   "packages/backend/convex/webRecipes.ts",

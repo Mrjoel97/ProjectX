@@ -15,7 +15,7 @@ import {
 } from "./webRuntime";
 
 export const WEB_RECIPE_SCHEMA_VERSION = 1 as const;
-export const WEB_RECIPE_COMPILER_ID = "web-recipes-v4" as const;
+export const WEB_RECIPE_COMPILER_ID = "web-recipes-v5" as const;
 export type WebRecipeMedia = {
   readonly logo?: { readonly storageRef: string; readonly alt: string };
   readonly hero?: Omit<WebMediaNode, "kind" | "placement">;

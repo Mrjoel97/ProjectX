@@ -4707,6 +4707,7 @@ describe("publishPackCustomization — schema-driven pack candidates (29-05)", (
       "pack-offer-and-lead-plan",
       "pack-process-sop",
       "pack-sales-call-prep",
+      "pack-shop-preparation",
     ]);
     // The three channels stay disjoint: a pack name is authorable through the FORM and nothing else.
     for (const name of WORKFLOW_PACK_SKILL_NAMES) {
@@ -5259,6 +5260,7 @@ describe("publishPackCustomization — schema-driven pack candidates (29-05)", (
       ["process-sop", "pack-process-sop", "sop_max_steps", 12],
       ["brand-review", "pack-brand-review", "review_max_findings", 9],
       ["offer-and-lead-plan", "pack-offer-and-lead-plan", "plan_days", 30],
+      ["shop-preparation", "pack-shop-preparation", "listing_max_items", 10],
     ];
 
     test("this table covers the whole closed pack set — no pack can be added past it", () => {

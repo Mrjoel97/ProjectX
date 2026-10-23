@@ -224,3 +224,69 @@ describe("closed recipe design renderer", () => {
     );
   });
 });
+
+test("image composition respects owned crop and navigation retains exact per-page destinations", () => {
+  const media = {
+    hero: {
+      storageRef: `webasset:owned_image:${"a".repeat(64)}`,
+      alt: "Supplied business illustration",
+      aspect: "landscape" as const,
+      focalPoint: { x: 35, y: 60 },
+    },
+  };
+  const result = materializeWebRecipeWithProvenance("business-site", {
+    brandName: "A business",
+    headline: "A useful service",
+    about: "Approved business background.",
+    ctaLabel: "Start a conversation",
+    ctaHref: "https://example.com/inquiry",
+    pageMode: "multi-page",
+    projectSlug: "owned-business",
+    media,
+    artDirection: "editorial",
+  });
+  const html = renderDesignedWebDocument(result.document, result.designProfile, {
+    slug: "owned-business",
+    page: "home",
+  });
+  expect(html).toContain('class="hero-composition has-rail has-media"');
+  expect(html).toContain("aspect-ratio:16 / 10");
+  expect(html).toContain("object-position:35% 60%");
+  expect(html).not.toMatch(/min-height:(320|220)px/);
+  expect(html).toContain(".web-media img{position:absolute;inset:0");
+  expect(html).toContain(
+    '<nav aria-label="Primary"><ul><li><a href="/p/owned-business/home" aria-current="page">Home</a>',
+  );
+  expect(html).toContain('<nav aria-label="Footer">');
+  expect(html).toContain('<a class="footer-brand" href="/p/owned-business/home">A business</a>');
+  expect(html.split('action="/p/owned-business/home/cta/primary"')).toHaveLength(2);
+  expect(html).not.toMatch(/<script|onload=|testimonials|guaranteed/);
+});
+
+test("the selected landing pattern changes a consumed copy measure on the same document", () => {
+  const result = materializeWebRecipeWithProvenance("campaign-landing", {
+    brandName: "Campaign",
+    headline: "A supported business offer",
+    ctaLabel: "Inquire",
+    ctaHref: "https://example.com/inquiry",
+  });
+  const campaign = renderDesignedWebDocument(result.document, {
+    ...result.designProfile,
+    patternId: "hero-features-cta",
+  });
+  const business = renderDesignedWebDocument(result.document, {
+    ...result.designProfile,
+    patternId: "landing-proof",
+  });
+  const css = (html: string) => html.match(/<style>([\s\S]*?)<\/style>/)?.[1];
+  expect(css(campaign)).toContain("--copy-measure:700px;");
+  expect(css(business)).toContain("--copy-measure:100%;");
+  for (const html of [campaign, business])
+    expect(css(html)).toContain(".hero-copy{max-width:var(--copy-measure)}");
+  expect(css(campaign)).not.toBe(css(business));
+  // A multi-column media lead is a composition, not the single text measure.
+  expect(css(campaign)).toContain(
+    "body[data-art-direction=editorial] .has-media .hero-copy{max-width:100%;display:grid",
+  );
+  expect(canonicalWebDocument(result.document)).toContain("A supported business offer");
+});

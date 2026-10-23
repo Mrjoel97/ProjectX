@@ -73,3 +73,8 @@ to be implemented. Finish these and the actual53-02 protocol before marking OPRE
 the plan complete. No other workstream's paid consent, identities or evidence were reused.
 Phase53 stays3/5 complete;53-02 is partial and53-03 commerce remains open. The separate
 readiness programme and historical53-05 observations remain unchanged.
+
+
+## Separate continuation — 2026-10-23
+
+See [53-06](53-06-SUMMARY.md) for current source and actual checks. Both separate staging accounts are now verified; exact approved A is the only owner, B ordinary, with one audited/idempotent grant. Production accounts were not copied. Sender/provider key names and confirmed standard billing are configured under a new5USD maximum; no paid call has run. The new100c shop evaluator covers seed/search/chat and refuses unknown holds. Browser control recovered; signed-in onboarding was observed and the fresh-owner operator redirect is fixed in source. Final changed-cut types/release/independent recipe and native workflow qualification remain pending. Historical October22 deployed-source receipts above are unchanged.

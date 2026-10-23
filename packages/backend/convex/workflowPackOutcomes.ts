@@ -55,6 +55,7 @@ const packIdArg = v.union(
   v.literal("process-sop"),
   v.literal("brand-review"),
   v.literal("offer-and-lead-plan"),
+  v.literal("shop-preparation"),
 );
 
 /** Cost, in the ledger's own unit. `runsPriced` is the denominator: a run the ledger never charged

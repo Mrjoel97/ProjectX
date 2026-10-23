@@ -2,8 +2,10 @@
 
 import { api } from "@pikar/backend/api";
 import { useMutation, useQuery } from "convex/react";
-import { type ReactNode, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { type ReactNode, Suspense, useState } from "react";
 import { BellIcon, BoltIcon, MailIcon, ShieldIcon, WalletIcon } from "../../(auth)/icons";
+import RecipeQualification, { OwnerQualificationLink } from "./web-recipes/RecipeQualification";
 
 // Visual chrome shared with the Command Center (globals.css .stat-tile): white card,
 // 1rem radius, soft diffuse shadow — anchored on the canvas, not a floating outline.
@@ -995,5 +997,20 @@ export function ComplianceView({ headingLevel = "h1" }: { headingLevel?: "h1" | 
 
 /** Preserve old bookmarks while the canonical navigation embeds this surface under Approvals. */
 export default function OpsPage() {
-  return <ComplianceView />;
+  return (
+    <Suspense fallback={<p role="status">Loading operations…</p>}>
+      <OpsRoute />
+    </Suspense>
+  );
+}
+
+function OpsRoute() {
+  const params = useSearchParams();
+  if (params.get("view") === "web-recipes") return <RecipeQualification />;
+  return (
+    <>
+      <OwnerQualificationLink />
+      <ComplianceView />
+    </>
+  );
 }

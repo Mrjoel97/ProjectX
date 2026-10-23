@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { COMMERCE_PACK_PROVENANCE } from "@pikar/contracts/skills/knowledgeWorkProvenance";
 import { describe, expect, test } from "vitest";
 import { KNOWLEDGE_SOURCES, renderSourceGap } from "./knowledgeSearch";
 import { grantsFor } from "./toolGrants";
@@ -73,6 +74,7 @@ describe("the workflow-pack registry is total", () => {
       "brand-review",
       // 35-02: the seventh, and the only original body — the idea-stage artifact.
       "offer-and-lead-plan",
+      "shop-preparation",
     ]);
   });
 
@@ -277,6 +279,7 @@ describe("the grant is code-owned and exact", () => {
         "offer-and-lead-plan",
         ["declareUnsupported", "saveAsDocument", "searchVault", "webResearch"],
       ],
+      ["shop-preparation", ["saveAsDocument", "searchVault"]],
     ]);
   });
 
@@ -355,6 +358,7 @@ describe("the grant is code-owned and exact", () => {
       "document",
       "document",
       // 35-02: offer-and-lead-plan — ONE saved document, by the same rule.
+      "document",
       "document",
     ]);
   });
@@ -511,6 +515,7 @@ describe("the honest-partial contract is in the matrix, not in prose", () => {
       // The warm list is a CRM read, price/cost-per-lead are connector reads, a reusable lead
       // magnet is the content shelf — all three unreadable, all three named in the body.
       ["offer-and-lead-plan", ["crm-facts", "connector-financials", "content-shelf"]],
+      ["shop-preparation", ["connector-financials", "crm-facts", "support-desk"]],
     ]);
   });
 
@@ -863,5 +868,40 @@ describe("isPackEvalSandboxTenant", () => {
     ]) {
       expect(isPackEvalSandboxTenant(near), near).toBe(false);
     }
+  });
+});
+
+describe("shop-preparation MIT provenance is exact and isolated", () => {
+  const name = "pack-shop-preparation";
+  const { pinnedAt, ...record } = COMMERCE_PACK_PROVENANCE[name];
+  const provenance = (over: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      ...record,
+      ts: pinnedAt,
+      skillVersions: { [name]: 1 },
+      ...over,
+    });
+  test("only this pinned adaptation can use the new MIT permission", () => {
+    expect(hasValidPackProvenance(provenance(), name, 1)).toBe(true);
+    for (const over of [
+      { license: "Apache-2.0" },
+      { license: "Pikar-original" },
+      { sourceRepo: "https://example.test/substitution" },
+      { sourceCommit: "0".repeat(40) },
+      { sourcePaths: ["some-other-skill/SKILL.md"] },
+      { bodySha256: "0".repeat(64) },
+      { modificationNotice: "unaltered vendor body" },
+      { ts: pinnedAt + 1 },
+      { skillVersions: { [name]: 2 } },
+    ])
+      expect(hasValidPackProvenance(provenance(over), name, 1), JSON.stringify(over)).toBe(false);
+    expect(
+      hasValidPackProvenance(
+        provenance({ skillVersions: { "pack-brand-review": 1 } }),
+        "pack-brand-review",
+        1,
+      ),
+    ).toBe(false);
+    expect(toolsForWorkflowPack("shop-preparation")).toEqual(["saveAsDocument", "searchVault"]);
   });
 });
