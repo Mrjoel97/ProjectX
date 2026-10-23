@@ -31,6 +31,8 @@
 > The read-only seven-day observer now requires the pinned checkpoint's code-authored atomic purge receipt as well as absence after the eligible sweep. Six offline boundary tests reject missing/forged receipts; elapsed production/staging time remains unqualified until the original 2026-10-24 deadline. cronAttributionVerified remains false.
 > 2026-10-17 font build reliability: all three existing brand families are vendored with official OFL licenses and SHA256 provenance. Build-time next/font/google fetching and its generated query replacement path are removed. Exact cached WOFF2 bytes, subset ranges, weights, fallback metrics and latin preloads are retained. This removes that dependency class; it does not prove the root cause of the earlier intermittent Turbopack failure. Font byte/reference/coverage regressions run in the web suite.
 
+> Last verified: 2026-10-23 — CI now installs Ubuntu's `ffmpeg` and `fonts-dejavu-core` packages and verifies Bash, FFmpeg, FFprobe and the detected DejaVu Sans font before the existing `pnpm test` step. Both synthetic render fixtures in `assembleQuality.test.ts` must run: missing prerequisites with `CI=true` or `CI=1` fail collection instead of silently skipping. Local runs without those prerequisites retain optional skips. Turbo explicitly includes `CI` in `globalEnv`, so strict environment filtering cannot hide the requirement and CI/local task results have distinct cache keys. The existing 120-second fixture limits are unchanged. This source change requires an exact-head hosted run; previous CI skips are not runtime passes.
+
 # Playbook: CI gate (typecheck / lint / test / build)
 
 > Last verified: 2026-10-17 — the read-only staging retention observer refuses ambiguous or
@@ -292,6 +294,10 @@ Couplings that are not visible in the graph:
 - **`NEXT_PUBLIC_CONVEX_URL`** (repository *variable*) — consumed by the deployed client when set and
   declared in `turbo.json`'s `globalEnv`. The current production build succeeds without it, so an
   unset variable does not prevent pull requests or forks from verifying the repository.
+- **`CI`** — GitHub Actions sets this to `true`. It is declared in `turbo.json`'s `globalEnv`
+  because the real media fixture suite refuses missing prerequisites in CI but allows optional
+  local skips. The value must reach Vitest under strict environment filtering and participate in
+  task hashes; a local run that skipped rendering cannot satisfy the hosted check from cache.
 - **`CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS`** — declared in `turbo.json`'s
   `globalPassThroughEnv`. Turbo filters the environment it hands to a task, so an env var set in the
   shell does NOT reach a turbo-run task unless it is declared. The repo's local sqlite backend is
@@ -314,7 +320,9 @@ Couplings that are not visible in the graph:
 3. `pnpm install --frozen-lockfile` — a drifted lockfile fails here, deliberately.
 4. `pnpm typecheck` → `turbo run typecheck` → `tsc --noEmit` per package.
 5. `pnpm lint` → `biome ci .` — formatter, `organizeImports` and linter, no writes.
-6. `pnpm test` → `turbo run test` → `vitest run` per package.
+6. Install Ubuntu media test prerequisites (`ffmpeg`, `fonts-dejavu-core`) and verify the detected
+   Bash, font and both binaries. `pnpm test` → `turbo run test` → `vitest run` per package, including
+   both real synthetic FFmpeg fixtures. No provider request or external media is used.
 7. `pnpm build` → `turbo run build` → `next build`.
 
 ## Invariants — what must never break
@@ -335,6 +343,8 @@ Couplings that are not visible in the graph:
   could drift from `package.json`. Enforced by `ci.yml` calling `pnpm <script>` only.
 - **Playwright stays out.** `apps/web`'s `test:e2e` needs a live deployment and a seeded tenant; it
   is not part of this gate. Enforced by `turbo run test` matching only the `test` script.
+- **Real render fixtures cannot silently skip in CI.** Keep the Ubuntu prerequisites and the
+  `CI=true` / `CI=1` missing-prerequisite refusal. Both fixtures retain their 120-second limits.
 
 ## How to change safely
 

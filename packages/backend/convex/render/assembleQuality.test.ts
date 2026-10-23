@@ -27,6 +27,9 @@ const available =
   font &&
   spawnSync("ffmpeg", ["-version"], { encoding: "utf8", windowsHide: true }).status === 0 &&
   spawnSync("ffprobe", ["-version"], { encoding: "utf8", windowsHide: true }).status === 0;
+if ((process.env.CI === "true" || process.env.CI === "1") && !available) {
+  throw new Error("CI render fixtures require Bash, FFmpeg, FFprobe and a supported font.");
+}
 const execFileAsync = promisify(execFile);
 
 test.skipIf(!available)(

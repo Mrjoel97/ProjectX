@@ -11,7 +11,7 @@ const imageSuffixes: Record<string, readonly string[]> = {
 };
 
 /** Media titles can supply a PNG hint even when the original is another image format. */
-function originalFilename(filename: string, contentType: string | null): string {
+export function originalFilename(filename: string, contentType: string | null): string {
   const suffix = /\.(png|jpe?g|webp|gif|avif|svg)$/i.exec(filename);
   const extension = suffix?.[1];
   const mime = contentType?.split(";")[0]?.trim().toLowerCase();
@@ -29,9 +29,18 @@ export class OriginalDownloadError extends Error {
   }
 }
 
-/** Caller must obtain this exact selected-file URL through its existing ownership query. */
-export async function downloadOwnedOriginal(url: string, filename: string, signal: AbortSignal) {
+/** Shared admission for individual and batch originals; URLs must come from ownership queries. */
+export async function streamOwnedOriginal(
+  url: string,
+  filename: string,
+  signal: AbortSignal,
+  onStart: (info: { filename: string; mimeType: string }) => void,
+  onChunk: (chunk: Uint8Array) => void,
+  maxBytes = ORIGINAL_DOWNLOAD_MAX_BYTES,
+) {
   signal.throwIfAborted();
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || maxBytes > ORIGINAL_DOWNLOAD_MAX_BYTES)
+    throw new OriginalDownloadError("byte_limit");
   const response = await fetch(url, {
     signal,
     credentials: "omit",
@@ -46,25 +55,29 @@ export async function downloadOwnedOriginal(url: string, filename: string, signa
     throw new OriginalDownloadError("unavailable");
   }
   const declared = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > ORIGINAL_DOWNLOAD_MAX_BYTES) {
+  if (Number.isFinite(declared) && declared > maxBytes) {
     await response.body.cancel();
     throw new OriginalDownloadError("byte_limit");
   }
   const reader = response.body.getReader();
-  const chunks: BlobPart[] = [];
+  const info = {
+    filename: originalFilename(filename, response.headers.get("content-type")),
+    mimeType: response.headers.get("content-type") ?? "application/octet-stream",
+  };
   let size = 0;
   try {
+    onStart(info);
     for (;;) {
       signal.throwIfAborted();
       const part = await reader.read();
       signal.throwIfAborted();
       if (part.done) break;
       size += part.value.byteLength;
-      if (size > ORIGINAL_DOWNLOAD_MAX_BYTES) {
+      if (size > maxBytes) {
         await reader.cancel();
         throw new OriginalDownloadError("byte_limit");
       }
-      chunks.push(part.value as BlobPart);
+      onChunk(part.value);
     }
   } catch (error) {
     await reader.cancel().catch(() => {});
@@ -73,9 +86,25 @@ export async function downloadOwnedOriginal(url: string, filename: string, signa
     reader.releaseLock();
   }
   signal.throwIfAborted();
-  const blob = new Blob(chunks, {
-    type: response.headers.get("content-type") ?? "application/octet-stream",
-  });
+  return info;
+}
+
+/** Caller must obtain this exact selected-file URL through its existing ownership query. */
+export async function downloadOwnedOriginal(url: string, filename: string, signal: AbortSignal) {
+  const chunks: BlobPart[] = [];
+  const info = await streamOwnedOriginal(
+    url,
+    filename,
+    signal,
+    () => {},
+    (chunk) => chunks.push(chunk as BlobPart),
+  );
+  downloadOriginalBlob(new Blob(chunks, { type: info.mimeType }), info.filename, signal);
+}
+
+/** The same bounded lifetime is used for a single original and a completed archive. */
+export function downloadOriginalBlob(blob: Blob, filename: string, signal: AbortSignal) {
+  signal.throwIfAborted();
   const objectUrl = URL.createObjectURL(blob);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let released = false;
@@ -91,7 +120,7 @@ export async function downloadOwnedOriginal(url: string, filename: string, signa
     signal.throwIfAborted();
     signal.addEventListener("abort", release, { once: true });
     anchor.href = objectUrl;
-    anchor.download = originalFilename(filename, response.headers.get("content-type"));
+    anchor.download = filename;
     anchor.rel = "noopener";
     document.body.appendChild(anchor);
     anchor.click();

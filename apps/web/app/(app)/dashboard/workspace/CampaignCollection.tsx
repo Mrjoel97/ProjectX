@@ -1,10 +1,11 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { useQuery } from "convex/react";
+import { useConvex, useQuery } from "convex/react";
 import type { GenericId } from "convex/values";
 import { useEffect, useRef, useState } from "react";
 import { ArtifactViewerBody } from "../artifacts/ArtifactViewer";
+import { BatchDownloadError, downloadOwnedBatch } from "../artifacts/batchDownload";
 import { downloadOwnedOriginal } from "../artifacts/originalDownload";
 import { ImageIcon, VideoIcon } from "../vault/icons";
 import styles from "./CampaignCollection.module.css";
@@ -81,9 +82,33 @@ export function CampaignCollection({
   threadId: string;
   onOpenPlan: (id: string) => void;
 }) {
+  const convex = useConvex();
   const campaign = useQuery(api.mediaCampaign.byId, { campaignId, threadId });
   const [index, setIndex] = useState(0);
   const [controls, setControls] = useState(false);
+  const archiveRequest = useRef<AbortController | null>(null);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [archiveStatus, setArchiveStatus] = useState<string | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  useEffect(() => {
+    void campaignId;
+    void threadId;
+    setArchiveBusy(false);
+    setArchiveStatus(null);
+    setArchiveError(null);
+    return () => {
+      archiveRequest.current?.abort();
+      archiveRequest.current = null;
+    };
+  }, [campaignId, threadId]);
+  useEffect(() => {
+    if (campaign === null) {
+      archiveRequest.current?.abort();
+      archiveRequest.current = null;
+      setArchiveBusy(false);
+      setArchiveStatus(null);
+    }
+  }, [campaign]);
   const selected = campaign?.items[Math.min(index, (campaign?.items.length ?? 1) - 1)];
   const url = useQuery(
     api.mediaCampaign.download,
@@ -91,6 +116,70 @@ export function CampaignCollection({
       ? { campaignId, itemIndex: Math.min(index, campaign.items.length - 1) }
       : "skip",
   );
+  async function downloadBatch() {
+    if (!campaign || archiveRequest.current) return;
+    const request = new AbortController();
+    archiveRequest.current = request;
+    setArchiveBusy(true);
+    setArchiveStatus("Preparing ZIP…");
+    setArchiveError(null);
+    try {
+      const manifest = await convex.query(api.mediaCampaign.downloadManifest, {
+        campaignId,
+        threadId,
+      });
+      request.signal.throwIfAborted();
+      if (archiveRequest.current !== request) return;
+      if (!manifest || manifest.campaignId !== campaignId || manifest.threadId !== threadId)
+        throw new BatchDownloadError("unavailable");
+      if (manifest.entries.length === 0) {
+        setArchiveStatus(null);
+        setArchiveError(
+          "No ready files are available. Try again when this batch has completed files.",
+        );
+        return;
+      }
+      await downloadOwnedBatch(manifest, request.signal, ({ completed, total, bytes }) => {
+        if (request.signal.aborted || archiveRequest.current !== request) return;
+        setArchiveStatus(
+          completed === total
+            ? `Creating ZIP for ${total} ${total === 1 ? "file" : "files"}…`
+            : `Downloading file ${completed + 1} of ${total} · ${(bytes / (1024 * 1024)).toFixed(1)} MiB`,
+        );
+      });
+      request.signal.throwIfAborted();
+      if (archiveRequest.current !== request) return;
+      const count = manifest.entries.length;
+      const omitted = manifest.omitted.length;
+      setArchiveStatus(
+        `ZIP download started with ${count} ${count === 1 ? "file" : "files"}.${
+          omitted
+            ? ` ${omitted} ${omitted === 1 ? "item was" : "items were"} omitted; details are in the ZIP readme.`
+            : ""
+        }`,
+      );
+    } catch (error) {
+      if (request.signal.aborted || archiveRequest.current !== request) return;
+      setArchiveStatus(null);
+      setArchiveError(
+        error instanceof BatchDownloadError && error.code === "byte_limit"
+          ? "This ZIP exceeds the 200 MiB limit. Download the files individually instead."
+          : "The ZIP couldn't be downloaded. No partial ZIP was saved. Try again.",
+      );
+    } finally {
+      if (archiveRequest.current === request) {
+        archiveRequest.current = null;
+        setArchiveBusy(false);
+      }
+    }
+  }
+  function cancelArchive() {
+    archiveRequest.current?.abort();
+    archiveRequest.current = null;
+    setArchiveBusy(false);
+    setArchiveError(null);
+    setArchiveStatus("ZIP download cancelled. You can try again.");
+  }
   if (campaign === undefined)
     return (
       <p className={styles.empty} role="status">
@@ -104,6 +193,7 @@ export function CampaignCollection({
       </p>
     );
   const completed = campaign.items.filter((item) => item.status === "succeeded").length;
+  const available = campaign.items.filter((item) => item.downloadable).length;
   const production = controls || completed === 0;
   return (
     <section className={styles.collection} aria-label={`${campaign.title} media batch`}>
@@ -116,24 +206,49 @@ export function CampaignCollection({
             {campaign.cancelled ? " · queued work cancelled" : ""}
           </p>
         </div>
-        <fieldset
-          className={styles.switch}
-          aria-label="Batch view"
-          style={{ border: 0, padding: 0, margin: 0 }}
-        >
-          <button
-            type="button"
-            aria-pressed={!production}
-            disabled={completed === 0}
-            onClick={() => setControls(false)}
+        <div className={styles.actions}>
+          <div className={styles.archiveActions}>
+            <button
+              type="button"
+              className={styles.archiveButton}
+              disabled={archiveBusy || available === 0}
+              onClick={() => void downloadBatch()}
+              title="Original ready files and a readme, in one ZIP. Up to 200 MiB."
+            >
+              {archiveBusy ? "Preparing ZIP…" : `Download ready files (${available})`}
+            </button>
+            {archiveBusy && (
+              <button type="button" className={styles.archiveButton} onClick={cancelArchive}>
+                Cancel ZIP
+              </button>
+            )}
+            <small>ZIP · 200 MiB max</small>
+          </div>
+          <fieldset
+            className={styles.switch}
+            aria-label="Batch view"
+            style={{ border: 0, padding: 0, margin: 0 }}
           >
-            Gallery
-          </button>
-          <button type="button" aria-pressed={production} onClick={() => setControls(true)}>
-            Review and generation
-          </button>
-        </fieldset>
+            <button
+              type="button"
+              aria-pressed={!production}
+              disabled={completed === 0}
+              onClick={() => setControls(false)}
+            >
+              Gallery
+            </button>
+            <button type="button" aria-pressed={production} onClick={() => setControls(true)}>
+              Review and generation
+            </button>
+          </fieldset>
+        </div>
       </header>
+      {archiveStatus || archiveError ? (
+        <div className={styles.archiveStatus}>
+          {archiveStatus ? <p role="status">{archiveStatus}</p> : null}
+          {archiveError ? <p role="alert">{archiveError}</p> : null}
+        </div>
+      ) : null}
       {production ? (
         <div className={styles.production} onFocusCapture={() => setControls(true)}>
           <CampaignCard campaign={campaign} onOpenPlan={onOpenPlan} />

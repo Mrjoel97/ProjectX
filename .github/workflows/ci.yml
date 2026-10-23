@@ -61,8 +61,8 @@ jobs:
         # diagnostic cap and hide the errors that actually reddened the job.
         run: pnpm lint --diagnostic-level=error --max-diagnostics=none
 
-      # Unit tests only (vitest). apps/web's Playwright suite is `test:e2e` and is deliberately NOT
-      # part of this gate — it needs a live deployment and a seeded tenant.
+      # Vitest includes free synthetic FFmpeg render fixtures. apps/web's Playwright suite is
+      # `test:e2e` and is deliberately NOT part of this gate — it needs a live deployment and tenant.
       # THE FREE GATES. Seventeen scripts carry an offline `--self-test` / `--self-check` mode, and
       # until 2026-09-09 nothing ran them: two were found red BY ACCIDENT, one of them stale since
       # 35-02. A gate nobody runs is indistinguishable from a gate that passes, and a gate that sits
@@ -75,6 +75,15 @@ jobs:
         run: |
           node scripts/check-free-gates.mjs --self-test
           node scripts/check-free-gates.mjs
+
+      - name: Install media render test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg fonts-dejavu-core
+          test -x /bin/bash
+          test -r /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+          ffmpeg -version
+          ffprobe -version
 
       - name: Test
         run: pnpm test

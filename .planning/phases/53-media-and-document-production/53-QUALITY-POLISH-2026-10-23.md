@@ -83,7 +83,7 @@ checks plus real finalization covering linear/dynamic/none, missing-statistics r
 
 ## Source and final checks
 
-Final golden source revision is
+At the audio/readability handoff, golden source revision is
 `2026-09-11.budgeted-evaluator.47841af295e24fbbf57ccf33a5b53a6b8615a214310c0c691ab7a0904c51be83`.
 The46-case corpus hash remains
 `5dbe6fdbd447ab2a152ccf928d195ed404ca3bf431f5240397f6be3b627e55fd`.
@@ -146,6 +146,49 @@ The ignored one-use rebuild helper has a discovered marker-name mismatch: it che
 preserved, not silently fixed/replayed. That helper is retired after its sole authorized run;
 future versions must refuse either marker and pre-existing outputs before writing. This does
 not change the canonical production renderer or authorize another benchmark/export attempt.
+
+## Batch delivery continuation
+
+The owner subsequently said proceed, then asked to focus on finishing. This continuation is
+limited to ready-file batch delivery and making the existing video runtime checks execute in CI.
+No new paid call, credential read, generation, deployment or registry operation is introduced.
+
+The click-only download manifest requires the exact tenant/conversation/campaign, validates all
+1–15 unique child memberships, and resolves current owned image slots or the existing governed
+video final. Partial availability has explicit omissions and existing music attribution. Videos
+retain the existing rendered/storage/sidecar/summary and terminal-caption contract; there is no
+new persisted render-batch provenance field or claim of stronger historical video binding.
+
+One sequential, cancellable ZIP uses installed fflate through a dedicated Vault subpath, never
+the Office parser barrel. STORE preserves original bytes; safe ordinal filenames use actual
+known image MIME extensions. A README describes the availability snapshot, omitted outputs and
+music credits without copying capability fields or internal IDs. Both aggregate input and final
+ZIP output, including headers/README, are bounded to200MiB. Failure saves no partial archive.
+The UI requests a fresh manifest only on explicit download, supports retry/cancel and aborts on
+scope change/unmount. Its completion message means browser download started, not OS save proof.
+
+Focused checks passed34 backend tests and39 frontend tests (15 collection,11 archive,13 original
+download regressions). ZIP tests independently decode original bytes through the installed ZIP
+decoder and exercise sequential fetch, late cancellation, MIME correction, omission/credit copy,
+invalid manifests, unavailable originals, streamed/declared aggregate limits and final ZIP overhead.
+Actual-component browser checks passed at390px and1440px with native ZIP downloads. An independent
+.NET ZIP reader verified original image/video bytes and the omission/credit README in both archives;
+cancellation produced no additional ZIP. The harness was interrupted during browser cleanup after
+those assertions, so this is scoped evidence, not a clean whole-harness exit. A separate exit0 TCP
+refusal confirmed the owned fixture server closed. Evidence is in the ignored batch-archive-ui-qa
+report. Exact-head hosted CI remains pending at this commit boundary and is recorded on PR83.
+
+CI installs/probes Bash, FFmpeg, FFprobe and DejaVu Sans before the existing test step. Missing
+prerequisites fail when CI is exactlytrue/1; Turbo forwards/hashes CI, while local optional skips
+remain. Twenty-five isolated availability-guard scenarios passed. Existing fixture/job timeouts
+are unchanged. Actual hosted execution of both FFmpeg fixtures is required before calling this
+gap closed; prior skipped fixtures are not converted into passing evidence.
+
+Current golden source revision is
+`2026-09-11.budgeted-evaluator.7ee16b3ba50a3a704ff825bef6cddc5461914163eacd0af759ff10c7e97ffcfa`.
+The46-case corpus/hash and40-case vertical corpus remain unchanged. Source identity refresh is
+not paid semantic qualification or reusable consent. Phase53 remains0/3 and the primary order
+and all previous financial/qualification receipts remain unchanged.
 
 ## Remaining acceptance
 

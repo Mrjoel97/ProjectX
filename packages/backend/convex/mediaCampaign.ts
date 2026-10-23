@@ -5,6 +5,7 @@ import {
   campaignStartIndexes,
   campaignStatus,
   MEDIA_CAMPAIGN_CONCURRENCY,
+  MEDIA_CAMPAIGN_MAX_ITEMS,
   MEDIA_CAMPAIGN_SETTLEMENT_MS,
   validateCampaignInput,
 } from "@pikar/core/mediaCampaign";
@@ -293,6 +294,73 @@ export const list = tenantQuery({
   },
 });
 
+function ownsCampaignItem(
+  plan: Doc<"plans"> | null,
+  campaign: Doc<"mediaCampaigns">,
+  item: Item,
+): plan is Doc<"plans"> {
+  return !!(
+    plan &&
+    plan.tenantId === campaign.tenantId &&
+    plan.threadId === campaign.threadId &&
+    plan.mediaCampaignId === campaign._id &&
+    plan.mediaMode === (item.kind === "image" ? "image" : "reel")
+  );
+}
+
+/** Both download paths resolve current owned rows, never a caller URL or an old final during retry. */
+async function currentCampaignDownload(
+  ctx: QueryCtx,
+  campaign: Doc<"mediaCampaigns">,
+  item: Item,
+  plan: Doc<"plans">,
+): Promise<{ url: string; captioned: boolean; musicCredit: string | null } | null> {
+  if (!ownsCampaignItem(plan, campaign, item)) throw new Error("CAMPAIGN_PLAN_NOT_OWNED");
+  if (item.status !== "succeeded" || !item.batchId) return null;
+  if (item.kind === "image") {
+    const jobs = await readMediaBatch(ctx, campaign.tenantId, item.batchId);
+    if (jobs.some((job) => job.planId !== item.planId)) throw new Error("CAMPAIGN_BATCH_NOT_OWNED");
+    const images = jobs.filter((job) => job.kind === "image" && job.blockIndex === 0);
+    const image = images.length === 1 ? images[0] : undefined;
+    const latest = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_plan_slot_kind_created", (q) =>
+        q
+          .eq("tenantId", campaign.tenantId)
+          .eq("planId", plan._id)
+          .eq("blockIndex", 0)
+          .eq("kind", "image"),
+      )
+      .order("desc")
+      .take(2);
+    if (
+      !image?.assetStorageId ||
+      image.status !== "succeeded" ||
+      latest[0]?._id !== image._id ||
+      (latest[1] && latest[0]?.createdAt === latest[1].createdAt)
+    )
+      return null;
+    const url = await ctx.storage.getUrl(image.assetStorageId);
+    return url ? { url, captioned: false, musicCredit: null } : null;
+  }
+  if (
+    plan.renderStatus !== "rendered" ||
+    !plan.renderStorageId ||
+    !plan.sidecarStorageId ||
+    !plan.renderSummary ||
+    (plan.captionStatus && ["pending", "transcribing", "burning"].includes(plan.captionStatus))
+  )
+    return null;
+  const url = await ctx.storage.getUrl(plan.renderStorageId);
+  return url
+    ? {
+        url,
+        captioned: plan.captionStatus === "captioned",
+        musicCredit: plan.musicCredit?.attribution ?? null,
+      }
+    : null;
+}
+
 /** Mint the bearer URL for the one artifact the human requested, never all hidden manifests. */
 export const download = tenantQuery({
   args: { campaignId: v.id("mediaCampaigns"), itemIndex: v.number() },
@@ -301,25 +369,85 @@ export const download = tenantQuery({
     const item = Number.isInteger(itemIndex) ? campaign.items[itemIndex] : undefined;
     if (item?.status !== "succeeded") return null;
     const plan = await ctx.db.get(item.planId);
-    if (!plan || plan.tenantId !== ctx.tenantId || plan.mediaCampaignId !== campaignId)
-      throw new Error("CAMPAIGN_PLAN_NOT_OWNED");
-    if (item.kind === "image" && item.batchId) {
-      const jobs = await readMediaBatch(ctx, ctx.tenantId, item.batchId);
-      const image = jobs.find(
-        (job) =>
-          job.planId === item.planId &&
-          job.kind === "image" &&
-          job.status === "succeeded" &&
-          job.assetStorageId,
-      );
-      return image?.assetStorageId ? ctx.storage.getUrl(image.assetStorageId) : null;
+    if (!ownsCampaignItem(plan, campaign, item)) throw new Error("CAMPAIGN_PLAN_NOT_OWNED");
+    return (await currentCampaignDownload(ctx, campaign, item, plan))?.url ?? null;
+  },
+});
+
+type CampaignDownloadManifest = {
+  campaignId: Id<"mediaCampaigns">;
+  threadId: string;
+  title: string;
+  total: number;
+  entries: {
+    index: number;
+    label: string;
+    kind: Item["kind"];
+    url: string;
+    captioned: boolean;
+    musicCredit: string | null;
+  }[];
+  omitted: {
+    index: number;
+    label: string;
+    status: Item["status"];
+    reason: "not_ready" | "final_unavailable";
+  }[];
+};
+
+/** Explicit human download: one bounded transactional snapshot; never subscribe/persist these URLs. */
+export const downloadManifest = tenantQuery({
+  args: { campaignId: v.id("mediaCampaigns"), threadId: v.string() },
+  handler: async (ctx, { campaignId, threadId }): Promise<CampaignDownloadManifest | null> => {
+    const campaign = await ctx.db.get(campaignId);
+    if (
+      !campaign ||
+      campaign.tenantId !== ctx.tenantId ||
+      campaign.threadId !== threadId ||
+      !threadId.trim() ||
+      threadId.length > 512 ||
+      !campaign.title.trim() ||
+      campaign.title.length > 120 ||
+      campaign.items.length < 1 ||
+      campaign.items.length > MEDIA_CAMPAIGN_MAX_ITEMS ||
+      new Set(campaign.items.map((item) => item.planId)).size !== campaign.items.length ||
+      campaign.items.some((item) => !item.label.trim() || item.label.length > 160)
+    )
+      return null;
+    const plans = await Promise.all(campaign.items.map((item) => ctx.db.get(item.planId)));
+    // Validate ALL membership before resolving even one capability, including unfinished siblings.
+    if (
+      campaign.items.some((item, index) => !ownsCampaignItem(plans[index] ?? null, campaign, item))
+    )
+      return null;
+    const manifest: CampaignDownloadManifest = {
+      campaignId,
+      threadId,
+      title: campaign.title,
+      total: campaign.items.length,
+      entries: [],
+      omitted: [],
+    };
+    for (const [index, item] of campaign.items.entries()) {
+      const plan = plans[index];
+      if (!plan) return null;
+      let downloadable: Awaited<ReturnType<typeof currentCampaignDownload>>;
+      try {
+        downloadable = await currentCampaignDownload(ctx, campaign, item, plan);
+      } catch {
+        return null;
+      }
+      if (downloadable)
+        manifest.entries.push({ index, label: item.label, kind: item.kind, ...downloadable });
+      else
+        manifest.omitted.push({
+          index,
+          label: item.label,
+          status: item.status,
+          reason: item.status === "succeeded" ? "final_unavailable" : "not_ready",
+        });
     }
-    return plan.renderStatus === "rendered" &&
-      plan.renderStorageId &&
-      plan.sidecarStorageId &&
-      plan.renderSummary
-      ? ctx.storage.getUrl(plan.renderStorageId)
-      : null;
+    return manifest;
   },
 });
 

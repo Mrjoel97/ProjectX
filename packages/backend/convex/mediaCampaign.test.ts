@@ -5,7 +5,7 @@ import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { DEPLOYMENT_MEDIA_BUDGET_CENTS, MEDIA_DAILY_BUDGET_CENTS, rateLimiter } from "./guardrails";
 import { newestRoot, ROOT_SCAN, threadRoots } from "./lib/planRow";
 import { buildCockpitTools } from "./llm";
@@ -88,6 +88,318 @@ async function finish(t: T, id: Id<"mediaCampaigns">, index: number, failure?: s
     }
   });
 }
+
+/** Synthetic completed refs only: no reservations, scheduling or provider calls. */
+async function downloadFixture(t: T) {
+  const { campaignId } = await t.mutation(internal.mediaCampaign.stage, {
+    tenantId,
+    threadId: "campaign_thread",
+    title: "Download collection",
+    maxCostCents: 100,
+    items: [
+      { kind: "image", label: "Product still", prompt: "Owned product" },
+      { kind: "video", label: "Captioned story", brief: "Owned story" },
+      { kind: "image", label: "Failed still", prompt: "Owned detail" },
+    ],
+  });
+  const campaign = await row(t, campaignId);
+  const image = campaign.items[0],
+    video = campaign.items[1],
+    failed = campaign.items[2];
+  if (!image || !video || !failed) throw new Error("missing download fixture");
+  const assets = await t.run(async (ctx) => {
+    const imageId = await ctx.storage.store(new Blob(["original-image"], { type: "image/png" }));
+    const videoId = await ctx.storage.store(new Blob(["captioned-final"], { type: "video/mp4" }));
+    const sidecarId = await ctx.storage.store(new Blob(["governed-sidecar"]));
+    const imageJobId = await ctx.db.insert("mediaJobs", {
+      tenantId,
+      planId: image.planId,
+      batchId: "manifest-image",
+      blockIndex: 0,
+      provider: "openai",
+      kind: "image",
+      model: "gpt-image-2",
+      spec: { kind: "image", width: 1024, height: 1536 },
+      promptHash: "fixture-hash",
+      status: "succeeded",
+      assetStorageId: imageId,
+      estUsd: 0,
+      createdAt: 1000,
+      updatedAt: 1000,
+    });
+    await ctx.db.patch(video.planId, {
+      renderStatus: "rendered",
+      renderStorageId: videoId,
+      sidecarStorageId: sidecarId,
+      renderSummary: { durationS: 30, sceneCount: 6, gates: [] },
+      captionStatus: "captioned",
+      musicCredit: {
+        title: "Licensed bed",
+        creator: "Fixture composer",
+        license: "CC BY 4.0",
+        licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+        sourceUrl: "https://example.com/licensed-bed",
+        attribution: "Licensed bed — Fixture composer (CC BY 4.0)",
+      },
+    });
+    await ctx.db.patch(campaignId, {
+      status: "partial",
+      items: [
+        { ...image, status: "succeeded", batchId: "manifest-image" },
+        { ...video, status: "succeeded", batchId: "manifest-video" },
+        { ...failed, status: "failed", failureReason: "provider_failed" },
+      ],
+    });
+    return { imageId, videoId, sidecarId, imageJobId };
+  });
+  return { campaignId, image, video, failed, ...assets };
+}
+
+test("download manifest snapshots ready current originals and captioned final with credits, omitting unfinished siblings", async () => {
+  const t = harness();
+  const f = await downloadFixture(t);
+  const result = await asA(t).query(api.mediaCampaign.downloadManifest, {
+    campaignId: f.campaignId,
+    threadId: "campaign_thread",
+  });
+  expect(result).toMatchObject({
+    campaignId: f.campaignId,
+    threadId: "campaign_thread",
+    title: "Download collection",
+    total: 3,
+    entries: [
+      { index: 0, label: "Product still", kind: "image", captioned: false, musicCredit: null },
+      {
+        index: 1,
+        label: "Captioned story",
+        kind: "video",
+        captioned: true,
+        musicCredit: "Licensed bed — Fixture composer (CC BY 4.0)",
+      },
+    ],
+    omitted: [{ index: 2, label: "Failed still", status: "failed", reason: "not_ready" }],
+  });
+  expect(result?.entries[0]?.url).toBe(
+    await asA(t).query(api.mediaCampaign.download, { campaignId: f.campaignId, itemIndex: 0 }),
+  );
+  expect(result?.entries[1]?.url).toBe(await t.run((ctx) => ctx.storage.getUrl(f.videoId)));
+  expect(JSON.stringify(result?.omitted)).not.toContain("http");
+  await t.run(async (ctx) => {
+    expect(await ctx.db.query("spendEvents").collect()).toHaveLength(0);
+    expect(await ctx.db.system.query("_scheduled_functions").collect()).toHaveLength(0);
+  });
+});
+
+test("download manifest rejects anonymous, foreign, wrong-thread and deleted campaigns", async () => {
+  const t = harness();
+  const f = await downloadFixture(t);
+  const args = { campaignId: f.campaignId, threadId: "campaign_thread" };
+  await expect(t.query(api.mediaCampaign.downloadManifest, args)).rejects.toThrow(
+    "UNAUTHENTICATED",
+  );
+  expect(
+    await t.withIdentity({ subject: "campaign_b" }).query(api.mediaCampaign.downloadManifest, args),
+  ).toBeNull();
+  expect(
+    await asA(t).query(api.mediaCampaign.downloadManifest, { ...args, threadId: "wrong_thread" }),
+  ).toBeNull();
+  await t.run((ctx) => ctx.db.delete(f.campaignId));
+  expect(await asA(t).query(api.mediaCampaign.downloadManifest, args)).toBeNull();
+});
+
+test.each([
+  "foreign",
+  "wrong_thread",
+  "wrong_campaign",
+  "wrong_kind",
+  "deleted",
+] as const)("download manifest refuses %s child membership even on an unfinished sibling", async (change) => {
+  const t = harness();
+  const f = await downloadFixture(t);
+  const other = await stage(t, 1);
+  await t.run(async (ctx) => {
+    if (change === "deleted") await ctx.db.delete(f.failed.planId);
+    else {
+      const patch: Partial<Doc<"plans">> =
+        change === "foreign"
+          ? { tenantId: "campaign_b" }
+          : change === "wrong_thread"
+            ? { threadId: "wrong_thread" }
+            : change === "wrong_campaign"
+              ? { mediaCampaignId: other.campaignId }
+              : { mediaMode: "reel" };
+      await ctx.db.patch(f.failed.planId, patch);
+    }
+  });
+  expect(
+    await asA(t).query(api.mediaCampaign.downloadManifest, {
+      campaignId: f.campaignId,
+      threadId: "campaign_thread",
+    }),
+  ).toBeNull();
+});
+
+test("single and batch downloads reject a ready child whose plan moved to another thread", async () => {
+  const t = harness();
+  const f = await downloadFixture(t);
+  await t.run((ctx) => ctx.db.patch(f.image.planId, { threadId: "moved_thread" }));
+  await expect(
+    asA(t).query(api.mediaCampaign.download, { campaignId: f.campaignId, itemIndex: 0 }),
+  ).rejects.toThrow("CAMPAIGN_PLAN_NOT_OWNED");
+  expect(
+    await asA(t).query(api.mediaCampaign.downloadManifest, {
+      campaignId: f.campaignId,
+      threadId: "campaign_thread",
+    }),
+  ).toBeNull();
+});
+
+test("an image retry does not export the preceding succeeded batch", async () => {
+  const t = harness();
+  const f = await downloadFixture(t);
+  await t.run(async (ctx) => {
+    const original = await ctx.db.get(f.imageJobId);
+    if (!original) throw new Error("missing image fixture");
+    const { _id, _creationTime, assetStorageId, ...job } = original;
+    await ctx.db.insert("mediaJobs", {
+      ...job,
+      batchId: "new-current-batch",
+      status: "queued",
+      createdAt: 1001,
+    });
+  });
+  const result = await asA(t).query(api.mediaCampaign.downloadManifest, {
+    campaignId: f.campaignId,
+    threadId: "campaign_thread",
+  });
+  expect(result?.entries.map((entry) => entry.index)).toEqual([1]);
+  expect(result?.omitted).toContainEqual({
+    index: 0,
+    label: "Product still",
+    status: "succeeded",
+    reason: "final_unavailable",
+  });
+  expect(
+    await asA(t).query(api.mediaCampaign.download, { campaignId: f.campaignId, itemIndex: 0 }),
+  ).toBeNull();
+});
+
+test.each([
+  "pending",
+  "rendering",
+  "failed",
+] as const)("a %s render does not export its retained prior final", async (renderStatus) => {
+  const t = harness();
+  const f = await downloadFixture(t);
+  await t.run((ctx) => ctx.db.patch(f.video.planId, { renderStatus }));
+  const result = await asA(t).query(api.mediaCampaign.downloadManifest, {
+    campaignId: f.campaignId,
+    threadId: "campaign_thread",
+  });
+  expect(result?.entries.map((entry) => entry.index)).toEqual([0]);
+  expect(result?.omitted).toContainEqual({
+    index: 1,
+    label: "Captioned story",
+    status: "succeeded",
+    reason: "final_unavailable",
+  });
+});
+
+test("missing governed final or active captions stay unavailable, failed captions preserve current uncaptioned final", async () => {
+  const t = harness();
+  const f = await downloadFixture(t);
+  const args = { campaignId: f.campaignId, threadId: "campaign_thread" };
+  for (const patch of [
+    { sidecarStorageId: undefined },
+    { sidecarStorageId: f.sidecarId, renderSummary: undefined },
+    {
+      renderSummary: { durationS: 30, sceneCount: 6, gates: [] },
+      captionStatus: "burning" as const,
+    },
+  ]) {
+    await t.run((ctx) => ctx.db.patch(f.video.planId, patch));
+    expect(
+      (await asA(t).query(api.mediaCampaign.downloadManifest, args))?.entries.map(
+        (entry) => entry.index,
+      ),
+    ).toEqual([0]);
+  }
+  await t.run((ctx) => ctx.db.patch(f.video.planId, { captionStatus: "failed" }));
+  const degraded = await asA(t).query(api.mediaCampaign.downloadManifest, args);
+  expect(degraded?.entries.find((entry) => entry.index === 1)).toMatchObject({
+    captioned: false,
+    musicCredit: "Licensed bed — Fixture composer (CC BY 4.0)",
+  });
+});
+
+test("deleted bytes are omitted and corrupt batch membership refuses the whole snapshot", async () => {
+  const t = harness();
+  const f = await downloadFixture(t);
+  const args = { campaignId: f.campaignId, threadId: "campaign_thread" };
+  await t.run((ctx) => ctx.storage.delete(f.imageId));
+  expect(
+    (await asA(t).query(api.mediaCampaign.downloadManifest, args))?.entries.map(
+      (entry) => entry.index,
+    ),
+  ).toEqual([1]);
+  await t.run((ctx) => ctx.db.patch(f.imageJobId, { planId: f.failed.planId }));
+  expect(await asA(t).query(api.mediaCampaign.downloadManifest, args)).toBeNull();
+});
+
+test.each([
+  "empty",
+  "duplicate",
+  "overflow",
+] as const)("malformed %s campaign membership refuses instead of truncating an archive", async (kind) => {
+  const t = harness();
+  const f = await downloadFixture(t);
+  const campaign = await row(t, f.campaignId);
+  await t.run(async (ctx) => {
+    const items = [...campaign.items];
+    const first = items[0];
+    if (!first) throw new Error("missing campaign item");
+    if (kind === "empty") items.length = 0;
+    else if (kind === "duplicate") items.push(first);
+    else
+      while (items.length < 16) {
+        const planId = await ctx.db.insert("plans", {
+          tenantId,
+          threadId: "campaign_thread",
+          mediaCampaignId: f.campaignId,
+          mediaMode: "image",
+          status: "proposed",
+          createdAt: 1000,
+        });
+        const pending: (typeof items)[number] = { ...first, planId, status: "ready" };
+        delete pending.batchId;
+        items.push(pending);
+      }
+    await ctx.db.patch(f.campaignId, { items });
+  });
+  expect(
+    await asA(t).query(api.mediaCampaign.downloadManifest, {
+      campaignId: f.campaignId,
+      threadId: "campaign_thread",
+    }),
+  ).toBeNull();
+});
+
+test("the full fifteen-member limit returns every omitted status without truncation", async () => {
+  const t = harness();
+  const { campaignId } = await stage(t, 15);
+  const result = await asA(t).query(api.mediaCampaign.downloadManifest, {
+    campaignId,
+    threadId: "campaign_thread",
+  });
+  expect(result?.total).toBe(15);
+  expect(result?.entries).toEqual([]);
+  expect(result?.omitted.map((item) => item.index)).toEqual(
+    Array.from({ length: 15 }, (_, index) => index),
+  );
+  expect(
+    result?.omitted.every((item) => item.status === "ready" && item.reason === "not_ready"),
+  ).toBe(true);
+});
 
 test("one brief stages images and video planning refs without any media purchase", async () => {
   const t = harness();
