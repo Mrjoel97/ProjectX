@@ -846,9 +846,7 @@ test("cancellation terminalizes owned queued jobs but leaves a submitted batch u
   const submitted = await t.run(async (ctx) => {
     const job = await ctx.db
       .query("mediaJobs")
-      .withIndex("by_batch", (q) =>
-        q.eq("tenantId", tenantId).eq("batchId", batchId),
-      )
+      .withIndex("by_batch", (q) => q.eq("tenantId", tenantId).eq("batchId", batchId))
       .first();
     if (!job) throw new Error("missing reserved job");
     await ctx.db.patch(job._id, { status: "submitted", providerRequestId: "already-submitted" });
