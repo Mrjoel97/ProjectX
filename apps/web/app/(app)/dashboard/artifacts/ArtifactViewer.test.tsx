@@ -188,6 +188,7 @@ describe("artifact reading canvas", () => {
     const video = element.querySelector("video");
     expect(video?.getAttribute("src")).toBe("https://owned.example/video");
     expect(video?.controls).toBe(true);
+    expect(video?.playsInline).toBe(true);
     expect(video?.autoplay).toBe(false);
     expect(element.querySelector('[aria-label="Artifact controls"]')).toBeNull();
   });

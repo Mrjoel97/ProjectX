@@ -52,7 +52,7 @@ const capsTeal = {
   fontWeight: 700,
   letterSpacing: "0.18em",
   textTransform: "uppercase" as const,
-  color: "var(--teal-600)",
+  color: "var(--teal-900)",
 };
 
 type Tab = { id: string; label: string };
@@ -603,6 +603,7 @@ function WorkspacePageContent({ storageKey }: { storageKey: string }) {
                       type="button"
                       className="chat-tab-label"
                       title={t.label}
+                      aria-current={t.id === threadId ? "true" : undefined}
                       onClick={() => selectThread(t.id)}
                     >
                       {t.label}
@@ -626,6 +627,7 @@ function WorkspacePageContent({ storageKey }: { storageKey: string }) {
                 className={`chat-tab is-new${threadId === undefined ? " is-active" : ""}`}
                 aria-label="New chat"
                 title="New chat"
+                aria-current={threadId === undefined ? "true" : undefined}
                 onClick={newChat}
               >
                 +
@@ -677,7 +679,7 @@ function WorkspacePageContent({ storageKey }: { storageKey: string }) {
                   divider's 20% clamp even after the header itself was allowed to wrap. */}
               <div style={{ flex: "1 1 20rem", minWidth: 0 }}>
                 <p style={capsTeal}>Operating workspace</p>
-                <h2
+                <h1
                   style={{
                     margin: "0.35rem 0 0.2rem",
                     fontFamily: "var(--font-display), system-ui, sans-serif",
@@ -687,7 +689,7 @@ function WorkspacePageContent({ storageKey }: { storageKey: string }) {
                   }}
                 >
                   {threadId ? "Workspace" : `${greeting}. What should we move forward?`}
-                </h2>
+                </h1>
                 <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--ink-soft)" }}>
                   {threadId
                     ? "Your files, media and plans, together in this chat."

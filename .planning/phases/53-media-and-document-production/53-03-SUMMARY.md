@@ -9,6 +9,10 @@ requirements-completed: []
 
 # 53-03 — Actual local authentication and owner-budgeted media comparison
 
+The October23 continuation is recorded separately in
+[the quality follow-up](53-QUALITY-POLISH-2026-10-23.md), including current source/checks and
+new reused-asset candidates. The October22 receipts and exports below remain historical.
+
 The owner approved a shared $5 testing policy allowance and explicitly authorized reading the
 staging provider key into memory without saving or printing it. This scope does not admit a
 production deployment, main-branch merge, registry activation, publishing or a Phase 23/48 replay.
@@ -24,7 +28,7 @@ all video, low-quality image and streaming verbatim-voice request fields; it doe
 quality preset or add a new provider route.
 
 The final caption repair and adapter are explicitly included in the closed golden inventory.
-After the root declares the already installed Node 26.1.1 types, current golden revision is
+At the October22 handoff, after the root declares the already installed Node 26.1.1 types, golden revision is
 `2026-09-11.budgeted-evaluator.d6a19a207c045990dd80a8ebf95db45decf3a0955694d97c3ba91e7bb1afa46a`;
 vertical revision is `ace853904b28c76f71615cdf79fac15254c9981bc0cb3cd8dc4c95685efe09df`.
 The 46/40-case corpora and historical receipts remain unchanged. No paid evaluator was run.

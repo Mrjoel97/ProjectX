@@ -283,7 +283,13 @@ export function ArtifactViewerBody({
     content = (
       <div className={styles.videoCanvas}>
         {/* biome-ignore lint/a11y/useMediaCaption: source media may not have a caption track. */}
-        <video src={artifact.url} controls preload="metadata" aria-label={artifact.title} />
+        <video
+          src={artifact.url}
+          controls
+          playsInline
+          preload="metadata"
+          aria-label={artifact.title}
+        />
       </div>
     );
   else if (artifact.loading)

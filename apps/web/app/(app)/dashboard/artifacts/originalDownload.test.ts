@@ -42,6 +42,33 @@ const response = (bytes = new Uint8Array([37, 80, 68, 70, 0, 255])) =>
   new Response(bytes, { headers: { "content-type": "application/pdf" } });
 
 describe("authorized original downloads", () => {
+  it("keeps original SVG bytes while correcting a generated PNG filename hint", async () => {
+    const bytes = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>');
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(bytes, { headers: { "content-type": "image/svg+xml; charset=utf-8" } }),
+    );
+    await downloadOwnedOriginal(source, "Batch image.png", new AbortController().signal);
+    expect(clicked[0]?.filename).toBe("Batch image.svg");
+    const downloadedBlob = blobs[0];
+    if (!downloadedBlob) throw new Error("Expected original image bytes");
+    expect(Array.from(new Uint8Array(await downloadedBlob.arrayBuffer()))).toEqual(
+      Array.from(bytes),
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    ["Photo.png", "image/jpeg", "Photo.jpg"],
+    ["Photo.jpeg", "image/jpeg", "Photo.jpeg"],
+    ["Report.xlsx", "image/png", "Report.xlsx"],
+    ["Photo.png", "application/octet-stream", "Photo.png"],
+    ["Photo.png", "image/unknown", "Photo.png"],
+  ])("preserves the supplied name unless a known image format corrects its hint: %s/%s", async (filename, mime, expected) => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": mime } }),
+    );
+    await downloadOwnedOriginal(source, filename, new AbortController().signal);
+    expect(clicked[0]?.filename).toBe(expected);
+  });
   it("downloads exact bytes through a local Blob URL without navigating to cross-origin storage", async () => {
     const bytes = new Uint8Array([37, 80, 68, 70, 0, 255]);
     vi.mocked(fetch).mockResolvedValue(response(bytes));

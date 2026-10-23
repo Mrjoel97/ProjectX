@@ -193,7 +193,9 @@ async function downloadOriginal(artifact: ArtifactFixture) {
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
             artifactType(artifact) === "workbook"
           ? ".xlsx"
-          : null;
+          : artifact.mimeType === "image/svg+xml"
+            ? ".svg"
+            : null;
   if (expectedExtension)
     expect(file.suggestedFilename().toLowerCase()).toMatch(
       new RegExp(`\\${expectedExtension}$`, "u"),

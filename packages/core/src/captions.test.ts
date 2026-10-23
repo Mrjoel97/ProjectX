@@ -400,6 +400,191 @@ describe("verified script caption alignment", () => {
   });
 });
 
+describe("verified take readability — regroup words, never manufacture display time", () => {
+  // Actual problematic takes from the paid benchmark, with their provider-relative timestamps.
+  // The zero-length 'comfortable' and 'rhythm' tokens must survive the new partition unchanged.
+  const takes = [
+    {
+      text: "Move what you need within a comfortable reach",
+      words: [
+        word("Move", 0.23999938964843892, 0.35999832153320455),
+        word("what", 0.35999832153320455, 0.5599990844726577),
+        word("you", 0.5599990844726577, 0.7599998474121108),
+        word("need", 0.7599998474121108, 0.940000152587892),
+        word("within", 0.940000152587892, 1.160001373291017),
+        word("a", 1.160001373291017, 1.739999389648439),
+        word("comfortable", 1.739999389648439, 1.739999389648439),
+        word("reach", 1.739999389648439, 2.140000915527345),
+      ],
+      greedyTail: "comfortable reach",
+      greedyTailSeconds: 0.4,
+      balanced: ["Move what you need within", "a comfortable reach"],
+      tailSeconds: 0.98,
+      maxSpeed: 27.18,
+    },
+    {
+      text: "Find a rhythm that fits your own routine",
+      words: [
+        word("Find", 0.18999938964843466, 0.32999877929687216),
+        word("a", 0.32999877929687216, 0.8099983215332003),
+        word("rhythm", 0.8099983215332003, 0.8099983215332003),
+        word("that", 0.8099983215332003, 1.4699981689453097),
+        word("fits", 1.4699981689453097, 1.4699981689453097),
+        word("your", 1.4699981689453097, 1.6899993896484347),
+        word("own", 1.6899993896484347, 2.110001373291013),
+        word("routine", 2.110001373291013, 2.369999694824216),
+      ],
+      greedyTail: "routine",
+      greedyTailSeconds: 0.26,
+      balanced: ["Find a rhythm that fits", "your own routine"],
+      tailSeconds: 0.9,
+      maxSpeed: 18,
+    },
+  ];
+  const input = (take: (typeof takes)[number]) => ({
+    words: take.words,
+    offsetsS: [0],
+    expectedTakeTexts: [take.text],
+    report: {
+      sceneCount: 1,
+      targetDurationS: 5,
+      totalDurationS: 5,
+      actualDurationS: 5,
+      gates: [],
+      scenes: [block({ startS: 0, durationS: 5, leadSilenceS: 0, speechAbsS: 1, speechDurS: 3 })],
+    },
+  });
+  it.each(takes)("removes the fast '$greedyTail' fragment within its own take", (take) => {
+    const a = input(take);
+    const before = structuredClone(a);
+    const greedy = buildCaptionLinesChecked(a);
+    const balanced = buildCaptionLinesChecked({ ...a, balanceReadability: true });
+    expect(greedy.ok && balanced.ok).toBe(true);
+    if (!greedy.ok || !balanced.ok) return;
+    const tail = greedy.value.at(-1);
+    expect(tail?.text).toBe(take.greedyTail);
+    expect((tail?.endS ?? 0) - (tail?.startS ?? 0)).toBeCloseTo(take.greedyTailSeconds, 4);
+    expect(balanced.value.map((line) => line.text)).toEqual(take.balanced);
+    const newTail = balanced.value.at(-1);
+    expect((newTail?.endS ?? 0) - (newTail?.startS ?? 0)).toBeCloseTo(take.tailSeconds, 4);
+    expect(balanced.value.map((line) => line.text).join(" ")).toBe(take.text);
+    expect(balanced.value).toHaveLength(greedy.value.length);
+    expect(balanced.value[0]?.startS).toBe(greedy.value[0]?.startS);
+    expect(newTail?.endS).toBe(tail?.endS);
+    for (const line of balanced.value) {
+      expect(line.text.length).toBeLessThanOrEqual(DEFAULT_LINE_CHARS);
+      expect(line.text.length / (line.endS - line.startS)).toBeLessThan(take.maxSpeed);
+      expect(line.endS - line.startS).toBeGreaterThanOrEqual(0.75);
+      expect(a.words.some((w) => w.start + 1 === line.startS)).toBe(true);
+      expect(a.words.some((w) => w.end + 1 === line.endS)).toBe(true);
+    }
+    expect(a).toEqual(before);
+  });
+
+  it("does not introduce simultaneous cues by cutting through overlapping provider words", () => {
+    const first = takes[0];
+    if (!first) throw new Error("missing test take");
+    const a = input(first);
+    a.words = first.words.map((w) => (w.text === "within" ? { ...w, end: 1.3 } : { ...w }));
+    const before = structuredClone(a);
+    const greedy = buildCaptionLinesChecked(a);
+    const balanced = buildCaptionLinesChecked({ ...a, balanceReadability: true });
+    expect(greedy.ok && balanced.ok).toBe(true);
+    if (!greedy.ok || !balanced.ok) return;
+    expect(greedy.value[0]?.endS).toBe(greedy.value[1]?.startS);
+    // The former optimum cut after 'within' would end at2.3s, while the next cue
+    // starts with 'a' at2.1600013733s. Choose a clean word boundary instead of padding.
+    expect(balanced.value.map((line) => line.text)).toEqual([
+      "Move what you",
+      "need within a comfortable reach",
+    ]);
+    expect(balanced.value[0]?.endS).toBeLessThanOrEqual(balanced.value[1]?.startS ?? 0);
+    expect(balanced.value[0]?.startS).toBe(greedy.value[0]?.startS);
+    expect(balanced.value.at(-1)?.endS).toBe(greedy.value.at(-1)?.endS);
+    expect(balanced.value.map((line) => line.text).join(" ")).toBe(first.text);
+    expect(a).toEqual(before);
+  });
+
+  it("retains the greedy fallback when the character ceiling leaves no clean cut", () => {
+    const first = takes[0];
+    if (!first) throw new Error("missing test take");
+    const a = {
+      ...input(first),
+      words: [word("a".repeat(32), 0.1, 1.3), word("b".repeat(32), 1.2, 2)],
+      expectedTakeTexts: [`${"a".repeat(32)} ${"b".repeat(32)}`],
+    };
+    const greedy = buildCaptionLinesChecked(a);
+    expect(greedy.ok).toBe(true);
+    expect(buildCaptionLinesChecked({ ...a, balanceReadability: true })).toEqual(greedy);
+  });
+
+  it("bounds the search:129-word takes retain the valid linear greedy result", () => {
+    const first = takes[0];
+    if (!first) throw new Error("missing test take");
+    const a = input(first);
+    const words = Array.from({ length: 129 }, (_, i) => word("a", i * 0.1, (i + 1) * 0.1));
+    const long = {
+      ...a,
+      words,
+      expectedTakeTexts: [words.map((w) => w.text).join(" ")],
+      report: {
+        ...a.report,
+        totalDurationS: 20,
+        scenes: [
+          block({ startS: 0, durationS: 20, leadSilenceS: 0, speechAbsS: 0, speechDurS: 13 }),
+        ],
+      },
+    };
+    const original = buildCaptionLinesChecked(long);
+    expect(original.ok).toBe(true);
+    if (!original.ok) return;
+    expect(original.value.at(-1)?.text).toBe("a");
+    expect(buildCaptionLinesChecked({ ...long, balanceReadability: true })).toEqual(original);
+  });
+
+  it("keeps separate takes separate even when joining them would reduce the reading rate", () => {
+    const first = takes[0];
+    if (!first) throw new Error("missing test take");
+    const a = input(first);
+    const result = buildCaptionLinesChecked({
+      ...a,
+      balanceReadability: true,
+      expectedTakeTexts: [first.text, "Wait"],
+      offsetsS: [0, 3.5],
+      words: [...first.words, word("Wait", 3.6, 3.6)],
+      report: {
+        ...a.report,
+        sceneCount: 2,
+        totalDurationS: 10,
+        scenes: [
+          ...a.report.scenes,
+          block({ index: 1, startS: 5, speechAbsS: 6, leadSilenceS: 0, speechDurS: 2 }),
+        ],
+      },
+    });
+    expect(result).toEqual({ ok: false, error: { code: "caption_nonpositive_cue" } });
+  });
+
+  it("preserves legacy grouping without verified scripts and still refuses a script mismatch", () => {
+    const first = takes[0];
+    if (!first) throw new Error("missing test take");
+    const a = input(first);
+    expect(
+      buildCaptionLines({ ...a, expectedTakeTexts: undefined, balanceReadability: true }),
+    ).toEqual(buildCaptionLines({ ...a, expectedTakeTexts: undefined }));
+    expect(
+      buildCaptionLinesChecked({
+        ...a,
+        expectedTakeTexts: ["Different words"],
+        balanceReadability: true,
+      }),
+    ).toEqual({
+      ok: false,
+      error: { code: "caption_expected_text_mismatch" },
+    });
+  });
+});
+
 describe("concatWavTakes — one transcript needs one audio file", () => {
   /** A minimal canonical 16-bit PCM WAV, so the test builds its input the way the landing plane
    *  describes the takes: 24 kHz, mono, 16-bit. */

@@ -1,6 +1,28 @@
 /** Matches the existing upload and rendered-media file policy; independent of PDF preview limits. */
 export const ORIGINAL_DOWNLOAD_MAX_BYTES = 200 * 1024 * 1024;
 
+const imageSuffixes: Record<string, readonly string[]> = {
+  "image/png": ["png"],
+  "image/jpeg": ["jpg", "jpeg"],
+  "image/webp": ["webp"],
+  "image/gif": ["gif"],
+  "image/avif": ["avif"],
+  "image/svg+xml": ["svg"],
+};
+
+/** Media titles can supply a PNG hint even when the original is another image format. */
+function originalFilename(filename: string, contentType: string | null): string {
+  const suffix = /\.(png|jpe?g|webp|gif|avif|svg)$/i.exec(filename);
+  const extension = suffix?.[1];
+  const mime = contentType?.split(";")[0]?.trim().toLowerCase();
+  const formats = mime ? imageSuffixes[mime] : undefined;
+  const canonical = formats?.[0];
+  if (!suffix || !extension || !formats || !canonical) return filename;
+  return formats.includes(extension.toLowerCase())
+    ? filename
+    : `${filename.slice(0, -suffix[0].length)}.${canonical}`;
+}
+
 export class OriginalDownloadError extends Error {
   constructor(public readonly code: "byte_limit" | "unavailable") {
     super(code);
@@ -69,7 +91,7 @@ export async function downloadOwnedOriginal(url: string, filename: string, signa
     signal.throwIfAborted();
     signal.addEventListener("abort", release, { once: true });
     anchor.href = objectUrl;
-    anchor.download = filename;
+    anchor.download = originalFilename(filename, response.headers.get("content-type"));
     anchor.rel = "noopener";
     document.body.appendChild(anchor);
     anchor.click();

@@ -45,12 +45,20 @@ test("no time-stretch filter and no deferred-mode flag survives in the harvested
   const code = SH.split("\n")
     .filter((l) => !l.trimStart().startsWith("#")) // strip comments — the 15.2-07 lesson
     .join("\n");
+  // The one permitted audio clock stamps existing samples; it changes no sample or rate.
+  // Require the complete literal at the filter's end: stripping a prefix would also exempt
+  // an altered expression such as N/SR/TB*2, which WOULD change presentation speed.
+  const withoutSampleClock = code.replaceAll(',asetpts=N/SR/TB"', ',"');
+  expect(code.match(/asetpts=/g)).toHaveLength(1);
+  expect(code).toContain('-af "${LN_FILTER}:print_format=json,asetpts=N/SR/TB"');
   // The two filters are anchored on `=` because an ffmpeg filter is ALWAYS `atempo=1.05` /
   // `setpts=0.9*PTS`, while the bare word appears legitimately inside the script's own error
   // message ("never pad, atempo, or trim speech") — which is the instruction, not the offence.
   // Same reasoning as the rate-knob scan in packages/cost/src/media.test.ts.
   for (const filter of ["atempo=", "setpts="]) {
-    expect(code, `${filter} is a time-stretch filter and must never appear`).not.toContain(filter);
+    expect(withoutSampleClock, `${filter} must not change video or audio speed`).not.toContain(
+      filter,
+    );
   }
   for (const flag of ["--song", "--stepped"]) {
     expect(code, `${flag} is deferred scope and must not be re-added silently`).not.toContain(flag);

@@ -1202,6 +1202,7 @@ export const burnCaptions = internalAction({
       report: report.value,
       offsetsS: job.offsetsS,
       expectedTakeTexts: job.expectedTakeTexts,
+      balanceReadability: true,
     });
     if (!captions.ok) return await fail(captions.error.code);
     const ass = toAss(captions.value);

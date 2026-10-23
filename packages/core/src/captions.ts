@@ -112,6 +112,66 @@ export function groupIntoLines(
   return out;
 }
 
+/** Same cue count and character ceiling as the greedy split, but move whole words between
+ * neighbouring cues to avoid flashes, then minimize the fastest reading rate. Called within ONE verified take.
+ * Every boundary remains an original word boundary; extra display time is never invented. */
+function balanceCaptionLines(
+  words: readonly CaptionLine[],
+  maxChars: number = DEFAULT_LINE_CHARS,
+): CaptionLine[] {
+  const greedy = groupIntoLines(words, maxChars);
+  if (greedy.length < 2 || words.length > 128) return greedy;
+  const speed = (line: CaptionLine): number => line.text.length / (line.endS - line.startS);
+  type Split = { flashes: number; fastest: number; lines: CaptionLine[] };
+  const better = (a: Split, b: Split): boolean =>
+    a.flashes < b.flashes || (a.flashes === b.flashes && a.fastest < b.fastest);
+  let previous = new Map<number, Split>([[0, { flashes: 0, fastest: 0, lines: [] }]]);
+  // ponytail: retain the greedy cue count instead of introducing a configurable subtitle
+  // optimizer. At most128 words enter this bounded search; longer takes retain the linear
+  // greedy path. Slower narration is the upgrade when the whole take itself reads fast.
+  for (let count = 1; count <= greedy.length; count++) {
+    const next = new Map<number, Split>();
+    for (const [start, split] of previous) {
+      let text = "";
+      let clamped = false;
+      for (let end = start; end < words.length; end++) {
+        const first = words[start];
+        const last = words[end];
+        if (!first || !last) break;
+        text = text.length === 0 ? last.text : `${text} ${last.text}`;
+        if (text.length > maxChars && end > start) break;
+        clamped ||= last.clamped === true;
+        const line: CaptionLine = {
+          startS: first.startS,
+          endS: last.endS,
+          text,
+          ...(clamped ? { clamped: true as const } : {}),
+        };
+        if (line.endS <= line.startS || assTime(line.endS) === assTime(line.startS)) continue;
+        // STT word ranges may overlap despite monotonic starts/ends. A new cut must not
+        // turn that overlap into simultaneous cues; keep the original endpoints instead.
+        const following = words[end + 1];
+        if (following && line.endS > following.startS) continue;
+        const candidate = {
+          flashes: split.flashes + (line.endS - line.startS < 0.75 ? 1 : 0),
+          fastest: Math.max(split.fastest, speed(line)),
+          lines: [...split.lines, line],
+        };
+        const existing = next.get(end + 1);
+        if (!existing || better(candidate, existing)) next.set(end + 1, candidate);
+      }
+    }
+    previous = next;
+  }
+  const balanced = previous.get(words.length);
+  const original = {
+    flashes: greedy.filter((line) => line.endS - line.startS < 0.75).length,
+    fastest: Math.max(...greedy.map(speed)),
+    lines: greedy,
+  };
+  return balanced && better(balanced, original) ? balanced.lines : greedy;
+}
+
 // ── the .ass file ───────────────────────────────────────────────────────────────────────────────
 
 /** `H:MM:SS.cc` — centiseconds, exactly two digits, which is the only time format libass accepts
@@ -367,6 +427,8 @@ type CaptionBuildArgs = {
   maxChars?: number;
   /** Exact submitted scripts in narrated ordinal order; never an unverified edited deck. */
   expectedTakeTexts?: readonly string[];
+  /** Rebalance whole words within verified takes; preserve cue count, width and word times. */
+  balanceReadability?: boolean;
 };
 export type CaptionBuildError = {
   code:
@@ -480,7 +542,12 @@ function captionLinesInner(
     // A line may run past its own scene but never into the next line — the same bound the
     // assembler enforces on the audio, applied to the captions so the two cannot disagree.
     const bound = narrated[ordinal + 1]?.speechAbsS ?? a.report.totalDurationS;
-    out.push(...groupIntoLines(rebaseWords(inTake, scene, bound), a.maxChars));
+    const rebased = rebaseWords(inTake, scene, bound);
+    out.push(
+      ...(wordsByTake && a.balanceReadability
+        ? balanceCaptionLines(rebased, a.maxChars)
+        : groupIntoLines(rebased, a.maxChars)),
+    );
   }
   return out.sort((l, r) => l.startS - r.startS);
 }

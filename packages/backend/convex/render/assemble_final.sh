@@ -68,7 +68,8 @@
 #     a deck simply using more silent scenes.
 #   * LEVEL LAW: voice is always 1.0; the clips' own diegetic SFX sit under it at 0.12
 #     (--sfx-vol, hard-clamped ≤ 0.20); the music bed is pinned at MUSIC_TP (below, NOT settable
-#     by the caller); final two-pass LINEAR loudnorm at -16 LUFS.
+#     by the caller); final loudnorm targets -16 LUFS, preferring linear gain when feasible.
+#     The sidecar reports the actual normalization mode and final 48 kHz audio rate.
 #   * An assembly.json SIDECAR is written last. A final video without one was hand-assembled.
 #
 # ── THE MUSIC BED (--music SLUG) ──────────────────────────────────────────────────────────────
@@ -674,21 +675,53 @@ if [[ "$NTAKE" -gt 0 ]]; then
 fi
 
 echo "[4/4] finalize -> $OUT" >&2
-# Two-pass LINEAR loudnorm: ONE constant gain for the whole file, so the voice/SFX ratio set above
-# is PRESERVED. Single-pass dynamic loudnorm pumps quiet SFX-only stretches up toward the voice.
+# Prefer two-pass LINEAR gain to preserve the voice/SFX ratio. FFmpeg can still select dynamic
+# normalization when peak/range constraints prevent linear gain, even with linear=true. Read its
+# actual second-pass statistics rather than claiming the requested mode ran. Dynamic loudnorm
+# upsamples internally; pin the encoded AAC rate so that cannot select a different delivery rate.
 ln2_args() {
   ffmpeg -hide_banner -i "$1" -af "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json" -f null - 2>&1 \
   | awk '/"input_i"/{i=$3}/"input_tp"/{t=$3}/"input_lra"/{l=$3}/"input_thresh"/{h=$3}/"target_offset"/{o=$3}
          {gsub(/[",]/,"",i);gsub(/[",]/,"",t);gsub(/[",]/,"",l);gsub(/[",]/,"",h);gsub(/[",]/,"",o)}
          END{printf "measured_I=%s:measured_TP=%s:measured_LRA=%s:measured_thresh=%s:offset=%s", i,t,l,h,o}'
 }
-LNARGS="$(ln2_args "$VOTRACK")"
-if [[ "$LNARGS" == *measured_I=-* ]]; then
-  ffmpeg -y -loglevel error -i "$VOTRACK" -af "loudnorm=I=-16:TP=-1.5:LRA=11:${LNARGS}:linear=true" -c:v copy -c:a aac -b:a 192k "$OUT"
+NORMALIZATION_MODE="none"
+NORMALIZATION_GATE="silent_audio_no_normalization"
+if [[ "$NTAKE" -eq 0 && "$NDIEG" -eq 0 && -z "$MUSICWAV" ]]; then
+  # Deliberate silence has no loudness to normalize. Keep its full-length track, without
+  # inventing a linear/dynamic mode from nonfinite loudness measurements.
+  ffmpeg -y -loglevel error -i "$VOTRACK" -c:v copy -c:a aac -b:a 192k -ar 48000 "$OUT"
 else
-  echo "WARN: loudness measurement failed — falling back to single-pass loudnorm." >&2
-  ffmpeg -y -loglevel error -i "$VOTRACK" -af "loudnorm=I=-16:TP=-1.5:LRA=11" -c:v copy -c:a aac -b:a 192k "$OUT"
+  LNARGS="$(ln2_args "$VOTRACK")" || LNARGS=""
+  if [[ "$LNARGS" == *measured_I=-* && "$LNARGS" != *inf* && "$LNARGS" != *nan* ]]; then
+    LN_FILTER="loudnorm=I=-16:TP=-1.5:LRA=11:${LNARGS}:linear=true"
+  else
+    echo "WARN: loudness measurement failed — falling back to single-pass loudnorm." >&2
+    LN_FILTER="loudnorm=I=-16:TP=-1.5:LRA=11"
+  fi
+  LN_STATS="$TMP/final-loudnorm.log"
+  # Dynamic loudnorm can emit an end-buffer PTS jump despite unchanged samples. Count the
+  # consumed samples to stamp a continuous audio clock; do not insert/drop/stretch any sample.
+  if ! ffmpeg -y -hide_banner -nostats -loglevel info -i "$VOTRACK" \
+    -af "${LN_FILTER}:print_format=json,asetpts=N/SR/TB" -c:v copy -c:a aac -b:a 192k -ar 48000 "$OUT" 2>"$LN_STATS"; then
+    cat "$LN_STATS" >&2; exit 1
+  fi
+  # Input/container metadata also reaches stderr. Only the filter's own terminal JSON object
+  # can certify its mode; require exactly one object/verdict, never a matching metadata line.
+  NORMALIZATION_MODE="$(awk '
+    /^\[Parsed_loudnorm_[0-9]+ @ [^]]+\][[:space:]]*$/ { tag=1; next }
+    tag && /^[[:space:]]*\{[[:space:]]*$/ { active=1; tag=0; next }
+    active && /"normalization_type"/ { mode=$3; gsub(/[",]/,"",mode); verdicts++ }
+    active && /^[[:space:]]*\}/ { objects++; active=0 }
+    !active { tag=0 }
+    END { if(objects==1 && verdicts==1) print mode }' "$LN_STATS")"
+  case "$NORMALIZATION_MODE" in
+    linear|dynamic) NORMALIZATION_GATE="${NORMALIZATION_MODE}_loudnorm_-16" ;;
+    *) echo "ERROR: final loudness statistics missing or invalid — do NOT deliver." >&2; exit 1 ;;
+  esac
 fi
+AUDIO_RATE="$(ffprobe -v error -select_streams a:0 -show_entries stream=sample_rate -of csv=p=0 "$OUT" | head -1)"
+[[ "$AUDIO_RATE" == "48000" ]] || { echo "ERROR: final audio rate is not 48000 Hz — do NOT deliver." >&2; exit 1; }
 
 # The fixed-length guarantee, asserted on the OUTPUT against the DECLARED TARGET: 0.5s, not 1s.
 # The old tolerance was sized for clips whose length was whatever the provider returned. Every
@@ -722,8 +755,8 @@ SIDE="${OUT}.assembly.json"
   # whose bed was missing from the snapshot says "none" here, which is the whole reason the
   # degrade path is not silent. No new entry in `gates`: the bed is not separately asserted, and
   # claiming a gate this script does not run is the one thing a proof plane must never do.
-  printf '{"script":"assemble_final.sh","out":"%s","scene_count":%d,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"music":"%s","card_bg":"%s","gates":["speech_fits_the_reel","no_overlapping_lines","clip_covers_window","speech_centred","no_time_stretch","narration_every_narrated_span","master_audio_timeline","linear_loudnorm_-16","duration_within_0.5s","full_decode"],"scenes":[' \
-    "$(basename "$OUT")" "$SCENES" "$TARGET" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$SFXVOL" "$MUSIC_USED" "$CARD_BG"
+  printf '{"script":"assemble_final.sh","out":"%s","scene_count":%d,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"music":"%s","card_bg":"%s","audio_sample_rate_hz":%s,"normalization_mode":"%s","gates":["speech_fits_the_reel","no_overlapping_lines","clip_covers_window","speech_centred","no_time_stretch","narration_every_narrated_span","master_audio_timeline","%s","duration_within_0.5s","full_decode"],"scenes":[' \
+    "$(basename "$OUT")" "$SCENES" "$TARGET" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$SFXVOL" "$MUSIC_USED" "$CARD_BG" "$AUDIO_RATE" "$NORMALIZATION_MODE" "$NORMALIZATION_GATE"
   for ((i=0;i<SCENES;i++)); do printf '%s%s' "${PBJSON[i]}" "$([[ $i -lt $((SCENES-1)) ]] && echo ,)"; done
   printf '],"ts":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$SIDE"
