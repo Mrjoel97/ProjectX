@@ -562,8 +562,8 @@ test("ordinary agent start tool reaches the same authenticated public start and 
   const tools = buildManagedServiceTools(ctx, String(a), "trusted-attended-root");
   const tool = tools.startSocialService;
   if (!tool?.execute) throw new Error("MISSING_START_TOOL");
-  const first = await tool.execute({}, { toolCallId: "first", messages: [] });
-  const duplicate = await tool.execute({}, { toolCallId: "again", messages: [] });
+  const first = await tool.execute({}, { toolCallId: "first", messages: [], context: {} });
+  const duplicate = await tool.execute({}, { toolCallId: "again", messages: [], context: {} });
   expect(first).toMatchObject({ publicationRequiresReview: true, existing: false });
   expect(duplicate).toMatchObject({ existing: true });
   const runs = await t.run((ctx) => ctx.db.query("managedServiceRuns").collect());

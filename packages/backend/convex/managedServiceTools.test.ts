@@ -41,7 +41,7 @@ function fixture(userId: string | null = "tenant-a") {
   const execute = async (name: keyof typeof tools) => {
     const definition = tools[name];
     if (!definition?.execute) throw new Error("tool_absent");
-    return definition.execute({}, { toolCallId: name, messages: [] });
+    return definition.execute({}, { toolCallId: name, messages: [], context: {} });
   };
   return { ctx, tools, execute, runQuery, runAction, config };
 }
