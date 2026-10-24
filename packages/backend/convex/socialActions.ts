@@ -79,16 +79,24 @@ async function open(
   );
 }
 function callbackUrl(provider: SocialProvider) {
-  if (provider === "youtube" && process.env.YOUTUBE_OAUTH_REDIRECT_URI !== undefined) {
-    // Only this owned production callback is permitted. The default isolated Convex
-    // callback remains unchanged when the override is absent; blank is a refusal.
-    const redirect = process.env.YOUTUBE_OAUTH_REDIRECT_URI;
+  const redirect =
+    provider === "youtube"
+      ? process.env.YOUTUBE_OAUTH_REDIRECT_URI
+      : provider === "tiktok"
+        ? process.env.TIKTOK_OAUTH_REDIRECT_URI
+        : undefined;
+  if (redirect !== undefined) {
+    // Closed owned-origin pairs only. An absent override preserves isolated Convex
+    // callbacks; blank, cross-environment and noncanonical overrides are refused.
     const site = process.env.SITE_URL;
-    if (
-      redirect !== "https://www.pikar-ai.com/social/youtube/callback" ||
-      (site !== "https://www.pikar-ai.com" && site !== "https://www.pikar-ai.com/")
-    )
-      throw new Error("SOCIAL_NOT_CONFIGURED");
+    const review =
+      (site === "https://review.pikar-ai.com" || site === "https://review.pikar-ai.com/") &&
+      redirect === `https://review.pikar-ai.com/social/${provider}/callback`;
+    const productionYoutube =
+      provider === "youtube" &&
+      (site === "https://www.pikar-ai.com" || site === "https://www.pikar-ai.com/") &&
+      redirect === "https://www.pikar-ai.com/social/youtube/callback";
+    if (!review && !productionYoutube) throw new Error("SOCIAL_NOT_CONFIGURED");
     return redirect;
   }
   const origin = new URL(process.env.CONVEX_SITE_URL ?? "");

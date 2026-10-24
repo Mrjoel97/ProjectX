@@ -223,6 +223,12 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
       "Direct TikTok token exchange/refresh and authenticated webhook handling are unavailable.",
   },
   {
+    name: "TIKTOK_OAUTH_REDIRECT_URI",
+    tier: "feature",
+    whatBreaks:
+      "Optional exact review-domain TikTok callback. Absent keeps the isolated Convex callback; an explicit invalid or mismatched-origin value blocks consent and token exchange.",
+  },
+  {
     name: "TIKTOK_MEDIA_URL_PREFIX",
     tier: "feature",
     whatBreaks:

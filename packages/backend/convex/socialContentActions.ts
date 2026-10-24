@@ -480,8 +480,14 @@ export const publishPost = internalAction({
           throw new Error("SOCIAL_TIKTOK_CREATOR_SETTINGS_CHANGED");
         if (mp4Duration(new Uint8Array(await blob!.arrayBuffer())) > info.maxDurationSeconds)
           throw new Error("SOCIAL_TIKTOK_DURATION");
-        const prefix = process.env.TIKTOK_MEDIA_URL_PREFIX,
-          expected = `${process.env.CONVEX_SITE_URL}/social/media/`;
+        const prefix = process.env.TIKTOK_MEDIA_URL_PREFIX;
+        const reviewPrefix = "https://review.pikar-ai.com/social/media/";
+        const site = process.env.SITE_URL;
+        const expected =
+          prefix === reviewPrefix &&
+          (site === "https://review.pikar-ai.com" || site === "https://review.pikar-ai.com/")
+            ? reviewPrefix
+            : `${process.env.CONVEX_SITE_URL}/social/media/`;
         if (prefix !== expected) throw new Error("SOCIAL_MEDIA_DOMAIN_NOT_VERIFIED");
         const ticket = socialNonce();
         phase = "tiktok_ticket";

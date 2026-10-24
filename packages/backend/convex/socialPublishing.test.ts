@@ -606,10 +606,15 @@ test("TikTok refuses video publishing without the exact verified provider-pull p
   expect(fetcher).toHaveBeenCalledTimes(1);
   expect((await h.owner.query(api.socialPublishing.posts, {}))[0]?.status).toBe("failed");
 });
-test("TikTok uses PULL_FROM_URL with an opaque expiring receipt and no FILE_UPLOAD", async () => {
+test.each([
+  ["https://test.convex.site", undefined],
+  ["https://review.pikar-ai.com", "https://review.pikar-ai.com"],
+  ["https://review.pikar-ai.com", "https://review.pikar-ai.com/"],
+] as const)("TikTok uses %s PULL_FROM_URL with the same opaque receipt and tenant/expiry/revocation fences", async (mediaOrigin, site) => {
   const h = await videoPost("tiktok");
   vi.stubEnv("CONVEX_SITE_URL", "https://test.convex.site");
-  vi.stubEnv("TIKTOK_MEDIA_URL_PREFIX", "https://test.convex.site/social/media/");
+  vi.stubEnv("SITE_URL", site);
+  vi.stubEnv("TIKTOK_MEDIA_URL_PREFIX", mediaOrigin + "/social/media/");
   let mediaUrl = "";
   const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     if (String(input).includes("creator_info"))
@@ -647,7 +652,7 @@ test("TikTok uses PULL_FROM_URL with an opaque expiring receipt and no FILE_UPLO
     status: "processing",
     providerPostId: "tt-publish-1",
   });
-  expect(new URL(mediaUrl).origin).toBe("https://test.convex.site");
+  expect(new URL(mediaUrl).origin).toBe(mediaOrigin);
   expect(new URL(mediaUrl).pathname).toBe("/social/media/video");
   const mediaPath = new URL(mediaUrl).pathname + new URL(mediaUrl).search;
   const result = await h.t.fetch(mediaPath);
@@ -1005,4 +1010,42 @@ test("refresh removes revoked YouTube publishing scope from persisted status and
   await expect(
     h.owner.mutation(api.socialPublishing.approvePost, { postId: h.postId, revision: 1 }),
   ).rejects.toThrow("SOCIAL_PERMISSION_REQUIRED");
+});
+
+test.each([
+  [undefined, "https://review.pikar-ai.com/social/media/"],
+  ["https://www.pikar-ai.com", "https://review.pikar-ai.com/social/media/"],
+  ["https://review.pikar-ai.com.evil.example", "https://review.pikar-ai.com/social/media/"],
+  ["https://review.pikar-ai.com/path", "https://review.pikar-ai.com/social/media/"],
+  ["https://review.pikar-ai.com", "https://evil.example/social/media/"],
+  ["https://review.pikar-ai.com", "https://www.pikar-ai.com/social/media/"],
+  ["https://review.pikar-ai.com", "https://review.pikar-ai.com/social/media"],
+  ["https://review.pikar-ai.com", "https://review.pikar-ai.com/social/media/?x=1"],
+  ["https://review.pikar-ai.com", "https://user@review.pikar-ai.com/social/media/"],
+  ["https://review.pikar-ai.com", "https://review.pikar-ai.com:443/social/media/"],
+] as const)("TikTok refuses mismatched review media prefix %s %s before issuing a ticket or publishing", async (site, prefix) => {
+  const h = await videoPost("tiktok");
+  vi.stubEnv("CONVEX_SITE_URL", "https://test.convex.site");
+  vi.stubEnv("SITE_URL", site);
+  vi.stubEnv("TIKTOK_MEDIA_URL_PREFIX", prefix);
+  const fetcher = vi.fn(async () =>
+    Response.json({
+      error: { code: "ok" },
+      data: {
+        creator_nickname: "Video account",
+        privacy_level_options: ["SELF_ONLY"],
+        max_video_post_duration_sec: 60,
+      },
+    }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  await h.t.action(internal.socialContentActions.publishPost, {
+    tenantId: h.tenantId,
+    postId: h.postId,
+  });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  const post = await h.t.run((ctx) => ctx.db.get(h.postId));
+  expect(post?.status).toBe("failed");
+  expect(post?.mediaTicketHash).toBeUndefined();
+  expect(post?.providerPostId).toBeUndefined();
 });
