@@ -138,15 +138,23 @@ test("free simulation admits exactly twenty hundred-dollar customers and refuses
   await t.run(async (ctx) => {
     for (let customer = 0; customer < 20; customer += 1) {
       const key = `beta_budget_${customer}`;
-      expect((await rateLimiter.check(ctx, "mediaSpendCents", { key, count: 10_000 })).ok).toBe(true);
-      expect((await rateLimiter.check(ctx, "deploymentMediaSpendCents", { count: 10_000 })).ok).toBe(true);
+      expect((await rateLimiter.check(ctx, "mediaSpendCents", { key, count: 10_000 })).ok).toBe(
+        true,
+      );
+      expect(
+        (await rateLimiter.check(ctx, "deploymentMediaSpendCents", { count: 10_000 })).ok,
+      ).toBe(true);
       await rateLimiter.limit(ctx, "mediaSpendCents", { key, count: 10_000, reserve: true });
       await rateLimiter.limit(ctx, "deploymentMediaSpendCents", { count: 10_000, reserve: true });
       expect((await rateLimiter.check(ctx, "mediaSpendCents", { key, count: 1 })).ok).toBe(false);
     }
     expect((await rateLimiter.getValue(ctx, "deploymentMediaSpendCents")).value).toBe(0);
-    expect((await rateLimiter.check(ctx, "deploymentMediaSpendCents", { count: 1 })).ok).toBe(false);
-    expect((await rateLimiter.check(ctx, "mediaSpendCents", { key: "beta_budget_21", count: 1 })).ok).toBe(true);
+    expect((await rateLimiter.check(ctx, "deploymentMediaSpendCents", { count: 1 })).ok).toBe(
+      false,
+    );
+    expect(
+      (await rateLimiter.check(ctx, "mediaSpendCents", { key: "beta_budget_21", count: 1 })).ok,
+    ).toBe(true);
   });
   expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
   expect(await t.run((ctx) => ctx.db.query("spendEvents").collect())).toHaveLength(0);
