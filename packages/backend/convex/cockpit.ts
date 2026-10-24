@@ -56,6 +56,7 @@ import { internalMutation } from "./lib/tenantLifecycle";
 // the same serializable transaction as the proposed -> approved CAS. See its doc comment.
 import {
   deckOf,
+  nativeReelReviewRefusal,
   type ReserveRefusal,
   type ReserveResult,
   reserveJobInner,
@@ -1244,10 +1245,14 @@ async function armOrPublishChildren(
 }
 
 export const executePlan = tenantMutation({
-  args: { planId: v.id("plans") },
+  args: {
+    planId: v.id("plans"),
+    expectedReviewHash: v.optional(v.string()),
+    maxCostCents: v.optional(v.number()),
+  },
   handler: async (
     ctx,
-    { planId },
+    { planId, expectedReviewHash, maxCostCents },
   ): Promise<
     // 19-05: `withheld` names the suppressed addresses this approve DROPPED. A partial send is
     // still `ok: true` — the user must be told who was left out, not stopped from mailing the rest.
@@ -1278,6 +1283,8 @@ export const executePlan = tenantMutation({
           | "all_recipients_suppressed"
           | "too_many_recipients"
           | ReserveRefusal
+          | "review_changed"
+          | "over_reviewed_cost"
           // 2026-08-10: the finance_write arm's two refusals — `applyFinanceClaims` RETURNS them
           // rather than throwing (its own doc comment explains why), so this dispatcher's ONLY job
           // is to pass the reason through unmodified to the card. Only bugs throw.
@@ -1294,6 +1301,13 @@ export const executePlan = tenantMutation({
     // Idempotent no-op (double-approve): only "proposed" proceeds. Convex mutations are
     // serializable, so of two concurrent approves exactly one flips the status and seeds/starts.
     if (plan.status !== "proposed") return { ok: true, alreadyStarted: true };
+    if (plan.kind === "media" && plan.mediaAudioMode === "native") {
+      const refusal = await nativeReelReviewRefusal(ctx, plan, {
+        expectedReviewHash,
+        maxCostCents,
+      });
+      if (refusal) return { ok: false, reason: refusal };
+    }
 
     // REVW-02 fail-closed: a plan escalated past MAX_REGENERATE (proposeEmailPlan) can NEVER be
     // approved/sent — the cockpit mirror of the pipeline unapproved-send guard (07-03). Sibling early

@@ -97,6 +97,52 @@ test("only the explicit approval click reserves generation against the displayed
   }
 });
 
+test("the conversation asks for an exact one-task daily increase and browsing spends nothing", async () => {
+  state.campaigns = [
+    { ...fixture(), dailyRemainingCents: 10, dailyLimitCents: 10000, dailyWindowStartMs: 1234 },
+  ];
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  try {
+    await act(async () =>
+      root.render(<MediaCampaign threadId="current-thread" budgetRequestsOnly />),
+    );
+    expect(container.textContent).toContain("Approve an extra $0.10 for this task?");
+    expect(container.textContent).toContain("$100.00 daily limit stays unchanged");
+    expect(state.mutations).toEqual([]);
+    const approve = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Approve extra $0.10 for this task",
+    );
+    expect(approve).toBeTruthy();
+    await act(async () => approve?.click());
+    expect(state.mutations).toEqual([
+      {
+        name: "mediaCampaign:approve",
+        args: {
+          campaignId: "campaign",
+          expectedUpdatedAt: 100,
+          expectedReviewHash: "review-hash",
+          maxCostCents: 100,
+          approvedDailyIncreaseCents: 10,
+          expectedDailyWindowStartMs: 1234,
+        },
+      },
+    ]);
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
+test("ordinary under-limit batches do not add a budget question to the conversation", () => {
+  state.campaigns = [
+    { ...fixture(), dailyRemainingCents: 1000, dailyLimitCents: 1000, dailyWindowStartMs: 1234 },
+  ];
+  const html = renderToStaticMarkup(<MediaCampaign threadId="current-thread" budgetRequestsOnly />);
+  expect(html).not.toContain("Product launch");
+  expect(html).not.toContain("Approve extra");
+  expect(state.mutations).toEqual([]);
+});
+
 test("a completed image mints one owned URL only when its download is requested", async () => {
   state.campaigns = [fixture("complete")];
   const container = document.createElement("div");

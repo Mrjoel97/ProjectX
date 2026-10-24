@@ -22,6 +22,8 @@
 
 > Last verified: 2026-10-17 — regenerated the native evaluator fingerprint after generated-file lifecycle ownership changed. The six-lane, 40-case corpus and source fixtures are unchanged. Offline fingerprint checks are not new live qualification.
 
+> Last verified: 2026-10-24 — Refreshed shared-source vertical fingerprints after native media/batch approval integration, preserving all40 cases, six lanes and historical receipts. This is mechanical source retirement, not a paid evaluation, pack qualification, registry activation or release. Final source identity is recorded with Phase53 integration verification.
+
 # Optional vertical packs
 
 Last verified: 2026-09-14 — `/admin` now contains a closed owner review console for an exact native

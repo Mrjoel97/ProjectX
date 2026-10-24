@@ -513,7 +513,7 @@ export function parseBlockDeck(body: string): ParsedDeck {
 
 /** The reel lengths a user may ask for. A closed set because each one is a price and a format
  *  decision, not a free parameter. */
-export const TARGET_DURATIONS = [15, 30, 60] as const;
+export const TARGET_DURATIONS = [15, 30, 45, 60] as const;
 export type TargetDuration = (typeof TARGET_DURATIONS)[number];
 
 /** Where a scene's pixels come from. A CLOSED set, and unlike `SHOT_TYPES` every member is

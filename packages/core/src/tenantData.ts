@@ -315,7 +315,13 @@ export function deletableTables(): readonly DeletableTenantTable[] {
  */
 export const STORAGE_ID_FIELDS = {
   uploadReceipts: ["storageId"],
-  plans: ["renderStorageId", "sidecarStorageId", "attachments[].storageId"],
+  plans: [
+    "renderStorageId",
+    "sidecarStorageId",
+    "nativeCaptionAudioStorageId",
+    "nativeCaptionRenderStorageId",
+    "attachments[].storageId",
+  ],
   attachments: ["storageId"],
   intakeArtifacts: ["storageId"],
   vaultDocuments: ["storageId", "transcriptionStorageId"],

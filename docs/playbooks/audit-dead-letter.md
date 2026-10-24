@@ -25,6 +25,8 @@
 
 > Last verified: 2026-10-15 — erasure now retains a durable opaque identity fence (ADR-055) and blocks public admission, application writes and tenant-bound component writes during and after deletion. Append-only audit/global metadata and cleanup deletes remain permitted. Reset-session fences expire after issued JWT lifetime; erasure fences persist to deny delayed workers. No business content or credentials are retained in the fence.
 
+> Last verified: 2026-10-24 — Native caption PCM and source-film references are included in shared storage discovery for export/erasure. Media task-increase audit decisions contain campaign references, integer cents, window and counts only; no prompts, narration or product references enter the immutable audit payload. Existing append-only audit and financial history remain unchanged. Runtime/hosted qualification boundaries are recorded in ADR-065/066.
+
 # Playbook: Audit Log & Dead-Letter Pipeline
 
 Last verified: 2026-10-15 — notification reads are bounded: legacy list returns at most 100 unread plus 100 read rows; unreadWindow returns the newest 100 unread with a truncation flag. The UI labels partial results; dismissing a reviewed item reveals an older item reactively. The tenant/read/createdAt index preserves ordering without whole-tenant collection. Cross-tenant dismissal still rejects.

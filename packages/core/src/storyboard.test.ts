@@ -390,31 +390,13 @@ describe("media-director.md round trip — the body's worked answer survives its
     }
   });
 
-  it("no deck is all-generated, and at least one SPENDS a clip", () => {
-    // Not a style note — but the REASON changed on 2026-08-30 and the old one was arithmetic.
-    // It used to be that every member of GENERATED_CLIP_SECONDS was a multiple of 4, so an
-    // all-generated deck could not sum to 15 or 30 at all. On grok's 1..15 grid it can, and cheaply
-    // enough to pass the job cap ($2.10 at 30 s) — so what keeps this true is now
-    // `MEDIA_GENERATED_SECONDS_CAP` in `@pikar/cost`, a code-owned ceiling of 12 generated seconds
-    // per reservation, asserted there against this same body (ADR-027). The "at least one" half is
-    // per-ANSWER rather than per-deck: a stills-and-cards concept costing a fraction of its sibling
-    // is the cost lever the body teaches, not a gap.
+  it("native worked examples use generated clips throughout, with different shot direction", () => {
     for (const r of decks())
-      expect(r.scenes.some((s) => s.visual !== "generated_video")).toBe(true);
-    expect(decks().some((r) => r.scenes.some((s) => s.visual === "generated_video"))).toBe(true);
-  });
-
-  it("the two decks are different CONCEPTS — their kind mixes differ", () => {
-    // The testable shadow of "a different angle AND a different visual treatment". Two decks with
-    // the same kinds in the same order are one deck with different words, and the owner's choice
-    // is then a choice between nothing.
+      expect(r.scenes.every((s) => s.visual === "generated_video")).toBe(true);
     const [a, b] = decks();
-    const mix = (r: typeof a) =>
-      (r?.scenes ?? [])
-        .map((s) => s.visual)
-        .sort()
-        .join(",");
-    expect(mix(a)).not.toBe(mix(b));
+    expect(a?.scenes.map((s) => s.prompt).join("\n")).not.toBe(
+      b?.scenes.map((s) => s.prompt).join("\n"),
+    );
   });
 
   it("every scene names what its picture is built from", () => {
@@ -1353,8 +1335,9 @@ describe("parseBrief — guided intake (33-01)", () => {
     expect(parseBrief("BRIEF\nTopic:\nDuration: 30s")).toBeNull();
   });
 
-  it("is NULL on a duration off the 15/30/60 presets — never free entry, never a guess", () => {
-    for (const bad of ["45s", "20", "three", ""]) {
+  it("accepts the new45-second preset and refuses durations outside the closed set", () => {
+    expect(parseBrief("BRIEF\nTopic: A topic\nDuration: 45s")?.durationSeconds).toBe(45);
+    for (const bad of ["46s", "20", "three", ""]) {
       expect(parseBrief(`BRIEF\nTopic: A topic\nDuration: ${bad}`)).toBeNull();
     }
     expect(parseBrief("BRIEF\nTopic: A topic")).toBeNull(); // absent line, same answer

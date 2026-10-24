@@ -401,6 +401,8 @@
     "packages/backend/convex/vaultPresentations"
   ],
   "media.md": [
+    "packages/core/src/mediaBudget",
+    "packages/core/src/nativeMedia",
     "packages/core/src/mediaProviderContract",
     "packages/core/src/productionQuality",
     "packages/backend/convex/reliabilitySweep.ts",

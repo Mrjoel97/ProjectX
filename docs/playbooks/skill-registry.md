@@ -50,6 +50,8 @@
 
 > Last verified: 2026-10-15 — Added foundation-voice registry seed for progressive business interviewing, with draft-only tool authority and explicit human publication. Canonical body is packages/contracts/skills/foundation-voice.md; bundler artifact is foundationVoice.ts. Like existing voice-session it is seeded as an ungated conversation skill; runtime loads fail closed if absent. Feature activation separately requires FOUNDATION_ONBOARDING_ENABLED and live readiness evidence. Existing gated skill activation policy is unchanged.
 
+> Last verified: 2026-10-24 — Canonical media director v9 and its exact derived mirror propose generated-only native30/45/60s product films, deliberate angles/lighting, grounded product identity and consistent written voice/sound direction. Registry retains creative instructions; the pure native helper is only a deterministic provider-content envelope. No registry seed or activation occurred. Written/cited references do not attach product/voice bytes to the provider, and technical tests cannot certify continuity.
+
 # Playbook: Skill Registry (versioned LLM prompts)
 
 > Last verified: 2026-09-14 — the deterministic research-PDF dependency and native vertical

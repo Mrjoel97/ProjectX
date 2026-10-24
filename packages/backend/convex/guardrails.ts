@@ -13,6 +13,7 @@ import {
   type RateLimitConfig,
   RateLimiter,
 } from "@convex-dev/rate-limiter";
+import { DEFAULT_MEDIA_DAILY_BUDGET_CENTS } from "@pikar/core/mediaBudget";
 import { chooseModel } from "@pikar/cost";
 import {
   EVAL_BUDGET_LIFETIME_MS,
@@ -70,17 +71,16 @@ export const DEPLOYMENT_BUDGET_CENTS = envCents(process.env.DEPLOYMENT_BUDGET_CE
 // folding media in would silently shrink every sub-agent envelope by up to 20x.
 //
 // D10 supersedes D4: the reserved unit is the whole JOB (clips + voice + captions STT + render)
-// against MEDIA_JOB_CAP_USD = $3.50, not a per-request cap. $10/day is ~2 full 60 s reels.
-export const MEDIA_DAILY_BUDGET_CENTS = 1_000; // $10/day PER TENANT.
+// against the explicit job policy: $3.50 legacy or $15 native, not a per-request cap.
+export const MEDIA_DAILY_BUDGET_CENTS = DEFAULT_MEDIA_DAILY_BUDGET_CENTS; // $100/day PER TENANT.
 // KEYLESS, and it exists for exactly the reason DEPLOYMENT_BUDGET_CENTS does: per-tenant keying
-// alone makes exposure N x $10, unbounded in N, with the manual kill switch as the only global
-// stop. 10,000 keeps the SAME 10x ratio the LLM ceiling holds over its per-tenant window — one
-// ratio to remember across both rails. Worst-case daily exposure is now $100 media + $50 LLM,
-// across four windows that never share. DO NOT remove this as redundant.
+// alone makes exposure N x $100, unbounded in N, with the manual kill switch as the only global
+// stop. The owner-selected source fallback is $2,000 shared media per day. An explicit existing
+// deployment environment value still wins; source changes do not reset stored limiter balances.
 export const DEPLOYMENT_MEDIA_BUDGET_CENTS = envCents(
   process.env.DEPLOYMENT_MEDIA_BUDGET_CENTS,
-  10_000,
-); // $100/day across ALL tenants.
+  200_000,
+); // $2,000/day across ALL tenants, unless explicitly configured otherwise.
 
 // ── The FOLDER-INGEST rail (Phase 15.3, VALT-06) ──────────────────────────────────────
 //
@@ -91,10 +91,10 @@ export const DEPLOYMENT_MEDIA_BUDGET_CENTS = envCents(
 // half-ingested folder is worse than a refused one, because the agent then grounds on it
 // confidently without knowing what is missing. Separate rails are what make both impossible.
 //
-// $25/day is DELIBERATELY the largest of the three per-tenant windows: a folder upload is a bursty
+// The separate $25/day ingest window covers a folder upload as a bursty
 // one-off onboarding-shaped event, not a daily habit, and the number is calibrated to the scanned-
 // PDF OCR path and to nothing else (~$0.005/page x 50 pages/doc — 15.3-RESEARCH §1.4). Accepted
-// consequence, owner decision: worst-case per-tenant daily exposure rises to $40.
+// consequence, owner decision: combined per-tenant daily policy is $130 ($5 LLM + $100 media + $25 ingest).
 export const INGEST_DAILY_BUDGET_CENTS = 2_500; // $25/day PER TENANT.
 // KEYLESS, for the third time and for the same reason: per-tenant keying alone makes exposure
 // N x $25, unbounded in N. 25,000 holds the SAME 10x ratio both existing rails hold.
@@ -1146,15 +1146,35 @@ export const remainingDailyCents = internalQuery({
  *  plan 20-09's `jobEstimate` must show today's remaining budget beside the estimate. The
  *  `reserveJobInner` / `reserveJob` split, for the same reason. */
 export async function mediaRemainingCentsInner(ctx: QueryCtx, tenantId: string): Promise<number> {
-  const tenant = Math.max(
-    0,
-    (await rateLimiter.getValue(ctx, "mediaSpendCents", { key: tenantId })).value,
-  );
-  const deployment = Math.max(
-    0,
-    (await rateLimiter.getValue(ctx, "deploymentMediaSpendCents")).value,
-  );
-  return Math.min(tenant, deployment);
+  const tenant = await mediaDailyBudgetInner(ctx, tenantId);
+  return Math.min(tenant.dailyRemainingCents, tenant.deploymentRemainingCents);
+}
+
+/** Component getValue returns stored state, not a Date.now-adjusted balance. Advance the fixed
+ * window without writes so a new day never asks for an unnecessary task-specific increase. */
+export async function mediaDailyBudgetInner(
+  ctx: QueryCtx,
+  tenantId: string,
+): Promise<{
+  dailyLimitCents: number;
+  dailyRemainingCents: number;
+  dailyWindowStartMs: number;
+  deploymentRemainingCents: number;
+}> {
+  const [raw, deploymentRaw] = await Promise.all([
+    rateLimiter.getValue(ctx, "mediaSpendCents", { key: tenantId }),
+    rateLimiter.getValue(ctx, "deploymentMediaSpendCents"),
+  ]);
+  const current = calculateRateLimit(raw, raw.config, Date.now());
+  return {
+    dailyLimitCents: MEDIA_DAILY_BUDGET_CENTS,
+    dailyRemainingCents: Math.max(0, Math.floor(current.value)),
+    dailyWindowStartMs: current.ts,
+    deploymentRemainingCents: Math.max(
+      0,
+      Math.floor(calculateRateLimit(deploymentRaw, deploymentRaw.config, Date.now()).value),
+    ),
+  };
 }
 
 export const mediaRemainingCents = internalQuery({

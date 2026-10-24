@@ -3384,7 +3384,7 @@ export function CardList({
       {/* Same footing as SourceCard (ACTN-04 SC#6): createDocument saves and never sends, so a
           creating turn carries no plan row at all — the Output card must not sit under a plan gate. */}
       {!hideArtifacts && <OutputCard threadId={threadId} />}
-      {!hideArtifacts && <MediaCampaign threadId={threadId ?? null} />}
+      <MediaCampaign threadId={threadId ?? null} budgetRequestsOnly={hideArtifacts} />
       {/* Like SourceCard: evaluation happens on advice turns that may carry no plan row, so it
           renders above the plan-status branches and self-reads its own latest-row data. */}
       <EvaluationCard threadId={threadId} />

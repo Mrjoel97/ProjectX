@@ -1,3 +1,5 @@
+> Last verified: 2026-10-24 — Native film review and one-task batch limit increases use explicit content/cost/window-bound human actions in conversation; current media source defaults are100USD/customer/day and2,000USD shared/day. The shared frame-free PDF reader has compact bottom controls and actual-padding mobile fit. Report creation has weighted/zebra tables, repeated headers, safe pagination and folios. Actual local reference reading and a fictional generated report were visually checked; deployment and registry activation remain pending.
+
 > Last verified: 2026-10-24 — Media canvas pricing now names standard Seedance2.0 and its generated duration range4–15s. Clip narration repair retains that provider minimum rather than silently shrinking to2/3s. Native-audio provider evidence is separate from production support; current separate-voice and workspace delivery flows retain their meaning.
 
 > Last verified: 2026-10-23 — Batch collections now expose a click-only Download ready files control. A fresh exact-thread/campaign manifest selects current available originals; queued/failed/unavailable items are disclosed in the ZIP readme. Progress, explicit cancellation, fresh retry and cancellation on scope/unmount are local browser state only. No generation starts from browsing or downloading. Input and complete ZIP output are capped at200MiB; no partial ZIP is saved on failure. Component/native-archive evidence is recorded in the Phase53 continuation; this is not hosted authorization acceptance.
@@ -2492,6 +2494,8 @@
 > `stagingSnapshot` and the migration both call `.unique()` on that index, and `.unique()` THROWS on
 > a duplicate — a second row is a permanently broken lookup, not a cosmetic problem.
 >
+> Last verified: 2026-10-24 — New native films use one Picture & sound stage,30/45/60s choices and exact reviewed-content/cost generation and retry guards. Native stock/still downgrade controls are omitted; older projects retain their readers. Over-daily-limit batch approvals appear in the conversation even when outputs live in workspace tabs, naming the exact task-only increase. No artifact browsing can approve or reserve generation. Shared deployment capacity remains independent; see ADR-065/066 and media.md for verification and qualification limits.
+
 # Playbook: Email Chat Cockpit
 
 > **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this

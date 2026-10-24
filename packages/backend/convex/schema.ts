@@ -1343,6 +1343,13 @@ export default defineSchema({
      *  before standalone images existed. `imagePrompt` is content-plane text: shown to the human,
      *  submitted only after their Generate click, and never copied to audit/telemetry rows. */
     mediaMode: v.optional(v.union(v.literal("reel"), v.literal("image"))),
+    /** Absent historical reels retain separately generated narration and music. */
+    mediaAudioMode: v.optional(v.union(v.literal("native"), v.literal("separate"))),
+    /** Same-render WAV extracted by the native assembly worker for the reserved captions pass. */
+    nativeCaptionAudioStorageId: v.optional(v.id("_storage")),
+    nativeCaptionAudioHash: v.optional(v.string()),
+    nativeCaptionBatchId: v.optional(v.string()),
+    nativeCaptionRenderStorageId: v.optional(v.id("_storage")),
     mediaCampaignId: v.optional(v.id("mediaCampaigns")),
     imagePrompt: v.optional(v.string()),
     /** koda's fixed 9-field art-direction block, parsed, plus the optional music bed. */
@@ -3140,7 +3147,12 @@ export default defineSchema({
     // Exactly what was SUBMITTED — never a provider default. fal's Wan 2.5 defaults to 1080p, so a
     // spec that omits its resolution is an estimate 3x below the invoice.
     spec: v.union(
-      v.object({ kind: v.literal("video"), resolution: v.string(), seconds: v.number() }),
+      v.object({
+        kind: v.literal("video"),
+        resolution: v.string(),
+        seconds: v.number(),
+        generateAudio: v.optional(v.boolean()),
+      }),
       v.object({ kind: v.literal("image"), width: v.number(), height: v.number() }),
       v.object({
         kind: v.literal("tts"),
@@ -3159,6 +3171,7 @@ export default defineSchema({
       }),
     ),
     promptHash: v.string(),
+    nativeAudioHash: v.optional(v.string()),
     status: v.union(
       v.literal("queued"),
       v.literal("submitted"),

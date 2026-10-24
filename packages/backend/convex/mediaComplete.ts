@@ -98,6 +98,7 @@ function repriceUsd(row: Doc<"mediaJobs">, actual: Actual | undefined): number |
       // the tier we submitted and hiding the drift.
       resolution: (actual?.resolution ?? row.spec.resolution) as VideoRes,
       seconds: actual?.seconds ?? row.spec.seconds,
+      ...(row.spec.generateAudio === undefined ? {} : { generateAudio: row.spec.generateAudio }),
     };
   } else if (row.spec.kind === "image") {
     spec = {
@@ -168,7 +169,7 @@ async function maybeStartRender(ctx: MutationCtx, row: Doc<"mediaJobs">): Promis
  * flight. For a deck that still needs every row it bought — every deck the landing path has ever
  * seen — both checks reduce to the original `every(succeeded)`.
  */
-async function latestBatch(
+export async function latestBatch(
   ctx: MutationCtx,
   a: { tenantId: string; planId: Id<"plans">; batchId: string },
 ): Promise<boolean> {
@@ -269,9 +270,22 @@ export async function maybeStartCaptions(
   row: Doc<"mediaJobs">,
   options: { terminalOnly?: boolean } = {},
 ): Promise<void> {
-  if (row.kind !== "tts") return;
+  if (row.kind !== "tts" && row.kind !== "video") return;
   const plan = await ctx.db.get(row.planId);
   if (!plan || plan.captionStatus !== undefined) return; // already started, finished or failed
+  const native = plan.mediaAudioMode === "native";
+  if (native) {
+    if (
+      row.spec.kind !== "video" ||
+      row.spec.generateAudio !== true ||
+      plan.renderStatus !== "rendered" ||
+      !plan.nativeCaptionAudioStorageId ||
+      !plan.nativeCaptionAudioHash ||
+      plan.nativeCaptionBatchId !== row.batchId ||
+      plan.nativeCaptionRenderStorageId !== plan.renderStorageId
+    )
+      return;
+  } else if (row.kind !== "tts") return;
   if (options.terminalOnly && !(await latestBatch(ctx, row))) return;
 
   const siblings = await readMediaBatch(ctx, row.tenantId, row.batchId);
@@ -280,7 +294,12 @@ export async function maybeStartCaptions(
   // behaviour, including its retention rule, stands unchanged for such a deck.
   if (!siblings.some((s) => s.kind === "stt")) return;
 
-  const takes = siblings.filter((s) => s.kind === "tts");
+  const takes = siblings.filter((s) =>
+    native
+      ? s.kind === "video" && s.spec.kind === "video" && s.spec.generateAudio === true
+      : s.kind === "tts",
+  );
+  if (takes.length === 0 || siblings.some((s) => s.planId !== plan._id)) return;
   if (takes.some((s) => s.status === "queued" || s.status === "submitted")) return; // still landing
   if (!takes.every((s) => s.status === "succeeded")) {
     // A missing take is a missing transcript source. Said in words on the plan rather than left as
@@ -336,7 +355,7 @@ export async function maybeBurnCaptions(ctx: MutationCtx, planId: Id<"plans">): 
  *  this landing just made — reading `row.status` here would be reading the status it had on the way
  *  in, which is `submitted` on every path. */
 async function afterCaptionLanding(ctx: MutationCtx, row: Doc<"mediaJobs">): Promise<void> {
-  if (row.kind === "tts") return await maybeStartCaptions(ctx, row);
+  if (row.kind === "tts" || row.kind === "video") return await maybeStartCaptions(ctx, row);
   if (row.kind !== "stt") return;
   const fresh = await ctx.db.get(row._id);
   if (fresh?.status === "succeeded") return await maybeBurnCaptions(ctx, row.planId);

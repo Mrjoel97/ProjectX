@@ -33,7 +33,13 @@ export function PdfDocumentViewer({
   useEffect(() => {
     const element = scroll.current;
     if (!element) return;
-    const resize = () => setWidth(Math.max(200, element.clientWidth - 48));
+    const resize = () => {
+      const spacing = getComputedStyle(element);
+      const horizontalPadding =
+        (Number.parseFloat(spacing.paddingLeft) || 0) +
+        (Number.parseFloat(spacing.paddingRight) || 0);
+      setWidth(Math.max(200, element.clientWidth - horizontalPadding));
+    };
     resize();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resize);
     observer?.observe(element);
@@ -190,65 +196,6 @@ export function PdfDocumentViewer({
   }
   return (
     <section className={styles.pdfViewer} aria-label={`${title} PDF reader`}>
-      <div className={styles.controls} role="toolbar" aria-label="PDF controls">
-        <div className={styles.controlGroup}>
-          <button
-            type="button"
-            aria-label="Previous page"
-            disabled={!pdf || page === 1}
-            onClick={() => move(page - 1)}
-          >
-            ‹
-          </button>
-          <label className={styles.pageField}>
-            Page{" "}
-            <input
-              aria-label="Page number"
-              type="number"
-              min={1}
-              max={pdf?.numPages ?? 1}
-              value={pageInput}
-              disabled={!pdf}
-              onChange={(event) => setPageInput(event.target.value)}
-              onBlur={() => move(Number(pageInput) || 1)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") move(Number(pageInput) || 1);
-              }}
-            />
-          </label>
-          <span className={styles.muted}>of {pdf?.numPages ?? "…"}</span>
-          <button
-            type="button"
-            aria-label="Next page"
-            disabled={!pdf || page === pdf.numPages}
-            onClick={() => move(page + 1)}
-          >
-            ›
-          </button>
-        </div>
-        <div className={styles.controlGroup}>
-          <button
-            type="button"
-            aria-label="Zoom out"
-            disabled={!pdf || zoom <= 0.5}
-            onClick={() => setZoom((value) => Math.max(0.5, value - 0.25))}
-          >
-            −
-          </button>
-          <span className={styles.zoomValue}>{Math.round(zoom * 100)}%</span>
-          <button
-            type="button"
-            aria-label="Zoom in"
-            disabled={!pdf || zoom >= 2}
-            onClick={() => setZoom((value) => Math.min(2, value + 0.25))}
-          >
-            +
-          </button>
-          <button type="button" disabled={!pdf} onClick={() => setZoom(1)}>
-            Fit width
-          </button>
-        </div>
-      </div>
       <div className={styles.pdfScroll} ref={scroll}>
         {error ? (
           <div className={styles.emptyState} role="alert">
@@ -282,6 +229,79 @@ export function PdfDocumentViewer({
         >
           <canvas ref={canvas} aria-label={`Page ${page} of ${pdf?.numPages ?? ""}`} role="img" />
           <div ref={text} className={styles.textLayer} />
+        </div>
+      </div>
+      <div className={styles.pdfControls} role="toolbar" aria-label="PDF controls">
+        <div className={styles.controlGroup}>
+          <button
+            type="button"
+            aria-label="Previous page"
+            disabled={!pdf || page === 1}
+            onClick={() => move(page - 1)}
+          >
+            ‹
+          </button>
+          <label className={styles.pageField}>
+            <span className={styles.screenReaderOnly}>Page</span>
+            <input
+              aria-label="Page number"
+              type="number"
+              min={1}
+              max={pdf?.numPages ?? 1}
+              value={pageInput}
+              disabled={!pdf}
+              onChange={(event) => setPageInput(event.target.value)}
+              onBlur={() => move(Number(pageInput) || 1)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") move(Number(pageInput) || 1);
+              }}
+            />
+          </label>
+          <span className={styles.muted}>/ {pdf?.numPages ?? "…"}</span>
+          <button
+            type="button"
+            aria-label="Next page"
+            disabled={!pdf || page === pdf.numPages}
+            onClick={() => move(page + 1)}
+          >
+            ›
+          </button>
+        </div>
+        <div className={styles.controlGroup}>
+          <button
+            type="button"
+            aria-label="Zoom out"
+            disabled={!pdf || zoom <= 0.5}
+            onClick={() => setZoom((value) => Math.max(0.5, value - 0.25))}
+          >
+            −
+          </button>
+          <span className={styles.zoomValue}>{Math.round(zoom * 100)}%</span>
+          <button
+            type="button"
+            aria-label="Zoom in"
+            disabled={!pdf || zoom >= 2}
+            onClick={() => setZoom((value) => Math.min(2, value + 0.25))}
+          >
+            +
+          </button>
+          <button
+            type="button"
+            aria-label="Fit width"
+            title="Fit width"
+            disabled={!pdf}
+            onClick={() => setZoom(1)}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M4 5v14M20 5v14M5 12h14M8 9l-3 3 3 3M16 9l3 3-3 3"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
         </div>
       </div>
     </section>

@@ -236,9 +236,18 @@ describe("storageIdsIn — every byte reachable from one row", () => {
       storageIdsIn("plans", {
         renderStorageId: "kg_reel",
         sidecarStorageId: "kg_sidecar",
+        nativeCaptionAudioStorageId: "kg_native_audio",
+        nativeCaptionRenderStorageId: "kg_native_render",
         attachments: [{ storageId: "kg_pdf_a" }, { storageId: "kg_pdf_b" }],
       }),
-    ).toEqual(["kg_reel", "kg_sidecar", "kg_pdf_a", "kg_pdf_b"]);
+    ).toEqual([
+      "kg_reel",
+      "kg_sidecar",
+      "kg_native_audio",
+      "kg_native_render",
+      "kg_pdf_a",
+      "kg_pdf_b",
+    ]);
   });
 
   // FAIL-SAFE, and it is the difference between a bad row and a user who cannot delete their

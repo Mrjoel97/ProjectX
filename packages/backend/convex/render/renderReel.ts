@@ -16,7 +16,13 @@
  * `ctx.storage.get`, `ctx.runQuery` and `ctx.runMutation`, all of which the regular action has.
  */
 import { parseAssemblySidecar } from "@pikar/core/assembly";
-import { buildCaptionLinesChecked, toAss } from "@pikar/core/captions";
+import {
+  buildCaptionLinesChecked,
+  buildTimelineCaptionLinesChecked,
+  isNativeCaptionWav,
+  toAss,
+} from "@pikar/core/captions";
+import { SEEDANCE_STANDARD_MODEL } from "@pikar/core/mediaProviderContract";
 import {
   CARD_DEFAULT_BG,
   cardColorsOf,
@@ -39,7 +45,7 @@ import { contentHash } from "./../lib/hash";
 import { currentMediaJobs, readMediaBatch } from "../lib/mediaRead";
 import { internalAction, internalMutation } from "../lib/tenantLifecycle";
 import { requireEnvMedia } from "./../media";
-import { maybeBurnCaptions } from "./../mediaComplete";
+import { latestBatch, maybeBurnCaptions, maybeStartCaptions } from "./../mediaComplete";
 import { startIngest } from "./../vaultIngest";
 
 /** What a finished reel's BYTES are. Drives both `storedMimeType` and the vault CATEGORY —
@@ -99,6 +105,7 @@ type RenderInputs = {
   /** The DECLARED reel length. The scenes must sum to it — asserted here, at the route, and again
    *  inside the script, because each of the three is a cheaper failure than the one after it. */
   targetSeconds: number;
+  nativeAudio?: true;
   scenes: Array<{ kind: "video" | "image" | "card"; seconds: number }>;
   /** An OPAQUE ref the blob route resolves — a `mediaJobs` row for anything that was bought, or a
    *  `vaultDocuments` row for an `uploaded_video` scene, whose bytes were already the tenant's.
@@ -173,6 +180,13 @@ export const batchToRender = internalQuery({
       return { ok: false, reason: "incomplete_blocks" };
     }
     const deck = [...plan.shots].sort((l, r) => l.index - r.index);
+    const native = plan.mediaAudioMode === "native";
+    if (
+      native &&
+      (deck.some((shot) => shot.visual !== "generated_video") ||
+        rows.some((row) => row.kind === "tts" || row.kind === "audio" || row.kind === "image"))
+    )
+      return { ok: false, reason: "incomplete_blocks" };
 
     // 33-04 — a TERMINAL non-success row (failed/blocked, or succeeded with no bytes: the landing
     // plane's own impossible state) refuses the render ONLY while the deck still needs what it was
@@ -284,6 +298,14 @@ export const batchToRender = internalQuery({
       } else {
         if (!slot?.video) return { ok: false, reason: "incomplete_blocks" };
         if (!fresh(slot.video)) return { ok: false, reason: "stale_inputs" };
+        if (
+          native &&
+          (slot.video.model !== SEEDANCE_STANDARD_MODEL ||
+            slot.video.spec.kind !== "video" ||
+            slot.video.spec.generateAudio !== true ||
+            slot.video.spec.seconds !== shot.seconds)
+        )
+          return { ok: false, reason: "stale_inputs" };
         inputs.push({ name: renderInputName("video", i), jobId: slot.video._id });
       }
 
@@ -291,7 +313,7 @@ export const batchToRender = internalQuery({
       // missing take is only a failure for a scene that declared a line. Demanding one at every
       // index — which this did until wave 5 — refuses every deck containing a silent card, which
       // is exactly the deck the rest of this wave exists to make renderable.
-      const wantsVoice = shot.narration.trim() !== "";
+      const wantsVoice = !native && shot.narration.trim() !== "";
       if (wantsVoice && !slot?.tts) return { ok: false, reason: "incomplete_blocks" };
       if (wantsVoice && slot?.tts && !fresh(slot.tts)) {
         return { ok: false, reason: "stale_inputs" };
@@ -332,7 +354,7 @@ export const batchToRender = internalQuery({
     // Unvalidated on purpose at THIS layer — `parseBody` in the route holds the closed set, on the
     // side of the trust boundary where the value is about to become a path. Restating it here
     // would be a third copy whose only distinguishing behaviour is failing earlier and quieter.
-    const music = plan.artDirection?.music as MusicMood | undefined;
+    const music = native ? undefined : (plan.artDirection?.music as MusicMood | undefined);
 
     // 33.1-06: THE BED'S BYTES, if its Openverse row has landed. Newest fresh `audio` row for this
     // plan — it sits at MUSIC_BLOCK_INDEX, outside the deck, so the index guards above never see
@@ -373,6 +395,7 @@ export const batchToRender = internalQuery({
       value: {
         planId,
         targetSeconds,
+        ...(native ? { nativeAudio: true as const } : {}),
         scenes,
         inputs,
         cards,
@@ -456,6 +479,8 @@ export const recordRender = internalMutation({
       v.object({
         ok: v.literal(true),
         renderStorageId: v.id("_storage"),
+        nativeAudioStorageId: v.optional(v.id("_storage")),
+        nativeAudioHash: v.optional(v.string()),
         sidecarStorageId: v.id("_storage"),
         sidecarHash: v.string(),
         sceneCount: v.number(),
@@ -469,10 +494,39 @@ export const recordRender = internalMutation({
           gates: v.array(v.string()),
         }),
       }),
-      v.object({ ok: v.literal(false), reason: v.string() }),
+      v.object({
+        ok: v.literal(false),
+        reason: v.string(),
+        partialStorageIds: v.optional(v.array(v.string())),
+      }),
     ),
   },
   handler: async (ctx, a): Promise<null> => {
+    const currentPlan = await ctx.db.get(a.planId);
+    if (!currentPlan || currentPlan.tenantId !== a.tenantId) return null;
+    if (currentPlan.mediaAudioMode === "native" && !a.result.ok && a.result.partialStorageIds) {
+      const partial = a.result.partialStorageIds.slice(0, 3).flatMap((candidate) => {
+        const id = ctx.db.system.normalizeId("_storage", candidate);
+        return id ? [id] : [];
+      });
+      await deleteOrphanedFinals(ctx, a.planId, partial);
+    }
+    if (currentPlan.mediaAudioMode === "native" && !(await latestBatch(ctx, a))) {
+      const newest = await ctx.db
+        .query("mediaJobs")
+        .withIndex("by_plan_created", (q) => q.eq("tenantId", a.tenantId).eq("planId", a.planId))
+        .order("desc")
+        .first();
+      if (newest || a.result.ok) {
+        if (a.result.ok)
+          await deleteOrphanedFinals(ctx, a.planId, [
+            a.result.renderStorageId,
+            a.result.sidecarStorageId,
+            a.result.nativeAudioStorageId,
+          ]);
+        return null;
+      }
+    }
     if (!a.result.ok) {
       // 33-04 — the ONE automatic retry, a narrow supersession of 20-16's no-retry rule (the
       // playbook carries the dated note). Only a code in the CLOSED transient set, and only while
@@ -530,6 +584,11 @@ export const recordRender = internalMutation({
     // repoint — it becomes deletable only once neither the plan nor the vault doc points at it.
     const before = await ctx.db.get(a.planId);
     const oldFinal = before?.renderStorageId ?? null;
+    if (
+      before?.mediaAudioMode === "native" &&
+      (!a.result.nativeAudioStorageId || !a.result.nativeAudioHash)
+    )
+      throw new Error("Native render requires its exact caption audio source");
     // `renderSummary` rides in the SAME patch as the two storage ids, and both are written only
     // after `parseAssemblySidecar` accepted the bytes. That co-location is what lets `media.reel`
     // treat their presence as proof the sidecar validated, without re-reading the blob.
@@ -541,6 +600,14 @@ export const recordRender = internalMutation({
       ...(before?.status === "canceled" ? {} : { status: "done" as const }),
       renderStatus: "rendered",
       renderStorageId: a.result.renderStorageId,
+      ...(before?.mediaAudioMode === "native"
+        ? {
+            nativeCaptionAudioStorageId: a.result.nativeAudioStorageId,
+            nativeCaptionBatchId: a.batchId,
+            nativeCaptionRenderStorageId: a.result.renderStorageId,
+            nativeCaptionAudioHash: a.result.nativeAudioHash,
+          }
+        : {}),
       sidecarStorageId: a.result.sidecarStorageId,
       sidecarHash: a.result.sidecarHash,
       renderSummary: a.result.summary,
@@ -586,6 +653,13 @@ export const recordRender = internalMutation({
      */
     // THE NARROWED CONDITION (plan 20-17). One `if`, and the comment on `deleteIntermediates` is
     // where the reasoning lives so the two rules read as one decision rather than two.
+    if (before?.mediaAudioMode === "native") {
+      const nativeRows = await readMediaBatch(ctx, a.tenantId, a.batchId);
+      const nativeVideo = nativeRows.find(
+        (row) => row.kind === "video" && row.status === "succeeded",
+      );
+      if (nativeVideo) await maybeStartCaptions(ctx, nativeVideo);
+    }
     if (!(await captionsStillOwed(ctx, a.tenantId, a.batchId))) {
       await deleteIntermediates(ctx, a.tenantId, a.batchId);
     }
@@ -606,7 +680,11 @@ export const recordRender = internalMutation({
     });
     // Repoint plan (the patch above) → repoint vault doc (the save) → delete what nothing
     // references.
-    await deleteOrphanedFinals(ctx, a.planId, [oldFinal, orphanedDoc]);
+    await deleteOrphanedFinals(ctx, a.planId, [
+      oldFinal,
+      orphanedDoc,
+      before?.nativeCaptionAudioStorageId,
+    ]);
     // The reel is published either way. The burn, if one is owed, is triggered from here because
     // the transcript may well have landed while the render was still running.
     await maybeBurnCaptions(ctx, a.planId);
@@ -818,6 +896,8 @@ async function deleteOrphanedFinals(
   const doc = plan?.reelVaultDocId ? await ctx.db.get(plan.reelVaultDocId) : null;
   const live = new Set<string>();
   if (plan?.renderStorageId) live.add(plan.renderStorageId);
+  if (plan?.sidecarStorageId) live.add(plan.sidecarStorageId);
+  if (plan?.nativeCaptionAudioStorageId) live.add(plan.nativeCaptionAudioStorageId);
   if (doc?.storageId) live.add(doc.storageId);
   const seen = new Set<string>();
   for (const id of candidates) {
@@ -832,10 +912,12 @@ type RouteSuccess = {
   ok: true;
   mp4StorageId: string;
   sidecarStorageId: string;
+  audioStorageId?: string;
   renderMs: number;
   gates: string[];
   blockCount: number;
 };
+type RouteFailure = { ok: false; code: string; partialStorageIds?: string[] };
 
 /**
  * Render a reserved, fully-landed batch into ONE finished mp4.
@@ -870,9 +952,14 @@ export const renderReel = internalAction({
       });
       return { ok: false, reason: batch.reason };
     }
-    const { planId, targetSeconds, scenes, inputs, cards, music, musicFile, card } = batch.value;
+    const { planId, targetSeconds, scenes, inputs, cards, music, musicFile, card, nativeAudio } =
+      batch.value;
 
-    await ctx.runMutation(internal.render.renderReel.markRendering, { planId });
+    const marked = await ctx.runMutation(internal.render.renderReel.markRendering, {
+      planId,
+      batchId: a.batchId,
+    });
+    if (marked === false) return { ok: false, reason: "stale_inputs" };
 
     // Single-use, WRITE-ONLY, short-lived. Deliberately weaker than a read URL.
     // ponytail: Convex-minted upload URLs are the shipped file-ingest idiom and are a strictly
@@ -882,6 +969,7 @@ export const renderReel = internalAction({
     const uploadUrls = {
       mp4: await ctx.storage.generateUploadUrl(),
       sidecar: await ctx.storage.generateUploadUrl(),
+      ...(nativeAudio ? { audio: await ctx.storage.generateUploadUrl() } : {}),
     };
 
     /* ponytail: MEDIA_SANDBOX_FIXTURE is the offline seam that keeps this whole path at $0 (the
@@ -891,9 +979,9 @@ export const renderReel = internalAction({
      * hermetic sandbox mock exists. */
     const fixture = process.env.MEDIA_SANDBOX_FIXTURE;
 
-    let outcome: RouteSuccess | { ok: false; code: string };
+    let outcome: RouteSuccess | RouteFailure;
     if (fixture) {
-      outcome = JSON.parse(fixture) as RouteSuccess | { ok: false; code: string };
+      outcome = JSON.parse(fixture) as RouteSuccess | RouteFailure;
     } else {
       // NOTHING FORBIDDEN CROSSES IN. This body is the complete list: no media-provider key, no
       // OPENAI_API_KEY, no Vercel credential, no tenantId, no fal URL, no `storage.getUrl` result,
@@ -913,6 +1001,7 @@ export const renderReel = internalAction({
         body: JSON.stringify({
           renderId: a.batchId,
           targetSeconds,
+          ...(nativeAudio ? { nativeAudio: true } : {}),
           scenes,
           inputs: inputs.map((i) => ({ name: i.name, jobId: i.jobId })),
           cards,
@@ -942,7 +1031,7 @@ export const renderReel = internalAction({
         const parsed: unknown = await response.json();
         outcome =
           parsed !== null && typeof parsed === "object"
-            ? (parsed as RouteSuccess | { ok: false; code: string })
+            ? (parsed as RouteSuccess | RouteFailure)
             : { ok: false, code: "route_bad_response" };
       } catch {
         outcome = { ok: false, code: "route_bad_response" };
@@ -954,7 +1043,17 @@ export const renderReel = internalAction({
         tenantId: a.tenantId,
         planId,
         batchId: a.batchId,
-        result: { ok: false, reason: outcome.code },
+        result: {
+          ok: false,
+          reason: outcome.code,
+          ...(nativeAudio && Array.isArray(outcome.partialStorageIds)
+            ? {
+                partialStorageIds: outcome.partialStorageIds
+                  .filter((id): id is string => typeof id === "string")
+                  .slice(0, 3),
+              }
+            : {}),
+        },
       });
       return { ok: false, reason: outcome.code };
     }
@@ -966,17 +1065,49 @@ export const renderReel = internalAction({
     const sidecarStorageId = outcome.sidecarStorageId as Id<"_storage">;
     const blob = await ctx.storage.get(sidecarStorageId);
     const raw = blob ? await blob.text() : "";
+    const partialStorageIds = nativeAudio
+      ? [
+          outcome.mp4StorageId,
+          outcome.sidecarStorageId,
+          ...(outcome.audioStorageId ? [outcome.audioStorageId] : []),
+        ]
+      : undefined;
     const reparsed = parseAssemblySidecar(raw);
     if (!reparsed.ok) {
       await ctx.runMutation(internal.render.renderReel.recordRender, {
         tenantId: a.tenantId,
         planId,
         batchId: a.batchId,
-        result: { ok: false, reason: "sidecar_rejected_on_return" },
+        result: {
+          ok: false,
+          reason: "sidecar_rejected_on_return",
+          ...(partialStorageIds ? { partialStorageIds } : {}),
+        },
       });
       return { ok: false, reason: "sidecar_rejected_on_return" };
     }
 
+    let nativeAudioHash: string | undefined;
+    if (nativeAudio) {
+      const audio = outcome.audioStorageId
+        ? await ctx.storage.get(outcome.audioStorageId as Id<"_storage">)
+        : null;
+      const bytes = audio ? new Uint8Array(await audio.arrayBuffer()) : null;
+      if (!bytes || !isNativeCaptionWav(bytes, targetSeconds)) {
+        await ctx.runMutation(internal.render.renderReel.recordRender, {
+          tenantId: a.tenantId,
+          planId,
+          batchId: a.batchId,
+          result: {
+            ok: false,
+            reason: "native_caption_audio_invalid",
+            ...(partialStorageIds ? { partialStorageIds } : {}),
+          },
+        });
+        return { ok: false, reason: "native_caption_audio_invalid" };
+      }
+      nativeAudioHash = await contentHash(bytes);
+    }
     await ctx.runMutation(internal.render.renderReel.recordRender, {
       tenantId: a.tenantId,
       planId,
@@ -984,6 +1115,12 @@ export const renderReel = internalAction({
       result: {
         ok: true,
         renderStorageId: outcome.mp4StorageId as Id<"_storage">,
+        ...(nativeAudio
+          ? {
+              nativeAudioStorageId: outcome.audioStorageId as Id<"_storage">,
+              nativeAudioHash,
+            }
+          : {}),
         sidecarStorageId,
         sidecarHash: await contentHash(raw),
         sceneCount: reparsed.value.sceneCount,
@@ -1022,6 +1159,10 @@ export const captionsToBurn = internalQuery({
     batchId: string;
     expectedTakeTexts?: string[];
     alignmentReason?: string;
+    nativeAudio?: true;
+    nativeAudioStorageId?: Id<"_storage">;
+    nativeAudioHash?: string;
+    nativeRenderStorageId?: Id<"_storage">;
   } | null> => {
     const plan = await ctx.db.get(a.planId);
     // The tenant check is HERE, on the row, because this query takes a plan id from an action
@@ -1050,6 +1191,33 @@ export const captionsToBurn = internalQuery({
       rows = await readMediaBatch(ctx, a.tenantId, stt.batchId);
     } catch {
       return { ...inputs, alignmentReason: "caption_batch_invalid" };
+    }
+    if (plan.mediaAudioMode === "native") {
+      const expectedText = [...(plan.shots ?? [])]
+        .sort((left, right) => left.index - right.index)
+        .map((shot) => shot.narration.trim())
+        .filter(Boolean)
+        .join("\n");
+      if (
+        !plan.nativeCaptionAudioStorageId ||
+        !plan.nativeCaptionAudioHash ||
+        plan.nativeCaptionBatchId !== stt.batchId ||
+        plan.nativeCaptionRenderStorageId !== plan.renderStorageId ||
+        stt.nativeAudioHash !== plan.nativeCaptionAudioHash ||
+        stt.promptHash !== (await contentHash(expectedText)) ||
+        plan.captionOffsetsS.length !== 1 ||
+        plan.captionOffsetsS[0] !== 0 ||
+        !expectedText
+      )
+        return { ...inputs, alignmentReason: "caption_native_source_binding_failed" };
+      return {
+        ...inputs,
+        nativeAudio: true,
+        expectedTakeTexts: [expectedText],
+        nativeAudioStorageId: plan.nativeCaptionAudioStorageId,
+        nativeAudioHash: plan.nativeCaptionAudioHash,
+        nativeRenderStorageId: plan.nativeCaptionRenderStorageId,
+      };
     }
     const takes = rows
       .filter((row) => row.kind === "tts" && row.status === "succeeded")
@@ -1094,6 +1262,8 @@ export const recordCaptionBurn = internalMutation({
     tenantId: v.string(),
     planId: v.id("plans"),
     batchId: v.string(),
+    nativeRenderStorageId: v.optional(v.id("_storage")),
+    nativeAudioHash: v.optional(v.string()),
     result: v.union(
       v.object({ ok: v.literal(true), captionedStorageId: v.id("_storage"), renderMs: v.number() }),
       v.object({ ok: v.literal(false), reason: v.string() }),
@@ -1102,6 +1272,16 @@ export const recordCaptionBurn = internalMutation({
   handler: async (ctx, a): Promise<null> => {
     const plan = await ctx.db.get(a.planId);
     if (!plan || plan.tenantId !== a.tenantId) return null;
+    // A new native render cannot be overwritten by a burn that started on the previous final.
+    if (
+      plan.mediaAudioMode === "native" &&
+      (a.result.ok || a.nativeRenderStorageId !== undefined) &&
+      (a.nativeRenderStorageId !== plan.renderStorageId ||
+        plan.nativeCaptionRenderStorageId !== a.nativeRenderStorageId ||
+        plan.nativeCaptionBatchId !== a.batchId ||
+        a.nativeAudioHash !== plan.nativeCaptionAudioHash)
+    )
+      return null;
     if (!a.result.ok) {
       await ctx.db.patch(a.planId, { captionStatus: "failed", captionReason: a.result.reason });
       await ctx.db.insert("deadLetters", {
@@ -1169,6 +1349,12 @@ export const burnCaptions = internalAction({
         tenantId: a.tenantId,
         planId: a.planId,
         batchId: job?.batchId ?? "",
+        ...(job?.nativeAudio
+          ? {
+              nativeRenderStorageId: job.nativeRenderStorageId,
+              nativeAudioHash: job.nativeAudioHash,
+            }
+          : {}),
         result: { ok: false, reason },
       });
       return { ok: false, reason };
@@ -1197,13 +1383,32 @@ export const burnCaptions = internalAction({
     }
     if (!Array.isArray(words)) return await fail("transcript_unreadable");
 
-    const captions = buildCaptionLinesChecked({
-      words: words as Array<{ text: string; start: number; end: number; type: string }>,
-      report: report.value,
-      offsetsS: job.offsetsS,
-      expectedTakeTexts: job.expectedTakeTexts,
-      balanceReadability: true,
-    });
+    if (job.nativeAudio) {
+      const audioBlob = job.nativeAudioStorageId
+        ? await ctx.storage.get(job.nativeAudioStorageId)
+        : null;
+      const audioBytes = audioBlob ? new Uint8Array(await audioBlob.arrayBuffer()) : null;
+      if (
+        !audioBytes ||
+        !isNativeCaptionWav(audioBytes, report.value.totalDurationS) ||
+        (await contentHash(audioBytes)) !== job.nativeAudioHash
+      )
+        return await fail("caption_native_source_binding_failed");
+    }
+    const captions = job.nativeAudio
+      ? buildTimelineCaptionLinesChecked({
+          words: words as Array<{ text: string; start: number; end: number; type: string }>,
+          durationS: report.value.totalDurationS,
+          expectedText: job.expectedTakeTexts[0] ?? "",
+          balanceReadability: true,
+        })
+      : buildCaptionLinesChecked({
+          words: words as Array<{ text: string; start: number; end: number; type: string }>,
+          report: report.value,
+          offsetsS: job.offsetsS,
+          expectedTakeTexts: job.expectedTakeTexts,
+          balanceReadability: true,
+        });
     if (!captions.ok) return await fail(captions.error.code);
     const ass = toAss(captions.value);
     // An empty track means the transcript held no words for any block. `burn_caps.sh` refuses an
@@ -1239,6 +1444,9 @@ export const burnCaptions = internalAction({
       tenantId: a.tenantId,
       planId: a.planId,
       batchId: job.batchId,
+      ...(job.nativeAudio
+        ? { nativeRenderStorageId: job.nativeRenderStorageId, nativeAudioHash: job.nativeAudioHash }
+        : {}),
       result: {
         ok: true,
         captionedStorageId: outcome.mp4StorageId as Id<"_storage">,
@@ -1252,8 +1460,19 @@ export const burnCaptions = internalAction({
 /** `pending -> rendering`, so the canvas can show the stage before a 60-150 s wait. Separate from
  *  `recordRender` because it runs BEFORE the POST and must not be able to write a terminal. */
 export const markRendering = internalMutation({
-  args: { planId: v.id("plans") },
-  handler: async (ctx, { planId }): Promise<null> => {
+  args: { planId: v.id("plans"), batchId: v.optional(v.string()) },
+  handler: async (ctx, { planId, batchId }): Promise<null | false> => {
+    const plan = await ctx.db.get(planId);
+    if (
+      plan?.mediaAudioMode === "native" &&
+      (!batchId ||
+        !(await latestBatch(ctx, {
+          tenantId: plan.tenantId,
+          planId,
+          batchId,
+        })))
+    )
+      return false;
     await ctx.db.patch(planId, { renderStatus: "rendering" });
     return null;
   },

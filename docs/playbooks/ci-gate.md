@@ -39,6 +39,8 @@
 
 > Last verified: 2026-10-23 — CI now installs Ubuntu's `ffmpeg` and `fonts-dejavu-core` packages and verifies Bash, FFmpeg, FFprobe and the detected DejaVu Sans font before the existing `pnpm test` step. Both synthetic render fixtures in `assembleQuality.test.ts` must run: missing prerequisites with `CI=true` or `CI=1` fail collection instead of silently skipping. Local runs without those prerequisites retain optional skips. Turbo explicitly includes `CI` in `globalEnv`, so strict environment filtering cannot hide the requirement and CI/local task results have distinct cache keys. The existing 120-second fixture limits are unchanged. This source change requires an exact-head hosted run; previous CI skips are not runtime passes.
 
+> Last verified: 2026-10-24 — Native integration adds core/generated-only admission and strict full-timeline captions, native request/source ownership checks, exact reviewed-cost guards on all paid film entry points, and a real native-audio FFmpeg fixture. The golden source inventory explicitly includes nativeMedia, storyboard, render, mediaComplete, media pricing and director bytes. Existing paid case bytes/receipts are unchanged. Final exact-head CI must execute real render fixtures, not qualify them through prerequisite skips; hosted/provider recovery and creative acceptance remain separate.
+
 # Playbook: CI gate (typecheck / lint / test / build)
 
 > Last verified: 2026-10-17 — the read-only staging retention observer refuses ambiguous or

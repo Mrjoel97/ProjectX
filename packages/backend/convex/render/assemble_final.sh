@@ -163,7 +163,7 @@
 # Requires: ffmpeg, ffprobe, awk. A `card` scene additionally needs a TrueType font in the image.
 set -euo pipefail
 
-IN_DIR="in"; OUT="out/final.mp4"; CLIP=10; SFXVOL="0.12"; BLOCKS=""; TARGET=""
+IN_DIR="in"; OUT="out/final.mp4"; CLIP=10; SFXVOL="0.12"; BLOCKS=""; TARGET=""; NATIVE_AUDIO=0
 KINDS=(); SECS=()
 MUSIC=""            # the requested mood slug, "" for a reel with no bed
 MUSIC_FILE=""       # 33.1-06: a track already in in/ (fetched from a public library); beats the library lookup
@@ -192,6 +192,7 @@ while [[ $# -gt 0 ]]; do
     # The DECLARED reel length, off the deck header. Asserted twice: the scenes must sum to it
     # before any work, and the finished file must land within 0.5s of it.
     --target-seconds) TARGET="$2"; shift 2 ;;
+    --native-audio) NATIVE_AUDIO=1; shift ;;
     # KIND:SECONDS, one per scene, IN ORDER. Order is the reel's order and the index, which is the
     # same rule the deck parser follows — the display `#` column is never read as a position.
     --scene)
@@ -212,6 +213,11 @@ while [[ $# -gt 0 ]]; do
     *) echo "ERROR: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+
+# The native soundtrack is the approved audio source, never an SFX bed under a second narrator.
+if [[ "$NATIVE_AUDIO" == 1 ]]; then
+  [[ -z "$MUSIC" && -z "$MUSIC_FILE" ]] || { echo "ERROR: native audio cannot add a music bed." >&2; exit 1; }
+fi
 
 # ONE of the two shapes, never both — a run that says both is a caller that does not know which
 # contract it is on, and guessing would pick a length nobody priced.
@@ -360,6 +366,9 @@ START=0
 for ((i=0;i<SCENES;i++)); do
   n=$((i+1)); SEC="${SECS[i]}"; KIND="${KINDS[i]}"
   voice="$IN_DIR/$(printf 'voice%02d.wav' "$n")"
+  if [[ "$NATIVE_AUDIO" == 1 ]]; then
+    [[ "$KIND" == video && ! -f "$voice" ]] || { echo "ERROR: native audio requires videos without separate voice takes." >&2; exit 1; }
+  fi
   # NORMALISE THE PICTURE FIRST, to exactly SEC seconds at W×H@FPS. Every kind lands in the same
   # shape, so the audio placement below does not care which kind it came from.
   pic="$TMP/p_$(printf '%03d' "$i").mp4"
@@ -463,7 +472,15 @@ for ((i=0;i<SCENES;i++)); do
       dieg="$TMP/d_$(printf '%03d' "$i").wav"
       if ffmpeg -y -loglevel error -i "$src" -vn -t "$SEC" -ar 48000 -ac 2 "$dieg" 2>/dev/null; then
         DIEG_FILE+=("$dieg"); DIEG_PAD+=($((START * 1000)))
+        if [[ "$NATIVE_AUDIO" == 1 ]]; then
+          NATIVE_DUR="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$dieg")"
+          awk -v d="$NATIVE_DUR" -v s="$SEC" 'BEGIN{exit (d>=s-0.05)?0:1}' || { echo "ERROR: native audio does not cover its scene." >&2; exit 1; }
+        fi
+      elif [[ "$NATIVE_AUDIO" == 1 ]]; then
+        echo "ERROR: native audio could not decode." >&2; exit 1
       fi
+    elif [[ "$NATIVE_AUDIO" == 1 ]]; then
+      echo "ERROR: native video has no audio stream." >&2; exit 1
     fi
   fi
 
@@ -620,9 +637,11 @@ for ((k=0;k<NTAKE;k++)); do
   LBLS="${LBLS}[t${k}]"; NMIX=$((NMIX+1)); IDX=$((IDX+1))
 done
 NDIEG=${#DIEG_FILE[@]}
+DIEG_GAIN="$SFXVOL"
+[[ "$NATIVE_AUDIO" == 1 ]] && DIEG_GAIN=1
 for ((k=0;k<NDIEG;k++)); do
   MIXARGS+=(-i "${DIEG_FILE[k]}")
-  FC="${FC}[${IDX}:a]${AFMT},volume=${SFXVOL},adelay=${DIEG_PAD[k]}:all=1[s${k}];"
+  FC="${FC}[${IDX}:a]${AFMT},volume=${DIEG_GAIN},adelay=${DIEG_PAD[k]}:all=1[s${k}];"
   LBLS="${LBLS}[s${k}]"; NMIX=$((NMIX+1)); IDX=$((IDX+1))
 done
 # THE MUSIC BED, into the SAME single amix — not a second mix, not a second pass over the output.
@@ -740,6 +759,12 @@ awk -v a="$ADUR" -v d="$FDUR" 'BEGIN{x=a-d; if(x<0)x=-x; exit (x<=1.5)?0:1}' || 
 DERR="$( (ffmpeg -v error -xerror -i "$OUT" -f null - ) 2>&1 | head -3 || true)"
 [[ -n "$DERR" ]] && { echo "ERROR: final failed decode validation — corrupted stream; do NOT deliver:" >&2; echo "$DERR" >&2; exit 1; }
 
+# Reuse this assembly sandbox for the one native STT source. It is decoded from the exact final,
+# begins at timeline zero and contains the entire soundtrack; MP4 bytes are never called WAV.
+if [[ "$NATIVE_AUDIO" == 1 ]]; then
+  ffmpeg -y -loglevel error -i "$OUT" -vn -t "$TOT" -ar 24000 -ac 1 -c:a pcm_s16le "${OUT}.native.wav"
+fi
+
 # The assembly sidecar: machine-readable proof this final went through this script, gates included.
 # A final video without one was hand-assembled. `packages/core/src/assembly.ts` is the validator and
 # the source of truth for these field names; a render whose sidecar fails it is NOT published.
@@ -750,13 +775,18 @@ DERR="$( (ffmpeg -v error -xerror -i "$OUT" -f null - ) 2>&1 | head -3 || true)"
 # a sidecar that still has either field, by name — so a stale runner fails loudly instead of
 # publishing a reel whose sidecar means something different from what the validator reads.
 SIDE="${OUT}.assembly.json"
+if [[ "$NATIVE_AUDIO" == 1 ]]; then
+  AUDIO_GATES='"native_audio_at_scene_start","native_audio_covers_window"'
+else
+  AUDIO_GATES='"speech_fits_the_reel","no_overlapping_lines","speech_centred","narration_every_narrated_span"'
+fi
 {
   # `music` is the mood that ACTUALLY reached the mix, never the one that was asked for — a reel
   # whose bed was missing from the snapshot says "none" here, which is the whole reason the
   # degrade path is not silent. No new entry in `gates`: the bed is not separately asserted, and
   # claiming a gate this script does not run is the one thing a proof plane must never do.
-  printf '{"script":"assemble_final.sh","out":"%s","scene_count":%d,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"music":"%s","card_bg":"%s","audio_sample_rate_hz":%s,"normalization_mode":"%s","gates":["speech_fits_the_reel","no_overlapping_lines","clip_covers_window","speech_centred","no_time_stretch","narration_every_narrated_span","master_audio_timeline","%s","duration_within_0.5s","full_decode"],"scenes":[' \
-    "$(basename "$OUT")" "$SCENES" "$TARGET" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$SFXVOL" "$MUSIC_USED" "$CARD_BG" "$AUDIO_RATE" "$NORMALIZATION_MODE" "$NORMALIZATION_GATE"
+  printf '{"script":"assemble_final.sh","out":"%s","scene_count":%d,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"music":"%s","card_bg":"%s","audio_sample_rate_hz":%s,"normalization_mode":"%s","native_audio":%s,"gates":["clip_covers_window",%s,"no_time_stretch","master_audio_timeline","%s","duration_within_0.5s","full_decode"],"scenes":[' \
+    "$(basename "$OUT")" "$SCENES" "$TARGET" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$DIEG_GAIN" "$MUSIC_USED" "$CARD_BG" "$AUDIO_RATE" "$NORMALIZATION_MODE" "$([[ "$NATIVE_AUDIO" == 1 ]] && echo true || echo false)" "$AUDIO_GATES" "$NORMALIZATION_GATE"
   for ((i=0;i<SCENES;i++)); do printf '%s%s' "${PBJSON[i]}" "$([[ $i -lt $((SCENES-1)) ]] && echo ,)"; done
   printf '],"ts":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$SIDE"

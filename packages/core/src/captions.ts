@@ -266,7 +266,13 @@ export type WavError = { code: "no_takes" | "not_a_wav" | "format_mismatch" };
 const ascii = (b: Uint8Array, at: number): string =>
   String.fromCharCode(b[at] ?? 0, b[at + 1] ?? 0, b[at + 2] ?? 0, b[at + 3] ?? 0);
 
-type WavParts = { channels: number; sampleRate: number; bits: number; data: Uint8Array };
+type WavParts = {
+  encoding: number;
+  channels: number;
+  sampleRate: number;
+  bits: number;
+  data: Uint8Array;
+};
 
 /** RIFF chunk walk. Deliberately not a general parser: it reads `fmt ` and `data` and ignores
  *  everything else, which is what makes it immune to the LIST/INFO chunks some encoders emit. */
@@ -275,7 +281,7 @@ function parseWav(bytes: Uint8Array): WavParts | null {
     return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let at = 12;
-  let fmt: { channels: number; sampleRate: number; bits: number } | null = null;
+  let fmt: { encoding: number; channels: number; sampleRate: number; bits: number } | null = null;
   let data: Uint8Array | null = null;
   while (at + 8 <= bytes.byteLength) {
     const id = ascii(bytes, at);
@@ -283,6 +289,7 @@ function parseWav(bytes: Uint8Array): WavParts | null {
     const body = at + 8;
     if (id === "fmt " && size >= 16) {
       fmt = {
+        encoding: view.getUint16(body, true),
         channels: view.getUint16(body + 2, true),
         sampleRate: view.getUint32(body + 4, true),
         bits: view.getUint16(body + 14, true),
@@ -293,6 +300,27 @@ function parseWav(bytes: Uint8Array): WavParts | null {
     at = body + size + (size % 2); // chunks are word-aligned
   }
   return fmt && data ? { ...fmt, data } : null;
+}
+
+/** The native caption source is one bounded PCM16/24k/mono track at final timeline zero. */
+export function isNativeCaptionWav(bytes: Uint8Array, durationS: number): boolean {
+  if (!Number.isFinite(durationS) || durationS <= 0 || bytes.byteLength > 6 * 1024 * 1024)
+    return false;
+  let parsed: WavParts | null;
+  try {
+    parsed = parseWav(bytes);
+  } catch {
+    return false;
+  }
+  return (
+    parsed !== null &&
+    parsed.encoding === 1 &&
+    parsed.channels === 1 &&
+    parsed.sampleRate === 24000 &&
+    parsed.bits === 16 &&
+    parsed.data.byteLength % 2 === 0 &&
+    Math.abs(parsed.data.byteLength / 48000 - durationS) <= 0.05
+  );
 }
 
 /**
@@ -511,6 +539,49 @@ export function buildCaptionLinesChecked(
   )
     return err({ code: "caption_nonpositive_cue" });
   return ok(lines);
+}
+
+/** Native audio is transcribed from one full rendered soundtrack. Its word timestamps already
+ * use the final timeline; project that audio track as one zero-anchored window instead of applying
+ * the clean-TTS take centering recorded by the picture sidecar. The reviewed script still must
+ * match exactly, and no returned word timestamp is changed to repair a mismatch. */
+export function buildTimelineCaptionLinesChecked(a: {
+  words: readonly SttWord[];
+  durationS: number;
+  expectedText: string;
+  balanceReadability?: boolean;
+}): Result<CaptionLine[], CaptionBuildError> {
+  if (!Number.isFinite(a.durationS) || a.durationS <= 0)
+    return err({ code: "caption_invalid_word_time" });
+  if (a.words.some((word) => !word || typeof word !== "object"))
+    return err({ code: "caption_invalid_word_time" });
+  if (a.words.some((word) => word.type === "word" && word.end > a.durationS))
+    return err({ code: "caption_word_outside_take" });
+  return buildCaptionLinesChecked({
+    words: a.words,
+    expectedTakeTexts: [a.expectedText],
+    offsetsS: [0],
+    balanceReadability: a.balanceReadability,
+    report: {
+      sceneCount: 1,
+      targetDurationS: a.durationS,
+      totalDurationS: a.durationS,
+      actualDurationS: a.durationS,
+      gates: [],
+      scenes: [
+        {
+          index: 0,
+          startS: 0,
+          durationS: a.durationS,
+          visual: "video",
+          leadSilenceS: 0,
+          speechAbsS: 0,
+          speechDurS: a.durationS,
+          overrun: false,
+        },
+      ],
+    },
+  });
 }
 
 /** Legacy callers preserve timestamp partitioning. Supplying verified scripts opts into strict

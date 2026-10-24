@@ -785,6 +785,8 @@
 > and transcribe has no telemetry option. See `docs/playbooks/tracing.md`.)
 >
 
+> Last verified: 2026-10-24 — The shared custom PDF.js reader now uses compact bottom controls and frame-free pages, with fit width based on actual container padding. The unchanged two-page owner report passed local Edge checks at390/768/1440: both pages, selectable text, zoom/page entry,44px mobile controls, exact original download, no PDF embed/external request/overflow/browser error. This is isolated local fixture evidence, not hosted rollout. The existing pure pdf-lib creator now renders content-weighted table columns, subtle headers/zebra rows, repeated headers/long-row pagination, heading keep-with-next and page folios. A fictional two-page report was rendered and visually inspected;9 PDF checks passed. Standard14/WinAnsi encoding remains, so universal multilingual fonts and complex image/chart layout are not claimed.
+
 # Playbook: Knowledge Vault & GraphRAG
 
 > Last verified: 2026-08-22 (26-16 — **the board pack lands on the created-doc rail, unchanged.**)

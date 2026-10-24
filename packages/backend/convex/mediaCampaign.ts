@@ -1,3 +1,4 @@
+import { mediaTaskIncreaseCents } from "@pikar/core/mediaBudget";
 import {
   ambiguousCampaignFailure,
   type CampaignStatus,
@@ -13,6 +14,7 @@ import { ConvexError, type ObjectType, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { mediaDailyBudgetInner } from "./guardrails";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { readMediaBatch } from "./lib/mediaRead";
@@ -21,6 +23,8 @@ import { TOOL_CONTEXT_ARGS } from "./lib/toolContextArgs";
 import {
   cancelQueuedCampaignBatchInner,
   estimateCampaignPlanInner,
+  type MediaDailyOverageAllowance,
+  nativeReelReviewHash,
   reserveCampaignPlanInner,
 } from "./media";
 import { ensureCoverage } from "./spendLedger";
@@ -152,6 +156,7 @@ export async function stageCampaignInner(ctx: MutationCtx, args: StageArgs): Pro
       subject: input.label,
       kind: input.kind === "image" ? "media" : "memo",
       mediaMode: input.kind === "image" ? "image" : "reel",
+      ...(input.kind === "video" ? { mediaAudioMode: "native" as const } : {}),
       mediaCampaignId: campaignId,
       ...(input.kind === "image" ? { imagePrompt: input.prompt.trim() } : {}),
       status: input.kind === "image" ? "proposed" : "collecting",
@@ -207,6 +212,10 @@ type CampaignView = {
   nextMaximumCents: number;
   cancelled: boolean;
   tenantBusy: boolean;
+  dailyRemainingCents: number;
+  dailyLimitCents: number;
+  dailyWindowStartMs: number;
+  deploymentRemainingCents: number;
   items: {
     planId: Id<"plans">;
     kind: "image" | "video";
@@ -219,6 +228,21 @@ type CampaignView = {
     musicCredit: Doc<"plans">["musicCredit"] | null;
   }[];
 };
+
+/** Native children bind current generation/pricing policy as well as their reviewed plan rows.
+ * Preserve the exact legacy review digest when no child uses the new native workflow. */
+async function campaignReviewHash(plans: readonly Doc<"plans">[]): Promise<string> {
+  if (!plans.some((plan) => plan.mediaAudioMode === "native"))
+    return contentHash(JSON.stringify(plans));
+  return contentHash(
+    JSON.stringify({
+      plans,
+      nativeReviews: await Promise.all(
+        plans.map((plan) => (plan.mediaAudioMode === "native" ? nativeReelReviewHash(plan) : null)),
+      ),
+    }),
+  );
+}
 
 async function campaignView(
   ctx: QueryCtx & { tenantId: string },
@@ -262,7 +286,8 @@ async function campaignView(
     title: campaign.title,
     status: campaign.status,
     updatedAt: campaign.updatedAt,
-    reviewHash: await contentHash(JSON.stringify(reviewedPlans)),
+    reviewHash: await campaignReviewHash(reviewedPlans),
+    ...(await mediaDailyBudgetInner(ctx, ctx.tenantId)),
     maxCostCents: campaign.maxCostCents,
     reservedCents: campaign.reservedCents,
     nextMaximumCents: items
@@ -461,6 +486,8 @@ const approvalArgs = {
   expectedReviewHash: v.string(),
   maxCostCents: v.number(),
   itemIndexes: v.optional(v.array(v.number())),
+  approvedDailyIncreaseCents: v.optional(v.number()),
+  expectedDailyWindowStartMs: v.optional(v.number()),
 };
 type ApprovalResult = { ok: true } | { ok: false; reason: string };
 
@@ -511,7 +538,7 @@ export const reserveApproved = internalMutation({
         refuse("plan_not_owned");
       reviewedPlans.push(plan);
     }
-    if ((await contentHash(JSON.stringify(reviewedPlans))) !== args.expectedReviewHash)
+    if ((await campaignReviewHash(reviewedPlans)) !== args.expectedReviewHash)
       refuse("stale_review");
     if (
       campaign.cancelledAt ||
@@ -549,10 +576,33 @@ export const reserveApproved = internalMutation({
       maximum += item.estimateCents;
     }
     if (campaign.reservedCents + maximum > args.maxCostCents) refuse("campaign_maximum_exceeded");
+    const daily = await mediaDailyBudgetInner(ctx, args.tenantId);
+    if (maximum > daily.deploymentRemainingCents) refuse("deployment_media_exhausted");
+    const requiredIncreaseCents = mediaTaskIncreaseCents(maximum, daily.dailyRemainingCents);
+    if (requiredIncreaseCents === null) refuse("invalid_maximum");
+    if (args.approvedDailyIncreaseCents !== undefined) {
+      if (
+        !Number.isSafeInteger(args.approvedDailyIncreaseCents) ||
+        args.approvedDailyIncreaseCents <= 0 ||
+        args.approvedDailyIncreaseCents !== requiredIncreaseCents ||
+        args.expectedDailyWindowStartMs !== daily.dailyWindowStartMs
+      )
+        refuse("stale_daily_limit_review");
+    } else if (requiredIncreaseCents > 0) refuse("daily_limit_increase_required");
+    const dailyOverage: MediaDailyOverageAllowance = {
+      tenantId: args.tenantId,
+      campaignId: campaign._id,
+      remainingCents: args.approvedDailyIncreaseCents ?? 0,
+    };
     for (const index of selected) {
       const item = items[index];
       if (!item) refuse("invalid_selection");
-      const reserved = await reserveCampaignPlanInner(ctx, args.tenantId, item.planId);
+      const reserved = await reserveCampaignPlanInner(
+        ctx,
+        args.tenantId,
+        item.planId,
+        dailyOverage,
+      );
       if (!reserved.ok) refuse(reserved.reason);
       // Any race/config drift rolls the whole subtransaction back, including all earlier reserves.
       if (campaignMaximumCents(reserved.estUsd) > item.estimateCents) refuse("estimate_changed");
@@ -560,6 +610,22 @@ export const reserveApproved = internalMutation({
       item.batchId = reserved.batchId;
       delete item.startedAt;
       delete item.failureReason;
+    }
+    if (requiredIncreaseCents > 0) {
+      if (dailyOverage.remainingCents !== 0) refuse("estimate_changed");
+      await ctx.runMutation(internal.audit.log, {
+        tenantId: args.tenantId,
+        correlationId: `media-campaign-increase:${campaign._id}:${campaign.updatedAt}`,
+        eventType: "media.campaign_task_budget_approved",
+        actor: "user",
+        payload: {
+          campaignId: campaign._id,
+          selectedCount: selected.length,
+          approvedExtraCents: requiredIncreaseCents,
+          maximumCents: maximum,
+          dailyWindowStartMs: daily.dailyWindowStartMs,
+        },
+      });
     }
     const updatedAt = Math.max(Date.now(), campaign.updatedAt + 1);
     await ctx.db.patch(campaign._id, {

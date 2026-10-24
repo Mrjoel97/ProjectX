@@ -18,6 +18,7 @@
  *     tier. A priced resolution must be present on both the estimate and the provider request.
  *  3. The cents floor happens ONCE, on the batch total. See chooseMediaBatch.
  */
+import type { MediaAudioMode } from "@pikar/core/nativeMedia";
 import { err, ok, type Result } from "@pikar/core/result";
 import { MUSIC_MOODS, type VisualKind } from "@pikar/core/storyboard";
 
@@ -176,7 +177,11 @@ export const MEDIA_MUSIC_STOCK = {
  *  per-request budget; there is deliberately no $1.00 constant left in this file to pull. */
 export const MEDIA_JOB_CAP_USD = 3.5;
 
-/** Total REQUESTED generated-video seconds in one reservation, unchanged from ADR-027.
+/** Explicit native production policy; never changes tenant/deployment spend rails. */
+export const MEDIA_NATIVE_JOB_CAP_USD = 15;
+export const MEDIA_NATIVE_GENERATED_SECONDS_CAP = 60;
+
+/** Legacy/separate total REQUESTED generated-video seconds, unchanged from ADR-027.
  * Twelve is below every supported whole-reel target, preserves the4+8worked answer and the
  * three4-second mixed fixture, and is inclusive. Seedance's billing-policy extra second does
  * not add requested footage and does not count toward this cap.
@@ -204,7 +209,8 @@ export const MEDIA_SANDBOX_USD_PER_RENDER = 0.04;
  * model, reviewed 720p tier and four-second default move with the duration grid and fixtures.
  * A one-second per-clip POLICY allowance covers observed frame-rounding variance; it is not
  * a guaranteed invoice maximum. Actual output-token billing remains subject to reconciliation.
- * The whole-job $3.50 and generated-seconds 12 ceilings remain unchanged. */
+ * Legacy/separate ceilings remain $3.50 and12 requested seconds; explicit native production
+ * has its own $15/60-second policy at chooseMediaBatch, without changing tenant/deployment rails. */
 export const MEDIA_DEFAULT_VIDEO = {
   model: "bytedance/seedance-2.0",
   resolution: "720p",
@@ -270,7 +276,7 @@ export const MEDIA_DEFAULT_STOCK = {
 } as const;
 
 export type MediaSpec =
-  | { kind: "video"; model: string; resolution: VideoRes; seconds: number }
+  | { kind: "video"; model: string; resolution: VideoRes; seconds: number; generateAudio?: boolean }
   | { kind: "image"; model: string; width: number; height: number }
   | { kind: "tts"; model: string; characters: number }
   | { kind: "stt"; model: string; audioMinutes: number }
@@ -313,6 +319,9 @@ const counted = (...ns: number[]) => ns.every((n) => Number.isFinite(n) && n >= 
 export function estimateMediaUsd(spec: MediaSpec): Result<number, MediaCostError> {
   switch (spec.kind) {
     case "video": {
+      if (spec.generateAudio === true && spec.model !== "bytedance/seedance-2.0") {
+        return err({ code: "unknown_model" });
+      }
       const row = MEDIA_VIDEO_PRICING[spec.model];
       if (!row) return err({ code: "unknown_model" });
       // The GRID is asked of the model we are about to submit to — never of `CLIP_SECONDS`, which
@@ -413,20 +422,42 @@ export function estimateBatchUsd(specs: readonly MediaSpec[]): Result<number, Me
 export function chooseMediaBatch(
   specs: readonly MediaSpec[],
   capUsd: number,
+  options?: { audioMode?: MediaAudioMode },
 ): Result<{ estUsd: number; estCents: number }, MediaCostError> {
+  const native = options?.audioMode === "native";
+  if (
+    native &&
+    specs.some((spec) =>
+      spec.kind === "video"
+        ? spec.model !== "bytedance/seedance-2.0" ||
+          spec.resolution !== "720p" ||
+          spec.generateAudio !== true
+        : spec.kind !== "render" && spec.kind !== "stt",
+    )
+  )
+    return err({ code: "unknown_model" });
+  if (!native && specs.some((spec) => spec.kind === "video" && spec.generateAudio === true)) {
+    return err({ code: "unknown_model" });
+  }
   const est = estimateBatchUsd(specs);
   if (!est.ok) return est;
   // THE GENERATED-SECONDS CEILING (33.1-04), beside the job cap and before any cents exist.
   // Here rather than at a caller because this is the ONE gate `reserveJobInner`,
   // `reserveSceneJobInner`, `jobEstimate` and `imageEstimate` all pass through — so the estimate
   // the canvas prints and the reservation that spends agree by construction. It is UNIFORM: block
-  // decks are generated-video by construction and are checked too. Passing a per-caller ceiling
-  // was rejected — a cap a deck shape can route around is not a cap (ADR-027).
+  // decks are generated-video by construction and are checked too. The explicit native mode has
+  // its own source-owned60-second/$15policy; callers cannot raise either mode above its ceiling.
   const generatedSeconds = specs.reduce((n, s) => n + (s.kind === "video" ? s.seconds : 0), 0);
-  if (generatedSeconds > MEDIA_GENERATED_SECONDS_CAP) {
+  if (
+    generatedSeconds > (native ? MEDIA_NATIVE_GENERATED_SECONDS_CAP : MEDIA_GENERATED_SECONDS_CAP)
+  ) {
     return err({ code: "over_generated_seconds" });
   }
-  if (!Number.isFinite(capUsd) || capUsd <= 0 || est.value > capUsd) {
+  if (
+    !Number.isFinite(capUsd) ||
+    capUsd <= 0 ||
+    est.value > Math.min(capUsd, native ? MEDIA_NATIVE_JOB_CAP_USD : MEDIA_JOB_CAP_USD)
+  ) {
     return err({ code: "over_job_cap" });
   }
   // Integer cents, fail-closed bias: a sub-cent job still costs 1 cent of budget. ONCE.

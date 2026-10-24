@@ -131,6 +131,22 @@ describe("actual PDF page reader", () => {
     expect(element.textContent).toContain("100%");
   });
 
+  it("fits the page to the current reader padding and keeps its controls below the document", async () => {
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      paddingLeft: "14px",
+      paddingRight: "14px",
+    } as CSSStyleDeclaration);
+    await show();
+    expect(state.render).toHaveBeenLastCalledWith(
+      expect.objectContaining({ viewport: expect.objectContaining({ width: 772 }) }),
+    );
+    const toolbar = element.querySelector('[role="toolbar"][aria-label="PDF controls"]');
+    const page = element.querySelector("[data-pdf-page]");
+    expect(page?.compareDocumentPosition(toolbar as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(toolbar?.querySelector('[aria-label="Page number"]')).toBeTruthy();
+    expect(toolbar?.querySelector('[aria-label="Fit width"]')).toBeTruthy();
+  });
+
   it("keeps the current page visible when its unchanged number is submitted", async () => {
     await show();
     await act(async () =>

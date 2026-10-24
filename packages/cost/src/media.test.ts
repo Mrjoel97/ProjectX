@@ -22,6 +22,8 @@ import {
   MEDIA_IMAGE_PRICING,
   MEDIA_JOB_CAP_USD,
   MEDIA_MUSIC_PRICING,
+  MEDIA_NATIVE_GENERATED_SECONDS_CAP,
+  MEDIA_NATIVE_JOB_CAP_USD,
   MEDIA_SANDBOX_USD_PER_RENDER,
   MEDIA_STOCK_PRICING,
   MEDIA_STT_PRICING,
@@ -47,6 +49,75 @@ const clip = (
   model: VIDEO_MODEL,
   resolution,
   seconds,
+});
+
+describe("explicit native production keeps separate admission policies", () => {
+  const nativeClip = (seconds: number): MediaSpec => ({
+    kind: "video",
+    model: MEDIA_DEFAULT_VIDEO.model,
+    resolution: "720p",
+    seconds,
+    generateAudio: true,
+  });
+  it("prices full30,45,60 second generated films without external TTS/music/stock", () => {
+    expect(MEDIA_NATIVE_JOB_CAP_USD).toBe(15);
+    expect(MEDIA_NATIVE_GENERATED_SECONDS_CAP).toBe(60);
+    for (const seconds of [30, 45, 60]) {
+      const specs = [
+        ...Array.from({ length: seconds / 5 }, () => nativeClip(5)),
+        { kind: "render" } as const,
+      ];
+      const result = chooseMediaBatch(specs, MEDIA_NATIVE_JOB_CAP_USD, { audioMode: "native" });
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value.estUsd).toBeCloseTo((seconds / 5) * 6 * 0.1512 + 0.04, 10);
+    }
+    const worst = [
+      ...Array.from({ length: 15 }, () => nativeClip(4)),
+      { kind: "render" } as const,
+      { kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes: 1 } as const,
+    ];
+    const result = chooseMediaBatch(worst, 15, { audioMode: "native" });
+    expect(result.ok && result.value.estUsd).toBeCloseTo(11.386, 10);
+  });
+  it("legacy absence and explicit separate retain12 generated seconds and3.50dollars", () => {
+    for (const audioMode of [undefined, "separate"] as const) {
+      const result = chooseMediaBatch([clip("720p", 15), clip("720p", 15)], 15, { audioMode });
+      expect(result.ok ? "ok" : result.error.code).toBe("over_generated_seconds");
+    }
+    expect(MEDIA_JOB_CAP_USD).toBe(3.5);
+    expect(MEDIA_GENERATED_SECONDS_CAP).toBe(12);
+  });
+  it("native refuses external inputs, missing audio flags and cheaper model substitution", () => {
+    for (const invalid of [
+      { kind: "tts", model: MEDIA_DEFAULT_VOICE.model, characters: 10 },
+      { kind: "music", model: MEDIA_DEFAULT_MUSIC.model, mood: "warm" },
+      { kind: "stock", model: MEDIA_DEFAULT_STOCK.model, media: "video", seconds: 5 },
+      { kind: "image", model: MEDIA_DEFAULT_IMAGE.model, width: 1024, height: 1536 },
+      { ...nativeClip(5), generateAudio: false },
+      { ...nativeClip(5), model: "x-ai/grok-imagine-video" },
+    ] as MediaSpec[]) {
+      const result = chooseMediaBatch([nativeClip(5), invalid], 15, { audioMode: "native" });
+      expect(result.ok ? "ok" : result.error.code).toBe("unknown_model");
+    }
+    expect(chooseMediaBatch([nativeClip(5)], 3.5).ok).toBe(false);
+  });
+  it("native caps are hard source ceilings even with a larger supplied cap", () => {
+    const overSeconds = chooseMediaBatch(
+      Array.from({ length: 16 }, () => nativeClip(4)),
+      100,
+      { audioMode: "native" },
+    );
+    expect(overSeconds.ok ? "ok" : overSeconds.error.code).toBe("over_generated_seconds");
+    const overMoney = chooseMediaBatch(
+      [
+        ...Array.from({ length: 15 }, () => nativeClip(4)),
+        { kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes: 1000 },
+      ],
+      100,
+      { audioMode: "native" },
+    );
+    expect(overMoney.ok ? "ok" : overMoney.error.code).toBe("over_job_cap");
+  });
 });
 const voice = (characters: number): MediaSpec => ({
   kind: "tts",
@@ -614,7 +685,7 @@ describe("the scene-kind price table — §2.3, and why the cheap kinds are not 
     expect(chooseMediaBatch(stillsDeck, MEDIA_JOB_CAP_USD).ok).toBe(true);
   });
 
-  it("THE SKILL BODY'S OWN WORKED ANSWER STAYS LEGAL — the gap nothing checked", () => {
+  it("THE NATIVE SKILL BODY WORKED ANSWERS STAY LEGAL UNDER THEIR EXPLICIT POLICY", () => {
     // `media-director.md` teaches by example, and `seedSkills` publishes it straight to ACTIVE with
     // no eval gate in front of it (the body is not a GATED skill). So the only thing between "the
     // body teaches a deck the money boundary refuses" and a live dead end is a check like this.
@@ -639,14 +710,24 @@ describe("the scene-kind price table — §2.3, and why the cheap kinds are not 
         `the worked answer's VARIATION ${name} spends ${generatedSeconds}s of generated video, ` +
           `over MEDIA_GENERATED_SECONDS_CAP (${MEDIA_GENERATED_SECONDS_CAP}). The body teaches a ` +
           "deck the money boundary refuses - fix the body or the cap, not this assertion.",
-      ).toBeLessThanOrEqual(MEDIA_GENERATED_SECONDS_CAP);
+      ).toBeLessThanOrEqual(MEDIA_NATIVE_GENERATED_SECONDS_CAP);
       // ...and the same deck is genuinely BUYABLE, not merely under one number.
       const specs = slice.deck.scenes.flatMap((sc) => {
         const line = sceneVisualSpec(sc.visual, sc.durationMs / 1000);
         if (!line.ok) throw new Error(`worked answer scene refused: ${line.error.code}`);
-        return line.value === null ? [] : [line.value.spec];
+        return line.value === null
+          ? []
+          : [
+              line.value.spec.kind === "video"
+                ? { ...line.value.spec, generateAudio: true }
+                : line.value.spec,
+            ];
       });
-      expect(chooseMediaBatch([...specs, { kind: "render" }], MEDIA_JOB_CAP_USD).ok).toBe(true);
+      expect(
+        chooseMediaBatch([...specs, { kind: "render" }], MEDIA_NATIVE_JOB_CAP_USD, {
+          audioMode: "native",
+        }).ok,
+      ).toBe(true);
     }
   });
 

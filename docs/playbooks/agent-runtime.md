@@ -240,6 +240,8 @@ evaluation, semantic acceptance, owner activation or rollback is implied by thes
 > a sandbox tenant is, and the execution side is where a foreign body runs. Behaviour unchanged:
 > the regex is identical, and `workflowPacks.test.ts` pins it against seven near misses.)
 
+> Last verified: 2026-10-24 — Native film source identity now explicitly covers the deterministic native prompt/validator, storyboard, render contract, caption completion orchestration, media cost policy and versioned director mirror. Current corpus case bytes and historic receipts remain unchanged; refresh suite fingerprints only after source freeze. No paid evaluator or registry activation follows from this fingerprint update.
+
 # Playbook: Agent Runtime (the Executive Agent platform)
 
 > Last verified: 2026-09-04 (33.2-02 — **`smoke:storyboardFactsForPlan`**: the storyboard bake-off's

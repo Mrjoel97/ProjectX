@@ -17,14 +17,52 @@ import type { AssemblyScene } from "./assembly";
 import {
   buildCaptionLines,
   buildCaptionLinesChecked,
+  buildTimelineCaptionLinesChecked,
   concatWavTakes,
   DEFAULT_LINE_CHARS,
   groupIntoLines,
+  isNativeCaptionWav,
   pcm16ToWav,
   rebaseWords,
   type SttWord,
   toAss,
 } from "./captions";
+
+describe("native soundtrack captions use the actual final timeline", () => {
+  const words: SttWord[] = [
+    { text: "Keep", start: 1.2, end: 1.7, type: "word" },
+    { text: "it", start: 2, end: 2.2, type: "word" },
+    { text: "close", start: 4, end: 4.8, type: "word" },
+  ];
+  it("matches the reviewed script and preserves native word endpoints without TTS centering", () => {
+    const result = buildTimelineCaptionLinesChecked({
+      words,
+      durationS: 6,
+      expectedText: "Keep it close.",
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: [{ text: "Keep it close", startS: 1.2, endS: 4.8 }],
+    });
+  });
+  it("refuses an ad-lib or music lyric instead of manufacturing reviewed words", () => {
+    expect(
+      buildTimelineCaptionLinesChecked({ words, durationS: 6, expectedText: "Keep it safe." }),
+    ).toEqual({ ok: false, error: { code: "caption_expected_text_mismatch" } });
+  });
+  it("refuses words beyond the actual soundtrack", () => {
+    expect(
+      buildTimelineCaptionLinesChecked({ words, durationS: 4, expectedText: "Keep it close." }),
+    ).toEqual({ ok: false, error: { code: "caption_word_outside_take" } });
+  });
+  it("requires full-duration PCM16 mono24k and rejects MP4 or another sample rate", () => {
+    const pcm = new Uint8Array(6 * 24000 * 2);
+    expect(isNativeCaptionWav(pcm16ToWav(pcm, 24000), 6)).toBe(true);
+    expect(isNativeCaptionWav(pcm16ToWav(pcm, 48000), 6)).toBe(false);
+    expect(isNativeCaptionWav(new Uint8Array([0, 0, 0, 24]), 6)).toBe(false);
+    expect(isNativeCaptionWav(pcm16ToWav(pcm.subarray(0, 48000), 24000), 6)).toBe(false);
+  });
+});
 
 const block = (over: Partial<AssemblyScene> = {}): AssemblyScene => ({
   index: 0,

@@ -131,7 +131,7 @@
       }
     ],
     "reel30s": {
-      "_what": "Current standard Seedance policy reservations, preserving the worked scene decks and existing ceilings. These are policy estimates, not guaranteed provider invoices.",
+      "_what": "Separate-mode standard Seedance policy reservations, preserving historical worked scene decks and legacy ceilings. Explicit native production is recorded separately below. These are policy estimates, not guaranteed provider invoices.",
       "mixed": {
         "scenes": "3 generated x 4s + 4 stills x 4s + 1 card x 2s",
         "pictureUsd": 2.292,
@@ -149,7 +149,14 @@
         "_what": "One4-second standard Seedance clip reserves$0.756 including policy headroom; stock assets have zero provider cost."
       }
     },
-    "targetsUnreachableByGeneratedVideoAlone": [15, 30, 60],
-    "_targetsUnreachableByGeneratedVideoAlone": "The unchanged12-generated-second ceiling is below all current targets. Standard Seedance supports4..15secondclips; requested duration, not reservation headroom, counts toward that ceiling."
+    "targetsUnreachableByGeneratedVideoAlone": [15, 30, 45, 60],
+    "_targetsUnreachableByGeneratedVideoAlone": "Legacy/separate audio uses the12-requested-generated-second cap and cannot fill any target solely with generated clips. Explicit native mode instead permits30/45/60seconds under separate60second/$15whole-job policy; tenant/deployment rails remain."
+  },
+  "native": {
+    "targets": [30, 45, 60],
+    "jobCapUsd": 15,
+    "generatedSecondsCap": 60,
+    "worst60SecondVideoUsd": 11.34,
+    "basis": "15four-second clips, each reserving5nominal seconds at$0.1512; render/captions additional. Policy allowances are not guaranteed provider invoices."
   }
 }

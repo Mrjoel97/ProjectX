@@ -1,4 +1,10 @@
+import { mediaDailyCharge } from "@pikar/core/mediaBudget";
 import { buildSubmitBody } from "@pikar/core/mediaProviderContract";
+import {
+  buildNativeScenePrompt,
+  NATIVE_TARGET_DURATIONS,
+  validateNativeSceneDeck,
+} from "@pikar/core/nativeMedia";
 
 export { buildSubmitBody } from "@pikar/core/mediaProviderContract";
 
@@ -62,6 +68,8 @@ import {
   MEDIA_GENERATED_SECONDS_CAP,
   MEDIA_JOB_CAP_USD,
   MEDIA_MUSIC_STOCK,
+  MEDIA_NATIVE_GENERATED_SECONDS_CAP,
+  MEDIA_NATIVE_JOB_CAP_USD,
   MEDIA_VIDEO_SECONDS,
   sceneVisualSpec,
 } from "@pikar/cost/media";
@@ -70,7 +78,12 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { internalQuery } from "./_generated/server";
-import { getGuardrailConfig, mediaRemainingCentsInner, rateLimiter } from "./guardrails";
+import {
+  getGuardrailConfig,
+  mediaDailyBudgetInner,
+  mediaRemainingCentsInner,
+  rateLimiter,
+} from "./guardrails";
 import { retrier } from "./index";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
@@ -94,6 +107,7 @@ export type ReserveRefusal =
    *  the first time, removing an arithmetic guarantee this restores in code (ADR-027). */
   | "over_generated_seconds"
   | "unrenderable_block"
+  | "native_deck_invalid"
   /** 20.2 wave 6 — regenerating a scene that BUYS NOTHING. A `text_card` is drawn by ffmpeg and an
    *  `uploaded_video`'s bytes are already the tenant's, so a silent one of either has no provider
    *  line to reserve: there is literally nothing to re-buy. Editing its words and generating the
@@ -118,6 +132,13 @@ type ProviderLine = {
   spec: MediaSpec;
   estUsd: number;
   row: Omit<Doc<"mediaJobs">, "_id" | "_creationTime">;
+};
+
+/** Created only by the exact-review campaign approval transaction; never a public action arg. */
+export type MediaDailyOverageAllowance = {
+  tenantId: string;
+  campaignId: Id<"mediaCampaigns">;
+  remainingCents: number;
 };
 
 /**
@@ -151,6 +172,8 @@ async function reserveProviderLinesInner(
   batchId: string,
   lines: readonly ProviderLine[],
   specs: readonly MediaSpec[],
+  native = false,
+  dailyOverage?: MediaDailyOverageAllowance,
 ): Promise<ReserveResult> {
   // FIN-01: watching starts at the gate, not at the money (see ensureCoverage). A media job that
   // is refused for price or budget is still a tenant we can report a confident zero for.
@@ -158,16 +181,39 @@ async function reserveProviderLinesInner(
 
   // The shared cap and conservative integer reservation. `chooseMediaBatch` rounds the TOTAL
   // up once, with a one-cent minimum; each row retains its exact fractional-USD estimate.
-  const est = chooseMediaBatch(specs, MEDIA_JOB_CAP_USD);
+  const est = chooseMediaBatch(specs, native ? MEDIA_NATIVE_JOB_CAP_USD : MEDIA_JOB_CAP_USD, {
+    audioMode: native ? "native" : "separate",
+  });
   if (!est.ok) return { ok: false, reason: est.error.code };
   const { estUsd, estCents } = est.value;
+  if (dailyOverage) {
+    const planId = lines[0]?.row.planId;
+    const plan = planId ? await ctx.db.get(planId) : null;
+    if (
+      dailyOverage.tenantId !== tenantId ||
+      plan?.tenantId !== tenantId ||
+      plan.mediaCampaignId !== dailyOverage.campaignId ||
+      lines.some((line) => line.row.planId !== planId)
+    )
+      return { ok: false, reason: "media_daily_exhausted" };
+  }
+  const daily = await mediaDailyBudgetInner(ctx, tenantId);
+  const charge = mediaDailyCharge(
+    estCents,
+    daily.dailyRemainingCents,
+    dailyOverage?.remainingCents ?? 0,
+  );
+  if (!charge) return { ok: false, reason: "media_daily_exhausted" };
 
   // CHECK BOTH, THEN CONSUME BOTH in this one serializable mutation. Tenant first, so a tenant that
   // is personally out is told so rather than blamed for a global pause.
-  const tenantWindow = await rateLimiter.check(ctx, "mediaSpendCents", {
-    key: tenantId,
-    count: estCents,
-  });
+  const tenantWindow =
+    charge.baseCents === 0
+      ? { ok: true }
+      : await rateLimiter.check(ctx, "mediaSpendCents", {
+          key: tenantId,
+          count: charge.baseCents,
+        });
   if (!tenantWindow.ok) return { ok: false, reason: "media_daily_exhausted" };
   const deploymentWindow = await rateLimiter.check(ctx, "deploymentMediaSpendCents", {
     count: estCents,
@@ -176,11 +222,13 @@ async function reserveProviderLinesInner(
 
   // CONSUME NOW, before any POST exists. There are deliberately no refunds: media's bounded,
   // spec-priced over-reservation is cents, not the folder-ingest rail's unknowable dollars.
-  await rateLimiter.limit(ctx, "mediaSpendCents", {
-    key: tenantId,
-    count: estCents,
-    reserve: true,
-  });
+  if (charge.baseCents > 0)
+    await rateLimiter.limit(ctx, "mediaSpendCents", {
+      key: tenantId,
+      count: charge.baseCents,
+      reserve: true,
+    });
+  if (dailyOverage) dailyOverage.remainingCents -= charge.extraCents;
   await rateLimiter.limit(ctx, "deploymentMediaSpendCents", { count: estCents, reserve: true });
 
   // FIN-01: ONE `reserved` movement for the WHOLE job, in this same transaction. Per-line rows
@@ -234,6 +282,7 @@ export async function reserveJobInner(
     blocks: readonly Block[];
     clipSeconds: number;
     withCaptions: boolean;
+    dailyOverage?: MediaDailyOverageAllowance;
   },
 ): Promise<ReserveResult> {
   // 0. FIN-01 coverage, ABOVE every refusal below — including the kill switch. This is the
@@ -248,6 +297,9 @@ export async function reserveJobInner(
   if (cfg.killSwitch || cfg.mediaKillSwitch) return { ok: false, reason: "kill_switch" };
 
   // 2. A block length THE PINNED MODEL cannot produce.
+  if ((await ctx.db.get(a.planId))?.mediaAudioMode === "native") {
+    return { ok: false, reason: "native_deck_invalid" };
+  }
   //
   //    This checked `CLIP_SECONDS` until 20.2 found the hole, and the hole was real rather than
   //    theoretical: `CLIP_SECONDS` is [4,5,8,10,12] — deliberately WIDE, so a historical Wan deck
@@ -409,7 +461,15 @@ export async function reserveJobInner(
 
   // 5-9. The shared transaction rounds the batch total up once, checks and consumes BOTH windows, and
   // inserts only after every refusal has passed. The standalone image path calls this exact helper.
-  return await reserveProviderLinesInner(ctx, a.tenantId, batchId, lines, specs);
+  return await reserveProviderLinesInner(
+    ctx,
+    a.tenantId,
+    batchId,
+    lines,
+    specs,
+    false,
+    a.dailyOverage,
+  );
 }
 
 /**
@@ -469,6 +529,7 @@ const firstUnconfirmedClaim = (
  * keeps the captions line whole on a partial buy.
  */
 const musicSpecOf = (plan: Doc<"plans"> | null): Extract<MediaSpec, { kind: "music" }> | null => {
+  if (plan?.mediaAudioMode === "native") return null;
   const mood = plan?.artDirection?.music;
   return mood === undefined ? null : { kind: "music", model: MEDIA_DEFAULT_MUSIC.model, mood };
 };
@@ -481,6 +542,7 @@ export async function reserveSceneJobInner(
     scenes: readonly Scene[];
     targetDurationSeconds: number;
     withCaptions: boolean;
+    dailyOverage?: MediaDailyOverageAllowance;
     /** A scene INDEX. Absent buys the whole deck; present buys that scene alone. */
     only?: number;
   },
@@ -504,6 +566,10 @@ export async function reserveSceneJobInner(
   // partial buy against a deck with an unvouched figure is still money against that deck. Reading
   // it HERE means no caller can hand this function a deck that skips the gate.
   const planRow = await ctx.db.get(a.planId);
+  const native = planRow?.tenantId === a.tenantId && planRow.mediaAudioMode === "native";
+  if (native && !validateNativeSceneDeck(a).ok) {
+    return { ok: false, reason: "native_deck_invalid" };
+  }
   const claim = firstUnconfirmedClaim(
     planRow && planRow.tenantId === a.tenantId ? planRow.shots : undefined,
   );
@@ -546,7 +612,11 @@ export async function reserveSceneJobInner(
     const picture = sceneVisualSpec(scene.visual, seconds);
     if (!picture.ok) return { ok: false, reason: picture.error.code }; // fail closed, never guess
     if (picture.value !== null) {
-      const { spec, usd } = picture.value;
+      const spec =
+        native && picture.value.spec.kind === "video"
+          ? { ...picture.value.spec, generateAudio: true }
+          : picture.value.spec;
+      const usd = picture.value.usd;
       buy({
         spec,
         estUsd: usd,
@@ -566,9 +636,16 @@ export async function reserveSceneJobInner(
             spec.kind === "stock"
               ? { kind: "stock", media: spec.media, seconds: spec.seconds }
               : spec.kind === "video"
-                ? { kind: "video", resolution: spec.resolution, seconds: spec.seconds }
+                ? {
+                    kind: "video",
+                    resolution: spec.resolution,
+                    seconds: spec.seconds,
+                    ...(native ? { generateAudio: true } : {}),
+                  }
                 : { kind: "image", width: spec.width, height: spec.height },
-          promptHash: await contentHash(scene.prompt),
+          promptHash: await contentHash(
+            native ? buildNativeScenePrompt(scene, planRow?.artDirection?.music) : scene.prompt,
+          ),
           status: "queued",
           estUsd: usd,
           createdAt: now,
@@ -592,7 +669,7 @@ export async function reserveSceneJobInner(
     //
     // It stays upstream of payment for the reason it always was: an overrun is otherwise only
     // provable inside a sandbox that has already been bought.
-    if (scene.narration !== "") {
+    if (!native && scene.narration !== "") {
       // Doubled for the same reason the block path doubles: ONE rewrite round is pre-paid, because
       // the provider returns no duration and a job that cannot afford its own cure strands a paid
       // deck. At $0.012 the doubling is free and the fail-closed direction is over-reserving.
@@ -647,7 +724,10 @@ export async function reserveSceneJobInner(
     (n, s) => n + (s.visual === "generated_video" ? s.durationMs / 1000 : 0),
     0,
   );
-  if (deckGeneratedSeconds > MEDIA_GENERATED_SECONDS_CAP) {
+  if (
+    deckGeneratedSeconds >
+    (native ? MEDIA_NATIVE_GENERATED_SECONDS_CAP : MEDIA_GENERATED_SECONDS_CAP)
+  ) {
     return { ok: false, reason: "over_generated_seconds" };
   }
 
@@ -665,7 +745,7 @@ export async function reserveSceneJobInner(
 
   // One deck-wide captions pass, priced against the DECLARED length rather than
   // `blocks × clipSeconds` — the arithmetic that no longer describes a reel.
-  if (a.withCaptions) {
+  if (a.withCaptions && (!native || a.scenes.some((scene) => scene.narration.trim() !== ""))) {
     const audioMinutes = a.targetDurationSeconds / 60;
     const spec: MediaSpec = { kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes };
     const priced = estimateMediaUsd(spec);
@@ -740,13 +820,26 @@ export async function reserveSceneJobInner(
     ...(music === null ? [] : [music]),
     { kind: "render" },
   ];
-  return await reserveProviderLinesInner(ctx, a.tenantId, batchId, lines, specs);
+  return await reserveProviderLinesInner(
+    ctx,
+    a.tenantId,
+    batchId,
+    lines,
+    specs,
+    native,
+    a.dailyOverage,
+  );
 }
 
 /** Reserve one standalone image through the same media money transaction as a reel. */
 export async function reserveImageInner(
   ctx: MutationCtx,
-  a: { tenantId: string; planId: Id<"plans">; prompt: string },
+  a: {
+    tenantId: string;
+    planId: Id<"plans">;
+    prompt: string;
+    dailyOverage?: MediaDailyOverageAllowance;
+  },
 ): Promise<ReserveResult> {
   const cfg = await getGuardrailConfig(ctx);
   if (cfg.killSwitch || cfg.mediaKillSwitch) return { ok: false, reason: "kill_switch" };
@@ -778,7 +871,15 @@ export async function reserveImageInner(
       updatedAt: now,
     },
   };
-  return await reserveProviderLinesInner(ctx, a.tenantId, batchId, [line], [spec]);
+  return await reserveProviderLinesInner(
+    ctx,
+    a.tenantId,
+    batchId,
+    [line],
+    [spec],
+    false,
+    a.dailyOverage,
+  );
 }
 
 /** The `internalMutation` face of `reserveJobInner`, for the canvas path (plan 20-09) and tests.
@@ -1193,6 +1294,7 @@ type SubmitLine = {
    *  spec in `submitBatch`: a stock line's spec is its own kind, but routing on the spec would put
    *  the decision one field away from the one that names the vendor. */
   provider: Doc<"mediaJobs">["provider"];
+  promptHash?: string;
 };
 
 /** The stored spec back into a typed `SubmittableSpec`, or `null` for a kind this plan does not
@@ -1207,7 +1309,13 @@ function toSubmittable(line: SubmitLine): SubmittableSpec | null {
   if (line.spec.kind === "video") {
     const resolution = line.spec.resolution;
     if (resolution !== "480p" && resolution !== "720p" && resolution !== "1080p") return null;
-    return { kind: "video", model: line.model, resolution, seconds: line.spec.seconds };
+    return {
+      kind: "video",
+      model: line.model,
+      resolution,
+      seconds: line.spec.seconds,
+      ...(line.spec.generateAudio === undefined ? {} : { generateAudio: line.spec.generateAudio }),
+    };
   }
   if (line.spec.kind === "image") {
     return { kind: "image", model: line.model, width: line.spec.width, height: line.spec.height };
@@ -1273,10 +1381,16 @@ export const batchToSubmit = internalQuery({
         model: r.model,
         spec: r.spec,
         provider: r.provider,
+        ...(r.spec.kind === "video" && r.spec.generateAudio === true
+          ? { promptHash: r.promptHash }
+          : {}),
       })),
       shots: (plan?.shots ?? []).map((s) => ({
         index: s.index,
-        prompt: s.prompt,
+        prompt:
+          plan?.mediaAudioMode === "native"
+            ? buildNativeScenePrompt(s, plan.artDirection?.music)
+            : s.prompt,
         narration: s.narration,
       })),
       imagePrompt: plan?.mediaMode === "image" ? (plan.imagePrompt ?? null) : null,
@@ -2126,6 +2240,18 @@ export const submitBatch = internalAction({
           tally.failed += 1;
           continue;
         }
+        if (
+          spec.kind === "video" &&
+          spec.generateAudio === true &&
+          (!line.promptHash || line.promptHash !== (await contentHash(text)))
+        ) {
+          await ctx.runMutation(internal.media.recordSubmission, {
+            jobId: line.jobId,
+            result: { ok: false, blocked: false, code: "native_prompt_changed" },
+          });
+          tally.failed += 1;
+          continue;
+        }
 
         if (spec.kind === "tts") {
           const voice = await generateOpenRouterVoice(text, spec);
@@ -2240,10 +2366,31 @@ export const captionsToSubmit = internalQuery({
     planId: Id<"plans">;
     model: string;
     takes: Array<{ blockIndex: number; storageId: Id<"_storage"> }>;
+    nativeAudioHash?: string;
   } | null> => {
     const rows = await readMediaBatch(ctx, a.tenantId, a.batchId);
     const stt = rows.find((r) => r.kind === "stt");
     if (!stt) return null; // captions were not reserved for this deck — nothing to do, not an error
+    const plan = await ctx.db.get(stt.planId);
+    if (plan?.mediaAudioMode === "native") {
+      if (
+        plan.tenantId !== a.tenantId ||
+        rows.some((row) => row.planId !== plan._id) ||
+        plan.renderStatus !== "rendered" ||
+        !plan.nativeCaptionAudioStorageId ||
+        !plan.nativeCaptionAudioHash ||
+        plan.nativeCaptionBatchId !== a.batchId ||
+        plan.nativeCaptionRenderStorageId !== plan.renderStorageId
+      )
+        return null;
+      return {
+        sttJobId: stt._id,
+        planId: stt.planId,
+        model: stt.model,
+        takes: [{ blockIndex: 0, storageId: plan.nativeCaptionAudioStorageId }],
+        nativeAudioHash: plan.nativeCaptionAudioHash,
+      };
+    }
     const takes = rows
       .filter((r) => r.kind === "tts" && r.status === "succeeded" && r.assetStorageId !== undefined)
       .sort((l, r) => l.blockIndex - r.blockIndex)
@@ -2261,6 +2408,7 @@ export const recordCaptionSubmission = internalMutation({
     planId: v.id("plans"),
     jobId: v.id("mediaJobs"),
     offsetsS: v.array(v.number()),
+    nativeAudioHash: v.optional(v.string()),
     result: v.union(
       v.object({ ok: v.literal(true), providerRequestId: v.string() }),
       v.object({ ok: v.literal(false), blocked: v.boolean(), code: v.string() }),
@@ -2268,9 +2416,37 @@ export const recordCaptionSubmission = internalMutation({
   },
   handler: async (ctx, a): Promise<null> => {
     const updatedAt = Date.now();
+    if (a.nativeAudioHash !== undefined) {
+      const job = await ctx.db.get(a.jobId);
+      if (
+        !job ||
+        job.planId !== a.planId ||
+        ["succeeded", "failed", "blocked"].includes(job.status)
+      )
+        return null;
+      const plan = await ctx.db.get(a.planId);
+      if (
+        plan?.mediaAudioMode !== "native" ||
+        job.tenantId !== plan.tenantId ||
+        plan.nativeCaptionBatchId !== job.batchId ||
+        plan.nativeCaptionAudioHash !== a.nativeAudioHash ||
+        plan.nativeCaptionRenderStorageId !== plan.renderStorageId
+      ) {
+        await ctx.db.patch(a.jobId, {
+          status: "failed",
+          failureReason: "native_audio_source_changed",
+          updatedAt,
+        });
+        return null;
+      }
+    }
     if (a.result.ok) {
       await ctx.db.patch(a.planId, { captionOffsetsS: a.offsetsS });
-      await ctx.db.patch(a.jobId, { providerRequestId: a.result.providerRequestId, updatedAt });
+      await ctx.db.patch(a.jobId, {
+        providerRequestId: a.result.providerRequestId,
+        ...(a.nativeAudioHash === undefined ? {} : { nativeAudioHash: a.nativeAudioHash }),
+        updatedAt,
+      });
       return null;
     }
     // A caption failure NEVER touches `renderStatus` — the uncaptioned reel stays published.
@@ -2308,7 +2484,7 @@ export const submitCaptions = internalAction({
       return { ok: false, code: "already_claimed" };
     }
 
-    const takes: Uint8Array[] = [];
+    const takes: Uint8Array<ArrayBuffer>[] = [];
     for (const take of job.takes) {
       const blob = await ctx.storage.get(take.storageId);
       if (!blob) {
@@ -2316,6 +2492,7 @@ export const submitCaptions = internalAction({
           planId: job.planId,
           jobId: job.sttJobId,
           offsetsS: [],
+          ...(job.nativeAudioHash === undefined ? {} : { nativeAudioHash: job.nativeAudioHash }),
           result: { ok: false, blocked: false, code: "take_missing" },
         });
         return { ok: false, code: "take_missing" };
@@ -2323,16 +2500,24 @@ export const submitCaptions = internalAction({
       takes.push(new Uint8Array(await blob.arrayBuffer()));
     }
 
-    const joined = concatWavTakes(takes);
     const fail = async (code: string) => {
       await ctx.runMutation(internal.media.recordCaptionSubmission, {
         planId: job.planId,
         jobId: job.sttJobId,
         offsetsS: [],
+        ...(job.nativeAudioHash === undefined ? {} : { nativeAudioHash: job.nativeAudioHash }),
         result: { ok: false, blocked: false, code },
       });
       return { ok: false, code };
     };
+    const nativeTake = takes[0];
+    if (
+      job.nativeAudioHash !== undefined &&
+      (takes.length !== 1 || !nativeTake || (await contentHash(nativeTake)) !== job.nativeAudioHash)
+    ) {
+      return await fail("native_audio_source_changed");
+    }
+    const joined = concatWavTakes(takes);
     if (!joined.ok) return await fail(joined.error.code);
     if (joined.value.wav.byteLength > MAX_STT_AUDIO_BYTES) return await fail("audio_too_large");
 
@@ -2380,6 +2565,7 @@ export const submitCaptions = internalAction({
       planId: job.planId,
       jobId: job.sttJobId,
       offsetsS: joined.value.offsetsS,
+      ...(job.nativeAudioHash === undefined ? {} : { nativeAudioHash: job.nativeAudioHash }),
       result: { ok: true, providerRequestId: requestId },
     });
     const transcript = new TextEncoder().encode(JSON.stringify({ words }));
@@ -2459,6 +2645,9 @@ async function ownedPlanOrThrow(
  * Convex unsets a field by patching it to `undefined`.
  */
 async function clearRender(ctx: MutationCtx, planId: Id<"plans">): Promise<void> {
+  const prior = await ctx.db.get(planId);
+  if (prior?.nativeCaptionAudioStorageId)
+    await ctx.storage.delete(prior.nativeCaptionAudioStorageId);
   await ctx.db.patch(planId, {
     renderStatus: "pending",
     renderReason: undefined,
@@ -2467,6 +2656,10 @@ async function clearRender(ctx: MutationCtx, planId: Id<"plans">): Promise<void>
     captionStatus: undefined,
     captionReason: undefined,
     captionOffsetsS: undefined,
+    nativeCaptionAudioStorageId: undefined,
+    nativeCaptionAudioHash: undefined,
+    nativeCaptionBatchId: undefined,
+    nativeCaptionRenderStorageId: undefined,
   });
 }
 
@@ -2596,7 +2789,8 @@ export const byPlan = tenantQuery({
         // ceiling on `reorderBlocks`.
         const mine = rows.filter((r) => r.blockIndex === shot.index);
         const clipRow = mine.find((r) => r.kind === "video" || r.kind === "image");
-        const voiceRow = mine.find((r) => r.kind === "tts");
+        const voiceRow =
+          plan.mediaAudioMode === "native" ? undefined : mine.find((r) => r.kind === "tts");
         const maxChars = sceneDeck
           ? maxCharsFor(narrationCeilingSeconds(sceneDeck.scenes, position))
           : deckMaxChars;
@@ -2637,7 +2831,14 @@ export const byPlan = tenantQuery({
            *  recorded", and the cure is the regenerate control right beside it. The comparison is
            *  the job's own `promptHash` against the shot's current text — the same hash the
            *  reserve wrote, so it cannot drift from what was actually bought. */
-          clipStale: clipRow ? clipRow.promptHash !== (await contentHash(shot.prompt)) : false,
+          clipStale: clipRow
+            ? clipRow.promptHash !==
+              (await contentHash(
+                clipRow.spec.kind === "video" && clipRow.spec.generateAudio === true
+                  ? buildNativeScenePrompt(shot, plan.artDirection?.music)
+                  : shot.prompt,
+              ))
+            : false,
           voiceStale: voiceRow
             ? voiceRow.promptHash !== (await contentHash(shot.narration))
             : false,
@@ -2741,6 +2942,61 @@ export const reel = tenantQuery({
 /** One itemised cost line, as the canvas prints it. */
 type EstimateLine = { label: string; qty: number; unit: string; cents: number };
 
+export async function nativeReelReviewHash(plan: Doc<"plans">): Promise<string> {
+  return await contentHash(
+    JSON.stringify({
+      planId: plan._id,
+      audioMode: plan.mediaAudioMode,
+      shots: plan.shots,
+      targetDurationSeconds: plan.targetDurationSeconds,
+      artDirection: plan.artDirection,
+      profile: MEDIA_DEFAULT_VIDEO,
+      policy: {
+        capUsd: MEDIA_NATIVE_JOB_CAP_USD,
+        generatedSeconds: MEDIA_NATIVE_GENERATED_SECONDS_CAP,
+        durations: MEDIA_VIDEO_SECONDS[MEDIA_DEFAULT_VIDEO.model],
+        videoUnits: (MEDIA_VIDEO_SECONDS[MEDIA_DEFAULT_VIDEO.model] ?? []).map((seconds) =>
+          estimateMediaUsd({
+            kind: "video",
+            ...MEDIA_DEFAULT_VIDEO,
+            seconds,
+            generateAudio: true,
+          }),
+        ),
+        captionsUnit: estimateMediaUsd({
+          kind: "stt",
+          model: MEDIA_DEFAULT_STT.model,
+          audioMinutes: 1,
+        }),
+        renderUnit: estimateMediaUsd({ kind: "render" }),
+      },
+    }),
+  );
+}
+
+export async function nativeReelReviewRefusal(
+  ctx: QueryCtx,
+  plan: Doc<"plans">,
+  review: { expectedReviewHash?: string; maxCostCents?: number },
+): Promise<ReserveRefusal | "review_changed" | "over_reviewed_cost" | null> {
+  if (plan.mediaAudioMode !== "native") return null;
+  if (
+    !review.expectedReviewHash ||
+    review.expectedReviewHash !== (await nativeReelReviewHash(plan))
+  )
+    return "review_changed";
+  const estimate = await estimateReelPlanInner(ctx, plan.tenantId, plan._id);
+  if (estimate.refusal) return estimate.refusal.reason;
+  if (
+    review.maxCostCents === undefined ||
+    !Number.isSafeInteger(review.maxCostCents) ||
+    review.maxCostCents < estimate.totalCents ||
+    review.maxCostCents > estimate.capCents
+  )
+    return "over_reviewed_cost";
+  return null;
+}
+
 /**
  * THE ITEMISED ESTIMATE — four labelled lines, not one total.
  *
@@ -2765,13 +3021,24 @@ export async function estimateReelPlanInner(
   capCents: number;
   remainingCents: number;
   estUsd?: number;
+  audioMode: "native" | "separate";
+  reviewHash?: string;
   refusal: { reason: ReserveRefusal; blockIndex?: number; chars?: number } | null;
 }> {
-  const capCents = Math.round(MEDIA_JOB_CAP_USD * 100);
-  const remainingCents = await mediaRemainingCentsInner(ctx, tenantId);
-  const empty = { lines: [], totalCents: 0, capCents, remainingCents, refusal: null };
-
   const plan = await ownedPlan(ctx, planId, tenantId);
+  const native = plan?.mediaAudioMode === "native";
+  const capCents = Math.round((native ? MEDIA_NATIVE_JOB_CAP_USD : MEDIA_JOB_CAP_USD) * 100);
+  const remainingCents = await mediaRemainingCentsInner(ctx, tenantId);
+  const empty = {
+    lines: [],
+    totalCents: 0,
+    capCents,
+    remainingCents,
+    refusal: null,
+    audioMode: native ? ("native" as const) : ("separate" as const),
+    ...(native && plan ? { reviewHash: await nativeReelReviewHash(plan) } : {}),
+  };
+
   if (!plan) return empty;
   // 20.2 wave 5 — the scene gate OPENS here in the same commit it opens at `generateReel`, and
   // that co-location is the point: a working Generate button behind a refusing estimate would
@@ -2780,6 +3047,8 @@ export async function estimateReelPlanInner(
   const sceneDeck = sceneDeckOf(plan);
   if (sceneDeck !== null) {
     const { scenes, targetDurationSeconds } = sceneDeck;
+    if (native && !validateNativeSceneDeck(sceneDeck).ok)
+      return { ...empty, refusal: { reason: "native_deck_invalid" } };
 
     // The SAME pre-flight refusals `reserveSceneJobInner` applies, in the same order.
     if (scenes.reduce((n, s) => n + s.durationMs, 0) / 1000 !== targetDurationSeconds) {
@@ -2805,10 +3074,14 @@ export async function estimateReelPlanInner(
       const picture = sceneVisualSpec(s.visual, seconds);
       if (!picture.ok) return { ...empty, refusal: { reason: picture.error.code } };
       if (picture.value !== null) {
-        specs.push(picture.value.spec);
+        specs.push(
+          native && picture.value.spec.kind === "video"
+            ? { ...picture.value.spec, generateAudio: true }
+            : picture.value.spec,
+        );
         if (picture.value.spec.kind === "video") clipSecondsTotal += seconds;
       }
-      if (s.narration !== "") {
+      if (!native && s.narration !== "") {
         const availableSeconds = narrationCeilingSeconds(scenes, i);
         if (s.narration.length > maxCharsFor(availableSeconds)) {
           return {
@@ -2826,14 +3099,17 @@ export async function estimateReelPlanInner(
       }
     }
     const audioMinutes = targetDurationSeconds / 60;
-    specs.push({ kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes });
+    const needsCaptions = !native || scenes.some((scene) => scene.narration.trim() !== "");
+    if (needsCaptions) specs.push({ kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes });
     // The SAME reader `reserveSceneJobInner` uses, in the same position of the same order — so
     // the estimate and the reserve cannot disagree about whether this deck has a bed.
     const music = musicSpecOf(plan);
     if (music !== null) specs.push(music);
     specs.push({ kind: "render" });
 
-    const priced = chooseMediaBatch(specs, MEDIA_JOB_CAP_USD);
+    const priced = chooseMediaBatch(specs, native ? MEDIA_NATIVE_JOB_CAP_USD : MEDIA_JOB_CAP_USD, {
+      audioMode: native ? "native" : "separate",
+    });
     if (!priced.ok) return { ...empty, refusal: { reason: priced.error.code } };
     const sub = (of: MediaSpec[]): number =>
       Math.round(
@@ -2842,7 +3118,7 @@ export async function estimateReelPlanInner(
           return n + (p.ok ? p.value : 0);
         }, 0) * 100,
       );
-    const voiceCount = scenes.filter((s) => s.narration !== "").length;
+    const voiceCount = native ? 0 : scenes.filter((s) => s.narration !== "").length;
     const clips = specs.filter((x) => x.kind === "video");
     const stills = specs.filter((x) => x.kind === "image");
     const stock = specs.filter((x) => x.kind === "stock");
@@ -2883,18 +3159,26 @@ export async function estimateReelPlanInner(
               },
             ]
           : []),
-        {
-          label: "voice",
-          qty: voiceCount,
-          unit: `${voiceChars} chars`,
-          cents: sub(specs.filter((x) => x.kind === "tts")),
-        },
-        {
-          label: "captions",
-          qty: 1,
-          unit: `${audioMinutes.toFixed(2)} min`,
-          cents: sub(specs.filter((x) => x.kind === "stt")),
-        },
+        ...(!native
+          ? [
+              {
+                label: "voice",
+                qty: voiceCount,
+                unit: `${voiceChars} chars`,
+                cents: sub(specs.filter((x) => x.kind === "tts")),
+              },
+            ]
+          : []),
+        ...(needsCaptions
+          ? [
+              {
+                label: "captions",
+                qty: 1,
+                unit: `${audioMinutes.toFixed(2)} min`,
+                cents: sub(specs.filter((x) => x.kind === "stt")),
+              },
+            ]
+          : []),
         // PRINTED AT ZERO, deliberately breaking the "omit a kind the deck does not use" rule
         // above — because it is not the same rule. A kind the deck does not use has no line;
         // a bed the deck DOES declare has a line that happens to cost nothing, and hiding it
@@ -2916,8 +3200,11 @@ export async function estimateReelPlanInner(
       capCents,
       remainingCents,
       refusal: null,
+      audioMode: native ? "native" : "separate",
+      ...(empty.reviewHash === undefined ? {} : { reviewHash: empty.reviewHash }),
     };
   }
+  if (native) return { ...empty, refusal: { reason: "native_deck_invalid" } };
   const blocks = deckOf(plan);
   const clipSeconds = plan.clipSeconds;
   if (!blocks || clipSeconds === undefined) return empty;
@@ -3023,6 +3310,7 @@ export async function estimateReelPlanInner(
     capCents,
     remainingCents,
     refusal: null,
+    audioMode: "separate",
   };
 }
 
@@ -3112,19 +3400,30 @@ export async function reserveCampaignPlanInner(
   ctx: MutationCtx,
   tenantId: string,
   planId: Id<"plans">,
+  dailyOverage?: MediaDailyOverageAllowance,
 ): Promise<
   { ok: true; batchId: string; estCents: number; estUsd: number } | { ok: false; reason: string }
 > {
   const plan = await ownedPlan(ctx, planId, tenantId);
   if (!plan?.mediaCampaignId || plan.kind !== "media")
     return { ok: false, reason: "no_campaign_plan" };
+  if (
+    dailyOverage &&
+    (dailyOverage.tenantId !== tenantId || dailyOverage.campaignId !== plan.mediaCampaignId)
+  )
+    return { ok: false, reason: "media_daily_exhausted" };
   if (plan.status === "collecting") return { ok: false, reason: "storyboard_in_progress" };
   if ((await activeMediaJobs(ctx, tenantId, planId)).length)
     return { ok: false, reason: "already_started" };
   let result: ReserveResult;
   if (plan.mediaMode === "image") {
     if (!plan.imagePrompt?.trim()) return { ok: false, reason: "no_image_plan" };
-    result = await reserveImageInner(ctx, { tenantId, planId, prompt: plan.imagePrompt.trim() });
+    result = await reserveImageInner(ctx, {
+      tenantId,
+      planId,
+      prompt: plan.imagePrompt.trim(),
+      dailyOverage,
+    });
   } else {
     const sceneDeck = sceneDeckOf(plan);
     const blocks = deckOf(plan);
@@ -3134,6 +3433,7 @@ export async function reserveCampaignPlanInner(
         planId,
         ...sceneDeck,
         withCaptions: true,
+        dailyOverage,
       });
     else if (blocks && plan.clipSeconds !== undefined)
       result = await reserveJobInner(ctx, {
@@ -3142,6 +3442,7 @@ export async function reserveCampaignPlanInner(
         blocks,
         clipSeconds: plan.clipSeconds,
         withCaptions: true,
+        dailyOverage,
       });
     else return { ok: false, reason: "no_deck" };
     if (result.ok) {
@@ -3245,10 +3546,23 @@ async function reserveAndSchedule(
 /** Generate the WHOLE reel — the canvas's paid entry point, through the identical money gate the
  *  approve arm uses. No second rail, no second cap, no bypass. */
 export const generateReel = tenantMutation({
-  args: { planId: v.id("plans") },
-  handler: async (ctx, { planId }) => {
+  args: {
+    planId: v.id("plans"),
+    expectedReviewHash: v.optional(v.string()),
+    maxCostCents: v.optional(v.number()),
+  },
+  handler: async (ctx, { planId, expectedReviewHash, maxCostCents }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
     if (plan.mediaCampaignId) return { ok: false as const, reason: "campaign_owned" as const };
+    if (plan.mediaAudioMode === "native") {
+      const refusal = await nativeReelReviewRefusal(ctx, plan, {
+        expectedReviewHash,
+        maxCostCents,
+      });
+      if (refusal) return { ok: false as const, reason: refusal };
+      if ((await activeMediaJobs(ctx, ctx.tenantId, planId)).length > 0)
+        return { ok: false as const, reason: "already_started" as const };
+    }
     // 20.2 wave 5 — THE SCENE GATE OPENS. Wave 2 put a `scene_render_not_ready` refusal here
     // because a scene deck reaching `deckOf` returns null and would have refused as `no_deck`,
     // which was a lie: the deck parsed and was on screen. Everything it was waiting for now
@@ -3342,9 +3656,24 @@ export const generateImage = tenantMutation({
  * The previous rows and their stored assets are LEFT ALONE. This is history, not mutation.
  */
 export const regenerateBlock = tenantMutation({
-  args: { planId: v.id("plans"), blockIndex: v.number() },
-  handler: async (ctx, { planId, blockIndex }) => {
+  args: {
+    planId: v.id("plans"),
+    blockIndex: v.number(),
+    expectedReviewHash: v.optional(v.string()),
+    maxCostCents: v.optional(v.number()),
+  },
+  handler: async (ctx, { planId, blockIndex, expectedReviewHash, maxCostCents }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    if (plan.mediaCampaignId) return { ok: false as const, reason: "campaign_owned" as const };
+    if (plan.mediaAudioMode === "native") {
+      const refusal = await nativeReelReviewRefusal(ctx, plan, {
+        expectedReviewHash,
+        maxCostCents,
+      });
+      if (refusal) return { ok: false as const, reason: refusal };
+      if ((await activeMediaJobs(ctx, ctx.tenantId, planId)).length > 0)
+        return { ok: false as const, reason: "already_started" as const };
+    }
     // 20.2 wave 6 — THE SCENE ARM OPENS. Re-buying one scene in isolation would reserve a batch
     // whose scenes do not add up to the declared target, so the WHOLE timeline is handed to the
     // reserve and only the purchase is narrowed (`only`). The render then takes this scene's new
@@ -3530,7 +3859,11 @@ export const editBlockNarration = tenantMutation({
     const sceneDeck = sceneDeckOf(plan);
     const position = (plan.shots ?? []).findIndex((s) => s.index === blockIndex);
     const maxChars = sceneDeck
-      ? maxCharsFor(narrationCeilingSeconds(sceneDeck.scenes, position))
+      ? maxCharsFor(
+          plan.mediaAudioMode === "native"
+            ? (sceneDeck.scenes[position]?.durationMs ?? 0) / 1000
+            : narrationCeilingSeconds(sceneDeck.scenes, position),
+        )
       : plan.clipSeconds === undefined
         ? MAX_CHARS_PER_BLOCK
         : maxCharsFor(plan.clipSeconds);
@@ -3584,6 +3917,8 @@ export const setSceneAsset = tenantMutation({
   args: { planId: v.id("plans"), blockIndex: v.number(), vaultDocId: v.string() },
   handler: async (ctx, { planId, blockIndex, vaultDocId }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    if (plan.mediaAudioMode === "native")
+      return { ok: false as const, reason: "native_deck_invalid" as const };
     const shots = plan.shots ?? [];
     const shot = shots.find((s) => s.index === blockIndex);
     if (!shot) return { ok: false as const, reason: "no_block" as const };
@@ -3644,6 +3979,8 @@ export const setSceneVisual = tenantMutation({
   },
   handler: async (ctx, { planId, sceneIndex, visual, overlay }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    if (plan.mediaAudioMode === "native" && visual !== "generated_video")
+      return { ok: false as const, reason: "native_deck_invalid" as const };
     // A closed vocabulary, checked before anything else — a kind this renderer does not ship must
     // never be written onto a row `assemblerKindOf` will later refuse.
     if (!(VISUAL_KINDS as readonly string[]).includes(visual)) {
@@ -3789,7 +4126,11 @@ export const editBrief = tenantMutation({
     }
     if (
       patch.durationSeconds !== undefined &&
-      !(TARGET_DURATIONS as readonly number[]).includes(patch.durationSeconds)
+      !(
+        (plan.mediaAudioMode === "native"
+          ? NATIVE_TARGET_DURATIONS
+          : TARGET_DURATIONS) as readonly number[]
+      ).includes(patch.durationSeconds)
     ) {
       return { ok: false as const, reason: "illegal_duration" as const };
     }

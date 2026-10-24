@@ -3,10 +3,16 @@
 import { NO_GRANTS } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { DEPLOYMENT_MEDIA_BUDGET_CENTS, MEDIA_DAILY_BUDGET_CENTS, rateLimiter } from "./guardrails";
+import {
+  DEPLOYMENT_MEDIA_BUDGET_CENTS,
+  MEDIA_DAILY_BUDGET_CENTS,
+  mediaDailyBudgetInner,
+  rateLimiter,
+} from "./guardrails";
 import { newestRoot, ROOT_SCAN, threadRoots } from "./lib/planRow";
 import { buildCockpitTools } from "./llm";
 import * as media from "./media";
@@ -16,6 +22,9 @@ import schema from "./schema";
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const rateLimiterModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
 );
 type T = TestConvex<typeof schema>;
 const tenantId = "campaign_a";
@@ -28,9 +37,316 @@ afterEach(() => {
 function harness() {
   const t = convexTest(schema, modules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   return t;
 }
 const asA = (t: T) => t.withIdentity({ subject: tenantId });
+async function nativeCampaign(
+  t: T,
+  durations: number[],
+  includeImage = false,
+  remainingBaseCents = 1000,
+) {
+  // Exercise overage with $10 remaining under the current $100/day base, without lowering rails.
+  if (remainingBaseCents < MEDIA_DAILY_BUDGET_CENTS)
+    await t.run((ctx) =>
+      rateLimiter.limit(ctx, "mediaSpendCents", {
+        key: tenantId,
+        count: MEDIA_DAILY_BUDGET_CENTS - remainingBaseCents,
+        reserve: true,
+      }),
+    );
+  const value = await t.mutation(internal.mediaCampaign.stage, {
+    tenantId,
+    threadId: "campaign_thread",
+    title: "Native launch collection",
+    maxCostCents: 30000,
+    items: [
+      ...durations.map((seconds, i) => ({
+        kind: "video" as const,
+        label: `Product ${i + 1}`,
+        brief: `A native${seconds}second product${i + 1} film`,
+      })),
+      ...(includeImage
+        ? [
+            {
+              kind: "image" as const,
+              label: "Launch still",
+              prompt: "Separate owned product still",
+            },
+          ]
+        : []),
+    ],
+  });
+  const campaign = await row(t, value.campaignId);
+  await t.run(async (ctx) => {
+    for (const [i, seconds] of durations.entries()) {
+      const item = campaign.items[i];
+      if (!item) throw new Error("missing native campaign item");
+      await ctx.db.patch(item.planId, {
+        kind: "media",
+        status: "proposed",
+        mediaAudioMode: "native",
+        targetDurationSeconds: seconds,
+        shots: Array.from({ length: seconds / 15 }, (_, index) => ({
+          index,
+          visual: "generated_video" as const,
+          seconds: 15,
+          windowStartMs: index * 15000,
+          description: `Product${i + 1} angle${index + 1}`,
+          prompt: `Owned product${i + 1}, stable identity, angle${index + 1}, coherent lighting`,
+          narration: `Discover product${i + 1}.`,
+        })),
+      });
+    }
+  });
+  return value;
+}
+async function campaignReview(t: T, campaignId: Id<"mediaCampaigns">) {
+  const value = await asA(t).query(api.mediaCampaign.byId, {
+    campaignId,
+    threadId: "campaign_thread",
+  });
+  if (!value) throw new Error("missing reviewed campaign");
+  return value;
+}
+async function approveReviewed(
+  t: T,
+  review: Awaited<ReturnType<typeof campaignReview>>,
+  extra?: number,
+  itemIndexes?: number[],
+) {
+  return asA(t).mutation(api.mediaCampaign.approve, {
+    campaignId: review.id,
+    expectedUpdatedAt: review.updatedAt,
+    expectedReviewHash: review.reviewHash,
+    maxCostCents: 30000,
+    ...(itemIndexes ? { itemIndexes } : {}),
+    ...(extra === undefined
+      ? {}
+      : {
+          approvedDailyIncreaseCents: extra,
+          expectedDailyWindowStartMs: review.dailyWindowStartMs,
+        }),
+  });
+}
+
+test("native30/45/60 videos and an image share batch rails with two whole-film workers", async () => {
+  const t = harness();
+  const { campaignId } = await nativeCampaign(t, [30, 45, 60], true);
+  const review = await campaignReview(t, campaignId);
+  expect(review.items.map((item) => item.refusal)).toEqual([null, null, null, null]);
+  const total = review.nextMaximumCents,
+    extra = total - review.dailyRemainingCents;
+  expect(extra).toBeGreaterThan(0);
+  expect(await approveReviewed(t, review)).toEqual({
+    ok: false,
+    reason: "daily_limit_increase_required",
+  });
+  expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+  expect(await approveReviewed(t, review, extra)).toEqual({ ok: true });
+  await t.run(async (ctx) => {
+    const jobs = await ctx.db.query("mediaJobs").collect();
+    expect(jobs.filter((j) => j.kind === "video")).toHaveLength(9);
+    expect(jobs.filter((j) => j.kind === "image")).toHaveLength(1);
+    expect(jobs.some((j) => j.kind === "tts" || j.provider === "stock")).toBe(false);
+    expect(
+      jobs
+        .filter((j) => j.kind === "video")
+        .every(
+          (j) =>
+            j.model === "bytedance/seedance-2.0" &&
+            j.spec.kind === "video" &&
+            j.spec.generateAudio === true,
+        ),
+    ).toBe(true);
+    expect((await mediaDailyBudgetInner(ctx, tenantId)).dailyRemainingCents).toBe(0);
+    expect((await rateLimiter.getValue(ctx, "deploymentMediaSpendCents")).value).toBe(
+      DEPLOYMENT_MEDIA_BUDGET_CENTS - total,
+    );
+    const reserved = await ctx.db.query("spendEvents").collect();
+    expect(
+      reserved.filter((e) => e.phase === "reserved").reduce((sum, e) => sum + e.amountCents, 0),
+    ).toBe(total);
+    const grant = (await ctx.db.query("audit").collect()).filter(
+      (e) => e.eventType === "media.campaign_task_budget_approved",
+    );
+    expect(grant).toHaveLength(1);
+    expect(grant[0]?.payload).toMatchObject({
+      campaignId,
+      selectedCount: 4,
+      approvedExtraCents: extra,
+    });
+  });
+  await advance(t, campaignId);
+  const active = await row(t, campaignId);
+  expect(active.items.filter((i) => i.status === "running")).toHaveLength(2);
+  expect(active.items.filter((i) => i.kind === "video" && i.status === "running")).toHaveLength(2);
+});
+
+test("late refusal rolls back the task grant, earlier native rows and both budget rails", async () => {
+  const t = harness();
+  const { campaignId } = await nativeCampaign(t, [60, 60]);
+  const review = await campaignReview(t, campaignId),
+    extra = review.nextMaximumCents - review.dailyRemainingCents;
+  const original = media.reserveCampaignPlanInner;
+  let calls = 0;
+  vi.spyOn(media, "reserveCampaignPlanInner").mockImplementation(async (...args) =>
+    ++calls === 2 ? { ok: false, reason: "media_daily_exhausted" } : original(...args),
+  );
+  expect(await approveReviewed(t, review, extra)).toEqual({
+    ok: false,
+    reason: "media_daily_exhausted",
+  });
+  expect(calls).toBe(2);
+  await t.run(async (ctx) => {
+    expect(await ctx.db.query("mediaJobs").collect()).toHaveLength(0);
+    expect(await ctx.db.query("spendEvents").collect()).toHaveLength(0);
+    expect((await mediaDailyBudgetInner(ctx, tenantId)).dailyRemainingCents).toBe(1000);
+    expect((await rateLimiter.getValue(ctx, "deploymentMediaSpendCents")).value).toBe(
+      DEPLOYMENT_MEDIA_BUDGET_CENTS,
+    );
+    expect(
+      (await ctx.db.query("audit").collect()).filter(
+        (e) => e.eventType === "media.campaign_task_budget_approved",
+      ),
+    ).toHaveLength(0);
+  });
+});
+
+test("a failed native child needs a fresh task approval and retries only its selected product", async () => {
+  const t = harness();
+  const { campaignId } = await nativeCampaign(t, [60, 60]);
+  const first = await campaignReview(t, campaignId);
+  expect(
+    await approveReviewed(t, first, first.nextMaximumCents - first.dailyRemainingCents),
+  ).toEqual({ ok: true });
+  const before = await row(t, campaignId);
+  await t.run(async (ctx) => {
+    const jobs = await ctx.db.query("mediaJobs").collect();
+    for (const job of jobs)
+      await ctx.db.patch(job._id, { status: "failed", failureReason: "provider_content_refused" });
+    await ctx.db.patch(campaignId, {
+      status: "partial",
+      items: before.items.map((item, i) => ({
+        ...item,
+        status: i === 0 ? ("succeeded" as const) : ("failed" as const),
+      })),
+      updatedAt: before.updatedAt + 1,
+    });
+  });
+  const retry = await campaignReview(t, campaignId),
+    failed = retry.items[1];
+  if (!failed) throw new Error("missing failed child");
+  expect(await approveReviewed(t, retry, undefined, [1])).toEqual({
+    ok: false,
+    reason: "daily_limit_increase_required",
+  });
+  const originalJobs = await t.run((ctx) => ctx.db.query("mediaJobs").collect());
+  expect(await approveReviewed(t, retry, failed.estimateCents, [1])).toEqual({ ok: true });
+  const after = await row(t, campaignId);
+  expect(after.items[0]?.batchId).toBe(before.items[0]?.batchId);
+  expect(after.items[1]?.batchId).not.toBe(before.items[1]?.batchId);
+  const added = await t.run((ctx) => ctx.db.query("mediaJobs").collect());
+  expect(added.length).toBeGreaterThan(originalJobs.length);
+  expect(
+    added
+      .filter((j) => !originalJobs.some((old) => old._id === j._id))
+      .every((j) => j.planId === failed.planId),
+  ).toBe(true);
+});
+
+test("fresh-bucket task consent survives elapsed milliseconds and never grants another task credit", async () => {
+  const t = harness();
+  const { campaignId } = await nativeCampaign(
+    t,
+    Array.from({ length: 15 }, () => 60),
+    false,
+    MEDIA_DAILY_BUDGET_CENTS,
+  );
+  const review = await campaignReview(t, campaignId),
+    extra = review.nextMaximumCents - review.dailyRemainingCents;
+  vi.setSystemTime(Date.now() + 250);
+  const current = await campaignReview(t, campaignId);
+  expect(current.dailyWindowStartMs).toBe(review.dailyWindowStartMs);
+  expect(await approveReviewed(t, review, extra)).toEqual({ ok: true });
+  expect(await approveReviewed(t, review, extra)).toMatchObject({ ok: false });
+  await asA(t).mutation(api.mediaCampaign.cancel, { campaignId });
+  const other = await stage(t, 1);
+  const next = await campaignReview(t, other.campaignId);
+  expect(next.dailyRemainingCents).toBe(0);
+  expect(await approveReviewed(t, next)).toEqual({
+    ok: false,
+    reason: "daily_limit_increase_required",
+  });
+  expect((await row(t, other.campaignId)).status).toBe("draft");
+});
+
+test("changed remaining balance or daily window refuses stale task consent without any jobs", async () => {
+  const t = harness();
+  const { campaignId } = await nativeCampaign(t, [60, 60]);
+  const review = await campaignReview(t, campaignId),
+    extra = review.nextMaximumCents - review.dailyRemainingCents;
+  await t.run((ctx) =>
+    rateLimiter.limit(ctx, "mediaSpendCents", { key: tenantId, count: 1, reserve: true }),
+  );
+  expect(await approveReviewed(t, review, extra)).toEqual({
+    ok: false,
+    reason: "stale_daily_limit_review",
+  });
+  const fresh = await campaignReview(t, campaignId);
+  vi.setSystemTime(Date.now() + 25 * 60 * 60 * 1000);
+  expect(
+    await approveReviewed(t, fresh, fresh.nextMaximumCents - fresh.dailyRemainingCents),
+  ).toEqual({ ok: false, reason: "stale_daily_limit_review" });
+  const reset = await campaignReview(t, campaignId);
+  expect(reset.dailyRemainingCents).toBe(MEDIA_DAILY_BUDGET_CENTS);
+  expect(reset.dailyWindowStartMs).not.toBe(fresh.dailyWindowStartMs);
+  expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+});
+
+test("a task increase cannot bypass the unchanged shared deployment limit, including15native films", async () => {
+  const t = harness();
+  const { campaignId } = await nativeCampaign(
+    t,
+    Array.from({ length: 15 }, () => 60),
+  );
+  await t.run((ctx) =>
+    rateLimiter.limit(ctx, "deploymentMediaSpendCents", {
+      count: DEPLOYMENT_MEDIA_BUDGET_CENTS - 1000,
+      reserve: true,
+    }),
+  );
+  const review = await campaignReview(t, campaignId);
+  expect(review.items).toHaveLength(15);
+  expect(review.nextMaximumCents).toBeGreaterThan(review.deploymentRemainingCents);
+  expect(
+    await approveReviewed(t, review, review.nextMaximumCents - review.dailyRemainingCents),
+  ).toEqual({ ok: false, reason: "deployment_media_exhausted" });
+  expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+  expect(await t.run((ctx) => ctx.db.query("spendEvents").collect())).toHaveLength(0);
+});
+
+test("native campaign review binds current profile and cannot borrow a child from another product", async () => {
+  const t = harness();
+  const { campaignId } = await nativeCampaign(t, [30, 45]);
+  const review = await campaignReview(t, campaignId);
+  const original = media.nativeReelReviewHash;
+  const spy = vi
+    .spyOn(media, "nativeReelReviewHash")
+    .mockImplementation(async (plan) => `${await original(plan)}-profile-changed`);
+  const changed = await campaignReview(t, campaignId);
+  expect(changed.reviewHash).not.toBe(review.reviewHash);
+  expect(await approveReviewed(t, review)).toEqual({ ok: false, reason: "stale_review" });
+  spy.mockRestore();
+  const campaign = await row(t, campaignId);
+  const first = campaign.items[0];
+  if (!first) throw new Error("missing first child");
+  await t.run((ctx) => ctx.db.patch(first.planId, { tenantId: "another_product_owner" }));
+  await expect(campaignReview(t, campaignId)).rejects.toThrow("CAMPAIGN_PLAN_NOT_OWNED");
+  expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+});
+
 async function stage(t: T, count = 3) {
   return t.mutation(internal.mediaCampaign.stage, {
     tenantId,
@@ -715,7 +1031,10 @@ test("aggregate fractional refusal rolls back all child rows and both spend wind
       reserve: true,
     }),
   );
-  expect(await approve(t, campaignId)).toEqual({ ok: false, reason: "media_daily_exhausted" });
+  expect(await approve(t, campaignId)).toEqual({
+    ok: false,
+    reason: "daily_limit_increase_required",
+  });
   await t.run(async (ctx) => {
     expect(await ctx.db.query("mediaJobs").collect()).toHaveLength(0);
     expect(await ctx.db.query("spendEvents").collect()).toHaveLength(0);
