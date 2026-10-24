@@ -1,14 +1,19 @@
 import type { FunctionReturnType } from "convex/server";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api } from "./_generated/api";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
 const TENANT = "inventory_owner";
 const THREAD = "inventory_chat";
 const setup = () => {
   const t = convexTest(schema, modules);
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
   return { t, user: t.withIdentity({ subject: TENANT }) };
 };
 async function doc(

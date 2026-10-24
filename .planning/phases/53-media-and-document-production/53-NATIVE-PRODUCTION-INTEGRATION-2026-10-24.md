@@ -132,3 +132,13 @@ operator regressions and installs prerequisites for all three actual FFmpeg fixt
 golden and vertical identities are regenerated from the combined source without changing
 case inputs or replaying provider calls. Exact-head hosted CI remains required and its result
 is recorded on PR83. Main itself is not modified by this isolated integration.
+
+
+Combined-source CI follow-up preserves the historical storyboard corpus and its original
+duration labels. Its offline harness checks the legacy classification separately from current
+45-second support; paid reuse of outdated inputs refuses before dispatch/writes. Full-suite
+integration also adds the task-budget event to the existing filtered audit viewer, registers
+the real rate limiter in the workspace fixture and explicitly inventories the PCM-only cleanup
+site. The existing final-film protection and failure-arm no-delete guards remain asserted.
+The focused workspace suite passes 8/8 and redaction inventory passes 69/69. Final complete
+CI evidence is recorded on PR83; no new paid request or deployment is implied.
