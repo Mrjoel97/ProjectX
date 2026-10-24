@@ -8,6 +8,7 @@ import {
   HAS_PLACEHOLDERS,
   LEGAL_REVIEW_DEFERRED,
   OPERATING_COUNTRY,
+  OWNER_APPROVED_PUBLICATION,
   OWNER_REVIEWED_DATE,
   SITE,
 } from "../legal";
@@ -25,12 +26,13 @@ export default function Privacy() {
       <h1>Privacy Policy</h1>
       <p className="updated">Effective {EFFECTIVE}</p>
 
-      {(HAS_PLACEHOLDERS || LEGAL_REVIEW_DEFERRED) && (
+      {HAS_PLACEHOLDERS || LEGAL_REVIEW_DEFERRED || !OWNER_APPROVED_PUBLICATION ? (
         <p className="notice">
-          <strong>Draft — not yet in force.</strong> Owner review only, recorded{" "}
-          {OWNER_REVIEWED_DATE}. This document has not been reviewed by a qualified lawyer.
-          Publication under the existing review deferral does not complete legal review.
+          <strong>Draft — not yet in force.</strong> Publication approval is pending or deferred, or
+          identifying details remain unresolved.
         </p>
+      ) : (
+        <p className="updated">Published with owner approval on {OWNER_REVIEWED_DATE}.</p>
       )}
 
       <h2>1. Who we are</h2>
@@ -45,8 +47,8 @@ export default function Privacy() {
         us about anything in this policy at <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
       </p>
       <p>
-        We have not appointed a Data Protection Officer, as we are not required to under Article 37
-        GDPR. Enquiries go to the address above.
+        We have not appointed a Data Protection Officer. Privacy enquiries can be sent to{" "}
+        <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
       </p>
 
       <h2>2. What data we collect</h2>
@@ -441,11 +443,11 @@ export default function Privacy() {
         confirmation.
       </p>
       <p>
-        Where personal data is transferred outside the UK or European Economic Area, we rely on the
-        European Commission&rsquo;s Standard Contractual Clauses, the UK International Data Transfer
-        Addendum, or an adequacy decision, as applicable to each provider. You may request a copy of
-        the safeguards in place, including the specific region a provider processes in, by writing
-        to <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
+        We have not confirmed the contractual transfer safeguards for every enabled provider route.
+        The applicable terms and any Standard Contractual Clauses, UK International Data Transfer
+        Addendum or adequacy basis require verification for the specific service and processing
+        location. You can request the information currently available by writing to{" "}
+        <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
       </p>
 
       <h2>9. Retention, and the immutable audit archive</h2>

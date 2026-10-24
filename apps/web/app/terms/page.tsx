@@ -7,6 +7,7 @@ import {
   GOVERNING_LAW,
   HAS_PLACEHOLDERS,
   LEGAL_REVIEW_DEFERRED,
+  OWNER_APPROVED_PUBLICATION,
   OWNER_REVIEWED_DATE,
   SITE,
   VENUE,
@@ -25,12 +26,13 @@ export default function Terms() {
       <h1>Terms of Service</h1>
       <p className="updated">Effective {EFFECTIVE}</p>
 
-      {(HAS_PLACEHOLDERS || LEGAL_REVIEW_DEFERRED) && (
+      {HAS_PLACEHOLDERS || LEGAL_REVIEW_DEFERRED || !OWNER_APPROVED_PUBLICATION ? (
         <p className="notice">
-          <strong>Draft — not yet in force.</strong> Owner review only, recorded{" "}
-          {OWNER_REVIEWED_DATE}. This document has not been reviewed by a qualified lawyer.
-          Publication under the existing review deferral does not complete legal review.
+          <strong>Draft — not yet in force.</strong> Publication approval is pending or deferred, or
+          identifying details remain unresolved.
         </p>
+      ) : (
+        <p className="updated">Published with owner approval on {OWNER_REVIEWED_DATE}.</p>
       )}
 
       <h2>1. Agreement</h2>
