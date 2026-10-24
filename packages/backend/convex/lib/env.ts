@@ -14,9 +14,9 @@
 // source but classified by nobody here. A manifest that has to be remembered is a manifest that
 // goes stale, so it is derived-checked instead.
 //
-// A THIRD indirection would be invisible again. If you add one, add its regex to that scan in the
-// same commit; the scan asserts that the media names are NOT reachable as literals, so removing the
-// extension reds rather than quietly narrowing the guard.
+// Direct-social computed OAuth families and publishing flags are also derived from the fixed
+// provider inventory, and unknown social computed reads fail the scan. New indirections must
+// extend that guard in the same commit; nonliteral regression assertions keep it load-bearing.
 
 export type EnvTier =
   /** The deployment cannot serve its core promise without this. */
@@ -149,6 +149,151 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     whatBreaks: "The Microsoft consent callback lands nowhere.",
   },
 
+  // ── Direct social connections. Separate from sign-in, mailbox grants and Buffer. ───────────
+  // Optional feature settings never make core readiness require a new platform/service.
+  {
+    name: "X_OAUTH_CLIENT_ID",
+    tier: "feature",
+    whatBreaks:
+      "Direct X OAuth connection is unavailable without the registered app client identifier.",
+  },
+  {
+    name: "X_OAUTH_CLIENT_SECRET",
+    tier: "feature",
+    whatBreaks:
+      "Direct X token exchange/refresh and authenticated X webhook handling are unavailable.",
+  },
+  {
+    name: "META_OAUTH_CLIENT_ID",
+    tier: "feature",
+    whatBreaks: "Direct Facebook Page and linked professional Instagram consent is unavailable.",
+  },
+  {
+    name: "META_OAUTH_CLIENT_SECRET",
+    tier: "feature",
+    whatBreaks:
+      "Direct Meta token exchange, token validation and signed webhook handling are unavailable.",
+  },
+  {
+    name: "META_GRAPH_API_VERSION",
+    tier: "feature",
+    whatBreaks:
+      "Direct Meta OAuth and Graph reads/writes fail closed without a valid explicit version.",
+  },
+  {
+    name: "META_LOGIN_CONFIG_ID",
+    tier: "feature",
+    whatBreaks:
+      "Meta identity/read consent falls back to scoped Facebook OAuth; configured Business Login requires this saved configuration.",
+  },
+  {
+    name: "META_FACEBOOK_PUBLISH_CONFIG_ID",
+    tier: "feature",
+    whatBreaks:
+      "Requesting the Facebook Page-only publishing grant fails without its saved Business Login configuration.",
+  },
+  {
+    name: "META_INSTAGRAM_PUBLISH_CONFIG_ID",
+    tier: "feature",
+    whatBreaks:
+      "Requesting the Instagram-only publishing grant fails without its saved Business Login configuration.",
+  },
+  {
+    name: "META_PUBLISH_CONFIG_ID",
+    tier: "feature",
+    whatBreaks:
+      "Requesting or preserving combined Facebook and Instagram publishing grants fails without the combined Business Login configuration.",
+  },
+  {
+    name: "META_WEBHOOK_VERIFY_TOKEN",
+    tier: "feature",
+    whatBreaks:
+      "Meta webhook subscription challenges are refused; signed delivery separately requires the Meta app secret.",
+  },
+  {
+    name: "TIKTOK_OAUTH_CLIENT_ID",
+    tier: "feature",
+    whatBreaks:
+      "Direct TikTok consent and webhook client-key validation require the registered app client key.",
+  },
+  {
+    name: "TIKTOK_OAUTH_CLIENT_SECRET",
+    tier: "feature",
+    whatBreaks:
+      "Direct TikTok token exchange/refresh and authenticated webhook handling are unavailable.",
+  },
+  {
+    name: "TIKTOK_MEDIA_URL_PREFIX",
+    tier: "feature",
+    whatBreaks:
+      "TikTok provider-pull publication is refused unless this matches the verified backend /social/media/ prefix.",
+  },
+  {
+    name: "TIKTOK_URL_VERIFICATION_FILENAME",
+    tier: "feature",
+    whatBreaks:
+      "The TikTok URL-ownership proof route returns 404 without the exact valid challenge filename and content.",
+  },
+  {
+    name: "TIKTOK_URL_VERIFICATION_CONTENT",
+    tier: "feature",
+    whatBreaks:
+      "The TikTok URL-ownership proof route returns 404 without valid public challenge content and its matching filename.",
+  },
+  {
+    name: "YOUTUBE_OAUTH_CLIENT_ID",
+    tier: "feature",
+    whatBreaks:
+      "Direct YouTube consent is unavailable; this is separate from Google sign-in and Gmail clients.",
+  },
+  {
+    name: "YOUTUBE_OAUTH_CLIENT_SECRET",
+    tier: "feature",
+    whatBreaks:
+      "Direct YouTube token exchange and refresh require this client secret; Google sign-in is separate.",
+  },
+  {
+    name: "YOUTUBE_WEBHOOK_SECRET",
+    tier: "feature",
+    whatBreaks:
+      "YouTube WebSub subscription requires a secret of at least 32 characters; feed challenges and deliveries otherwise fail authentication.",
+  },
+  {
+    name: "SOCIAL_X_PUBLISH_ENABLED",
+    tier: "feature",
+    whatBreaks:
+      "Direct X publishing remains unsupported; this status flag cannot supply a missing X publishing implementation or approval.",
+  },
+  {
+    name: "SOCIAL_META_PUBLISH_ENABLED",
+    tier: "feature",
+    whatBreaks:
+      "Direct Facebook Page and Instagram publishing approval/submission remain disabled unless exactly true and separately qualified.",
+  },
+  {
+    name: "SOCIAL_TIKTOK_PUBLISH_ENABLED",
+    tier: "feature",
+    whatBreaks:
+      "Direct TikTok publishing approval/submission remain disabled unless exactly true and separately qualified.",
+  },
+  {
+    name: "SOCIAL_YOUTUBE_PUBLISH_ENABLED",
+    tier: "feature",
+    whatBreaks:
+      "Direct YouTube upload approval/submission remain disabled unless exactly true and separately qualified.",
+  },
+  {
+    name: "SOCIAL_YOUTUBE_CONNECT_ENABLED",
+    tier: "feature",
+    whatBreaks:
+      "New YouTube consent and activation stay disabled unless this and metadata cleanup are exactly true; existing saved access is separate.",
+  },
+  {
+    name: "SOCIAL_YOUTUBE_METADATA_CLEANUP_ENABLED",
+    tier: "feature",
+    whatBreaks:
+      "Scheduled YouTube metadata cleanup stays disabled unless exactly true, and new YouTube consent also requires this gate; stale-read guards remain independent.",
+  },
   // ── Phase 28 connector grants. A THIRD credential family, unrelated to sign-in or mailboxes. ──
   // Every one is `feature`: with none of them set, the app runs and the HubSpot rail simply refuses
   // to connect, loudly (`requireHubSpotConfig` throws naming the variable). There is deliberately no

@@ -381,7 +381,12 @@ describe("25-06: no second OAuth surface exists, and mail readiness is derived n
     // ADR-060 adds POST and OPTIONS for one-use Zernio credential intake, not OAuth callbacks.
     // ADR-061 adds three declarations inside the fixed four-provider loop: callback GET and webhook GET/POST.
     // These register twelve native routes and do not add a second Microsoft callback.
-    expect(routes).toBe(20);
+    // 20 -> 22 adds GET /social/media/video and GET /social/media/* for the approved
+    // TikTok provider-pull lease and URL-ownership challenge, not OAuth callbacks.
+    expect(routes).toBe(22);
+    expect(httpSource.match(/path:\s*"\/social\/media\/video"/g)).toHaveLength(1);
+    expect(httpSource.match(/pathPrefix:\s*"\/social\/media\/"/g)).toHaveLength(1);
+    expect(httpSource.match(/path:\s*"\/microsoft\/callback"/g)).toHaveLength(1);
     expect(httpSource).toContain("for (const provider of SOCIAL_PROVIDERS)");
     expect(httpSource.match(/path:\s*"\/zernio\/connect"/g)).toHaveLength(2);
     expect(httpSource.match(/path:\s*"\/buffer\/callback"/g)).toHaveLength(1);

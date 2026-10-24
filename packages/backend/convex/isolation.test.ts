@@ -165,6 +165,10 @@ const NON_TENANT_LEADING: Record<string, string> = {
   "socialOAuthStates.by_state_hash":
     "one-use callback and authenticated receipt lookup; provider and tenant checked before activation",
   "socialOAuthStates.by_expiry": "bounded internal retention of expired OAuth material only",
+  "socialConnections.by_provider":
+    "internal YouTube count-only retention impact and gated bounded cleanup across tenants; tenant-facing reads use by_tenant",
+  "socialPosts.by_provider":
+    "internal YouTube count-only retention impact and gated bounded cleanup across tenants; customer content and exports remain tenant-bound",
   "zernioConnections.by_ticket":
     "one-use HTTP credential intake; the authenticated beginConnect mutation binds tenant and profile before minting the capability",
   "zernioConnections.by_report_due":
@@ -244,6 +248,44 @@ const NON_TENANT_LEADING: Record<string, string> = {
   "billingPeriods.by_status_dueAt":
     "deployment-wide claim scan from the cron; no tenant-facing caller",
 };
+
+test("social provider-leading indexes have only the two reviewed internal retention consumers", () => {
+  const source = sources["./social.ts"] ?? "";
+  expect(source.length).toBeGreaterThan(500);
+  const declarations = /export const (\w+) = (\w+)\(/g;
+  const sites = [...source.matchAll(/\.withIndex\("by_provider"/g)];
+  expect(sites).toHaveLength(4);
+  const consumers = sites.map((site) => {
+    const enclosing = [...source.slice(0, site.index).matchAll(declarations)].pop();
+    return { name: enclosing?.[1], builder: enclosing?.[2] };
+  });
+  expect(consumers).toEqual([
+    { name: "youtubeMetadataCleanupImpact", builder: "internalQuery" },
+    { name: "youtubeMetadataCleanupImpact", builder: "internalQuery" },
+    { name: "cleanupYouTubeMetadata", builder: "internalMutation" },
+    { name: "cleanupYouTubeMetadata", builder: "internalMutation" },
+  ]);
+  const impact = source.slice(
+    source.indexOf("export const youtubeMetadataCleanupImpact"),
+    source.indexOf("export const cleanupYouTubeMetadata"),
+  );
+  expect(impact).toMatch(/paginate\(\{ numItems: 50/);
+  expect(impact).toMatch(/inspected,/);
+  expect(impact).toMatch(/legacy,/);
+  expect(impact).toMatch(/stale,/);
+  expect(impact).not.toMatch(/return\s+(?:row|post|page)\b/);
+  expect(impact).not.toMatch(/ciphertextB64|ivB64|accountName|assetName|providerPostId/);
+  const cleanup = source.slice(
+    source.indexOf("export const cleanupYouTubeMetadata"),
+    source.indexOf("export const cleanup ="),
+  );
+  expect(cleanup).toContain(
+    'if (process.env.SOCIAL_YOUTUBE_METADATA_CLEANUP_ENABLED !== "true") return;',
+  );
+  expect(cleanup.match(/paginate\(\{ numItems: 50/g)).toHaveLength(2);
+  expect(cleanup).toContain('q.eq("tenantId", post.tenantId).eq("provider", "youtube")');
+  expect(cleanup).toContain("youtubePostMetadataCleared()");
+});
 
 describe("every tenant-owned index leads with tenantId, or names why it does not", () => {
   test("the runtime index accessor is alive, so the scan cannot pass vacuously", () => {

@@ -35,7 +35,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 76 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 77 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -59,7 +59,8 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │ ── Connections (OAuth tokens) ──────────────────────────── ~L1425          │
 // │   notifications, gmailTokens, microsoftCalendarTokens                      │
 // │   bufferOAuthStates, bufferConnections, bufferPosts, bufferReports          │
-// │   socialOAuthStates, socialConnections, socialWebhookReceipts             │
+// │   socialOAuthStates, socialConnections                                  │
+// │   socialPosts, socialWebhookReceipts                                    │
 // │   zernioConnections, zernioReports                                        │
 // │                                                                            │
 // │ ── Vault (Document Store) ──────────────────────────────── ~L956           │
