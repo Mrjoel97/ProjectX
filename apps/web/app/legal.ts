@@ -4,40 +4,37 @@ export const SITE = "https://pikar-ai.com";
 export const CONTACT = "joel@pikar-ai.com";
 export const EFFECTIVE = "10 July 2026";
 
-// Business identity supplied by the operator on 2026-10-15. Remaining legal
-// particulars still require confirmation; identity alone does not complete review.
+// Public business name and operating country confirmed by the owner on 2026-10-24.
+// Owner confirmation does not establish qualified legal review or registration verification.
 export const ENTITY = "pikar-ai";
 export const OPERATING_COUNTRY = "Tanzania";
-// Postal address supplied by Joel on 2026-10-17; no street/building was supplied.
-export const ENTITY_ADDRESS = "Dar es Salaam 17107, Tanzania";
-// Draft choices confirmed by Joel on 2026-10-17; qualified review remains deferred.
+// Exact city/country address confirmed on 2026-10-24; no street or postcode was supplied.
+export const ENTITY_ADDRESS = "Dar es Salaam, Tanzania";
+// Draft choices confirmed by the owner on 2026-10-17; qualified review remains deferred.
 export const GOVERNING_LAW = "the laws of Tanzania";
 export const VENUE = "the courts in Dar es Salaam, Tanzania";
-export const LEAD_AUTHORITY = "[LEAD EU SUPERVISORY AUTHORITY — TBD]";
+// Owner-only policy review, separate from qualified legal review and the effective date.
+export const OWNER_REVIEWED_DATE = "24 October 2026";
 
-const PLACEHOLDERS = [ENTITY, ENTITY_ADDRESS, GOVERNING_LAW, VENUE, LEAD_AUTHORITY];
-
+const PLACEHOLDERS = [ENTITY, ENTITY_ADDRESS, GOVERNING_LAW, VENUE];
 export const HAS_PLACEHOLDERS = PLACEHOLDERS.some((p) => p.startsWith("["));
 
-// Owner-approved production deferral, 2026-08-12. Keep this explicit and visible so the
-// unresolved legal work cannot be mistaken for completion. The public pages continue to render
-// the placeholders verbatim; this flag only permits a production build while formation details
-// are pending.
+// Owner-approved production deferral, 2026-08-12. It remains visible even when
+// owner-supplied identity fields contain no placeholders. Owner review is not lawyer review.
 export const LEGAL_REVIEW_DEFERRED = true;
 
-// A Terms of Service naming "[LEGAL ENTITY — NOT YET FORMED]" is unenforceable, and a
-// privacy policy with no named controller fails GDPR Art. 13 and Google's OAuth review.
-// The owner explicitly deferred this production gate on 2026-08-12. Emit a production-build
-// warning instead of failing, but do not hide or replace any placeholder. Remove the deferral and
-// fill every value above before representing the legal surface as complete.
-if (HAS_PLACEHOLDERS && process.env.VERCEL_ENV === "production") {
+// Keep unresolved facts and deferred review distinct. Production may render the owner-approved
+// draft under the explicit deferral; filling identity fields must not silently certify review.
+if (process.env.VERCEL_ENV === "production") {
   const unresolved = PLACEHOLDERS.filter((p) => p.startsWith("[")).join(", ");
-  if (!LEGAL_REVIEW_DEFERRED) {
+  if (HAS_PLACEHOLDERS && !LEGAL_REVIEW_DEFERRED) {
     throw new Error(
       `Refusing to build for production: unresolved legal placeholders in app/legal.ts — ${unresolved}.`,
     );
   }
-  console.warn(
-    `LEGAL REVIEW DEFERRED: production contains unresolved placeholders in app/legal.ts — ${unresolved}. Owner-approved deferral recorded 2026-08-12.`,
-  );
+  if (LEGAL_REVIEW_DEFERRED) {
+    console.warn(
+      `LEGAL REVIEW DEFERRED: owner-only review recorded ${OWNER_REVIEWED_DATE}; qualified legal review remains deferred.${unresolved ? ` Unresolved placeholders: ${unresolved}.` : ""}`,
+    );
+  }
 }

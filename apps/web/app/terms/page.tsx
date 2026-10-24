@@ -6,6 +6,8 @@ import {
   ENTITY_ADDRESS,
   GOVERNING_LAW,
   HAS_PLACEHOLDERS,
+  LEGAL_REVIEW_DEFERRED,
+  OWNER_REVIEWED_DATE,
   SITE,
   VENUE,
 } from "../legal";
@@ -23,11 +25,11 @@ export default function Terms() {
       <h1>Terms of Service</h1>
       <p className="updated">Effective {EFFECTIVE}</p>
 
-      {HAS_PLACEHOLDERS && (
+      {(HAS_PLACEHOLDERS || LEGAL_REVIEW_DEFERRED) && (
         <p className="notice">
-          <strong>Draft — not yet in force.</strong> This document has not been reviewed by a
-          qualified lawyer. The bracketed legal details below remain unconfirmed. Publication under
-          the existing review deferral does not complete legal review.
+          <strong>Draft — not yet in force.</strong> Owner review only, recorded{" "}
+          {OWNER_REVIEWED_DATE}. This document has not been reviewed by a qualified lawyer.
+          Publication under the existing review deferral does not complete legal review.
         </p>
       )}
 
@@ -73,10 +75,11 @@ export default function Terms() {
 
       <h2>4. What the service does</h2>
       <p>
-        You give Pikar a goal. It plans the work and presents that plan to you. Once you approve it,
-        Pikar carries the plan out autonomously under cost and content guardrails, notifies you as
-        stages complete, and writes every step to an append-only audit log. You can halt a running
-        automation at any time.
+        You give Pikar a goal. It may read authorised context and prepare drafts while planning.
+        Work that requires approval is presented for your review before the approved action or plan
+        runs. Approved work proceeds under cost and content guardrails, with notifications and an
+        append-only audit trail. Direct social publication requires separate approval of the saved
+        post. You can halt a running automation at any time.
       </p>
       <p>
         If you connect the Google mailbox integration, Pikar&rsquo;s agents can read your email,
