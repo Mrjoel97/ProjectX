@@ -1,4 +1,4 @@
-import { nativeSocialPostReference } from "./buffer";
+import { nativeSocialPostReference } from "@pikar/core/buffer";
 
 /** Read-only, two-account qualification. No publishing or credential storage. */
 export const ZERNIO_PILOT_ORIGIN = "https://zernio.com";

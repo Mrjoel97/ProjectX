@@ -2,6 +2,8 @@
 
 The inline-prompt guard separately recognizes one exact named Buffer GraphQL protocol document in its exact source file. Changed queries, prose, other files and nested same-name files remain guarded, and the 200-character threshold is unchanged. The draft-answer tool's concise description remains a proposal-only contract; no registry instruction body changes. Fifteen focused inline/registry checks pass.
 
+The October24 native-Node Zernio helper import correction refreshes the evaluator revision and both generated manifests. All 46 golden and 40 vertical fixture cases remain unchanged; this mechanical source identity update performs no paid evaluation or activation.
+
 > Last verified: 2026-10-23 — The evaluator source identity includes the Zernio permission-generation correction and schema/history consumers. The current contract revision and mechanical manifest are refreshed together; golden fixture bodies and case hashes remain unchanged. This retires stale evaluator identities without recording new live qualification or activating any skill.
 
 > Last verified: 2026-10-23 — The local attended-service runtime imports new managed-service helpers. Both evaluator source inventories explicitly pin these dependencies; a source-edit regression ensures each retires both identities. Mechanical revision/manifest refresh preserves all46 golden and40 vertical cases and historical handoffs, including after the tenant-first service budget index repair. No paid evaluation, passing evidence or activation follows from this bookkeeping.
