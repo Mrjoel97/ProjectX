@@ -194,9 +194,11 @@ test("finish later saves the captured question before deferring and survives reo
     expectedControlRevision: 5,
     expectedConversationRevision: 2,
   });
-  expect(state.save.mock.invocationCallOrder[0]).toBeLessThan(
-    state.defer.mock.invocationCallOrder[0],
-  );
+  const saveOrder = state.save.mock.invocationCallOrder[0];
+  const deferOrder = state.defer.mock.invocationCallOrder[0];
+  if (saveOrder === undefined || deferOrder === undefined)
+    throw new Error("Both save and defer must be called");
+  expect(saveOrder).toBeLessThan(deferOrder);
   await act(async () => root.unmount());
   root = createRoot(host);
   state.view = structuredClone(persisted);

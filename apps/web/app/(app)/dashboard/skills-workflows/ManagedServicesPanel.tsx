@@ -196,7 +196,6 @@ function ServiceSetup({
   const valid =
     goal.trim().length > 0 &&
     selectedOps.length > 0 &&
-    !missing &&
     usable.length === selected.length &&
     selected.length <= 8 &&
     options.skills.length > 0 &&
@@ -338,7 +337,8 @@ function ServiceSetup({
       </fieldset>
       {missing && (
         <p style={muted}>
-          Choose a Buffer account to prepare content and a Zernio account to review engagement, or
+          You can save this setup and answer business questions now. Before work starts, choose a
+          Buffer account for content preparation and a Zernio account for engagement reports, or
           turn off the activity you do not need.
         </p>
       )}

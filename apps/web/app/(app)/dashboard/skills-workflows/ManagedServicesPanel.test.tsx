@@ -197,25 +197,65 @@ test("setup uses server-owned pins and chosen accounts, with review and budget b
   ).toContain("Run on a schedule");
 });
 
-test("missing or disconnected account blocks saving until the unsupported activity is removed", async () => {
+test("an activity with no connected account can be saved as a draft without starting work", async () => {
   state.zernio = false;
   await render();
   await text("Service goal", "Prepare next week’s social drafts.");
   await selectAccounts();
-  expect(button("Save service setup").disabled).toBe(true);
-  await save();
-  expect(state.setup).not.toHaveBeenCalled();
-  expect(host.textContent).toContain("Reconnect to use");
-  await act(async () =>
-    [...host.querySelectorAll("label")]
-      .find((l) => l.textContent?.includes("Review engagement"))
-      ?.querySelector<HTMLInputElement>("input")
-      ?.click(),
-  );
   expect(button("Save service setup").disabled).toBe(false);
+  await save();
+  expect(state.setup).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      operationIds: ["social.prepare", "social.report"],
+      accounts: [expect.objectContaining({ provider: "buffer" })],
+    }),
+  );
+  expect(state.start).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("Reconnect to use");
   expect(
     host.querySelector<HTMLAnchorElement>('a[href="/dashboard/profile?tab=connections"]'),
   ).not.toBeNull();
+});
+
+test("a new user can save setup with no accounts and continue business setup before connecting", async () => {
+  state.options.accounts = [];
+  state.buffer = false;
+  state.zernio = false;
+  await render();
+  expect(button("Save service setup").disabled).toBe(true);
+  await text("Service goal", "Introduce my shop to local customers.");
+  expect(host.textContent).toContain("save this setup and answer business questions now");
+  expect(button("Save service setup").disabled).toBe(false);
+  await save();
+  expect(state.setup).toHaveBeenCalledExactlyOnceWith({
+    serviceId: "social-marketing",
+    expectedRevision: 0,
+    goal: "Introduce my shop to local customers.",
+    operationIds: ["social.prepare", "social.report"],
+    accounts: [],
+    skills: [skill],
+    budgetLimitCents: 100,
+  });
+  expect(state.start).not.toHaveBeenCalled();
+  expect(state.control).not.toHaveBeenCalled();
+});
+
+test("draft setup still refuses unavailable selected accounts and missing native skills", async () => {
+  state.service = saved();
+  state.services = [state.service];
+  state.zernio = false;
+  await render();
+  await click("Edit setup");
+  expect(button("Save service setup").disabled).toBe(true);
+  await save();
+  expect(state.setup).not.toHaveBeenCalled();
+  state.zernio = true;
+  state.options.skills = [];
+  await render();
+  expect(button("Save service setup").disabled).toBe(true);
+  await save();
+  expect(state.setup).not.toHaveBeenCalled();
+  expect(state.start).not.toHaveBeenCalled();
 });
 
 test("stale edits preserve the draft and require an explicit latest-revision reload", async () => {
