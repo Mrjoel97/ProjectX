@@ -130,9 +130,10 @@ test("production guard follows auth preflight before build and is covered by sec
   const ci = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
   const regressions = ci
     .split("\n")
-    .find((line) =>
-      line.includes("run: node --test ") &&
-      line.includes("packages/backend/scripts/goldenPaidAttempt.test.mjs"),
+    .find(
+      (line) =>
+        line.includes("run: node --test ") &&
+        line.includes("packages/backend/scripts/goldenPaidAttempt.test.mjs"),
     );
   assert.ok(regressions?.includes("scripts/check-release-social.test.mjs"));
   assert.ok(!ci.includes("run: node ../../scripts/check-release-social.mjs"));

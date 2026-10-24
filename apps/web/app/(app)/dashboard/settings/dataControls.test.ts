@@ -221,14 +221,16 @@ test("erasure warns about project-wide Google revocation and reports each social
     });
     await act(async () => erase.click());
     expect(action.mock.calls[0]?.[1]).toEqual({ confirmation: "DELETE MY DATA" });
-    const outcomes = [...container.querySelectorAll("li")];
-    expect(outcomes[0].textContent).toContain("YouTube:");
-    expect(outcomes[0].querySelector("a")?.getAttribute("href")).toBe(
+    const [youtubeOutcome, metaOutcome] = [...container.querySelectorAll("li")];
+    if (!youtubeOutcome || !metaOutcome)
+      throw new Error("Expected YouTube and Meta deletion outcomes");
+    expect(youtubeOutcome.textContent).toContain("YouTube:");
+    expect(youtubeOutcome.querySelector("a")?.getAttribute("href")).toBe(
       "https://myaccount.google.com/permissions",
     );
-    expect(outcomes[1].textContent).toContain("Meta:");
-    expect(outcomes[1].textContent).toContain("platform's connected-app settings");
-    expect(outcomes[1].querySelector("a")).toBeNull();
+    expect(metaOutcome.textContent).toContain("Meta:");
+    expect(metaOutcome.textContent).toContain("platform's connected-app settings");
+    expect(metaOutcome.querySelector("a")).toBeNull();
     expect(container.textContent).not.toContain("Microsoft:");
   } finally {
     await act(async () => root.unmount());
