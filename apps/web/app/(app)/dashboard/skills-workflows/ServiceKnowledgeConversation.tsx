@@ -8,6 +8,11 @@ import Link from "next/link";
 import { type CSSProperties, useState } from "react";
 
 type Conversation = NonNullable<FunctionReturnType<typeof api.serviceConversations.read>>;
+type RunReadiness = {
+  revision: number;
+  controlRevision: number;
+  reasons: readonly string[];
+};
 const names: Record<ServiceKnowledgeKey, string> = {
   offering: "Your offer",
   targetCustomer: "Your customers",
@@ -32,13 +37,28 @@ export function ServiceKnowledgeConversation({
   disabled = false,
   budgetLimitCents,
   inbox = false,
+  runReadiness,
 }: {
   serviceId?: string;
   disabled?: boolean;
   budgetLimitCents?: number;
   inbox?: boolean;
+  runReadiness?: RunReadiness;
 }) {
   const view = useQuery(api.serviceConversations.read, { serviceId });
+  const service = useQuery(
+    api.managedServices.status,
+    view && runReadiness === undefined ? { serviceId } : "skip",
+  );
+  const readiness =
+    runReadiness ??
+    (service
+      ? {
+          revision: service.revision,
+          controlRevision: service.controlRevision,
+          reasons: service.readiness.reasons,
+        }
+      : undefined);
   if (view === undefined)
     return (
       <p role="status" style={muted}>
@@ -60,6 +80,12 @@ export function ServiceKnowledgeConversation({
       disabled={disabled}
       budgetLimitCents={budgetLimitCents ?? view.budgetLimitCents}
       inbox={inbox}
+      prepareAvailable={
+        readiness !== undefined &&
+        readiness.revision === view.revision &&
+        readiness.controlRevision === view.controlRevision &&
+        readiness.reasons.every((reason) => reason === "business_information_required")
+      }
     />
   );
 }
@@ -69,11 +95,13 @@ function Conversation({
   disabled,
   budgetLimitCents,
   inbox,
+  prepareAvailable,
 }: {
   view: Conversation;
   disabled: boolean;
   budgetLimitCents?: number;
   inbox: boolean;
+  prepareAvailable: boolean;
 }) {
   const begin = useMutation(api.serviceConversations.begin);
   const save = useMutation(api.serviceConversations.save);
@@ -127,6 +155,7 @@ function Conversation({
   const accept = (run: boolean) =>
     act(async () => {
       if (!view.reviewHash || !view.canConfirm) return;
+      if (run && !prepareAvailable) return;
       if (run) {
         const result = await continueWork({ ...cas(), reviewHash: view.reviewHash });
         setNotice(
@@ -332,8 +361,15 @@ function Conversation({
                   {budgetLimitCents !== undefined && (
                     <button
                       type="button"
-                      style={{ ...control, background: "var(--teal-900)", color: "var(--card)" }}
-                      disabled={blocked}
+                      style={{
+                        ...control,
+                        background: "var(--teal-900)",
+                        color: "var(--card)",
+                        ...(blocked || !prepareAvailable
+                          ? { opacity: 0.5, cursor: "not-allowed" }
+                          : {}),
+                      }}
+                      disabled={blocked || !prepareAvailable}
                       onClick={() => void accept(true)}
                     >
                       Confirm and let Pikar prepare
@@ -342,8 +378,18 @@ function Conversation({
                 </div>
                 {budgetLimitCents !== undefined && (
                   <p style={muted}>
-                    Continuing starts one run using your saved accounts and a maximum of $
-                    {(budgetLimitCents / 100).toFixed(2)}.
+                    {prepareAvailable ? (
+                      <>
+                        Continuing starts one run using your saved accounts and a maximum of $
+                        {(budgetLimitCents / 100).toFixed(2)}.
+                      </>
+                    ) : (
+                      <>
+                        Finish the service setup before Pikar can prepare. You can confirm these
+                        details now.{" "}
+                        <Link href="/dashboard/skills-workflows">Review service setup</Link>.
+                      </>
+                    )}
                   </p>
                 )}
               </div>

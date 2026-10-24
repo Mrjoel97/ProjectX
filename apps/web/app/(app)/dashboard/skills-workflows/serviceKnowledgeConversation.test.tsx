@@ -6,6 +6,11 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   view: undefined as ReturnType<typeof initial> | null | undefined,
+  status: undefined as
+    | { revision: number; controlRevision: number; readiness: { reasons: string[] } }
+    | null
+    | undefined,
+  statusArgs: [] as unknown[],
   begin: vi.fn(),
   save: vi.fn(),
   defer: vi.fn(),
@@ -13,7 +18,14 @@ const state = vi.hoisted(() => ({
   continue: vi.fn(),
 }));
 vi.mock("convex/react", () => ({
-  useQuery: () => state.view,
+  useQuery: (ref: FunctionReference<"query">, args: unknown) => {
+    if (getFunctionName(ref) === "serviceConversations:read") return state.view;
+    if (getFunctionName(ref) === "managedServices:status") {
+      state.statusArgs.push(args);
+      return args === "skip" ? undefined : state.status;
+    }
+    throw new Error(`Unexpected query ${getFunctionName(ref)}`);
+  },
   useMutation: (ref: FunctionReference<"mutation">) => {
     const name = getFunctionName(ref);
     if (name === "serviceConversations:begin") return state.begin;
@@ -66,6 +78,12 @@ let root: ReturnType<typeof createRoot>;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   state.view = initial();
+  state.status = {
+    revision: 2,
+    controlRevision: 5,
+    readiness: { reasons: ["business_information_required"] },
+  };
+  state.statusArgs = [];
   for (const fn of [state.begin, state.save, state.defer, state.confirm, state.continue])
     fn.mockReset();
   state.begin.mockImplementation(async () => ({ ...state.view, conversationRevision: 1 }));
@@ -82,9 +100,18 @@ afterEach(async () => {
   host.remove();
   vi.unstubAllGlobals();
 });
-const render = async (inbox = false) => {
+const render = async (
+  inbox = false,
+  runReadiness?: { revision: number; controlRevision: number; reasons: string[] },
+) => {
   await act(async () =>
-    root.render(<ServiceKnowledgeConversation budgetLimitCents={100} inbox={inbox} />),
+    root.render(
+      <ServiceKnowledgeConversation
+        budgetLimitCents={100}
+        inbox={inbox}
+        runReadiness={runReadiness}
+      />,
+    ),
   );
 };
 const click = async (text: string) => {
@@ -281,6 +308,75 @@ test("a failed continuation preserves confirmed information and never claims wor
   await click("Confirm and let Pikar prepare");
   expect(host.textContent).toContain("Work has not been confirmed as started");
   expect(host.textContent).not.toContain("Pikar is preparing");
+});
+
+test("workspace review permits confirmation but cannot prepare while native accounts are missing", async () => {
+  state.view = {
+    ...initial(),
+    conversationRevision: 4,
+    state: "review",
+    nextQuestion: null,
+    canConfirm: true,
+  };
+  state.status = {
+    revision: 2,
+    controlRevision: 5,
+    readiness: { reasons: ["missing_account", "business_information_required"] },
+  };
+  await render(true);
+  const prepare = [...host.querySelectorAll("button")].find(
+    (item) => item.textContent === "Confirm and let Pikar prepare",
+  );
+  expect(prepare?.disabled).toBe(true);
+  await click("Confirm and let Pikar prepare");
+  expect(state.continue).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("You can confirm these details now");
+  expect(host.textContent).not.toContain("Continuing starts one run");
+  await click("Confirm business information");
+  expect(state.confirm).toHaveBeenCalledExactlyOnceWith({
+    serviceId: "social-marketing",
+    expectedRevision: 2,
+    expectedControlRevision: 5,
+    expectedConversationRevision: 4,
+    reviewHash: "a".repeat(64),
+  });
+  expect(state.statusArgs).toContainEqual({ serviceId: "social-marketing" });
+  expect(state.continue).not.toHaveBeenCalled();
+});
+
+test("workspace native readiness enables one deliberate continuation after business review", async () => {
+  state.view = {
+    ...initial(),
+    conversationRevision: 4,
+    state: "review",
+    nextQuestion: null,
+    canConfirm: true,
+  };
+  await render(true);
+  await click("Confirm and let Pikar prepare");
+  expect(state.continue).toHaveBeenCalledTimes(1);
+  expect(host.textContent).toContain("Pikar is preparing");
+});
+
+test("parent readiness skips a duplicate query and loading or stale native facts cannot enable work", async () => {
+  state.view = {
+    ...initial(),
+    conversationRevision: 4,
+    state: "review",
+    nextQuestion: null,
+    canConfirm: true,
+  };
+  await render(false, { revision: 2, controlRevision: 5, reasons: ["missing_account"] });
+  expect(state.statusArgs.every((args) => args === "skip")).toBe(true);
+  await click("Confirm and let Pikar prepare");
+  expect(state.continue).not.toHaveBeenCalled();
+  state.status = undefined;
+  await render(true);
+  await click("Confirm and let Pikar prepare");
+  state.status = { revision: 2, controlRevision: 4, readiness: { reasons: [] } };
+  await render(true);
+  await click("Confirm and let Pikar prepare");
+  expect(state.continue).not.toHaveBeenCalled();
 });
 test("an empty workspace and deferred conversation have no persistent intake panel", async () => {
   state.view = null;

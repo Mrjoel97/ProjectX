@@ -13,6 +13,8 @@
 > Last verified: 2026-10-19 — registered app OAuth replaces rejected hosted MCP registration; regression tests cover callback, API reads, refresh and approved writes. Full hosted account consent/publication remains a separate acceptance check.
 > Authority: owner request to repair production; [ADR-059](../decisions/059-buffer-registered-app-oauth.md) supersedes ADR-058's hosted MCP/report path.
 
+> Last verified: 2026-10-24 — Incomplete platform drafts retain their local text and media details. The marketing panel uses the shared platform requirements to explain missing media, video, title, category or board, and disables approval until those details and the current selected account are ready. Edit and reject remain available. Native approval and publication enforce the same requirements before queueing or provider work; local UI checks do not establish live publication.
+
 ## Purpose
 
 Users connect their own Buffer account, choose an organization and channels, prepare campaign posts and approve scheduling. Engagement reports are unavailable for registered third-party app connections. Buffer remains an optional publishing provider alongside future direct social integrations. Existing direct-provider blockers are unchanged.

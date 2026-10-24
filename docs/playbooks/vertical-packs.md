@@ -1,3 +1,5 @@
+> Last verified: 2026-10-24 — The Buffer platform-requirement and current Pinterest-board checks remain inside already pinned core/backend Buffer files. Both generated evaluator identities are refreshed after those source changes; the six-lane forty-case corpus, its hash and all golden fixture bytes are unchanged. The vertical generator check and source-edit regressions pass. No vertical is activated or newly qualified by the refresh.
+
 > Last verified: 2026-10-24 — The evaluator dependency inventory includes managed recurrence execution and its reused calendar helper, service conversations, pure knowledge requirements and reused Foundation/profile code. Refresh both generated identities together at source freeze. The six-lane, forty-case corpus and forty-six golden cases remain unchanged. This source bookkeeping neither activates verticals nor claims semantic, hosted or paid qualification.
 
 The integrated tool-description correction refreshed both source identities together. The protocol/query guard and metadata-only calendar path controls remain narrow; the held-out corpus remains unchanged. Current-source CI remains the release check.

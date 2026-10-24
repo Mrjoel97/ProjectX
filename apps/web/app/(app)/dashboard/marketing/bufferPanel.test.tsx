@@ -81,6 +81,73 @@ test("rendering and reviewing never approve a post; explicit approval sends the 
   });
 });
 
+test("an incomplete TikTok draft stays visible and editable or rejectable without approval", async () => {
+  mocks.queries["buffer:status"] = {
+    connected: true,
+    channels: [{ id: channelId, name: "Business TikTok", service: "tiktok", available: true }],
+    selectedChannelIds: [channelId],
+  };
+  mocks.queries["buffer:posts"] = [
+    {
+      _id: "post1",
+      revision: 3,
+      campaign: "First caption",
+      channelId,
+      platform: "tiktok",
+      text: "Keep this caption while I prepare the video.",
+      mode: "addToQueue",
+      status: "draft",
+    },
+  ];
+  await act(async () => root.render(<BufferMarketing />));
+  expect(host.textContent).toContain("Keep this caption while I prepare the video.");
+  expect(host.textContent).toContain("Add an image or video before approving this post.");
+  expect(button("Review approval").disabled).toBe(true);
+  await act(async () => button("Review approval").click());
+  expect(host.textContent).not.toContain("Approve this exact post");
+  expect(button("Edit draft").disabled).toBe(false);
+  expect(button("Discard draft").disabled).toBe(false);
+  await act(async () => button("Edit draft").click());
+  expect(host.querySelector('form[aria-label="Edit social draft"]')).not.toBeNull();
+  expect(mocks.calls["buffer:approvePost"]).not.toHaveBeenCalled();
+});
+
+test("approval becomes available only after actual required draft media is present", async () => {
+  mocks.queries["buffer:status"] = {
+    connected: true,
+    channels: [{ id: channelId, name: "Business TikTok", service: "tiktok", available: true }],
+    selectedChannelIds: [channelId],
+  };
+  const draft = {
+    _id: "post1",
+    revision: 3,
+    campaign: "First caption",
+    channelId,
+    text: "A caption awaiting media.",
+    mode: "addToQueue",
+    status: "draft",
+  };
+  mocks.queries["buffer:posts"] = [draft];
+  await act(async () => root.render(<BufferMarketing />));
+  expect(button("Review approval").disabled).toBe(true);
+  mocks.queries["buffer:posts"] = [
+    {
+      ...draft,
+      revision: 4,
+      videoUrl: "https://media.example.test/review-video.mp4",
+    },
+  ];
+  await act(async () => root.render(<BufferMarketing />));
+  expect(button("Review approval").disabled).toBe(false);
+  await act(async () => button("Review approval").click());
+  expect(mocks.calls["buffer:approvePost"]).not.toHaveBeenCalled();
+  await act(async () => button("Approve and schedule").click());
+  expect(mocks.calls["buffer:approvePost"]).toHaveBeenCalledExactlyOnceWith({
+    postId: "post1",
+    revision: 4,
+  });
+});
+
 test("editing keeps the visible revision, saves a new draft and never schedules it", async () => {
   mocks.queries["buffer:posts"] = [
     {

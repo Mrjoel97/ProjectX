@@ -539,6 +539,11 @@ function ServiceCard({
           serviceId={serviceId}
           disabled={Boolean(pending) || busy || service.controlState !== "active"}
           budgetLimitCents={service.budgetLimitCents}
+          runReadiness={{
+            revision: service.revision,
+            controlRevision: service.controlRevision,
+            reasons: service.readiness.reasons,
+          }}
         />
       )}
       {supportsEditor && (

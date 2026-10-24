@@ -456,8 +456,11 @@ async function draftContext(
     !row.selectedChannelIds.includes(a.channelId)
   )
     throw new Error("BUFFER_CHANNEL_NOT_ALLOWED");
-  bufferCreateArguments(a, target.service);
-  if (target.service === "pinterest" && !target.boards?.some((board) => board.id === a.boardId))
+  if (
+    target.service === "pinterest" &&
+    a.boardId !== undefined &&
+    !target.boards?.some((board) => board.id === a.boardId)
+  )
     throw new Error("BUFFER_PINTEREST_BOARD_REQUIRED");
   return { row, target, organizationId: row.organizationId };
 }
@@ -600,19 +603,11 @@ export const approvePost = tenantMutation({
       post.revision !== a.revision
     )
       throw new Error("BUFFER_DRAFT_CHANGED");
-    validateBufferDraft(post, Date.now());
-    const row = await ctx.db
-      .query("bufferConnections")
-      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
-      .unique();
-    if (
-      !row ||
-      row.status !== "connected" ||
-      row.connectionId !== post.connectionId ||
-      row.organizationId !== post.organizationId ||
-      !row.selectedChannelIds.includes(post.channelId)
-    )
+    const { row, target } = await draftContext(ctx, ctx.tenantId, post);
+    if (row.connectionId !== post.connectionId || row.organizationId !== post.organizationId)
       throw new Error("BUFFER_CHANNEL_NOT_ALLOWED");
+    // An incomplete local draft is safe to retain, but can never enter the outbound queue.
+    bufferCreateArguments(post, target.service);
     await ctx.db.patch(post._id, {
       status: "approved",
       approvedAt: Date.now(),

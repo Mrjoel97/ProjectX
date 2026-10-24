@@ -294,37 +294,59 @@ export function validateBufferDraft(draft: BufferDraft, now: number): void {
   }
 }
 
+const YOUTUBE_CATEGORY_IDS = [
+  "1",
+  "2",
+  "10",
+  "15",
+  "17",
+  "19",
+  "20",
+  "22",
+  "23",
+  "24",
+  "25",
+  "26",
+  "27",
+  "28",
+  "29",
+];
+
+export type BufferDraftRequirement =
+  | "media_required"
+  | "video_required"
+  | "media_title_required"
+  | "youtube_category_required"
+  | "pinterest_board_required";
+
+/** Missing publishing details do not prevent saving a local, unapproved draft. */
+export function bufferDraftRequirements(
+  draft: BufferDraft,
+  service: string,
+): readonly BufferDraftRequirement[] {
+  const missing: BufferDraftRequirement[] = [];
+  if (["instagram", "tiktok", "pinterest"].includes(service) && !draft.imageUrl && !draft.videoUrl)
+    missing.push("media_required");
+  if (service === "youtube") {
+    if (!draft.videoUrl) missing.push("video_required");
+    if (!draft.mediaTitle?.trim()) missing.push("media_title_required");
+    if (!YOUTUBE_CATEGORY_IDS.includes(draft.categoryId ?? ""))
+      missing.push("youtube_category_required");
+  }
+  if (service === "pinterest" && !draft.boardId) missing.push("pinterest_board_required");
+  return missing;
+}
+
 /** Platform metadata is code-owned; the model cannot insert arbitrary vendor mutation fields. */
 export function bufferCreateArguments(
   draft: BufferDraft,
   service: string,
 ): Record<string, unknown> {
-  if (["instagram", "tiktok", "pinterest"].includes(service) && !draft.imageUrl && !draft.videoUrl)
-    throw new Error("BUFFER_MEDIA_REQUIRED");
-  if (
-    service === "youtube" &&
-    (!draft.videoUrl ||
-      !draft.mediaTitle ||
-      ![
-        "1",
-        "2",
-        "10",
-        "15",
-        "17",
-        "19",
-        "20",
-        "22",
-        "23",
-        "24",
-        "25",
-        "26",
-        "27",
-        "28",
-        "29",
-      ].includes(draft.categoryId ?? ""))
-  )
-    throw new Error("BUFFER_YOUTUBE_DETAILS_REQUIRED");
-  if (service === "pinterest" && !draft.boardId) throw new Error("BUFFER_PINTEREST_BOARD_REQUIRED");
+  const missing = bufferDraftRequirements(draft, service);
+  if (missing.includes("media_required")) throw new Error("BUFFER_MEDIA_REQUIRED");
+  if (service === "youtube" && missing.length) throw new Error("BUFFER_YOUTUBE_DETAILS_REQUIRED");
+  if (missing.includes("pinterest_board_required"))
+    throw new Error("BUFFER_PINTEREST_BOARD_REQUIRED");
   const disclosure =
     draft.isAiGenerated === undefined ? {} : { isAiGenerated: draft.isAiGenerated };
   return {

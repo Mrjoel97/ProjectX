@@ -1,6 +1,7 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
+import { type BufferDraftRequirement, bufferDraftRequirements } from "@pikar/core/buffer";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { type CSSProperties, useState } from "react";
@@ -39,6 +40,14 @@ const button: CSSProperties = {
 };
 type BufferPost = FunctionReturnType<typeof api.buffer.posts>[number];
 type BufferChannels = NonNullable<FunctionReturnType<typeof api.buffer.status>>["channels"];
+
+const draftRequirementMessages: Record<BufferDraftRequirement, string> = {
+  media_required: "Add an image or video before approving this post.",
+  video_required: "Add a video before approving this post.",
+  media_title_required: "Add a title before approving this post.",
+  youtube_category_required: "Choose a YouTube category before approving this post.",
+  pinterest_board_required: "Choose a Pinterest board before approving this post.",
+};
 
 function BufferDraftEditor({
   post,
@@ -621,67 +630,189 @@ export function BufferMarketing() {
         ) : (
           posts
             .filter((post) => post.status !== "discarded")
-            .map((post) => (
-              <article
-                key={post._id}
-                data-testid={`buffer-post-${post._id}`}
-                style={{ padding: "20px 0", borderTop: "1px solid var(--rule)" }}
-              >
-                <h3>{post.campaign}</h3>
-                <p>
-                  {status?.channels.find((channel) => channel.id === post.channelId)?.name ??
-                    "Previous channel"}{" "}
-                  ·{" "}
-                  {post.status === "submitting" || post.status === "unknown"
-                    ? "Publishing outcome needs checking in Buffer"
-                    : post.status === "buffer_review"
-                      ? "Awaiting review in Buffer"
-                      : post.status}
-                </p>
-                <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{post.text}</p>
-                {post.imageUrl && (
+            .map((post) => {
+              const channel = channels.find((item) => item.id === post.channelId);
+              const requirements = [
+                ...bufferDraftRequirements(post, channel?.service ?? post.platform ?? ""),
+              ];
+              if (
+                channel?.service === "pinterest" &&
+                post.boardId &&
+                !channel.boards?.some((board) => board.id === post.boardId)
+              )
+                requirements.push("pinterest_board_required");
+              const accountUnavailable = !status?.connected || !channel?.available;
+              const approvalBlocked = accountUnavailable || requirements.length > 0;
+              return (
+                <article
+                  key={post._id}
+                  data-testid={`buffer-post-${post._id}`}
+                  style={{ padding: "20px 0", borderTop: "1px solid var(--rule)" }}
+                >
+                  <h3>{post.campaign}</h3>
                   <p>
-                    Media: <span style={{ overflowWrap: "anywhere" }}>{post.imageUrl}</span>
+                    {status?.channels.find((channel) => channel.id === post.channelId)?.name ??
+                      "Previous channel"}{" "}
+                    ·{" "}
+                    {post.status === "submitting" || post.status === "unknown"
+                      ? "Publishing outcome needs checking in Buffer"
+                      : post.status === "buffer_review"
+                        ? "Awaiting review in Buffer"
+                        : post.status}
                   </p>
-                )}
-                {post.videoUrl && (
+                  <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{post.text}</p>
+                  {post.imageUrl && (
+                    <p>
+                      Media: <span style={{ overflowWrap: "anywhere" }}>{post.imageUrl}</span>
+                    </p>
+                  )}
+                  {post.videoUrl && (
+                    <p>
+                      Video: <span style={{ overflowWrap: "anywhere" }}>{post.videoUrl}</span>
+                    </p>
+                  )}
+                  {post.mediaTitle && <p>Title: {post.mediaTitle}</p>}
+                  {post.boardId && (
+                    <p>
+                      Pinterest board:{" "}
+                      {status?.channels
+                        .find((channel) => channel.id === post.channelId)
+                        ?.boards?.find((board) => board.id === post.boardId)?.name ??
+                        "Previously selected board — reload channels to confirm"}
+                    </p>
+                  )}
+                  {post.isAiGenerated && <p>AI-generated media disclosure enabled.</p>}
+                  {status?.channels.find((channel) => channel.id === post.channelId)?.service ===
+                    "youtube" && <p>This YouTube video will be public.</p>}
                   <p>
-                    Video: <span style={{ overflowWrap: "anywhere" }}>{post.videoUrl}</span>
+                    {post.mode === "customScheduled" && post.dueAt
+                      ? `Scheduled for ${new Date(post.dueAt).toLocaleString()}`
+                      : "Next available Buffer queue slot"}
                   </p>
-                )}
-                {post.mediaTitle && <p>Title: {post.mediaTitle}</p>}
-                {post.boardId && (
-                  <p>
-                    Pinterest board:{" "}
-                    {status?.channels
-                      .find((channel) => channel.id === post.channelId)
-                      ?.boards?.find((board) => board.id === post.boardId)?.name ??
-                      "Previously selected board — reload channels to confirm"}
-                  </p>
-                )}
-                {post.isAiGenerated && <p>AI-generated media disclosure enabled.</p>}
-                {status?.channels.find((channel) => channel.id === post.channelId)?.service ===
-                  "youtube" && <p>This YouTube video will be public.</p>}
-                <p>
-                  {post.mode === "customScheduled" && post.dueAt
-                    ? `Scheduled for ${new Date(post.dueAt).toLocaleString()}`
-                    : "Next available Buffer queue slot"}
-                </p>
-                {editing?._id === post._id &&
-                (post.status === "draft" || post.status === "failed") ? (
-                  <BufferDraftEditor
-                    post={editing}
-                    channels={channels}
-                    onClose={() => setEditing(null)}
-                    onSaved={() => {
-                      setEditing(null);
-                      setApproval(null);
-                      setNotice("Changes saved as a new draft. Review it again before approving.");
-                    }}
-                  />
-                ) : (
-                  post.status === "draft" && (
-                    <div style={controls}>
+                  {post.status === "draft" && approvalBlocked && (
+                    <div role="status">
+                      <p>This draft is saved. Complete these details before approval:</p>
+                      {accountUnavailable && (
+                        <p>Reconnect and select this account before approving this post.</p>
+                      )}
+                      {requirements.map((requirement) => (
+                        <p key={requirement}>{draftRequirementMessages[requirement]}</p>
+                      ))}
+                    </div>
+                  )}
+                  {editing?._id === post._id &&
+                  (post.status === "draft" || post.status === "failed") ? (
+                    <BufferDraftEditor
+                      post={editing}
+                      channels={channels}
+                      onClose={() => setEditing(null)}
+                      onSaved={() => {
+                        setEditing(null);
+                        setApproval(null);
+                        setNotice(
+                          "Changes saved as a new draft. Review it again before approving.",
+                        );
+                      }}
+                    />
+                  ) : (
+                    post.status === "draft" && (
+                      <div style={controls}>
+                        <button
+                          type="button"
+                          style={button}
+                          disabled={busy}
+                          onClick={() => {
+                            setApproval(null);
+                            setEditing(post);
+                          }}
+                        >
+                          Edit draft
+                        </button>
+                        {approval?.id !== post._id || approval.revision !== post.revision ? (
+                          <button
+                            type="button"
+                            style={{
+                              ...button,
+                              ...(busy || approvalBlocked
+                                ? { opacity: 0.5, cursor: "not-allowed" }
+                                : {}),
+                            }}
+                            disabled={busy || approvalBlocked}
+                            onClick={() => setApproval({ id: post._id, revision: post.revision })}
+                          >
+                            Review approval
+                          </button>
+                        ) : (
+                          <>
+                            <p>
+                              Approve this exact post and its media for this channel and schedule?
+                            </p>
+                            <button
+                              type="button"
+                              style={{
+                                ...button,
+                                ...(busy || approvalBlocked
+                                  ? { opacity: 0.5, cursor: "not-allowed" }
+                                  : {}),
+                              }}
+                              disabled={busy || approvalBlocked}
+                              onClick={async () => {
+                                setBusy(true);
+                                try {
+                                  await approve({ postId: post._id, revision: approval.revision });
+                                  setApproval(null);
+                                  setNotice("Approved. Pikar is submitting this post to Buffer.");
+                                } catch {
+                                  setNotice(
+                                    "Approval did not complete. Check the draft and connection before trying again.",
+                                  );
+                                } finally {
+                                  setBusy(false);
+                                }
+                              }}
+                            >
+                              Approve and schedule
+                            </button>
+                            <button type="button" style={button} onClick={() => setApproval(null)}>
+                              Back to review
+                            </button>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          style={button}
+                          disabled={busy}
+                          onClick={async () => {
+                            setBusy(true);
+                            try {
+                              await discard({ postId: post._id, revision: post.revision });
+                              setApproval(null);
+                              setNotice("Draft rejected. It will not be scheduled.");
+                            } catch {
+                              setNotice("The draft could not be discarded.");
+                            } finally {
+                              setBusy(false);
+                            }
+                          }}
+                        >
+                          Discard draft
+                        </button>
+                      </div>
+                    )
+                  )}
+                  {(post.status === "unknown" || post.status === "submitting") && (
+                    <p>
+                      Check your queue in Buffer before creating a replacement. Pikar will not
+                      automatically repeat an uncertain submission.
+                    </p>
+                  )}
+                  {post.status === "failed" &&
+                    !post.bufferPostId &&
+                    !post.replacementPostId &&
+                    ["connection_changed", "schedule_expired", "provider_rejected"].includes(
+                      post.failure ?? "",
+                    ) &&
+                    editing?._id !== post._id && (
                       <button
                         type="button"
                         style={button}
@@ -691,103 +822,18 @@ export function BufferMarketing() {
                           setEditing(post);
                         }}
                       >
-                        Edit draft
+                        Create replacement draft
                       </button>
-                      {approval?.id !== post._id || approval.revision !== post.revision ? (
-                        <button
-                          type="button"
-                          style={button}
-                          disabled={busy}
-                          onClick={() => setApproval({ id: post._id, revision: post.revision })}
-                        >
-                          Review approval
-                        </button>
-                      ) : (
-                        <>
-                          <p>
-                            Approve this exact post and its media for this channel and schedule?
-                          </p>
-                          <button
-                            type="button"
-                            style={button}
-                            disabled={busy}
-                            onClick={async () => {
-                              setBusy(true);
-                              try {
-                                await approve({ postId: post._id, revision: approval.revision });
-                                setApproval(null);
-                                setNotice("Approved. Pikar is submitting this post to Buffer.");
-                              } catch {
-                                setNotice(
-                                  "Approval did not complete. Check the draft and connection before trying again.",
-                                );
-                              } finally {
-                                setBusy(false);
-                              }
-                            }}
-                          >
-                            Approve and schedule
-                          </button>
-                          <button type="button" style={button} onClick={() => setApproval(null)}>
-                            Back to review
-                          </button>
-                        </>
-                      )}
-                      <button
-                        type="button"
-                        style={button}
-                        disabled={busy}
-                        onClick={async () => {
-                          setBusy(true);
-                          try {
-                            await discard({ postId: post._id, revision: post.revision });
-                            setApproval(null);
-                            setNotice("Draft rejected. It will not be scheduled.");
-                          } catch {
-                            setNotice("The draft could not be discarded.");
-                          } finally {
-                            setBusy(false);
-                          }
-                        }}
-                      >
-                        Discard draft
-                      </button>
-                    </div>
-                  )
-                )}
-                {(post.status === "unknown" || post.status === "submitting") && (
-                  <p>
-                    Check your queue in Buffer before creating a replacement. Pikar will not
-                    automatically repeat an uncertain submission.
-                  </p>
-                )}
-                {post.status === "failed" &&
-                  !post.bufferPostId &&
-                  !post.replacementPostId &&
-                  ["connection_changed", "schedule_expired", "provider_rejected"].includes(
-                    post.failure ?? "",
-                  ) &&
-                  editing?._id !== post._id && (
-                    <button
-                      type="button"
-                      style={button}
-                      disabled={busy}
-                      onClick={() => {
-                        setApproval(null);
-                        setEditing(post);
-                      }}
-                    >
-                      Create replacement draft
-                    </button>
+                    )}
+                  {post.replacementPostId && (
+                    <p>
+                      A replacement draft has been created for review. This failed version will not
+                      be resubmitted.
+                    </p>
                   )}
-                {post.replacementPostId && (
-                  <p>
-                    A replacement draft has been created for review. This failed version will not be
-                    resubmitted.
-                  </p>
-                )}
-              </article>
-            ))
+                </article>
+              );
+            })
         )}
         <p>Showing the latest 100 saved posts.</p>
       </section>

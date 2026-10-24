@@ -364,6 +364,11 @@ export const publishPost = internalAction({
       );
       if (!target || !row.selectedChannelIds.includes(post.channelId))
         throw new Error("BUFFER_CHANNEL_NOT_ALLOWED");
+      if (
+        target.service === "pinterest" &&
+        !target.boards?.some((board) => board.id === post.boardId)
+      )
+        throw new Error("BUFFER_PINTEREST_BOARD_REQUIRED");
       const args = bufferCreateArguments(post, target.service);
       attempted = true;
       const result = await bufferGraphql(

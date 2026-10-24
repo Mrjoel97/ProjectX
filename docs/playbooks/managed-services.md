@@ -19,6 +19,8 @@ Integrated CI guard checks now cover the concise proposal-only answer tool, its 
 
 ## Purpose
 
+> Last verified: 2026-10-24 — Confirmation of business details remains available before accounts are connected. Confirm-and-prepare is disabled while native readiness has any gap other than the information being reviewed, while readiness is loading or its configuration/control revisions differ. Service cards reuse their current readiness; workspace conversations read the existing native status when none is supplied. This is a user-interface guard only; native start and confirmation fences remain authoritative.
+
 Let a user save an objective, selected accounts and operating boundaries once, then supervise agent-produced work. The local attended social implementation reuses the existing Executive, native workflow component and provider accounting; it introduces no general recurrence. Release admission remains closed while current-source acceptance is pending.
 
 ## Key files

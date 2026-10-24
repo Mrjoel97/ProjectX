@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   bufferCreateArguments,
+  bufferDraftRequirements,
   nativeSocialPostReference,
   normalizeBufferChannels,
   normalizeBufferMetrics,
@@ -208,5 +209,39 @@ describe("Buffer MCP contracts", () => {
         "pinterest",
       ).metadata,
     ).toEqual({ pinterest: { boardServiceId: "board1" } });
+  });
+  test("retains valid incomplete local drafts while listing every required publishing detail", () => {
+    expect(() => validateBufferDraft(draft, 1000)).not.toThrow();
+    expect(bufferDraftRequirements(draft, "tiktok")).toEqual(["media_required"]);
+    expect(bufferDraftRequirements(draft, "instagram")).toEqual(["media_required"]);
+    expect(bufferDraftRequirements(draft, "pinterest")).toEqual([
+      "media_required",
+      "pinterest_board_required",
+    ]);
+    expect(bufferDraftRequirements(draft, "youtube")).toEqual([
+      "video_required",
+      "media_title_required",
+      "youtube_category_required",
+    ]);
+    const videoDraft = {
+      ...draft,
+      videoUrl: "https://example.com/video.mp4",
+      mediaTitle: "A reviewed video",
+      categoryId: "22",
+    };
+    expect(bufferDraftRequirements(videoDraft, "youtube")).toEqual([]);
+    expect(bufferDraftRequirements(videoDraft, "tiktok")).toEqual([]);
+    expect(bufferDraftRequirements({ ...videoDraft, categoryId: "invalid" }, "youtube")).toEqual([
+      "youtube_category_required",
+    ]);
+    expect(() =>
+      bufferCreateArguments({ ...videoDraft, categoryId: "invalid" }, "youtube"),
+    ).toThrow("BUFFER_YOUTUBE_DETAILS_REQUIRED");
+    expect(() => validateBufferDraft({ ...draft, mediaTitle: " " }, 1000)).toThrow(
+      "BUFFER_INVALID_MEDIA_TITLE",
+    );
+    expect(() => validateBufferDraft({ ...draft, text: "x".repeat(10001) }, 1000)).toThrow(
+      "BUFFER_INVALID_POST",
+    );
   });
 });

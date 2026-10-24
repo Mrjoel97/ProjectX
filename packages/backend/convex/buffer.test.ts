@@ -2,6 +2,7 @@ import { BUFFER_SCOPES } from "@pikar/core/buffer";
 import { importCredentialKey, openCredential, sealCredential } from "@pikar/revenue";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { schedulingTest, withPausedScheduler } from "../test/pausedScheduler";
 import { api, internal } from "./_generated/api";
 import { bufferGraphql, bufferJson, callBufferTool } from "./lib/bufferMcp";
 import schema from "./schema";
@@ -74,6 +75,103 @@ describe("reviewable social draft revisions and recovery", () => {
     text: "Review this exact draft",
     mode: "addToQueue" as const,
   };
+  test("an agent's media-incomplete TikTok draft survives until a new exact-content review", async () => {
+    const h = await setup();
+    await connect(h);
+    // Initialize lazy native modules before pausing callbacks; only publishing jobs are paused.
+    await withPausedScheduler(async () => {
+      await h.t.mutation(internal.buffer.storeChannels, {
+        tenantId: h.tenantId,
+        connectionId: "connection1",
+        organizationId,
+        organizationName: "Own organization",
+        channels: [{ id: channelId, name: "Own TikTok", service: "tiktok", available: true }],
+      });
+      const postId = await h.t.mutation(internal.buffer.stageAgentPost, {
+        tenantId: h.tenantId,
+        ...draft,
+      });
+      expect((await h.asUser.query(api.buffer.posts, {}))[0]).toMatchObject({
+        _id: postId,
+        text: draft.text,
+        platform: "tiktok",
+        status: "draft",
+        revision: 1,
+      });
+      const jobs = () => h.t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+      expect(await jobs()).toHaveLength(0);
+      await expect(
+        h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 }),
+      ).rejects.toThrow("BUFFER_MEDIA_REQUIRED");
+      expect(await jobs()).toHaveLength(0);
+      const retained = (await h.asUser.query(api.buffer.posts, {}))[0];
+      expect(retained).toMatchObject({ text: draft.text, status: "draft", revision: 1 });
+      expect(retained?.approvedAt).toBeUndefined();
+      await h.asUser.mutation(api.buffer.editPost, {
+        ...draft,
+        postId,
+        revision: 1,
+        videoUrl: "https://example.com/reviewed.mp4",
+      });
+      await expect(
+        h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 }),
+      ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+      expect(await jobs()).toHaveLength(0);
+      await h.asUser.mutation(api.buffer.approvePost, { postId, revision: 2 });
+      expect(await jobs()).toHaveLength(1);
+      expect((await h.asUser.query(api.buffer.posts, {}))[0]).toMatchObject({
+        status: "approved",
+        revision: 2,
+        text: draft.text,
+        videoUrl: "https://example.com/reviewed.mp4",
+      });
+    });
+  });
+  schedulingTest(
+    "other media platforms retain incomplete drafts without accepting foreign Pinterest boards",
+    async () => {
+      const h = await setup();
+      await connect(h);
+      for (const service of ["instagram", "youtube", "pinterest"]) {
+        await h.t.mutation(internal.buffer.storeChannels, {
+          tenantId: h.tenantId,
+          connectionId: "connection1",
+          organizationId,
+          organizationName: "Own organization",
+          channels: [
+            {
+              id: channelId,
+              name: "Own channel",
+              service,
+              available: true,
+              ...(service === "pinterest"
+                ? { boards: [{ id: "owned-board", name: "Own board" }] }
+                : {}),
+            },
+          ],
+        });
+        const postId = await h.asUser.mutation(api.buffer.stagePost, draft);
+        await expect(
+          h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 }),
+        ).rejects.toThrow(
+          service === "youtube" ? "BUFFER_YOUTUBE_DETAILS_REQUIRED" : "BUFFER_MEDIA_REQUIRED",
+        );
+        expect((await h.t.run((ctx) => ctx.db.get(postId)))?.status).toBe("draft");
+      }
+      await expect(
+        h.asUser.mutation(api.buffer.stagePost, { ...draft, boardId: "foreign-board" }),
+      ).rejects.toThrow("BUFFER_PINTEREST_BOARD_REQUIRED");
+      await expect(
+        h.asUser.mutation(api.buffer.stagePost, {
+          ...draft,
+          imageUrl: "https://secret@example.com/private.jpg",
+        }),
+      ).rejects.toThrow("BUFFER_INVALID_MEDIA");
+      expect(
+        await h.t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect()),
+      ).toHaveLength(0);
+    },
+  );
   test("edits are tenant-owned CAS changes, remove omitted media and invalidate stale review decisions", async () => {
     vi.useFakeTimers();
     const h = await setup();
