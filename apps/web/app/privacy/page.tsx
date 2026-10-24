@@ -6,8 +6,10 @@ import {
   ENTITY,
   ENTITY_ADDRESS,
   HAS_PLACEHOLDERS,
-  LEAD_AUTHORITY,
+  LEGAL_REVIEW_DEFERRED,
   OPERATING_COUNTRY,
+  OWNER_APPROVED_PUBLICATION,
+  OWNER_REVIEWED_DATE,
   SITE,
 } from "../legal";
 
@@ -24,12 +26,13 @@ export default function Privacy() {
       <h1>Privacy Policy</h1>
       <p className="updated">Effective {EFFECTIVE}</p>
 
-      {HAS_PLACEHOLDERS && (
+      {HAS_PLACEHOLDERS || LEGAL_REVIEW_DEFERRED || !OWNER_APPROVED_PUBLICATION ? (
         <p className="notice">
-          <strong>Draft — not yet in force.</strong> This document has not been reviewed by a
-          qualified lawyer. The bracketed legal details below remain unconfirmed. Publication under
-          the existing review deferral does not complete legal review.
+          <strong>Draft — not yet in force.</strong> Publication approval is pending or deferred, or
+          identifying details remain unresolved.
         </p>
+      ) : (
+        <p className="updated">Published with owner approval on {OWNER_REVIEWED_DATE}.</p>
       )}
 
       <h2>1. Who we are</h2>
@@ -44,8 +47,8 @@ export default function Privacy() {
         us about anything in this policy at <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
       </p>
       <p>
-        We have not appointed a Data Protection Officer, as we are not required to under Article 37
-        GDPR. Enquiries go to the address above.
+        We have not appointed a Data Protection Officer. Privacy enquiries can be sent to{" "}
+        <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
       </p>
 
       <h2>2. What data we collect</h2>
@@ -180,9 +183,10 @@ export default function Privacy() {
           use it.
         </li>
         <li>
-          <strong>You approve the automation before it runs.</strong> Pikar presents a plan of what
-          it intends to do. Work begins only after you approve that plan, and you are notified as it
-          proceeds. You can stop it.
+          <strong>You approve actions that require approval.</strong> Pikar may plan, read
+          authorised context and prepare drafts before asking you to approve a plan. Sending an
+          email from your connected mailbox requires approval of the saved plan. You are notified as
+          approved work proceeds and can stop a running automation.
         </li>
         <li>
           <strong>What we do with message content.</strong> We read messages to understand context,
@@ -336,10 +340,11 @@ export default function Privacy() {
         precisely where the human sits.
       </p>
       <p>
-        <strong>You approve the plan before it runs.</strong> Pikar shows you what it intends to do.
-        Nothing executes until you approve, you are notified as each stage completes, and you can
-        halt a running automation at any time. Individual steps within an approved plan are carried
-        out automatically — that is what you approved.
+        <strong>Approval applies to the actions you are asked to review.</strong> Planning,
+        authorised context reads and draft preparation can happen before final approval. Sending
+        email on your behalf and publishing a saved social post require their explicit approvals.
+        Individual steps within an approved plan can then run automatically under the applicable
+        guardrails. You are notified as approved work proceeds and can halt a running automation.
       </p>
       <p>
         Pikar does not make decisions producing legal or similarly significant effects about you by
@@ -438,11 +443,11 @@ export default function Privacy() {
         confirmation.
       </p>
       <p>
-        Where personal data is transferred outside the UK or European Economic Area, we rely on the
-        European Commission&rsquo;s Standard Contractual Clauses, the UK International Data Transfer
-        Addendum, or an adequacy decision, as applicable to each provider. You may request a copy of
-        the safeguards in place, including the specific region a provider processes in, by writing
-        to <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
+        We have not confirmed the contractual transfer safeguards for every enabled provider route.
+        The applicable terms and any Standard Contractual Clauses, UK International Data Transfer
+        Addendum or adequacy basis require verification for the specific service and processing
+        location. You can request the information currently available by writing to{" "}
+        <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
       </p>
 
       <h2>9. Retention, and the immutable audit archive</h2>
@@ -450,6 +455,11 @@ export default function Privacy() {
         We keep account data and your submitted content for as long as your account is active. You
         may request deletion at any time (section 10); we will action it within one month, as
         required by Article 12(3) GDPR.
+      </p>
+      <p>
+        Account access ends during erasure. Removal of search copies can continue in the background
+        after the account-closed message appears. That message does not confirm that background
+        removal has finished; contact us for confirmation of completion.
       </p>
       <p>
         Audit records are retained as an immutable compliance log.{" "}
@@ -511,7 +521,10 @@ export default function Privacy() {
         <a href="https://myaccount.google.com/permissions" rel="noopener noreferrer">
           myaccount.google.com/permissions
         </a>
-        . Revoking access invalidates our tokens immediately.
+        . For requests made through Pikar, removing the stored token and revoking access at Google
+        are distinct outcomes. Follow the app&rsquo;s status message. If Google revocation is not
+        confirmed or the request fails, check the connection status and use Google&rsquo;s account
+        controls to complete revocation.
       </p>
       <p>
         You can disconnect your Microsoft account at any time from within the application. That
@@ -537,8 +550,12 @@ export default function Privacy() {
       </p>
       <p>
         If you are unhappy with how we handle your data, you may complain to your local supervisory
-        authority. Our lead supervisory authority is {LEAD_AUTHORITY}. In the UK, this is the
-        Information Commissioner&rsquo;s Office (<code>ico.org.uk</code>).
+        authority. Where the GDPR applies, you may lodge a complaint under{" "}
+        <a href="https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679">
+          Article 77
+        </a>
+        , including with an authority in the Member State where you usually live or work, or where
+        the alleged infringement occurred.
       </p>
 
       <h2>11. Security</h2>

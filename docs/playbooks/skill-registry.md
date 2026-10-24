@@ -1,3 +1,5 @@
+> Last verified: 2026-10-24 — Current golden source revision is regenerated after integrating main c765168d callback/policy work. The 46 input cases and historical receipts are unchanged; no registry seeding, activation or paid evaluation is performed.
+
 > Combined-source checkpoint: 2026-10-24 — Preserve canonical media-director v9/native-film guidance and the direct-social tool boundaries. Older director versions and source fingerprints below are historical checkpoints. Regenerate the exact merged evaluator identities with unchanged corpus bytes and historical receipts; this merge creates no paid qualification, registry seed, activation or release approval.
 
 > Last verified: 2026-10-24 — Canonical director v8 and derived mirror align standard Seedance4–15s and policy cost guidance; the unactivated v7 editorial candidate is aligned, not promoted. Golden source revision219834047fb7b7dc9b7b63857c0e90ecc4536d35f7a2988a46837e91cc6f5c61 preserves46/40-case corpora and historical receipts. No registry seed, activation or paid agent qualification occurred.

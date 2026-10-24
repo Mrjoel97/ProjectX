@@ -253,6 +253,12 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
       "Direct YouTube token exchange and refresh require this client secret; Google sign-in is separate.",
   },
   {
+    name: "YOUTUBE_OAUTH_REDIRECT_URI",
+    tier: "feature",
+    whatBreaks:
+      "Optional owned-domain YouTube callback. Absent keeps the isolated Convex callback; an explicit invalid value blocks consent and token exchange.",
+  },
+  {
     name: "YOUTUBE_WEBHOOK_SECRET",
     tier: "feature",
     whatBreaks:

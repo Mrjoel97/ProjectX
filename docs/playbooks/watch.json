@@ -589,6 +589,7 @@
     "apps/web/app/(app)/connect-social/",
     "apps/web/app/(app)/dashboard/marketing/SocialPanel.tsx",
     "packages/backend/convex/youtubeMetadata.test.ts",
-    "packages/backend/convex/socialDisconnect.test.ts"
+    "packages/backend/convex/socialDisconnect.test.ts",
+    "apps/web/app/social/youtube/callback/"
   ]
 }

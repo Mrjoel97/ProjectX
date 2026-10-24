@@ -1,3 +1,5 @@
+> Last verified: 2026-10-24 — Regenerate the current vertical source fingerprint after integrating main c765168d. The 40 cases across six lanes remain byte-equivalent and no historical qualification is relabeled or replayed.
+
 > Combined-source checkpoint: 2026-10-24 — Recompute vertical fingerprints after combining native media/batch approval and direct-social lifecycle sources, preserving all forty cases, six lanes and historical receipts. Dated source pins and offline checks below describe their original candidates; they do not qualify this merged source, activate a pack or establish deployment.
 
 > Last verified: 2026-10-22 — The explicit root declaration of existing Node 26.1.1 types and corrected schema comment index change shared source inputs. Regenerated vertical source revision is `ace853904b28c76f71615cdf79fac15254c9981bc0cb3cd8dc4c95685efe09df`, with all 40 cases and six lanes unchanged. Golden separately fingerprints the caption repair. These mechanical source identities do not qualify any pack or change historical receipts, consent, registry state or provider authorization.

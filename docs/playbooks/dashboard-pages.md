@@ -1,3 +1,5 @@
+> Last verified: 2026-10-24 — Preserve main c765168d legal disclosures and owned-domain callback alongside the media workspace. This integration does not replace the policy pages or alter the approved public contact details. Combined-source CI and hosted acceptance remain separate.
+
 > Combined-source checkpoint: 2026-10-24 — Preserve the tabbed artifact workspace and in-conversation media budget request while retaining social draft locking, explicit destination/approval controls and truthful disconnect/data-erasure disclosures. Reading an output or social account does not authorize generation or publication. Final merged-candidate CI and release remain pending.
 
 > Last verified: 2026-10-24 — Over-daily-limit media batch approval appears in the chat while artifacts remain in workspace tabs. It names exact task cost/remaining allowance/required extra; changed content, selection, amount or window needs fresh approval. Current media source defaults100USD/customer/day and2,000USD shared/day do not change chat/research/document rails or the separate test allowance.

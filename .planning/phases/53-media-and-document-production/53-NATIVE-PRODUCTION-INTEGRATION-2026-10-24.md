@@ -142,3 +142,9 @@ the real rate limiter in the workspace fixture and explicitly inventories the PC
 site. The existing final-film protection and failure-arm no-delete guards remain asserted.
 The focused workspace suite passes 8/8 and redaction inventory passes 69/69. Final complete
 CI evidence is recorded on PR83; no new paid request or deployment is implied.
+
+The final combined candidate also incorporates main `c765168d` owned-domain callback and
+policy work. Only current source pins needed conflict resolution; original qualification cases
+remain unchanged. The new callback route is registered under the existing social playbook.
+Focused follow-up checks pass 8 workspace, 69 cleanup-inventory, 24 audit-projection and
+18 governance checks. Exact final-head CI is recorded on PR83.
