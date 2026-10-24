@@ -148,6 +148,93 @@ test("deferring preserves the conversation and cannot launch a service", async (
   );
   expect(state.continue).not.toHaveBeenCalled();
 });
+
+test("finish later saves the captured question before deferring and survives reopening", async () => {
+  await render();
+  await enter("Warm and clear.");
+  state.view = {
+    ...initial(),
+    nextQuestion: {
+      key: "publishingBoundaries",
+      question: "What should Pikar avoid?",
+      why: "Keep content within your rules.",
+      reason: "missing",
+    },
+  };
+  await render();
+  const saved = {
+    ...state.view,
+    conversationRevision: 2,
+    answers: [
+      {
+        key: "brandVoice",
+        value: "Warm and clear.",
+        origin: "draft",
+        sourceRef: null,
+        sourceHash: null,
+        confirmedAt: null,
+      },
+    ],
+  };
+  const persisted = { ...saved, state: "deferred", conversationRevision: 3 };
+  state.save.mockResolvedValue(saved);
+  state.defer.mockResolvedValue(persisted);
+  await click("Finish this later");
+  expect(state.save).toHaveBeenCalledWith({
+    serviceId: "social-marketing",
+    expectedRevision: 2,
+    expectedControlRevision: 5,
+    expectedConversationRevision: 1,
+    key: "brandVoice",
+    value: "Warm and clear.",
+  });
+  expect(state.defer).toHaveBeenCalledWith({
+    serviceId: "social-marketing",
+    expectedRevision: 2,
+    expectedControlRevision: 5,
+    expectedConversationRevision: 2,
+  });
+  expect(state.save.mock.invocationCallOrder[0]).toBeLessThan(
+    state.defer.mock.invocationCallOrder[0],
+  );
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  state.view = structuredClone(persisted);
+  await render();
+  expect(host.textContent).toContain("This conversation is saved for later");
+  state.begin.mockResolvedValue({ ...persisted, state: "collecting", conversationRevision: 4 });
+  await click("Continue the conversation");
+  expect(state.begin).toHaveBeenLastCalledWith({
+    serviceId: "social-marketing",
+    expectedRevision: 2,
+    expectedControlRevision: 5,
+    expectedConversationRevision: 3,
+  });
+  state.view = { ...persisted, state: "collecting", conversationRevision: 4 };
+  await render();
+  expect(host.textContent).toContain("Warm and clear.");
+  expect(host.textContent).toContain("Awaiting your confirmation");
+  expect(host.querySelector("textarea")?.value).toBe("");
+  expect(state.confirm).not.toHaveBeenCalled();
+  expect(state.continue).not.toHaveBeenCalled();
+});
+
+test.each([
+  "save",
+  "defer",
+] as const)("finish later keeps the typed answer when %s fails and never confirms or starts", async (failure) => {
+  state.save.mockResolvedValue({ ...initial(), conversationRevision: 2 });
+  state[failure].mockRejectedValue(new Error("SERVICE_CONVERSATION_STALE"));
+  await render();
+  await enter("Keep our voice warm and clear.");
+  await click("Finish this later");
+  expect(host.querySelector("textarea")?.value).toBe("Keep our voice warm and clear.");
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("answer is kept");
+  expect(host.textContent).not.toContain("Saved for later. No work was started.");
+  if (failure === "save") expect(state.defer).not.toHaveBeenCalled();
+  expect(state.confirm).not.toHaveBeenCalled();
+  expect(state.continue).not.toHaveBeenCalled();
+});
 test("the reviewed exact snapshot is confirmed and continued only after an explicit click", async () => {
   state.view = {
     ...initial(),

@@ -355,8 +355,14 @@ function Conversation({
               disabled={blocked}
               onClick={() =>
                 void act(async () => {
-                  const current = await ensureConversation();
+                  let current = await ensureConversation();
+                  if (key && value.trim()) {
+                    current = await save({ ...cas(current), key, value: value.trim() });
+                  }
                   await defer(cas(current));
+                  setValue("");
+                  setEditing(null);
+                  setDraftQuestion(null);
                   setNotice("Saved for later. No work was started.");
                 })
               }
