@@ -1,3 +1,5 @@
+> Last verified: 2026-10-24 — Canonical director v8 and derived mirror align standard Seedance4–15s and policy cost guidance; the unactivated v7 editorial candidate is aligned, not promoted. Golden source revision219834047fb7b7dc9b7b63857c0e90ecc4536d35f7a2988a46837e91cc6f5c61 preserves46/40-case corpora and historical receipts. No registry seed, activation or paid agent qualification occurred.
+
 > Last verified: 2026-10-24 — Opt-in Seedance request contracts refresh golden source revision to2026-09-11.budgeted-evaluator.200f4e57f1d533787b78f4718f11e09c1e1fc681e0556a90a64231cdf9d53c33. The46-case golden and40-case vertical corpora remain unchanged. Provider comparison is not paid agent qualification, prompt promotion or registry activation; director/default/mixed-media policy remains unchanged.
 
 > Last verified: 2026-10-23 — The queued-cancellation writer correction refreshes golden source revision to 2026-09-11.budgeted-evaluator.36d5c34e09b87bbfb45e0cb53f529b213ed381ebb23dc5c6dc44eefe44d8baf4. The46-case corpus/hash and40-case vertical corpus are unchanged. No paid qualification, registry decision or historical receipt is replaced.

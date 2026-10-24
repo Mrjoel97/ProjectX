@@ -1,3 +1,5 @@
+> Last verified: 2026-10-24 — Golden source revision219834047fb7b7dc9b7b63857c0e90ecc4536d35f7a2988a46837e91cc6f5c61 binds the standard-default/cost/grid/director migration. Current provider preference does not add agent tool grants or activate a registry row. Native audio remains an explicitly typed wire option; current production keeps separate-voice ownership until a persisted native-mode integration is built.
+
 > Last verified: 2026-10-24 — Golden source revision200f4e57f1d533787b78f4718f11e09c1e1fc681e0556a90a64231cdf9d53c33 binds opt-in Seedance request validation. The unchanged46/40-case corpora and historical qualification receipts are retained. No new tool grant, default model, paid runtime authority or activation follows from the isolated comparison.
 
 > Last verified: 2026-10-23 — Golden source revision36d5c34e09b87bbfb45e0cb53f529b213ed381ebb23dc5c6dc44eefe44d8baf4 includes the transactional queued-cancellation writer correction. The46/40-case corpora remain unchanged; no new tool grant, paid evaluation, provider default, activation or deployment follows.

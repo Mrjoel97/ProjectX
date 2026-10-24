@@ -11,6 +11,7 @@ import type { Block, Scene, ShotType } from "@pikar/core/storyboard";
 import { maxCharsFor, minCharsFor } from "@pikar/core/storyboard";
 import {
   chooseMediaBatch,
+  estimateMediaUsd,
   MEDIA_DEFAULT_IMAGE,
   MEDIA_DEFAULT_STOCK,
   MEDIA_DEFAULT_STT,
@@ -159,8 +160,11 @@ const REF_JOB = () => deck(3);
 // `openai/gpt-audio-mini` on OpenRouter — $0.015 -> $0.006 per 1000 chars, so 3 x 112 chars is
 // 0.336 of a thousand at the new rate. The $0.003024 delta is the whole change to this total, and
 // 88.8016 cents CEILINGS to 89 rather than 90.
-const REF_JOB_USD = 0.888016;
-const REF_JOB_CENTS = 89;
+// Standard Seedance 2.0: three four-second clips reserve five policy seconds each at $0.1512,
+// plus the unchanged voice, caption and render lines. This is not a verified provider invoice cap.
+const REF_JOB_USD = 2.316016;
+const REF_JOB_CENTS = 232;
+const REF_JOBS_PER_DAY = Math.floor(MEDIA_DAILY_BUDGET_CENTS / REF_JOB_CENTS);
 const REF_JOB_LINES = 7; // 3 video + 3 tts + 1 stt — the render line gets NO row
 
 // ── the two kill switches ──────────────────────────────────────────────────────────
@@ -276,10 +280,10 @@ test("an unpriced model is unknown_model — zero rows, never a guess", async ()
 
 describe("the reference job: the WHOLE reel is ONE reserved unit", () => {
   test("the arithmetic, derived from the price table rather than asserted twice", () => {
-    const clips =
-      3 *
-      MEDIA_DEFAULT_VIDEO.seconds *
-      (MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_VIDEO.model]?.[MEDIA_DEFAULT_VIDEO.resolution] ?? 0);
+    const clip = estimateMediaUsd({ kind: "video", ...MEDIA_DEFAULT_VIDEO });
+    expect(clip.ok).toBe(true);
+    if (!clip.ok) return;
+    const clips = 3 * clip.value;
     // 2x — rewrite allowance. 33.1-06: the rate is READ from the table now, like the clip line
     // above. It was the literal `0.015`, which made a test whose own name says "derived from the
     // price table" go red on a price move it should have absorbed — and would have gone SILENTLY
@@ -290,7 +294,7 @@ describe("the reference job: the WHOLE reel is ONE reserved unit", () => {
       (MEDIA_TTS_PRICING[MEDIA_DEFAULT_VOICE.model] ?? 0);
     const stt = 1 * 0.006; // the sub-minute input is billed as one minute
     expect(clips + voice + stt + MEDIA_SANDBOX_USD_PER_RENDER).toBeCloseTo(REF_JOB_USD, 6);
-    expect(REF_JOB_USD).toBeLessThan(MEDIA_JOB_CAP_USD); // 75% headroom — the test is not vacuous
+    expect(REF_JOB_USD).toBeLessThan(MEDIA_JOB_CAP_USD);
   });
 
   test("§4.1's SIX-BLOCK REEL IS NOW A REFUSAL — 24 generated seconds against a 12 s ceiling", async () => {
@@ -664,18 +668,16 @@ describe("the media windows: keyed per tenant, with a keyless ceiling behind the
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     } as const;
-    // ELEVEN jobs fit in the tenant window. The twelfth cannot. (It was four and a fifth while
-    // the reference job was six sora-2 blocks at 246 cents; the same reel is 90 cents on grok at
-    // the seconds ceiling, so the count is recomputed rather than left to pass by luck.)
-    for (let i = 0; i < 11; i++) expect((await reserve(t, job)).ok).toBe(true);
+    // Recompute the exact number of complete current-profile jobs that fit before exhaustion.
+    for (let i = 0; i < REF_JOBS_PER_DAY; i++) expect((await reserve(t, job)).ok).toBe(true);
     const rowsBefore = (await rows(t)).length;
-    expect(rowsBefore).toBe(11 * REF_JOB_LINES);
+    expect(rowsBefore).toBe(REF_JOBS_PER_DAY * REF_JOB_LINES);
 
     const res = await reserve(t, job);
 
     expect(res).toEqual({ ok: false, reason: "media_daily_exhausted" });
     expect((await rows(t)).length).toBe(rowsBefore); // all-or-nothing
-    expect(await mediaLeft(t, A)).toBe(MEDIA_DAILY_BUDGET_CENTS - 11 * REF_JOB_CENTS);
+    expect(await mediaLeft(t, A)).toBe(MEDIA_DAILY_BUDGET_CENTS - REF_JOBS_PER_DAY * REF_JOB_CENTS);
   });
 
   test("the KEYLESS ceiling refuses independently, with its own distinct reason", async () => {
@@ -690,12 +692,11 @@ describe("the media windows: keyed per tenant, with a keyless ceiling behind the
         withCaptions: true,
       }) as const;
 
-    // Many tenants, each individually modest (11 jobs = 990 < its own 1000 allowance), together
-    // exceeding the 10,000 ceiling. No single tenant is over its own window, so only the global
-    // rail can refuse here. Counts recomputed for the 90-cent reference job (33.1-04).
+    // Many tenants each stay within their own allowance while collectively exhausting the
+    // deployment ceiling, so only the global rail can refuse here.
     let sawCeiling = false;
     outer: for (let i = 0; i < 15 && !sawCeiling; i++) {
-      for (let j = 0; j < 11; j++) {
+      for (let j = 0; j < REF_JOBS_PER_DAY; j++) {
         const res = await reserve(t, job(`crowd_${i}`));
         if (!res.ok) {
           expect(res.reason).toBe("deployment_media_exhausted");
@@ -766,10 +767,10 @@ test("CONCURRENCY: two jobs that fit alone but not together — exactly ONE wins
     withCaptions: true,
   } as const;
 
-  // Leave room for exactly one more job. TEN at 90 cents leaves 100: one fits, two do not.
-  for (let i = 0; i < 10; i++) expect((await reserve(t, job)).ok).toBe(true);
+  // Leave room for exactly one more complete current-profile job.
+  for (let i = 0; i < REF_JOBS_PER_DAY - 1; i++) expect((await reserve(t, job)).ok).toBe(true);
   const room = await mediaLeft(t, A);
-  expect(room).toBe(MEDIA_DAILY_BUDGET_CENTS - 10 * REF_JOB_CENTS);
+  expect(room).toBe(MEDIA_DAILY_BUDGET_CENTS - (REF_JOBS_PER_DAY - 1) * REF_JOB_CENTS);
   expect(room).toBeGreaterThanOrEqual(REF_JOB_CENTS); // one fits...
   expect(room).toBeLessThan(2 * REF_JOB_CENTS); // ...two do not. The test is not vacuous.
 
@@ -785,7 +786,7 @@ test("CONCURRENCY: two jobs that fit alone but not together — exactly ONE wins
   // Consumed cents equal the WINNER's estimate, not both.
   expect(await mediaLeft(t, A)).toBe(room - REF_JOB_CENTS);
   // ...and the loser wrote nothing.
-  expect(await rows(t)).toHaveLength(11 * REF_JOB_LINES);
+  expect(await rows(t)).toHaveLength(REF_JOBS_PER_DAY * REF_JOB_LINES);
 });
 
 // ── plan 20-18: the D5 reconciliation readers ──────────────────────────────────────
@@ -1162,6 +1163,7 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
       duration: MEDIA_DEFAULT_VIDEO.seconds,
       resolution: MEDIA_DEFAULT_VIDEO.resolution,
       aspect_ratio: "9:16",
+      generate_audio: false,
     });
   });
 
@@ -1181,12 +1183,13 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
     expect(buildSubmitBody({ ...VIDEO, resolution: "720p" }, "p").resolution).toBe("720p");
   });
 
-  test("NO audio field is sent, on any video submit", () => {
-    // The endpoint has no audio toggle (20-01 preflight): the only audio field is `audio_url` and
-    // we never send one. A clip's own native track is ducked to SFXVOL 0.20 under the voice bed by
-    // `render/assemble_final.sh`'s LEVEL LAW — Open Question 5 resolves at the assembler.
+  test("the narrated standard profile disables native audio while historical Grok keeps its body", () => {
     const keys = Object.keys(buildSubmitBody(VIDEO, "p"));
-    expect(keys.filter((k) => /audio/i.test(k))).toEqual([]);
+    expect(keys.filter((k) => /audio/i.test(k))).toEqual(["generate_audio"]);
+    expect(buildSubmitBody(VIDEO, "p")).toHaveProperty("generate_audio", false);
+    expect(buildSubmitBody({ ...VIDEO, model: "x-ai/grok-imagine-video" }, "p")).not.toHaveProperty(
+      "generate_audio",
+    );
   });
 
   test("the image body pins size, one output, and no rewrite/watermark", () => {
@@ -1377,11 +1380,8 @@ describe("OpenRouter video submit contract", () => {
     expect(typeof body.duration).toBe("number");
   });
 
-  test("no unpriced dimension is sent — not generate_audio, not Sora's size", () => {
-    // Grok has no native audio and this pipeline muxes TTS separately in assemble_final.sh.
-    // The price table keys on model/resolution/seconds; a fourth priced-looking dimension the table
-    // cannot see is exactly the money bug buildSubmitBody's doc comment exists to prevent.
-    expect(buildSubmitBody(VIDEO, "p")).not.toHaveProperty("generate_audio");
+  test("the standard request pins silent audio and never sends Sora's size field", () => {
+    expect(buildSubmitBody(VIDEO, "p")).toHaveProperty("generate_audio", false);
     expect(buildSubmitBody(VIDEO, "p")).not.toHaveProperty("size");
   });
 
@@ -1937,6 +1937,8 @@ describe("OpenRouter video task landing", () => {
     // Were the poller to pass a default 4 instead of the row's 7, this would read 28.
     const t = harness();
     const jobId = await seedSubmittedVideo(t, 7);
+    // This receipt-specific test remains on its original Grok model after the default migration.
+    await t.run((ctx) => ctx.db.patch(jobId, { model: "x-ai/grok-imagine-video", estUsd: 0.49 }));
     stubMediaEnv();
     vi.stubGlobal(
       "fetch",
@@ -5443,7 +5445,7 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
     } as const;
 
     // Drain the tenant's media window through the REAL rail rather than a test-only door, then ask
-    // for one more. 90c a job against a 1000c window, so the twelfth is the one that cannot fit.
+    // for one more at the current profile's exact reservation.
     let refused: Awaited<ReturnType<typeof reserve>> | null = null;
     for (let i = 0; i < 13 && refused === null; i += 1) {
       const res = await reserve(t, { ...job, blocks: REF_JOB() });
@@ -5457,8 +5459,10 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
 
     // Exactly the successful reservations are recorded, and the refusal added nothing.
     const reserved = (await events(t)).filter((r) => r.phase === "reserved");
-    expect(reserved).toHaveLength(11);
-    expect(reserved.reduce((sum, r) => sum + r.amountCents, 0)).toBe(REF_JOB_CENTS * 11);
+    expect(reserved).toHaveLength(REF_JOBS_PER_DAY);
+    expect(reserved.reduce((sum, r) => sum + r.amountCents, 0)).toBe(
+      REF_JOB_CENTS * REF_JOBS_PER_DAY,
+    );
   });
 
   test("even a REFUSED media job opens coverage — a refusal is a confident zero", async () => {
@@ -5715,7 +5719,7 @@ describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable"
     expect(estimate.refusal).toBeNull();
     expect(estimate.totalCents).toBeGreaterThan(0);
     // ONE LINE PER PAID KIND (wave 7). The blended `pictures` row wave 5 printed hid the only
-    // lever the user has: 12 s of generated clip is $0.84 and the still beside it is $0.006.
+    // lever the user has: clip reservations include a policy second per request.
     expect(estimate.lines.map((l) => l.label)).toEqual([
       "clips",
       "stills",
@@ -5725,7 +5729,7 @@ describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable"
     ]);
     const line = (label: string) => estimate.lines.find((l) => l.label === label);
     expect(line("clips")?.qty).toBe(2);
-    expect(line("clips")?.cents).toBe(84); // 4 s + 8 s at $0.07 a second
+    expect(line("clips")?.cents).toBe(212); // (4+1 + 8+1) * $0.1512, rounded once
     expect(line("stills")?.qty).toBe(1);
     expect(line("stills")?.cents).toBe(1); // ONE still, whatever its scene's length
     // 33-04: the render line is DOUBLED at its one source so the retry sandbox is reserved, not
@@ -6166,21 +6170,21 @@ describe("33-02 switchDeck: the unpicked deck swaps in atomically, until Generat
     const { planId } = await seedSceneDeck(t);
     await seedAltDeck(t, planId);
 
-    // Before the switch: the picked deck is 4 s + 8 s of paid clip → 84 cents of clips.
+    // Before the switch: two clip reservations include two policy seconds.
     const before = await asA(t).query(api.media.jobEstimate, { planId });
-    expect(before.lines.find((l) => l.label === "clips")?.cents).toBe(84);
+    expect(before.lines.find((l) => l.label === "clips")?.cents).toBe(212);
 
     await asA(t).mutation(api.media.switchDeck, { planId });
 
     // After: the SAME query, textually untouched by this plan, prices the formerly-alternate deck
-    // (one 8 s clip → 56 cents) because `plans.shots` IS the picked deck.
+    // (one 8 s clip plus one policy second → 136 cents) because `plans.shots` IS the picked deck.
     const row = await planRowOf(t, planId);
     const deck = row ? sceneDeckOf(row) : null;
     expect(deck?.targetDurationSeconds).toBe(15);
     expect(deck?.scenes.map((s) => s.narration)).toEqual(["alt line 0", "alt line 1"]);
     const after = await asA(t).query(api.media.jobEstimate, { planId });
     expect(after.refusal).toBeNull();
-    expect(after.lines.find((l) => l.label === "clips")?.cents).toBe(56);
+    expect(after.lines.find((l) => l.label === "clips")?.cents).toBe(136);
   });
 
   test("no_alternate when there is nothing to switch to", async () => {

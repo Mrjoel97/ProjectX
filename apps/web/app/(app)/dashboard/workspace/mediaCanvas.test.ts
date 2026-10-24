@@ -244,7 +244,7 @@ describe("the refusal names the lever, in the deck's own vocabulary", () => {
     // whole visible symptom standing behind a green backend.
     expect(refusalText({ reason: "illegal_duration" }, base)).toContain(GENERATED_LENGTH_RANGE);
     expect(refusalText({ reason: "illegal_duration" }, base)).not.toMatch(/4, 8 or 12/);
-    expect(GENERATED_LENGTH_RANGE).toBe("1 to 15");
+    expect(GENERATED_LENGTH_RANGE).toBe("4 to 15");
     expect(refusalText({ reason: "illegal_duration" }, { ...base, noun: "block" })).toBe(
       "Every block must be 5 or 10 seconds.",
     );
@@ -378,6 +378,7 @@ describe("33-06: the estimate is ONE headline, and it is jobEstimate's own numbe
     expect(pricedAsLine(30, 4, 4)).toBe("A 30-second reel of 4 scenes, priced per scene");
     expect(pricedAsLine(30, 4, 4)).not.toMatch(/per block/);
     expect(pricedAsLine(null, 4, 8)).toMatch(/8 s per block/);
+    expect(pricedAsLine(null, 4, 8)).toContain("Seedance 2.0 on OpenRouter");
   });
 });
 

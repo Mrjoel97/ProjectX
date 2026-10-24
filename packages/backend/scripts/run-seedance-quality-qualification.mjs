@@ -25,6 +25,7 @@ const API = "https://openrouter.ai/api/v1";
 const APPROVAL = "phase53-owner-2026-10-22-five-usd-testing";
 const MODEL = "bytedance/seedance-1-5-pro";
 const MINI = "bytedance/seedance-2.0-mini";
+const STANDARD = "bytedance/seedance-2.0";
 const BASELINE = resolve(ROOT, ".tmp/phase53-reel-qualification");
 const LEDGER = resolve(ROOT, ".tmp/phase53-paid-qualification/charges.jsonl");
 const MAX_BYTES = 24 * 1024 * 1024;
@@ -54,7 +55,8 @@ function append(path, value) {
     closeSync(fd);
   }
 }
-export function seedanceManifest(baselineDir = BASELINE) {
+export function seedanceManifest(baselineDir = BASELINE, profile = "comparison") {
+  check(["comparison", "standard_native_audio"].includes(profile), "unknown_profile");
   baselineDir = privatePath(baselineDir);
   const original = JSON.parse(readFileSync(resolve(baselineDir, "manifest.json"), "utf8"));
   const result = JSON.parse(readFileSync(resolve(baselineDir, "result.json"), "utf8"));
@@ -101,8 +103,26 @@ export function seedanceManifest(baselineDir = BASELINE) {
     estimatedUsd: 0.378,
     body: { ...shots[0].body, model: MINI },
   });
+  if (profile === "standard_native_audio") {
+    shots.splice(0, shots.length, {
+      id: "seedance-standard-native-0",
+      kind: "video",
+      policyAllowanceUsd: 1,
+      estimatedUsd: 0.6048,
+      body: {
+        model: STANDARD,
+        prompt:
+          'Premium cinematic product launch. A single matte black insulated bottle stands on dark stone, amber rim light and a slow deliberate camera push-in. The bottle remains grounded with stable shape. Warm confident English voice says exactly: "Meet your everyday upgrade." Subtle modern instrumental pulse beneath the voice, no other speech. No people, logos, text or watermarks. Illustrative fictional product.',
+        duration: 4,
+        resolution: "720p",
+        aspect_ratio: "9:16",
+        generate_audio: true,
+      },
+    });
+  }
   const manifest = {
     version: 1,
+    profile,
     approvalRef: APPROVAL,
     sharedPolicyAllowanceUsd: 5,
     guaranteedInvoiceCeilingUsd: null,
@@ -113,17 +133,22 @@ export function seedanceManifest(baselineDir = BASELINE) {
     baselineDir: relative(ROOT, baselineDir),
     baselineManifestSha256: hash(readFileSync(resolve(baselineDir, "manifest.json"))),
     baselineReceiptSha256: hash(readFileSync(resolve(baselineDir, "result.json"))),
-    models: [MODEL, MINI],
-    retirementDate: "2026-11-11",
+    models: profile === "comparison" ? [MODEL, MINI] : [STANDARD],
+    retirementDate: profile === "comparison" ? "2026-11-11" : null,
     automaticRetries: 0,
     concurrency: 1,
     comparison:
-      "Two exact purchased text-to-video briefs; no new Grok charge. Not image-to-video, branded-product preservation, a complete launch film, or evidence of faster 30/45/60-second production.",
+      profile === "comparison"
+        ? "Two exact purchased text-to-video briefs; no new Grok charge. Not image-to-video, branded-product preservation, a complete launch film, or evidence of faster 30/45/60-second production."
+        : "One standard Seedance 2.0 native-audio request with a new four-second product brief. No separate TTS, music, stock, image or STT request. This is not a matched quality benchmark, a complete film or proof of exact spoken-script fidelity.",
     requests: shots,
-    catalogue: [
-      { model: MODEL, silentVideoTokenUsd: 0.0000012 },
-      { model: MINI, silentVideoTokenUsd: 0.0000035 },
-    ],
+    catalogue:
+      profile === "comparison"
+        ? [
+            { model: MODEL, silentVideoTokenUsd: 0.0000012 },
+            { model: MINI, silentVideoTokenUsd: 0.0000035 },
+          ]
+        : [{ model: STANDARD, audioVideoTokenUsd: 0.000007 }],
   };
   return { manifest, sha256: hash(JSON.stringify(manifest)) };
 }
@@ -174,7 +199,7 @@ export async function runSeedanceQualification({
   ledger = privatePath(ledger);
   check(policyAllowanceAck && creditBillingOnly, "policy_ack_required");
   const saved = JSON.parse(readFileSync(resolve(out, "manifest.json"), "utf8"));
-  const plan = seedanceManifest(resolve(ROOT, saved.manifest.baselineDir));
+  const plan = seedanceManifest(resolve(ROOT, saved.manifest.baselineDir), saved.manifest.profile);
   check(reviewHash === plan.sha256 && saved.sha256 === plan.sha256, "review_digest_mismatch");
   const state = inspectQualificationLedger(ledger);
   check(state.attempts > 0 && !state.unsettled.length, "unsettled_shared_ledger");
@@ -187,13 +212,17 @@ export async function runSeedanceQualification({
   const catalog = await catalogResponse.json();
   for (const expected of plan.manifest.catalogue) {
     const model = catalog.data?.find((m) => m.id === expected.model);
+    const duration = plan.manifest.requests.find((r) => r.body.model === expected.model).body
+      .duration;
+    const audio = typeof expected.audioVideoTokenUsd === "number";
     check(
-      model?.supported_durations?.includes(5) &&
+      model?.supported_durations?.includes(duration) &&
         model.supported_resolutions?.includes("720p") &&
         model.supported_aspect_ratios?.includes("9:16") &&
         model.supported_sizes?.includes("720x1280") &&
         model.generate_audio === true &&
-        Number(model.pricing_skus?.video_tokens_without_audio) === expected.silentVideoTokenUsd,
+        Number(model.pricing_skus?.[audio ? "video_tokens" : "video_tokens_without_audio"]) ===
+          (audio ? expected.audioVideoTokenUsd : expected.silentVideoTokenUsd),
       "catalogue_contract_changed",
     );
   }
@@ -327,11 +356,11 @@ export async function runSeedanceQualification({
         };
         check(
           Number.isFinite(deliveredMedia.durationS) &&
-            deliveredMedia.durationS >= 4.8 &&
-            deliveredMedia.durationS <= 5.3 &&
+            deliveredMedia.durationS >= request.body.duration - 0.2 &&
+            deliveredMedia.durationS <= request.body.duration + 0.3 &&
             video?.width >= 720 &&
             video?.height >= 1280 &&
-            deliveredMedia.audioStreams === 0,
+            deliveredMedia.audioStreams === (request.body.generate_audio ? 1 : 0),
           "video_profile_invalid",
         );
       } catch (error) {
@@ -389,7 +418,13 @@ export async function runSeedanceQualification({
 export async function main(argv = process.argv.slice(2)) {
   const options = {};
   const values = new Set(["--out", "--review-hash"]),
-    flags = new Set(["--prepare", "--execute", "--policy-allowance-ack", "--credit-billing-only"]);
+    flags = new Set([
+      "--prepare",
+      "--execute",
+      "--policy-allowance-ack",
+      "--credit-billing-only",
+      "--native-audio",
+    ]);
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     check(values.has(arg) || flags.has(arg), "unknown_argument");
@@ -401,11 +436,20 @@ export async function main(argv = process.argv.slice(2)) {
   }
   check(!(options["--prepare"] && options["--execute"]), "conflicting_modes");
   const out = privatePath(
-    options["--out"] ?? resolve(ROOT, ".tmp/phase53-seedance-qualification-20261024"),
+    options["--out"] ??
+      resolve(
+        ROOT,
+        options["--native-audio"]
+          ? ".tmp/phase53-seedance-standard-native-20261024"
+          : ".tmp/phase53-seedance-qualification-20261024",
+      ),
   );
   if (!options["--execute"]) {
     check(!existsSync(resolve(out, "execution.lock")), "run_already_attempted");
-    const plan = seedanceManifest();
+    const plan = seedanceManifest(
+      BASELINE,
+      options["--native-audio"] ? "standard_native_audio" : "comparison",
+    );
     mkdirSync(out, { recursive: true });
     writeJson(resolve(out, "manifest.json"), plan);
     const state = inspectQualificationLedger(LEDGER);
@@ -413,9 +457,9 @@ export async function main(argv = process.argv.slice(2)) {
       JSON.stringify({
         mode: "prepared_no_egress",
         manifestSha256: plan.sha256,
-        requests: 3,
-        estimatedUsd: 0.6372,
-        policyAllowancesUsd: 1.2,
+        requests: plan.manifest.requests.length,
+        estimatedUsd: plan.manifest.requests.reduce((n, r) => n + r.estimatedUsd, 0),
+        policyAllowancesUsd: plan.manifest.requests.reduce((n, r) => n + r.policyAllowanceUsd, 0),
         reportedPriorCostUsd: state.spentUsd,
         unresolvedPriorAttempts: state.unsettled.length,
         paidExecutionBlocked: state.unsettled.length > 0,

@@ -1,7 +1,14 @@
 /** Pure provider wire contract. Structurally matches the existing priced submit subset;
  * no cost-package import (that dependency runs from cost to core), defaults or requests. */
 export type SubmittableSpec =
-  | { kind: "video"; model: string; resolution: "480p" | "720p" | "1080p"; seconds: number }
+  | {
+      kind: "video";
+      model: string;
+      resolution: "480p" | "720p" | "1080p";
+      seconds: number;
+      /** Explicit opt-in for standard Seedance native audio; absent preserves silent jobs. */
+      generateAudio?: boolean;
+    }
   | { kind: "image"; model: string; width: number; height: number }
   | { kind: "tts"; model: string; characters: number; voice: string; sampleRateHertz: number };
 export const TTS_VERBATIM_SYSTEM =
@@ -12,19 +19,24 @@ export const TTS_VERBATIM_SYSTEM =
 /** Comparison candidate only: OpenRouter lists retirement on 2026-11-11. Not a default. */
 export const SEEDANCE_CANDIDATE_MODEL = "bytedance/seedance-1-5-pro";
 export const SEEDANCE_MINI_CANDIDATE_MODEL = "bytedance/seedance-2.0-mini";
+export const SEEDANCE_STANDARD_MODEL = "bytedance/seedance-2.0";
 
 export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<string, unknown> {
   switch (spec.kind) {
     case "video":
-      if (spec.model === SEEDANCE_CANDIDATE_MODEL || spec.model === SEEDANCE_MINI_CANDIDATE_MODEL) {
-        // Public /videos/models verified 2026-10-24: Pro 4–12s/all tiers; Mini 4–15s/480p+720p.
-        // Explicit silence selects the reviewed silent SKU and avoids a second voice under TTS.
+      if (
+        spec.model === SEEDANCE_CANDIDATE_MODEL ||
+        spec.model === SEEDANCE_MINI_CANDIDATE_MODEL ||
+        spec.model === SEEDANCE_STANDARD_MODEL
+      ) {
+        // Public /videos/models verified 2026-10-24: Pro 4–12s; standard/Mini 4–15s.
+        // Existing jobs stay silent; only a persisted standard-model opt-in requests native audio.
         // Pricing/admission stays separate; this wire helper cannot authorize a paid request.
         const mini = spec.model === SEEDANCE_MINI_CANDIDATE_MODEL;
         if (
           !Number.isInteger(spec.seconds) ||
           spec.seconds < 4 ||
-          spec.seconds > (mini ? 15 : 12)
+          spec.seconds > (spec.model === SEEDANCE_CANDIDATE_MODEL ? 12 : 15)
         ) {
           throw new Error("unsupported_seedance_duration");
         }
@@ -37,7 +49,7 @@ export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<str
           duration: spec.seconds,
           resolution: spec.resolution,
           aspect_ratio: "9:16",
-          generate_audio: false,
+          generate_audio: spec.model === SEEDANCE_STANDARD_MODEL && spec.generateAudio === true,
         };
       }
       // OpenRouter's field names, MEASURED on 2026-08-30 (33.1-PRICE-EVIDENCE.md), not Sora's:

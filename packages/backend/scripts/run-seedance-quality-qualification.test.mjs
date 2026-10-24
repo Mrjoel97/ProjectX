@@ -15,7 +15,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const approvalRef = "phase53-owner-2026-10-22-five-usd-testing";
 const hash = (x) => createHash("sha256").update(x).digest("hex");
 const json = (x, status = 200) => new Response(JSON.stringify(x), { status });
-function fixture(t) {
+function fixture(t, profile = "comparison") {
   mkdirSync(resolve(ROOT, ".tmp"), { recursive: true });
   const out = mkdtempSync(resolve(ROOT, ".tmp/seedance-qualification-test-"));
   t.after(() => rmSync(out, { recursive: true, force: true }));
@@ -53,7 +53,7 @@ function fixture(t) {
       },
     }),
   );
-  const plan = seedanceManifest(baseline);
+  const plan = seedanceManifest(baseline, profile);
   writeFileSync(resolve(out, "manifest.json"), JSON.stringify(plan));
   const ledger = resolve(out, "charges.jsonl");
   writeFileSync(
@@ -159,6 +159,72 @@ test("fixed comparison preserves both original briefs without repurchasing basel
   assert.equal(f.plan.manifest.requests[2].body.model, "bytedance/seedance-2.0-mini");
   assert.equal(f.plan.manifest.requests[2].body.prompt, f.plan.manifest.requests[0].body.prompt);
   assert.equal(f.plan.manifest.requests[2].estimatedUsd, 0.378);
+});
+
+for (const hasAudio of [true, false])
+  test(`standard native audio requires its requested audio stream (${hasAudio})`, async (t) => {
+    const f = fixture(t, "standard_native_audio");
+    assert.equal(f.plan.manifest.requests.length, 1);
+    const request = f.plan.manifest.requests[0];
+    assert.equal(request.body.model, "bytedance/seedance-2.0");
+    assert.equal(request.body.generate_audio, true);
+    assert.equal(request.body.duration, 4);
+    assert.equal(request.policyAllowanceUsd, 1);
+    assert.equal(f.plan.manifest.retirementDate, null);
+    let posts = 0;
+    const fetchImpl = async (url, init = {}) => {
+      if (url.endsWith("/videos/models"))
+        return json({
+          data: [
+            {
+              id: request.body.model,
+              supported_durations: [4],
+              supported_resolutions: ["720p"],
+              supported_aspect_ratios: ["9:16"],
+              supported_sizes: ["720x1280"],
+              generate_audio: true,
+              pricing_skus: { video_tokens: "0.000007" },
+            },
+          ],
+        });
+      if (url.endsWith("/key")) return json({ data: { is_free_tier: false } });
+      if (init.method === "POST") {
+        posts++;
+        assert.deepEqual(JSON.parse(init.body), request.body);
+        assert.equal(inspectQualificationLedger(f.ledger).unsettled.length, 1);
+        return json({ id: "native-job", status: "pending" }, 202);
+      }
+      if (url.includes("/content?index=0")) return new Response(Buffer.from("native bytes"));
+      return json({
+        id: "native-job",
+        status: "completed",
+        model: request.body.model,
+        usage: { cost: 0.6111, is_byok: false },
+      });
+    };
+    const result = await runSeedanceQualification({
+      ...f.options,
+      fetchImpl,
+      probeMedia: () => ({
+        format: { duration: "4.041667" },
+        streams: [
+          { codec_type: "video", width: 720, height: 1280 },
+          ...(hasAudio ? [{ codec_type: "audio" }] : []),
+        ],
+      }),
+    });
+    assert.equal(result.status, hasAudio ? "completed" : "stopped");
+    assert.equal(result.completed, hasAudio ? 1 : 0);
+    assert.equal(posts, 1);
+    assert.equal(result.requests[0].deliveredMedia.audioStreams, hasAudio ? 1 : 0);
+    assert.equal(inspectQualificationLedger(f.ledger).unsettled.length, hasAudio ? 0 : 1);
+  });
+
+test("standard native profile is hash-bound and unrelated profile values refuse", (t) => {
+  const f = fixture(t);
+  const native = seedanceManifest(resolve(f.out, "baseline"), "standard_native_audio");
+  assert.notEqual(native.sha256, f.plan.sha256);
+  assert.throws(() => seedanceManifest(resolve(f.out, "baseline"), "fast"), /unknown_profile/);
 });
 test("catalogue price drift refuses before key inspection or paid submission", async (t) => {
   const f = fixture(t);

@@ -3,6 +3,7 @@ import {
   buildSubmitBody,
   SEEDANCE_CANDIDATE_MODEL,
   SEEDANCE_MINI_CANDIDATE_MODEL,
+  SEEDANCE_STANDARD_MODEL,
   type SubmittableSpec,
   TTS_VERBATIM_SYSTEM,
 } from "./mediaProviderContract";
@@ -120,6 +121,118 @@ describe("existing media provider wire contract", () => {
         "A product reveal",
       ),
     ).toThrow("unsupported_seedance_resolution");
+  });
+  test("uses standard Seedance 2.0 exactly without substituting Mini or Fast", () => {
+    expect(
+      buildSubmitBody(
+        { kind: "video", model: SEEDANCE_STANDARD_MODEL, resolution: "720p", seconds: 5 },
+        "A deliberate product reveal",
+      ),
+    ).toEqual({
+      model: "bytedance/seedance-2.0",
+      prompt: "A deliberate product reveal",
+      duration: 5,
+      resolution: "720p",
+      aspect_ratio: "9:16",
+      generate_audio: false,
+    });
+  });
+  test.each([true, false])("honors explicit standard native-audio opt-in %s", (generateAudio) => {
+    expect(
+      buildSubmitBody(
+        {
+          kind: "video",
+          model: SEEDANCE_STANDARD_MODEL,
+          resolution: "720p",
+          seconds: 4,
+          generateAudio,
+        },
+        "A product launch with native speech and music",
+      ),
+    ).toEqual({
+      model: SEEDANCE_STANDARD_MODEL,
+      prompt: "A product launch with native speech and music",
+      duration: 4,
+      resolution: "720p",
+      aspect_ratio: "9:16",
+      generate_audio: generateAudio,
+    });
+  });
+  test.each([
+    SEEDANCE_CANDIDATE_MODEL,
+    SEEDANCE_MINI_CANDIDATE_MODEL,
+  ])("keeps comparison candidate %s silent when the standard-only audio flag is present", (model) => {
+    expect(
+      buildSubmitBody(
+        { kind: "video", model, resolution: "720p", seconds: 5, generateAudio: true },
+        "A product reveal",
+      ).generate_audio,
+    ).toBe(false);
+  });
+  test("keeps historical Grok wire fields unchanged even with the standard-only audio flag", () => {
+    expect(
+      buildSubmitBody(
+        {
+          kind: "video",
+          model: "x-ai/grok-imagine-video",
+          resolution: "720p",
+          seconds: 5,
+          generateAudio: true,
+        },
+        "A product reveal",
+      ),
+    ).toEqual({
+      model: "x-ai/grok-imagine-video",
+      prompt: "A product reveal",
+      duration: 5,
+      resolution: "720p",
+      aspect_ratio: "9:16",
+    });
+  });
+  test.each([
+    { resolution: "480p" as const, seconds: 4 },
+    { resolution: "720p" as const, seconds: 15 },
+    { resolution: "1080p" as const, seconds: 15 },
+  ])("accepts verified standard Seedance tier and boundary %j", (dimensions) => {
+    expect(
+      buildSubmitBody(
+        { kind: "video", model: SEEDANCE_STANDARD_MODEL, ...dimensions },
+        "A product reveal",
+      ),
+    ).toMatchObject({
+      model: SEEDANCE_STANDARD_MODEL,
+      resolution: dimensions.resolution,
+      duration: dimensions.seconds,
+      generate_audio: false,
+    });
+  });
+  test.each([
+    3,
+    16,
+    30,
+    45,
+    60,
+    4.5,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+  ])("refuses unsupported standard Seedance duration %s before transport", (seconds) => {
+    expect(() =>
+      buildSubmitBody(
+        { kind: "video", model: SEEDANCE_STANDARD_MODEL, resolution: "720p", seconds },
+        "A product reveal",
+      ),
+    ).toThrow("unsupported_seedance_duration");
+  });
+  test("refuses unsupported standard Seedance tier at the runtime boundary", () => {
+    const spec = {
+      kind: "video",
+      model: SEEDANCE_STANDARD_MODEL,
+      resolution: "2K",
+      seconds: 5,
+    } as unknown as SubmittableSpec;
+    expect(() => buildSubmitBody(spec, "A product reveal")).toThrow(
+      "unsupported_seedance_resolution",
+    );
   });
   test("preserves the legacy low-quality image request byte values", () => {
     expect(

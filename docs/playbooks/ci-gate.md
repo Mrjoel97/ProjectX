@@ -1,3 +1,5 @@
+> Last verified: 2026-10-24 — Standard Seedance migration has focused45provider/62cost/161storyboard/137workspace/294backend-media passes; native-audio operator checks now cover one audio-bearing standard request and missing-audio refusal. Full final-head CI remains required. A paid native clip is separate provider evidence, not proof of full production native-audio integration.
+
 > Last verified: 2026-10-24 — CI includes the free Seedance operator regressions alongside existing image/reel controls. They verify fixed requests/catalogue pricing, shared-budget refusal, append-before-submit, single-use execution, profile checks and narrow billing reconciliation using mocked providers. Paid quality, latency and branded-product consistency require separate actual-output evidence.
 
 > Last verified: 2026-10-23 — CI39967368898 ran both real FFmpeg fixtures successfully (14.718 seconds combined). Typecheck/lint/free gates and frontend passed; the sole backend failure exposed a pre-existing campaign cancellation write outside the pinned terminal modules. That write now delegates transactionally to media.ts; the writer test is unchanged. Final exact-head CI must rerun.

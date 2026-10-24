@@ -732,7 +732,7 @@ export const pricedAsLine = (
   clipSeconds: number,
 ): string =>
   targetSeconds === null
-    ? `Priced at Grok Imagine on OpenRouter, 720p, ${clipSeconds} s per block`
+    ? `Priced at Seedance 2.0 on OpenRouter, 720p, ${clipSeconds} s per block`
     : `A ${targetSeconds}-second reel of ${sceneCount} scenes, priced per scene`;
 
 /** What the hero slot holds. A discriminated union rather than five booleans, because "playing the

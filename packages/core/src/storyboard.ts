@@ -536,7 +536,7 @@ export const VISUAL_KINDS = [
 export type VisualKind = (typeof VISUAL_KINDS)[number];
 
 /**
- * The provider's duration grid: xAI's **1-15, any integer** (33.1-04, ADR-027). A
+ * The current provider's duration grid: Seedance 2.0's **4-15, any integer**. A
  * `generated_video` scene MUST land on it, and above 15 it is snapped down or refused.
  *
  * **WHAT THIS GRID CHANGED, stated because the old comment claimed the opposite.** Until
@@ -567,7 +567,7 @@ export type VisualKind = (typeof VISUAL_KINDS)[number];
  * pricing is downstream of the contract), and inverting that to deduplicate fifteen integers
  * would be a much larger change than the drift it prevents.
  */
-export const GENERATED_CLIP_SECONDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] as const;
+export const GENERATED_CLIP_SECONDS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] as const;
 
 /** The old closed set, mapped onto the new one, so a deck proposed under the block contract still
  *  READS. Accepted by the parser for one version and taught by the skill body for none:
@@ -1304,8 +1304,12 @@ function widenNarrationWindow(
     let most = 0;
     for (const [j, s] of scenes.entries()) {
       if (inSpan(j) || (s.visual === "generated_video") !== wantClip) continue;
-      // MIN_DONOR_SECONDS is also what keeps a shrunk clip on the 1..15 grid: the floor is 2.
-      const floor = s.durationMs / 1000 - MIN_DONOR_SECONDS;
+      // A donated generated clip must remain on the current provider's grid, whose minimum can
+      // exceed the editorial floor. Never repair narration into an unbuyable two-second clip.
+      const minimum = wantClip
+        ? Math.max(MIN_DONOR_SECONDS, GENERATED_CLIP_SECONDS[0])
+        : MIN_DONOR_SECONDS;
+      const floor = s.durationMs / 1000 - minimum;
       // AND IT MUST STILL FIT ITS OWN LINE. Without this, a donor is chosen on length alone and a
       // scene already at its narration limit gets robbed — it becomes the next offender, the next
       // pass robs the scene that just took its seconds, and `repairNarrationWindows` ping-pongs
