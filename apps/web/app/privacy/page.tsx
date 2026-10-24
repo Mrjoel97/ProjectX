@@ -191,8 +191,10 @@ export default function Privacy() {
         </li>
         <li>
           <strong>It reaches our AI providers.</strong> To draft, summarise, or search your vault,
-          content is sent to the large-language-model and embedding providers named in section 7 —
-          OpenAI and Google — under contractual terms that forbid retaining it or training on it.
+          content may be sent to the model and embedding services selected by the configured route,
+          including OpenRouter and its upstream providers. Section 7 describes these services.
+          Retention and training controls depend on the selected route and approved account
+          settings; API access alone does not establish those controls.
         </li>
         <li>
           <strong>It never reaches our audit log.</strong> The append-only log records references,
@@ -349,8 +351,9 @@ export default function Privacy() {
 
       <h2>7. Who we share data with</h2>
       <p>
-        We share personal data only with service providers who process it on our instructions as
-        processors under Article 28 GDPR:
+        We use external services to operate the features described below. The data sent depends on
+        the feature and configured provider route. Applicable processor terms and data controls
+        require verification for each enabled service.
       </p>
       <ul>
         <li>
@@ -368,20 +371,21 @@ export default function Privacy() {
           <strong>Google</strong> — in two distinct roles. As your connected account provider:
           reading, organising and sending mail, reading your calendar and creating events, and
           reading Drive files, via Google&rsquo;s APIs; and YouTube channel reading or approved
-          uploads when separately connected. Separately, as an <strong>AI provider</strong>:
-          Google&rsquo;s Gemini models generate content and produce the embeddings that make your
-          vault searchable, and receive the content processed for those purposes.
+          uploads when separately connected. Separately, as an <strong>AI provider</strong>: Google
+          models can receive content when a Google AI route is selected. The current vault embedding
+          route uses the OpenAI model described below through OpenRouter.
         </li>
         <li>
           <strong>Microsoft</strong> — reading and writing your Outlook calendar, via the Microsoft
           Graph API, if you connect a Microsoft account.
         </li>
         <li>
-          <strong>OpenAI</strong> — generation of plans, summaries, and drafts, and embeddings for
-          vault search. OpenAI receives the content of messages and documents our agents read in
-          order to produce them. API data is not used for training by default. Retention depends on
-          the endpoint and approved account controls; API access alone does not establish Zero Data
-          Retention. See OpenAI&rsquo;s{" "}
+          <strong>OpenAI</strong> — generation of plans, summaries and drafts when an OpenAI model
+          route is selected. The current vault embedding route selects OpenAI&rsquo;s
+          text-embedding-3-small through OpenRouter. These requests can include the content of
+          messages and documents needed for the task. API data is not used for training by default.
+          Retention depends on the endpoint and approved account controls; API access alone does not
+          establish Zero Data Retention. See OpenAI&rsquo;s{" "}
           <a href="https://developers.openai.com/api/docs/guides/your-data">
             data controls documentation
           </a>
@@ -390,20 +394,19 @@ export default function Privacy() {
         </li>
         <li>
           <strong>OpenRouter</strong> — routing model and embedding requests to selected providers.
-          It receives the prompts and content needed for those requests. Its terms and the selected
-          upstream provider&rsquo;s controls require separate review.
+          The current application also sends new image, video, speech-generation and
+          file-transcription requests through OpenRouter. It receives the prompts and source content
+          needed for those requests. Its terms and the selected upstream provider&rsquo;s controls
+          require separate review.
         </li>
         <li>
           <strong>Resend</strong> — delivering account verification and password recovery emails,
           including the destination email address and one-time code.
         </li>
         <li>
-          <strong>fal.ai</strong> — image, video, and speech generation. It receives the prompts and
-          any source images or audio for media you ask us to create.
-        </li>
-        <li>
-          <strong>Alibaba Cloud (Model Studio)</strong> — image and video generation using the WAN
-          models. It receives the prompts and source assets for that media. See section 8.
+          <strong>Alibaba Cloud (Model Studio)</strong> — a retained WAN integration can check and
+          retrieve results for previously submitted jobs. It does not submit new generation
+          requests. See section 8.
         </li>
         <li>
           <strong>Tavily</strong> — web search, when an agent needs current information. It receives
@@ -428,11 +431,11 @@ export default function Privacy() {
 
       <h2>8. International transfers</h2>
       <p>
-        Most of our providers are established in, or process data in, the United States.{" "}
-        <strong>One is not:</strong> media generation on the WAN models is routed to Alibaba Cloud
-        Model Studio in <strong>Singapore</strong> (region <code>ap-southeast-1</code>). This
-        applies only if you ask Pikar to generate images or video; if you never do, no data reaches
-        it.
+        Processing locations depend on the enabled service, provider route and account
+        configuration. New media-generation requests currently use OpenRouter. The retained Alibaba
+        Cloud WAN integration only checks and retrieves results for older jobs, using its configured
+        endpoint. Applicable processing regions and transfer arrangements remain subject to
+        confirmation.
       </p>
       <p>
         Where personal data is transferred outside the UK or European Economic Area, we rely on the
