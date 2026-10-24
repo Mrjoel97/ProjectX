@@ -221,6 +221,13 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
   "llm.fallback": ["fromModel", "toModel", "errorName", "stage"],
   "mailbox.listed": ["range", "resultCount"],
   "mailbox.searched": ["queryHash", "resultCount"],
+  "media.campaign_task_budget_approved": [
+    "campaignId",
+    "selectedCount",
+    "approvedExtraCents",
+    "maximumCents",
+    "dailyWindowStartMs",
+  ],
   "media.captioned": ["batchId", "planId", "renderMs"],
   "media.claim_confirmed": ["planId", "sceneIndex"],
   "media.deck_persisted": [

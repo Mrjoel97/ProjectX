@@ -34,7 +34,8 @@
 //                 brief's tenant, so no pass sees another pass's refusal through the retry line.
 //   --only <sub>  DIAGNOSTIC: only briefs whose id contains <sub>. A filter matching nothing is an
 //                 ERROR, never an empty green run (the run-eval-golden `applyOnly` rule).
-//   --self-check  OFFLINE: validates the corpus and the constant reader with zero convex calls.
+//   --self-check  OFFLINE: checks the unchanged historical corpus, current duration validation
+//                 and the constant reader with zero convex calls. Not native-film qualification.
 //
 // Exit codes: 0 every pass produced a VERDICT (a refusal IS a verdict — this measures refusals) ·
 // 1 a pass could not be measured (dispatch refused for a non-model reason, facts unreadable) ·
@@ -55,6 +56,9 @@ import { must } from "./smokeRun.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const briefsPath = join(here, "storyboard-briefs.json");
+// Preserve the Phase 33.2 comparison inputs and their original duration classification.
+// They are historical evidence, not a current native-film qualification corpus.
+const LEGACY_BAKEOFF_DURATIONS = [15, 30, 60];
 const costSrcPath = resolve(here, "../../cost/src/cost.ts");
 const dispatchSrcPath = resolve(here, "../convex/dispatch.ts");
 const storyboardSrcPath = resolve(here, "../../core/src/storyboard.ts");
@@ -134,10 +138,22 @@ export function validateBrief(b, { maxChars = MAX_QUESTION_CHARS, legal = TARGET
   }
 }
 
-export function loadBriefs(path = briefsPath) {
+export function loadBriefs(path = briefsPath, { legal = TARGET_DURATIONS } = {}) {
   const doc = parse(readFileSync(path, "utf8"));
   assert.ok(Array.isArray(doc.briefs), "storyboard-briefs.json: `briefs` must be an array");
-  for (const b of doc.briefs) validateBrief(b);
+  for (const b of doc.briefs) {
+    if (
+      path === briefsPath &&
+      legal === TARGET_DURATIONS &&
+      b.illegalDuration === true &&
+      legal.includes(b.durationSeconds)
+    ) {
+      throw new EnvironmentAbort(
+        "historical storyboard corpus marks a currently supported duration illegal; paid reuse requires a separately versioned, reviewed corpus before any dispatch",
+      );
+    }
+    validateBrief(b, { legal });
+  }
   const ids = new Set(doc.briefs.map((b) => b.id));
   assert.equal(ids.size, doc.briefs.length, "brief ids must be unique");
   const texts = new Set(doc.briefs.map((b) => b.text.trim().toLowerCase()));
@@ -373,23 +389,26 @@ function live({ candidate, repeat, only }) {
 // ── self-check: the ponytail one-runnable-check ─────────────────────────────────────────────────
 
 function selfCheck() {
-  const briefs = loadBriefs();
-  assert.equal(briefs.length, 12, "the gate corpus is twelve briefs");
+  const briefs = loadBriefs(briefsPath, { legal: LEGACY_BAKEOFF_DURATIONS });
+  assert.equal(briefs.length, 12, "the historical comparison corpus is twelve briefs");
   const legal = briefs.filter((b) => b.illegalDuration !== true && b.durationSeconds !== null);
   assert.ok(
     legal.some((b) => b.durationSeconds === 15) &&
       legal.some((b) => b.durationSeconds === 30) &&
       legal.some((b) => b.durationSeconds === 60),
-    "every legal duration is covered",
+    "every historical legal duration is covered",
   );
   assert.ok(
     briefs.some((b) => b.illegalDuration === true),
-    "one brief asks for an illegal duration",
+    "one historical brief asks for a then-illegal duration",
   );
 
   // The validator REJECTS each malformed shape — prove it before trusting it to accept the corpus.
   const good = { id: "ok-brief", durationSeconds: 30, text: "a reel" };
   validateBrief(good);
+  validateBrief({ ...good, durationSeconds: 45 });
+  validateBrief({ ...good, durationSeconds: 50, illegalDuration: true });
+  assert.throws(() => loadBriefs(), /separately versioned, reviewed corpus/);
   assert.throws(() => validateBrief({ ...good, id: "Bad Id" }), /not a slug/);
   assert.throws(() => validateBrief({ ...good, text: "   " }), /empty/);
   assert.throws(
@@ -397,11 +416,11 @@ function selfCheck() {
     /exceeds/,
   );
   assert.throws(
-    () => validateBrief({ ...good, durationSeconds: 45 }),
+    () => validateBrief({ ...good, durationSeconds: 50 }),
     /not marked illegalDuration/,
   );
   assert.throws(
-    () => validateBrief({ ...good, durationSeconds: 30, illegalDuration: true }),
+    () => validateBrief({ ...good, durationSeconds: 45, illegalDuration: true }),
     /marked illegalDuration/,
   );
   assert.throws(
@@ -472,7 +491,7 @@ function selfCheck() {
   assert.equal(s.meanElapsedMsFromPass2, 200);
   assert.equal(s.meanGeneratedSeconds, 8);
   console.log(
-    `[bakeoff] self-check OK — ${briefs.length} briefs, MEDIA_MODEL -> ${resolved}, MAX_QUESTION_CHARS=${MAX_QUESTION_CHARS}, TARGET_DURATIONS=${TARGET_DURATIONS.join("/")}`,
+    `[bakeoff] historical offline self-check OK — ${briefs.length} unchanged legacy briefs (${LEGACY_BAKEOFF_DURATIONS.join("/")}s), current durations ${TARGET_DURATIONS.join("/")}s; 45s accepted/50s unsupported; paid legacy reuse refused; not native-film qualification. MEDIA_MODEL -> ${resolved}, MAX_QUESTION_CHARS=${MAX_QUESTION_CHARS}`,
   );
   return 0;
 }

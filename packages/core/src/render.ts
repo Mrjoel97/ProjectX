@@ -18,6 +18,7 @@ import {
   type AssemblyVisual,
   parseAssemblySidecar,
 } from "./assembly";
+import { isNativeCaptionWav } from "./captions";
 import { MUSIC_MOODS, type MusicMood, TARGET_DURATIONS } from "./storyboard";
 
 // ── The duration ceiling (plan 20-15 Task 1, settled 2026-08-02) ───────────────────────────────
@@ -605,6 +606,8 @@ type RenderRequestBody =
       targetSeconds: number;
       /** The reel, in order. Order IS the index — the same rule the deck parser follows. */
       scenes: Array<{ kind: AssemblyVisual; seconds: number }>;
+      /** Explicit new-job mode; absent preserves the historical separate narration mix. */
+      nativeAudio?: true;
       inputs: Array<{ name: string; jobId: string }>;
       /** Text cards: the only input whose bytes come from the body rather than a job row. */
       cards: Array<{ name: string; text: string }>;
@@ -625,7 +628,7 @@ type RenderRequestBody =
        *  once, in one tested function, instead of at whichever end happens to look. Absent means
        *  the black-and-white card every reel had before. */
       card?: { bg: string; ink: string };
-      uploadUrls: { mp4: string; sidecar: string };
+      uploadUrls: { mp4: string; sidecar: string; audio?: string };
     }
   | {
       mode: "caption";
@@ -774,6 +777,17 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
     if (!inputs.some((i) => i.name === b.musicFile)) return null;
   }
   const musicFile = b.musicFile as string | undefined;
+  if (b.nativeAudio !== undefined && b.nativeAudio !== true) return null;
+  if (
+    b.nativeAudio === true &&
+    (scenes.some((scene) => scene.kind !== "video") ||
+      cards.length !== 0 ||
+      inputs.length !== scenes.length ||
+      inputs.some((input, i) => input.name !== renderInputName("video", i)) ||
+      music !== undefined ||
+      musicFile !== undefined)
+  )
+    return null;
 
   // THE CARD PALETTE, and this is a TRUST BOUNDARY rather than a format check. Both values are
   // written into an ffmpeg filtergraph inside the VM, so the shape is re-asserted here even though
@@ -791,23 +805,25 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
 
   const up = b.uploadUrls;
   if (up === null || typeof up !== "object") return null;
-  const { mp4, sidecar } = up as Record<string, unknown>;
+  const { mp4, sidecar, audio } = up as Record<string, unknown>;
   // The WRITE-direction SSRF guard. These URLs come from the body (Convex mints them per render),
   // so the runner POSTs bytes to them — and must not POST a tenant's reel to a host of the
   // caller's choosing. Their origin has to be the deployment we derived, not one we were handed.
   if (!sameOrigin(mp4) || !sameOrigin(sidecar)) return null;
+  if (b.nativeAudio === true ? !sameOrigin(audio) : audio !== undefined) return null;
 
   return {
     mode: "assemble",
     renderId: b.renderId,
     targetSeconds: b.targetSeconds,
     scenes,
+    ...(b.nativeAudio === true ? { nativeAudio: true as const } : {}),
     inputs,
     cards,
     ...(music === undefined ? {} : { music }),
     ...(musicFile === undefined ? {} : { musicFile }),
     ...(card === undefined ? {} : { card }),
-    uploadUrls: { mp4, sidecar },
+    uploadUrls: { mp4, sidecar, ...(typeof audio === "string" ? { audio } : {}) },
   };
 }
 
@@ -998,6 +1014,7 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
       ...body.scenes.flatMap((s) => ["--scene", `${s.kind}:${s.seconds}`]),
       "--target-seconds",
       String(body.targetSeconds),
+      ...(body.nativeAudio ? ["--native-audio"] : []),
       // The bed, by MOOD. No file was written for it above and none needs to be: the library is
       // baked into the snapshot, so this is a name the script looks up, not bytes we ship.
       ...(body.music === undefined ? [] : ["--music", body.music]),
@@ -1026,17 +1043,37 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
     if (!checked.ok || !mp4 || !sidecarBytes) {
       return jsonStop(checked.ok ? "missing_output" : checked.code);
     }
+    const nativeAudio = body.nativeAudio
+      ? await sandbox.readFileToBuffer({ path: "out/final.mp4.native.wav" })
+      : null;
+    if (body.nativeAudio) {
+      if (!nativeAudio || nativeAudio.byteLength > 6 * 1024 * 1024)
+        return jsonStop("missing_output");
+      if (!isNativeCaptionWav(nativeAudio, body.targetSeconds)) return jsonStop("missing_output");
+    }
 
     // 3. Up through the two single-use, write-only, short-lived URLs Convex minted. **The MIME
     //    type is OURS** — asserted here as a literal, never read from the VM's response.
+    const audioStorageId =
+      nativeAudio && body.uploadUrls.audio
+        ? await uploadTo(deps.fetch, body.uploadUrls.audio, nativeAudio, "audio/wav")
+        : undefined;
+    if (body.nativeAudio && !audioStorageId) return jsonStop("upload_failed");
+    const partialStorageIds: string[] = audioStorageId ? [audioStorageId] : [];
+    const failedUpload = () =>
+      body.nativeAudio
+        ? Response.json({ ok: false, code: "upload_failed", partialStorageIds })
+        : jsonStop("upload_failed");
     const mp4StorageId = await uploadTo(deps.fetch, body.uploadUrls.mp4, mp4, "video/mp4");
+    if (!mp4StorageId) return failedUpload();
+    if (body.nativeAudio) partialStorageIds.push(mp4StorageId);
     const sidecarStorageId = await uploadTo(
       deps.fetch,
       body.uploadUrls.sidecar,
       sidecarBytes,
       "application/json",
     );
-    if (!mp4StorageId || !sidecarStorageId) return jsonStop("upload_failed");
+    if (!sidecarStorageId) return failedUpload();
 
     // Small JSON only. The bytes never travel in this response — 10 MB would meet the platform's
     // response-body limit, and the upload URLs are the shipped ingest idiom anyway.
@@ -1044,6 +1081,7 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
       ok: true,
       mp4StorageId,
       sidecarStorageId,
+      ...(audioStorageId ? { audioStorageId } : {}),
       renderMs: Date.now() - startedAt,
       gates: checked.report.gates,
       sceneCount: checked.report.sceneCount,

@@ -14,6 +14,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { pcm16ToWav } from "./captions";
 import {
   buildSandboxOptions,
   CAPTION_MAX_ASS_BYTES,
@@ -307,6 +308,8 @@ function deps(
     deploymentUrl?: string | undefined;
     blobStatus?: number;
     uploadOk?: boolean;
+    uploadFailureAt?: number;
+    nativeWav?: Uint8Array | null;
   } = {},
 ): { deps: RenderDeps; rec: Recorder } {
   const rec: Recorder = { created: [], writes: [], commands: [], fetches: [], stops: 0 };
@@ -321,6 +324,10 @@ function deps(
       return new Response(status === 200 ? new Uint8Array([1, 2, 3, 4]) : null, { status });
     }
     if (over.uploadOk === false) return new Response(null, { status: 500 });
+    if (
+      over.uploadFailureAt === rec.fetches.filter((call) => call.url.startsWith(DEPLOYMENT)).length
+    )
+      return new Response(null, { status: 500 });
     return Response.json({ storageId: `stor_${rec.fetches.length}` });
   }) as unknown as typeof globalThis.fetch;
 
@@ -348,11 +355,13 @@ function deps(
             };
           },
           readFileToBuffer: async (file) =>
-            file.path.endsWith(".json")
-              ? sidecar === null
-                ? null
-                : (new TextEncoder().encode(sidecar) as Uint8Array<ArrayBuffer>)
-              : (mp4 as Uint8Array<ArrayBuffer> | null),
+            file.path.endsWith(".native.wav")
+              ? ((over.nativeWav ?? null) as Uint8Array<ArrayBuffer> | null)
+              : file.path.endsWith(".json")
+                ? sidecar === null
+                  ? null
+                  : (new TextEncoder().encode(sidecar) as Uint8Array<ArrayBuffer>)
+                : (mp4 as Uint8Array<ArrayBuffer> | null),
           stop: async () => {
             rec.stops += 1;
           },
@@ -401,6 +410,88 @@ const post = (b: unknown, auth: string | null = `Bearer ${SECRET}`) =>
     headers: auth === null ? {} : { Authorization: auth },
     body: JSON.stringify(b),
   });
+
+describe("native soundtrack assembly", () => {
+  const nativeBody = (over: Record<string, unknown> = {}) =>
+    body({
+      nativeAudio: true,
+      scenes: [
+        { kind: "video", seconds: 15 },
+        { kind: "video", seconds: 15 },
+      ],
+      inputs: [
+        { name: "block01.mp4", jobId: "job1" },
+        { name: "block02.mp4", jobId: "job2" },
+      ],
+      cards: [],
+      uploadUrls: {
+        mp4: `${DEPLOYMENT}/upload/a`,
+        sidecar: `${DEPLOYMENT}/upload/b`,
+        audio: `${DEPLOYMENT}/upload/c`,
+      },
+      ...over,
+    });
+  it("extracts and uploads a checked full-timeline WAV in the same assembly sandbox", async () => {
+    const { deps: d, rec } = deps({ nativeWav: pcm16ToWav(new Uint8Array(30 * 48000), 24000) });
+    const result = await handleRenderRequest(post(nativeBody()), d);
+    await expect(result.json()).resolves.toMatchObject({
+      ok: true,
+      audioStorageId: expect.any(String),
+    });
+    expect(rec.created).toHaveLength(1);
+    expect(rec.commands[0]?.args).toContain("--native-audio");
+    const uploads = rec.fetches.filter((call) => call.url.startsWith(DEPLOYMENT));
+    expect(uploads).toHaveLength(3);
+    expect(headersOf(uploads[0])["Content-Type"]).toBe("audio/wav");
+    expect(rec.stops).toBe(1);
+  });
+  it.each([
+    { nativeAudio: "true" },
+    { music: "calm" },
+    { uploadUrls: { mp4: `${DEPLOYMENT}/a`, sidecar: `${DEPLOYMENT}/b` } },
+    {
+      uploadUrls: {
+        mp4: `${DEPLOYMENT}/a`,
+        sidecar: `${DEPLOYMENT}/b`,
+        audio: "https://foreign.example/a",
+      },
+    },
+    {
+      inputs: [
+        { name: "block01.mp4", jobId: "job1" },
+        { name: "block02.mp4", jobId: "job2" },
+        { name: "voice01.wav", jobId: "job3" },
+      ],
+    },
+  ])("refuses an invalid native contract before creating a sandbox: %j", async (over) => {
+    const { deps: d, rec } = deps();
+    await expect(
+      (await handleRenderRequest(post(nativeBody(over)), d)).json(),
+    ).resolves.toMatchObject({ ok: false, code: "bad_request" });
+    expect(rec.created).toHaveLength(0);
+  });
+  it("never publishes native assembly when WAV extraction is absent or malformed", async () => {
+    const { deps: d, rec } = deps({ nativeWav: new Uint8Array([0, 0, 0, 24]) });
+    await expect((await handleRenderRequest(post(nativeBody()), d)).json()).resolves.toMatchObject({
+      ok: false,
+      code: "missing_output",
+    });
+    expect(rec.fetches.filter((call) => call.url.startsWith(DEPLOYMENT))).toHaveLength(0);
+    expect(rec.stops).toBe(1);
+  });
+  it("returns the known native audio upload for cleanup if a later upload fails", async () => {
+    const { deps: d, rec } = deps({
+      nativeWav: pcm16ToWav(new Uint8Array(30 * 48000), 24000),
+      uploadFailureAt: 2,
+    });
+    await expect((await handleRenderRequest(post(nativeBody()), d)).json()).resolves.toMatchObject({
+      ok: false,
+      code: "upload_failed",
+      partialStorageIds: ["stor_3"],
+    });
+    expect(rec.stops).toBe(1);
+  });
+});
 
 describe("handleRenderRequest: the bearer, and what happens before it passes", () => {
   it("401s with NO Authorization header — and creates no sandbox", async () => {

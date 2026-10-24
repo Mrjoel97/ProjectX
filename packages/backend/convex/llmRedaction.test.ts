@@ -1714,12 +1714,15 @@ test("only media.ts and mediaComplete.ts write a TERMINAL mediaJobs status, and 
   expect([...succeeders]).toEqual(["mediaComplete.ts"]);
 });
 
-test("storage.getUrl stays in authenticated queries or exact reviewed funnel/social capability seams", () => {
+test("storage.getUrl stays in authenticated queries or exact reviewed funnel/social/product-reference capability seams", () => {
   // A storage URL is a BEARER CAPABILITY. Reached from anything but a tenant-guarded read it is one
   // step from a log line or an unguarded return.
   // Instagram requires image_url rather than uploaded bytes. Its one reviewed handoff is
   // publishPost only, after a customer-approved claim and owned-upload checks; the focused
   // assertions below pin the provider-only sink and exclude model/log/return surfaces.
+  // Native product-reference generation has one further reviewed internal seam: immutable owned
+  // product images selected by the human and bound to the exact film review. Its only consumer
+  // rechecks actual bytes before the provider input; it is not a general internal URL reader.
   // THIS SCAN IS WHAT PLAN 20-17 MUST NOT BREAK: handing fal a `ctx.storage.getUrl()` result as the
   // STT `audio_url` would give a third party a bearer capability to a tenant's asset. If 20-17
   // needs the bytes at a provider, it uploads them - it does not hand over a URL.
@@ -1741,6 +1744,7 @@ test("storage.getUrl stays in authenticated queries or exact reviewed funnel/soc
   ]);
   const seenFunnelExceptions: string[] = [];
   const seenSocialExceptions: string[] = [];
+  const seenProductReferenceExceptions: string[] = [];
   let sites = 0;
   for (const [rel, code] of allConvexSources()) {
     for (const call of code.matchAll(/storage\.getUrl/g)) {
@@ -1758,6 +1762,11 @@ test("storage.getUrl stays in authenticated queries or exact reviewed funnel/soc
         seenSocialExceptions.push(name);
         continue;
       }
+      if (rel === "media.ts" && name === "productReferencesForSubmit") {
+        expect(kind).toBe("internalQuery");
+        seenProductReferenceExceptions.push(name);
+        continue;
+      }
       expect(
         ["tenantQuery", "ownerQuery"],
         `${rel}: storage.getUrl is not inside an authenticated query (found ${kind ?? "top level"})`,
@@ -1767,6 +1776,58 @@ test("storage.getUrl stays in authenticated queries or exact reviewed funnel/soc
   expect(sites, "no storage.getUrl call sites found - the scan is vacuous").toBeGreaterThan(0);
   expect(seenFunnelExceptions.sort()).toEqual(["create", "resolveAndIncrement"]);
   expect(seenSocialExceptions).toEqual(["publishPost"]);
+  expect(seenProductReferenceExceptions).toEqual(["productReferencesForSubmit"]);
+});
+
+test("native product reference URLs require the exact owned reviewed images and only reach the paid provider input", () => {
+  const source = stripCode(readSource("media.ts"));
+  const start = source.indexOf("export const productReferencesForSubmit = internalQuery(");
+  const end = source.indexOf("export async function nativeProductReferenceHash", start);
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  const query = source.slice(start, end);
+  expect(query).toContain('args: { jobId: v.id("mediaJobs") }');
+  expect(query).toContain("plan.tenantId !== job.tenantId");
+  expect(query).toContain('plan.mediaAudioMode !== "native"');
+  expect(query).toContain("job.nativeReviewHash !== (await nativeReelReviewHash(plan))");
+  const checked = query.indexOf("await checkedProductReferences(ctx, plan)");
+  const capability = query.indexOf("await ctx.storage.getUrl(reference.storageId)");
+  expect(checked).toBeGreaterThanOrEqual(0);
+  expect(capability).toBeGreaterThan(checked);
+  expect(query.match(/storage\.getUrl/g)).toHaveLength(1);
+  expect(query).not.toMatch(
+    /console\.|audit\.log|telemetry|generateText|generateObject|agentSteps/,
+  );
+
+  const ownership = source.slice(
+    source.indexOf("async function productReferenceFromDocument"),
+    source.indexOf("export const setProductReferences"),
+  );
+  expect(ownership).toContain("doc.tenantId !== tenantId");
+  expect(ownership).toContain("ctx.db.system.get(doc.storageId)");
+  expect(ownership).toContain("PRODUCT_IMAGE_TYPES.has(mimeType)");
+  expect(ownership).toContain("metadata.size > MAX_PRODUCT_IMAGE_BYTES");
+  for (const field of ["storageId", "contentHash", "mimeType", "size"])
+    expect(ownership).toContain(`current.${field} !== reference.${field}`);
+
+  const submitStart = source.indexOf("export const submitBatch = internalAction(");
+  const submitEnd = source.indexOf("export const ", submitStart + 20);
+  const submit = source.slice(submitStart, submitEnd);
+  const resolve = submit.indexOf("internal.media.productReferencesForSubmit");
+  const bytes = submit.indexOf("ctx.storage.get(reference.storageId)");
+  const hash = submit.indexOf("contentHash(bytes)");
+  const signature = submit.indexOf("referenceImageHasExpectedType(bytes, reference.mimeType)");
+  const attached = submit.indexOf("imageReferences.push({ url: reference.url })");
+  const provider = submit.indexOf("await submitLine(spec, text, { imageReferences })");
+  expect(resolve).toBeGreaterThanOrEqual(0);
+  expect(bytes).toBeGreaterThan(resolve);
+  expect(hash).toBeGreaterThan(bytes);
+  expect(signature).toBeGreaterThan(hash);
+  expect(attached).toBeGreaterThan(signature);
+  expect(provider).toBeGreaterThan(attached);
+  expect(submit).not.toMatch(
+    /console\.|audit\.log|telemetry|generateText|generateObject|agentSteps/,
+  );
 });
 
 test("Instagram's sole bearer URL handoff requires approved tenant-owned media and has only a provider sink", () => {
@@ -2015,24 +2076,32 @@ test("caption audio reaches OpenAI as multipart bytes, never as a signed storage
   expect(submitFn).not.toMatch(/audio_?[Uu]rl|data:audio/);
 });
 
-test("storage.delete has exactly ONE site in the media subsystem — the retention loop", () => {
-  // D12(b) is delete-on-SUCCESS and keep-on-FAILURE, and the failure half is the one that is easy
-  // to get backwards and impossible to notice. A second deletion site is how a delete-on-failure
-  // bug gets introduced later, so the site count is pinned rather than the behaviour described.
-  // Scoped to the MEDIA subsystem: `llm.ts` deletes its own transient blobs and is not this
-  // policy's business. What must stay single-sited is the deletion of TENANT MEDIA.
+test("media storage deletion stays in the reviewed retention and native PCM reset sites", () => {
+  // D12(b) keeps failed-render evidence. Pin every tenant-media deletion site so a new
+  // submit/landing cleanup cannot silently erase that evidence or the held current film.
+  // Other subsystems, including llm.ts transient blobs, follow their own policies.
   const sites: Array<[string, number]> = [];
   for (const [rel, code] of allConvexSources()) {
     if (!rel.startsWith("render/") && !rel.startsWith("media")) continue;
     const n = [...code.matchAll(/storage\.delete\b/g)].length;
     if (n > 0) sites.push([rel, n]);
   }
-  // TWO as of 20-17, both still inside the one module. The second is the caption terminal deleting
-  // the UNCAPTIONED cut after repointing `renderStorageId` at the captioned one — that is a delete
-  // of tenant media, so it is pinned here rather than exempted. What the count still forbids is a
-  // deletion site appearing in the submit or landing planes, which is where a delete-on-failure bug
-  // would hide.
-  expect(sites).toEqual([["render/renderReel.ts", 2]]);
+  // The renderer retains its two cleanup sites. Native audio adds exactly one in media.ts:
+  // reset only the superseded extracted PCM, preserving the final film and its sidecar.
+  expect(sites).toEqual([
+    ["media.ts", 1],
+    ["render/renderReel.ts", 2],
+  ]);
+  const media = stripCode(readSource("media.ts"));
+  const resetAt = media.indexOf("async function clearRender(");
+  expect(resetAt, "native PCM reset helper was not found").toBeGreaterThan(-1);
+  const reset = media.slice(resetAt, media.indexOf("\nexport function deckOf", resetAt));
+  expect(reset).toMatch(/const prior = await ctx\.db\.get\(planId\)/);
+  expect(reset).toMatch(
+    /if \(prior\?\.nativeCaptionAudioStorageId\)\s*await ctx\.storage\.delete\(prior\.nativeCaptionAudioStorageId\)/,
+  );
+  expect([...reset.matchAll(/storage\.delete\b/g)]).toHaveLength(1);
+  expect(reset).not.toMatch(/(?:^|\n)\s*(?:renderStorageId|sidecarStorageId)\s*:/);
 
   // …and it is inside the SUCCESS arm. The failure arm returns before reaching it, which is what
   // makes "the intermediates are the only debugging evidence a failed render leaves" true.

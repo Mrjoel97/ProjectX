@@ -1,3 +1,9 @@
+> Last verified: 2026-10-24 — The audit viewer explicitly projects the real media task-budget approval event: campaign reference, selected count, approved extra cents, task maximum cents and daily-window timestamp only. Prompts and product/voice references stay excluded. The forward event inventory and privacy projection regression cover this read boundary; no audit writer or spending authority changed.
+
+> Combined-source checkpoint: 2026-10-24 — Retain media campaign/presentation ownership and native-audio file lifecycle controls alongside direct-social credential summaries, bounded metadata retention and truthful revocation results. Dated table counts and social rollout receipts below describe their original sources/deployments; they do not establish rollout of this merged media candidate.
+
+> Last verified: 2026-10-21 — Phase 53 classifies mediaCampaigns and vaultPresentations as tenant_owned data (75 schema tables total). Campaign briefs/specs/preview content stay outside insert-only refs/counts audit; lifecycle and hosted acceptance remain distinct.
+
 > 2026-10-24: Direct YouTube disconnect and tenant erasure attempt bounded, immediate programmatic Google token revocation before credential erasure, recording confirmed versus attempted_failed without logging grant material or scheduling stale-token retries. Local credentials/pending grants are removed and bounded old-connection metadata cleanup preserves original customer content. Google project-wide impact is disclosed. Backend social/export/erasure regressions pass 153 cases; no live owner grant was revoked.
 
 > Retention rollout verified: 2026-10-23 — The bounded read-only preview completed both pages: one YouTube connection, one saved post, two legacy metadata records and zero stale connections/posts. The current private-test receipt therefore remains inside its conservative retention bound. SOCIAL_YOUTUBE_METADATA_CLEANUP_ENABLED is now true on quixotic-basilisk-795 and was read back successfully; hourly bounded cleanup is enabled with a one-day margin before the metadata deadline. No live row deletion or elapsed scheduled sweep is claimed by enabling the schedule. All provider publication switches remain off. This supersedes earlier cleanup-gated notes.
@@ -30,6 +36,8 @@
 > Last verified: 2026-10-15 — owner audit projection includes foundation publication (revision, document count, Blueprint reference) and manual delivery reconciliation (request reference and outcome). Neither event projects transcript, document body, or delivery content. Evidence: reportsGovernance 18 tests and auditProjection 22 tests pass.
 
 > Last verified: 2026-10-15 — erasure now retains a durable opaque identity fence (ADR-055) and blocks public admission, application writes and tenant-bound component writes during and after deletion. Append-only audit/global metadata and cleanup deletes remain permitted. Reset-session fences expire after issued JWT lifetime; erasure fences persist to deny delayed workers. No business content or credentials are retained in the fence.
+
+> Last verified: 2026-10-24 — Native caption PCM and source-film references are included in shared storage discovery for export/erasure. Media task-increase audit decisions contain campaign references, integer cents, window and counts only; no prompts, narration or product references enter the immutable audit payload. Existing append-only audit and financial history remain unchanged. Runtime/hosted qualification boundaries are recorded in ADR-065/066.
 
 # Playbook: Audit Log & Dead-Letter Pipeline
 
@@ -1358,3 +1366,16 @@ Independent review, 2026-09-10: synthetic eval teardown now deletes each unexpor
 ## Delivery receipt preservation — 2026-10-15
 
 Last verified: 2026-10-15 — workflow failure handling preserves confirmed delivery receipts and holds uncertain attempts instead of declaring them failed. Delivery reconciliation records user observation separately from provider receipt events and never reopens an attempt for sending.
+
+
+## Phase 53 — production metadata is tenant content
+
+TENANT_TABLE_CLASSIFICATION adds mediaCampaigns and vaultPresentations as tenant_owned; tenantData.test.ts now expects75 schema tables and exact registry coverage. Campaign item briefs, plan labels, source references, presentation specs/notes and workbook source metadata are content-plane data, never audit/dead-letter payloads. Existing generated-artifact audit events retain refs/hashes/counts/enums only. A new storage or sidecar field needs lifecycle and storage-registry coverage at its owning seam.
+
+Tenant export/erasure must traverse the added tables. Presentation preview sidecars must also retire with their document/replacement, while immutable audit remains insert-only. Preserve owned-byte receipt promotion, late-write erasure fences and replacement-before-deleting-good-bytes ordering. A JSON campaign manifest must not persist temporary download capabilities.
+
+Local registry and artifact/campaign tests do not prove hosted late-provider cleanup, Office export fidelity, physical erasure or WORM acceptance. No paid/provider or historical Phase23 retention receipt was changed by this lane. See Phase53 partial summary for exact remaining gates.
+
+
+> Last verified: 2026-10-24 — The tenant storage inventory includes plans.mediaProductReferences[].storageId so owned product references participate in existing export and erasure handling. Reference content stays outside audit payloads.
+> Last verified: 2026-10-24 — The bearer-URL inventory now admits exactly media.productReferencesForSubmit as an internalQuery capability seam for human-selected native product images. Focused source assertions require the job/plan tenant match, exact approved review, owned immutable image metadata and hashes, followed by actual byte/hash/signature checks before the provider input. The exception does not admit other internal readers, logs, agent/model surfaces, or arbitrary URLs. Runtime ownership and reference checks remain unchanged; the four product-reference regressions passed in CI before this inventory correction.

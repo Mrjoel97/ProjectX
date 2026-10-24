@@ -33,7 +33,9 @@ export const insert = internalMutation({
     count: v.number(),
     role: v.optional(v.literal("created")),
     snippet: v.optional(v.string()), // first ~240 chars of the artifact — the card's preview
-    form: v.optional(v.union(v.literal("short"), v.literal("long"), v.literal("sheet"))),
+    form: v.optional(
+      v.union(v.literal("short"), v.literal("long"), v.literal("sheet"), v.literal("presentation")),
+    ),
     createdAt: v.number(),
   },
   handler: async (ctx, args) => await ctx.db.insert("vaultSources", args),

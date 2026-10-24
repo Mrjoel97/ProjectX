@@ -102,8 +102,8 @@ export const summary = tenantQuery({
     const base = () =>
       ctx.db
         .query("plans")
-        .withIndex("by_tenant_status_createdAt", (q) =>
-          q.eq("tenantId", ctx.tenantId).eq("status", "proposed"),
+        .withIndex("by_tenant_status_campaign_createdAt", (q) =>
+          q.eq("tenantId", ctx.tenantId).eq("status", "proposed").eq("mediaCampaignId", undefined),
         );
     const [countWindow, oldest] = await Promise.all([
       base().take(SUMMARY_LIMIT + 1),
@@ -125,8 +125,8 @@ async function paginatePlans(
   const limit = pageSize(paginationOpts.numItems);
   const page = await ctx.db
     .query("plans")
-    .withIndex("by_tenant_status_createdAt", (q) =>
-      q.eq("tenantId", ctx.tenantId).eq("status", status),
+    .withIndex("by_tenant_status_campaign_createdAt", (q) =>
+      q.eq("tenantId", ctx.tenantId).eq("status", status).eq("mediaCampaignId", undefined),
     )
     .order("desc")
     .paginate({ ...paginationOpts, numItems: limit });
@@ -178,8 +178,8 @@ export const runningWork = tenantQuery({
       (["collecting", "proposed", "approved", "delivering"] as const).map((status) =>
         ctx.db
           .query("plans")
-          .withIndex("by_tenant_status_createdAt", (q) =>
-            q.eq("tenantId", ctx.tenantId).eq("status", status),
+          .withIndex("by_tenant_status_campaign_createdAt", (q) =>
+            q.eq("tenantId", ctx.tenantId).eq("status", status).eq("mediaCampaignId", undefined),
           )
           .order("desc")
           .take(limit),
@@ -249,8 +249,12 @@ export const listCleared = tenantQuery({
         (["done", "canceled"] as const).map((status) =>
           ctx.db
             .query("plans")
-            .withIndex("by_tenant_status_createdAt", (q) =>
-              q.eq("tenantId", ctx.tenantId).eq("status", status).gte("createdAt", sinceMs),
+            .withIndex("by_tenant_status_campaign_createdAt", (q) =>
+              q
+                .eq("tenantId", ctx.tenantId)
+                .eq("status", status)
+                .eq("mediaCampaignId", undefined)
+                .gte("createdAt", sinceMs),
             )
             .order("desc")
             .take(limit + 1),

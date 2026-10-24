@@ -45,12 +45,20 @@ test("no time-stretch filter and no deferred-mode flag survives in the harvested
   const code = SH.split("\n")
     .filter((l) => !l.trimStart().startsWith("#")) // strip comments — the 15.2-07 lesson
     .join("\n");
+  // The one permitted audio clock stamps existing samples; it changes no sample or rate.
+  // Require the complete literal at the filter's end: stripping a prefix would also exempt
+  // an altered expression such as N/SR/TB*2, which WOULD change presentation speed.
+  const withoutSampleClock = code.replaceAll(',asetpts=N/SR/TB"', ',"');
+  expect(code.match(/asetpts=/g)).toHaveLength(1);
+  expect(code).toContain('-af "${LN_FILTER}:print_format=json,asetpts=N/SR/TB"');
   // The two filters are anchored on `=` because an ffmpeg filter is ALWAYS `atempo=1.05` /
   // `setpts=0.9*PTS`, while the bare word appears legitimately inside the script's own error
   // message ("never pad, atempo, or trim speech") — which is the instruction, not the offence.
   // Same reasoning as the rate-knob scan in packages/cost/src/media.test.ts.
   for (const filter of ["atempo=", "setpts="]) {
-    expect(code, `${filter} is a time-stretch filter and must never appear`).not.toContain(filter);
+    expect(withoutSampleClock, `${filter} must not change video or audio speed`).not.toContain(
+      filter,
+    );
   }
   for (const flag of ["--song", "--stepped"]) {
     expect(code, `${flag} is deferred scope and must not be re-added silently`).not.toContain(flag);
@@ -59,8 +67,8 @@ test("no time-stretch filter and no deferred-mode flag survives in the harvested
 
 // ── The music bed ───────────────────────────────────────────────────────────────────────────────
 //
-// Source tripwires, same instrument and same reason as the scene branches: a shell script cannot
-// be unit-tested, and the behavioural half is `smoke_assemble.sh`. What these pin is the SHAPE that
+// Source tripwires complement the real offline `assembleQuality.test.ts`/`smoke_assemble.sh`
+// fixtures. What these pin is the SHAPE that
 // makes the bed safe — every one of them is a way a well-meaning "make the music better" edit
 // would quietly break something that has nothing to do with music.
 
@@ -263,7 +271,10 @@ test("audio is mixed ONCE, on one timeline — not per scene and concatenated", 
   // The concat list carries the PICTURE, which is silent by construction. Listing a per-scene mux
   // here is what the old shape did.
   expect(code).toContain('echo "file \'$(basename "$pic")\'"');
-  expect(code, "the picture track is joined with no audio at all").toContain("-an -c:v libx264");
+  expect(
+    code,
+    "the normalized picture track is joined without audio or another lossy encode",
+  ).toContain('-an -c:v copy "$VOSIL"');
 });
 
 test("the per-cell speech band is GONE, and did not come back as a constant", () => {
@@ -394,7 +405,9 @@ test("the fade is drawn INSIDE the scene and cannot move a boundary", () => {
   expect(SH).toContain("fade=t=in:st=0:d=${CFADE}");
   expect(SH).toContain("if(d>0.4)d=0.4");
   // The card branch's own length still comes from SEC and nothing else.
-  expect(SH).toContain('-an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 "$pic"');
+  expect(SH).toContain(
+    '-an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 -video_track_timescale 15360 "$pic"',
+  );
 });
 
 test("TYPOGRAPHY IS NOT WIRED, and the script says why rather than silently ignoring it", () => {

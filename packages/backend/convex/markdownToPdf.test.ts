@@ -1,13 +1,14 @@
 // @vitest-environment node
 //
-// markdownToPdf (CKPT-02, V1 + V2) — the pure-JS pdf-lib renderer that lives in llm.ts.
+// markdownToPdf (CKPT-02, V1 + V2) — the shared pure-JS pdf-lib renderer used by llm.ts.
 // pdf-lib + Standard-14 fonts run in plain node (no font-file reads), so this suite imports
 // the function directly in a `node` env (the convex-test edge-runtime is neither needed nor
 // wanted here). Proves: valid %PDF- bytes in a small band, byte-determinism (pinned dates),
 // smart-punctuation renders without corruption, and un-sanitizable glyphs never yield a
 // partial PDF (dropped by toWinAnsi before drawText).
+import { getDocumentProxy } from "unpdf";
 import { expect, test } from "vitest";
-import { markdownToPdf } from "./llm";
+import { markdownToPdf } from "./lib/markdownPdf";
 
 const startsWithPdf = (bytes: Uint8Array): boolean =>
   bytes[0] === 0x25 &&
@@ -84,4 +85,97 @@ test("rich formatting (bold, table, numbered list, sub-headings) renders a valid
   expect(a.length).toBeLessThan(50_000);
   // Deterministic across runs even with tables + shapes (pinned dates, no randomness).
   expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
+});
+
+async function readPages(bytes: Uint8Array) {
+  const doc = await getDocumentProxy(bytes);
+  try {
+    return await Promise.all(
+      Array.from({ length: doc.numPages }, async (_, i) => {
+        const page = await doc.getPage(i + 1);
+        const content = await page.getTextContent();
+        return content.items.filter(
+          (item): item is typeof item & { str: string; transform: number[]; width: number } =>
+            "str" in item,
+        );
+      }),
+    );
+  } finally {
+    await doc.destroy();
+  }
+}
+
+test("report tables allocate more room to descriptive columns and avoid duplicate opening titles", async () => {
+  const pages = await readPages(
+    await markdownToPdf(
+      "Trial Framework",
+      "# Trial Framework\n\n| Key | Detailed finding |\n| --- | --- |\n| A1 | A detailed observation with enough context to explain the planned inspection and reporting process. |",
+    ),
+  );
+  const items = pages[0] ?? [];
+  const detail = items.find((item) => item.str === "Detailed finding");
+  expect(detail).toBeDefined();
+  // A short key column must leave most of the page available for the descriptive text.
+  expect(detail?.transform[4]).toBeLessThan(250);
+  // Once in the title block, once in the footer, without repeating the Markdown h1.
+  expect(items.filter((item) => item.str === "Trial Framework")).toHaveLength(2);
+});
+
+test("long tables repeat headers, preserve every record and number every page", async () => {
+  const records = Array.from({ length: 100 }, (_, i) => `REC${String(i).padStart(3, "0")}`);
+  const pages = await readPages(
+    await markdownToPdf(
+      "Inspection Register",
+      [
+        "| Record | Inspection detail |",
+        "| --- | --- |",
+        ...records.map(
+          (record) => `| ${record} | Check the sample and document the observation. |`,
+        ),
+      ].join("\n"),
+    ),
+  );
+  expect(pages.length).toBeGreaterThan(2);
+  const all = pages.flat().map((item) => item.str);
+  for (const record of records) expect(all.filter((text) => text === record)).toHaveLength(1);
+  pages.forEach((items, i) => {
+    const text = items.map((item) => item.str).join(" ");
+    expect(text).toContain("Inspection detail");
+    expect(text).toContain(`${i + 1} / ${pages.length}`);
+    for (const item of items) {
+      if (!item.str.trim()) continue;
+      expect(item.transform[4]).toBeGreaterThanOrEqual(47.9);
+      expect((item.transform[4] ?? 0) + item.width).toBeLessThanOrEqual(564.1);
+      expect(item.transform[5]).toBeGreaterThanOrEqual(20.9);
+      expect(item.transform[5]).toBeLessThanOrEqual(744);
+    }
+  });
+});
+
+test("a single very tall row continues across pages without losing its last cell or long tokens", async () => {
+  const tokens = Array.from({ length: 450 }, (_, i) => `TOKEN${String(i).padStart(3, "0")}`);
+  const unbroken = "LONGIDENTIFIER".repeat(18);
+  const pages = await readPages(
+    await markdownToPdf(
+      "Extended Record",
+      `| Key | Full observation |\n| --- | --- |\n| ONE | ${tokens.join(" ")} ${unbroken} |\n| LAST | End of record. |`,
+    ),
+  );
+  expect(pages.length).toBeGreaterThan(1);
+  const text = pages
+    .flat()
+    .map((item) => item.str)
+    .join(" ");
+  for (const token of tokens) expect(text.split(token)).toHaveLength(2);
+  expect(text).toContain("LAST");
+  expect(text).toContain("End of record.");
+  expect(text.replace(/\s/g, "")).toContain(unbroken);
+  for (const items of pages) {
+    expect(items.some((item) => item.str === "Full observation")).toBe(true);
+    for (const item of items) {
+      if (!item.str.trim()) continue;
+      expect((item.transform[4] ?? 0) + item.width).toBeLessThanOrEqual(564.1);
+      expect(item.transform[5]).toBeGreaterThanOrEqual(20.9);
+    }
+  }
 });

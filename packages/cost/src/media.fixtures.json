@@ -1,9 +1,32 @@
 {
-  "_what": "Provider-price provenance for the media estimator. Values were read from the official OpenAI documentation.",
-  "_how_to_refresh": "Re-read the OpenAI model and pricing pages, then run packages/cost/src/media.test.ts. THE IMAGE ROW IS NOT REFRESHED THAT WAY: since 33.1-03 it is MEASURED, not read — re-run the one-call probe recorded in .planning/phases/33.1-*/33.1-PRICE-EVIDENCE.md and take usage.cost from the response.",
+  "_what": "Provider-price provenance for the media estimator. Historical rows remain priceable; the current video default is standard Seedance 2.0.",
+  "_how_to_refresh": "Read the exact OpenRouter video-model catalogue and pricing page, preserve historical rows, then run media.test.ts. Seedance nominal token pricing and policy allowance are separate; no guaranteed provider invoice ceiling is established. Image pricing remains measured as recorded in the Phase33.1 evidence.",
   "source": "https://openrouter.ai/api/v1/models (each entry carries its own vendor page)",
-  "readAt": "2026-08-14",
+  "readAt": "2026-10-24",
   "entries": [
+    {
+      "id": "bytedance/seedance-2.0",
+      "kind": "video",
+      "unit": "Nominal USD per output video-second at 720x1280, 24fps; reservation adds one second per submitted clip",
+      "rates": {
+        "720p": 0.1512
+      },
+      "confidence": "MEDIUM",
+      "vendor": {
+        "pricingInfoOverride": "OpenRouter standard Seedance 2.0 charges $7.00 per million video tokens, with or without audio. The published H*W*duration*24/1024 formula implies $0.1512 per second at 720x1280. Current catalogue verified 2026-10-24. Actual output tokens determine billing; no upper frame-count guarantee was found.",
+        "status": "public",
+        "deprecated": false,
+        "removed": false
+      },
+      "source": "https://openrouter.ai/bytedance/seedance-2.0",
+      "catalogueSource": "https://openrouter.ai/api/v1/videos/models",
+      "reservation": {
+        "extraSecondsPerClip": 1,
+        "guaranteedInvoiceCeilingUsd": null,
+        "basis": "Owner-reviewed policy allowance for actual-output frame variance, not an established provider maximum"
+      },
+      "notes": "Exact standard model, not Mini/Fast. Current admission prices only720p,4..15seconds. Historical Grok remains priceable. $3.50 job and12 generated-second ceilings unchanged."
+    },
     {
       "id": "x-ai/grok-imagine-video",
       "kind": "video",
@@ -19,7 +42,7 @@
         "deprecated": false,
         "removed": false
       },
-      "notes": "Route-qualified id: the video plane posts to openrouter.ai/api/v1/videos and the id travels unstripped. No 1080p rate is published, so a 1080p request is unknown_model rather than a silent downgrade. The 1-15 grid is the reason this counterparty was accepted - see ADR-027."
+      "notes": "Route-qualified id: the video plane posts to openrouter.ai/api/v1/videos and the id travels unstripped. No 1080p rate is published, so a 1080p request is unknown_model rather than a silent downgrade. The 1-15 grid is the reason this counterparty was accepted - see ADR-027. Historical price row retained after the standard Seedance default migration; never a fallback."
     },
     {
       "id": "openai/tts-1",
@@ -71,8 +94,8 @@
       {
         "visual": "generated_video",
         "buys": "video",
-        "usdAt4s": 0.28,
-        "durations": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        "usdAt4s": 0.756,
+        "durations": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
       },
       {
         "visual": "animated_image",
@@ -108,25 +131,32 @@
       }
     ],
     "reel30s": {
-      "_what": "The §2.3 worked example, REPRICED against the shipped tables. The plan's $1.36-vs-$3.00 predated the gpt-image-2 cutover, and the all-generated column turned out not to exist at all. Repriced on 2026-08-30 (33.1-03) when the still row moved from a guessed $0.01 to a measured $0.006: mixed went $1.24 -> $1.224. Repriced AGAIN the same day (33.1-04) when the clip rate moved from sora-2's $0.10/s to grok's $0.07/s: mixed $1.224 -> $0.864, stockLeaning $0.40 -> $0.28.",
+      "_what": "Separate-mode standard Seedance policy reservations, preserving historical worked scene decks and legacy ceilings. Explicit native production is recorded separately below. These are policy estimates, not guaranteed provider invoices.",
       "mixed": {
         "scenes": "3 generated x 4s + 4 stills x 4s + 1 card x 2s",
-        "pictureUsd": 0.864,
+        "pictureUsd": 2.292,
         "generatedSeconds": 12,
         "_generatedSeconds": "3 x 4 s = 12, which is EXACTLY MEDIA_GENERATED_SECONDS_CAP. This deck sits ON the boundary with zero slack - a one-second nudge to any generated scene makes it illegal - and media.test.ts asserts that deliberately, because the cap was chosen to keep this deck and media-director.md's worked answer legal as written."
       },
       "generatedOnly": {
         "reachable": false,
-        "why": "NOT ARITHMETIC ANY MORE. On grok's 1..15 grid a 30 s all-generated deck IS composable (2 x 15 s) and prices at $2.10, which is under the $3.50 job cap - so nothing in the pricing refuses it. What refuses it is MEDIA_GENERATED_SECONDS_CAP (12 s of generated video per reservation, $0.84 at $0.07/s), added by 33.1-04 to restore in code the guarantee the wider grid destroyed. Both numbers are recorded because the mechanism moved: $2.10 is what it would cost, 12 s is what stops it.",
-        "wouldCostUsd": 2.1
+        "why": "A 30-second all-generated deck requires30 generated seconds and is refused by the unchanged12-second cap. Two15-second standard clips would reserve$4.8384 including per-clip policy allowance, also above the unchanged$3.50job cap; the generated-seconds check runs first.",
+        "wouldCostUsd": 4.8384
       },
       "stockLeaning": {
         "scenes": "1 generated x 4s + 3 stock_video x 6s + 1 stock_image x 8s",
-        "pictureUsd": 0.28,
-        "_what": "The lever the skill body teaches, priced: the same 30 seconds as `mixed` at a third of its picture cost, because four of its five scenes come from a free library instead of a generator."
+        "pictureUsd": 0.756,
+        "_what": "One4-second standard Seedance clip reserves$0.756 including policy headroom; stock assets have zero provider cost."
       }
     },
-    "targetsUnreachableByGeneratedVideoAlone": [15, 30, 60],
-    "_targetsUnreachableByGeneratedVideoAlone": "UNCHANGED at [15, 30, 60], but for ONE reason now instead of two. Until 33.1-04: 15 and 30 failed the ARITHMETIC (every sora-2 length was a multiple of 4) while 60 failed the JOB CAP ($6.00 > $3.50) - one property asserted through two mechanisms without saying so. Since 33.1-04 all three are refused by MEDIA_GENERATED_SECONDS_CAP = 12, which is below min(TARGET_DURATIONS) = 15, so the property holds for any future target duration rather than only for these three. If this array ever reads [60], the cap did not land."
+    "targetsUnreachableByGeneratedVideoAlone": [15, 30, 45, 60],
+    "_targetsUnreachableByGeneratedVideoAlone": "Legacy/separate audio uses the12-requested-generated-second cap and cannot fill any target solely with generated clips. Explicit native mode instead permits15/30/45/60seconds under separate60second/$15whole-job policy; tenant/deployment rails remain."
+  },
+  "native": {
+    "targets": [15, 30, 45, 60],
+    "jobCapUsd": 15,
+    "generatedSecondsCap": 60,
+    "worst60SecondVideoUsd": 11.34,
+    "basis": "15four-second clips, each reserving5nominal seconds at$0.1512; render/captions additional. Policy allowances are not guaranteed provider invoices."
   }
 }

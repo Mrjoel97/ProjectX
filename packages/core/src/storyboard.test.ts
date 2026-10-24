@@ -390,31 +390,13 @@ describe("media-director.md round trip — the body's worked answer survives its
     }
   });
 
-  it("no deck is all-generated, and at least one SPENDS a clip", () => {
-    // Not a style note — but the REASON changed on 2026-08-30 and the old one was arithmetic.
-    // It used to be that every member of GENERATED_CLIP_SECONDS was a multiple of 4, so an
-    // all-generated deck could not sum to 15 or 30 at all. On grok's 1..15 grid it can, and cheaply
-    // enough to pass the job cap ($2.10 at 30 s) — so what keeps this true is now
-    // `MEDIA_GENERATED_SECONDS_CAP` in `@pikar/cost`, a code-owned ceiling of 12 generated seconds
-    // per reservation, asserted there against this same body (ADR-027). The "at least one" half is
-    // per-ANSWER rather than per-deck: a stills-and-cards concept costing a fraction of its sibling
-    // is the cost lever the body teaches, not a gap.
+  it("native worked examples use generated clips throughout, with different shot direction", () => {
     for (const r of decks())
-      expect(r.scenes.some((s) => s.visual !== "generated_video")).toBe(true);
-    expect(decks().some((r) => r.scenes.some((s) => s.visual === "generated_video"))).toBe(true);
-  });
-
-  it("the two decks are different CONCEPTS — their kind mixes differ", () => {
-    // The testable shadow of "a different angle AND a different visual treatment". Two decks with
-    // the same kinds in the same order are one deck with different words, and the owner's choice
-    // is then a choice between nothing.
+      expect(r.scenes.every((s) => s.visual === "generated_video")).toBe(true);
     const [a, b] = decks();
-    const mix = (r: typeof a) =>
-      (r?.scenes ?? [])
-        .map((s) => s.visual)
-        .sort()
-        .join(",");
-    expect(mix(a)).not.toBe(mix(b));
+    expect(a?.scenes.map((s) => s.prompt).join("\n")).not.toBe(
+      b?.scenes.map((s) => s.prompt).join("\n"),
+    );
   });
 
   it("every scene names what its picture is built from", () => {
@@ -1038,7 +1020,7 @@ describe("parseSceneDeck — a long line buys seconds instead of losing the deck
     const rows = [
       `| 1 | animated_image | 4 | Founder at a desk | ${long} | | |`,
       "| 2 | animated_image | 7 | Mail icons | | | |",
-      `| 3 | generated_video | 2 | The cockpit | ${S3} | | |`,
+      `| 3 | animated_image | 2 | The cockpit | ${S3} | | |`,
       "| 4 | animated_image | 2 | One line of type | | | |",
     ];
     // 33.1-06: the TRADE still cannot happen — that is what this test is about, and it is
@@ -1150,6 +1132,27 @@ describe("parseSceneDeck — a long line buys seconds instead of losing the deck
       { sceneIndex: 0, fromSeconds: 2, toSeconds: 4, why: "narration" },
       { sceneIndex: 1, fromSeconds: 7, toSeconds: 5, why: "narration" },
     ]);
+  });
+
+  it("does not donate a generated clip below the current four-second minimum", () => {
+    const r = parseSceneDeck(
+      sceneDeck(
+        [
+          `| 1 | animated_image | 2 | Founder | ${S1} | | |`,
+          `| 2 | generated_video | 5 | Product | ${S3} | | |`,
+          "| 3 | animated_image | 2 | Detail | | | |",
+          "| 4 | animated_image | 2 | Benefit | | | |",
+          "| 5 | animated_image | 2 | Proof | | | |",
+          "| 6 | animated_image | 2 | Close | | | |",
+        ],
+        "Target duration: 15",
+      ),
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // The old editorial floor would donate two seconds and leave an unbuyable three-second clip.
+    expect(r.scenes[1]?.durationMs).toBe(5000);
+    expect(r.adjustments).toEqual([]);
   });
 
   it("leaves the clip alone when a still can cover the deficit", () => {
@@ -1332,8 +1335,9 @@ describe("parseBrief — guided intake (33-01)", () => {
     expect(parseBrief("BRIEF\nTopic:\nDuration: 30s")).toBeNull();
   });
 
-  it("is NULL on a duration off the 15/30/60 presets — never free entry, never a guess", () => {
-    for (const bad of ["45s", "20", "three", ""]) {
+  it("accepts the new45-second preset and refuses durations outside the closed set", () => {
+    expect(parseBrief("BRIEF\nTopic: A topic\nDuration: 45s")?.durationSeconds).toBe(45);
+    for (const bad of ["46s", "20", "three", ""]) {
       expect(parseBrief(`BRIEF\nTopic: A topic\nDuration: ${bad}`)).toBeNull();
     }
     expect(parseBrief("BRIEF\nTopic: A topic")).toBeNull(); // absent line, same answer
@@ -1517,7 +1521,7 @@ describe("parseSceneDeck — off-grid generated clips are repaired (33-12)", () 
 // 2026-08-30: a deck of ordinary-looking scene lengths was refused at the write boundary because
 // sora-2 only made multiples of four. On grok's 1..15 grid that class is gone for every integer
 // length a scene sensibly has, and what is left fires only ABOVE 15.
-describe("parseSceneDeck — the 1..15 grid retires illegal_generated_duration (33.1-04)", () => {
+describe("parseSceneDeck — the current 4..15 generated duration grid", () => {
   it("a 5-SECOND and a 7-SECOND generated scene parse AT THEIR OWN LENGTHS, with NO adjustments", () => {
     // 5 + 7 + 3 = 15. Asserting `adjustments: []` is what makes this non-vacuous: a test that
     // only asserted `ok` would pass on a deck the repair had silently snapped to 4 s and 4 s.
@@ -1545,15 +1549,15 @@ describe("parseSceneDeck — the 1..15 grid retires illegal_generated_duration (
       sceneDeck(
         [
           `| 1 | generated_video | 5 | Founder | ${S1} | | |`,
-          `| 2 | generated_video | 7 | Cockpit | ${S2} | | |`,
-          `| 3 | generated_video | 3 | Close | ${S3} | | |`,
+          `| 2 | generated_video | 6 | Cockpit | ${S2} | | |`,
+          `| 3 | generated_video | 4 | Close | ${S3} | | |`,
         ],
         "Target duration: 15",
       ),
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([5, 7, 3]);
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([5, 6, 4]);
     expect(r.adjustments).toEqual([]);
     // …and it is still refused by MONEY rather than by arithmetic — 15 generated seconds is over
     // `MEDIA_GENERATED_SECONDS_CAP`. The parser's job is the contract; the cap's job is the spend.
@@ -1575,10 +1579,28 @@ describe("parseSceneDeck — the 1..15 grid retires illegal_generated_duration (
       { sceneIndex: 0, fromSeconds: 16, toSeconds: 15, why: "grid" },
       { sceneIndex: 2, fromSeconds: 4, toSeconds: 5, why: "rebalance" },
     ]);
-    // Every integer 1..15 is legal, and 16 is the first that is not.
-    expect([...GENERATED_CLIP_SECONDS]).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-    ]);
+    // Every integer 4..15 is legal; the current provider cannot generate shorter clips.
+    expect([...GENERATED_CLIP_SECONDS]).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+  });
+
+  it.each([
+    1, 2, 3,
+  ])("refuses a %i-second generated clip rather than increasing its paid length", (seconds) => {
+    expect(
+      parseSceneDeck(
+        sceneDeck(
+          [
+            `| 1 | generated_video | ${seconds} | Product | ${S1} | | |`,
+            `| 2 | animated_image | ${15 - seconds} | Close | ${S2} | | |`,
+          ],
+          "Target duration: 15",
+        ),
+      ),
+    ).toMatchObject({
+      ok: false,
+      reason: "illegal_generated_duration",
+      sceneIndex: 0,
+    });
   });
 });
 

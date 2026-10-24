@@ -5,10 +5,12 @@ import type { DocType } from "@pikar/core";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { ArtifactViewerBody } from "../artifacts/ArtifactViewer";
 import { MarkdownDocument } from "../MarkdownDocument";
 import { docLabel, fmtSize, type VaultDoc } from "./DocGrid";
 import { failureCopy } from "./failureCopy";
 import { XIcon } from "./icons";
+import { PresentationPreview } from "./PresentationPreview";
 import {
   type PreviewActionId,
   type PreviewControlHandlers,
@@ -59,6 +61,12 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   // query and the render branch, and the last time those two answered the mime question separately
   // a document qualified for a branch whose URL was never fetched and rendered nothing, silently.
   const displayMime = doc.storedMimeType ?? doc.mimeType;
+  const presentation = useQuery(
+    api.vaultPresentations.byDoc,
+    displayMime === "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      ? { docId: doc._id }
+      : "skip",
+  );
   const media = binaryMediaKind(displayMime) !== null;
   const mediaUrl = useQuery(api.vault.vaultDownloadUrl, media ? { vaultDocId: doc._id } : "skip");
   const docText = useQuery(api.vault.vaultDocText, { vaultDocId: doc._id });
@@ -279,7 +287,10 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
             minHeight: 0,
             // Media alone is floated in a fixed pane; media WITH a description has to scroll.
             overflow:
-              preview.content.kind === "ready-binary" && !preview.content.text ? "hidden" : "auto",
+              preview.content.kind === "ready-binary" &&
+              (preview.content.media === "pdf" || !preview.content.text)
+                ? "hidden"
+                : "auto",
             padding: "clamp(1.25rem, 3vw, 2rem)",
             background: "var(--canvas)",
           }}
@@ -293,6 +304,7 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                   projection is the artifact of record and stays reachable through the same
                   "Show full text" control, which would otherwise render beside nothing it
                   controls. */}
+              {presentation ? <PresentationPreview spec={presentation} /> : null}
               {sheets ? <SheetGrid sheets={sheets.sheets} sheetCount={sheets.sheetCount} /> : null}
               {/* With a grid on screen the tab-separated projection is redundant noise, so it waits
                   behind the expand control the modal already has — which is what gives that button
@@ -344,7 +356,12 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
               style={{
                 display: "grid",
                 gap: "1.25rem",
-                height: preview.content.text ? undefined : "100%",
+                height:
+                  preview.content.media === "pdf"
+                    ? "calc(100% - 2rem)"
+                    : preview.content.text
+                      ? undefined
+                      : "100%",
               }}
             >
               {preview.content.media === "image" ? (
@@ -372,24 +389,17 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                   </button>
                 </div>
               ) : preview.content.media === "pdf" ? (
-                // The browser's OWN PDF viewer, over the same stored-file bearer URL the image and
-                // video branches use — pagination, zoom, text selection and search for free. No
-                // library, no conversion, no rendering fidelity to argue about.
-                //
-                // Taller than the 60vh media cap because a PDF is READ here rather than glanced at,
-                // and it keeps its own internal scroll; the extracted text still rides beneath.
-                <iframe
-                  src={mediaUrl}
-                  title={doc.title}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    height: preview.content.text ? "70vh" : "100%",
-                    minHeight: "24rem",
-                    border: "1px solid var(--vault-border)",
-                    borderRadius: "0.5rem",
-                    background: "var(--vault-paper)",
+                <ArtifactViewerBody
+                  artifact={{
+                    id: String(doc._id),
+                    title: doc.title,
+                    mimeType: "application/pdf",
+                    markdown: doc.mimeType === "text/markdown",
+                    text: preview.content.text,
+                    url: mediaUrl,
+                    hasOriginal: Boolean(doc.storageId),
                   }}
+                  onDownload={handleDownload}
                 />
               ) : (
                 // biome-ignore lint/a11y/useMediaCaption: user-uploaded media has no caption track
@@ -404,7 +414,7 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                   }}
                 />
               )}
-              {preview.content.text && (
+              {preview.content.text && preview.content.media !== "pdf" && (
                 <section style={{ borderTop: "1px solid var(--vault-border)", paddingTop: "1rem" }}>
                   <p className="caps-label" style={{ marginBottom: "0.5rem" }}>
                     {preview.content.media === "image"

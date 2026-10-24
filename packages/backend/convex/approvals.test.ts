@@ -40,6 +40,53 @@ async function seedPlan(
 
 const firstPage = { numItems: 1, cursor: null };
 
+test("campaign private items are excluded before approval, running-work and cleared-page bounds", async () => {
+  const t = convexTest(schema, modules);
+  const proposedId = await seedPlan(t, TENANT, "proposed", 1);
+  const deliveringId = await seedPlan(t, TENANT, "delivering", 2);
+  const doneId = await seedPlan(t, TENANT, "done", 3);
+  await t.run(async (ctx) => {
+    const campaignId = await ctx.db.insert("mediaCampaigns", {
+      tenantId: TENANT,
+      threadId: "private-campaign",
+      title: "Synthetic private campaign",
+      status: "running",
+      maxCostCents: 100,
+      reservedCents: 0,
+      concurrency: 2,
+      items: [],
+      createdAt: 4,
+      updatedAt: 4,
+    });
+    for (let index = 0; index < 105; index += 1) {
+      for (const status of ["proposed", "delivering", "done"] as const)
+        await ctx.db.insert("plans", {
+          tenantId: TENANT,
+          threadId: "private-campaign",
+          status,
+          mediaCampaignId: campaignId,
+          kind: "media",
+          mediaMode: "image",
+          imagePrompt: "Owned synthetic product",
+          createdAt: 100 + index,
+        });
+    }
+  });
+  const viewer = t.withIdentity({ subject: TENANT });
+  expect(await viewer.query(api.approvals.summary, {})).toEqual({
+    awaitingCount: 1,
+    awaitingCountCapped: false,
+    oldestWaitingAt: 1,
+  });
+  const awaiting = await viewer.query(api.approvals.listAwaiting, { paginationOpts: firstPage });
+  expect(awaiting.items.map((item) => item.planId)).toEqual([proposedId]);
+  expect(awaiting.nextCursor).toBeNull();
+  const running = await viewer.query(api.approvals.runningWork, {});
+  expect(running.items.map((item) => item.id)).toEqual([String(deliveringId)]);
+  const cleared = await viewer.query(api.approvals.listCleared, { sinceMs: 0, limit: 20 });
+  expect(cleared.items.map((item) => item.planId)).toEqual([doneId]);
+});
+
 describe("Approvals summary and plan lanes", () => {
   test("running work includes background threads and ingestion without leaking content or foreign rows", async () => {
     const t = convexTest(schema, modules);

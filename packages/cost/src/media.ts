@@ -12,12 +12,13 @@
  * Three containment rules this module exists to enforce:
  *  1. Every table is keyed by the billing unit the vendor ACTUALLY charges on (submitted
  *     characters, generated images, video-seconds, input audio minutes). A model billed per
- *     GENERATED output duration or per COMPUTE second cannot be reserved and is therefore refused
- *     by construction — not by preference.
+ *     GENERATED output duration or per COMPUTE second needs an explicit reviewed reservation
+ *     policy. Seedance uses a declared allowance, not a guaranteed provider invoice ceiling.
  *  2. A resolution missing from a model's row is `unknown_model`, NEVER a fallback to another
  *     tier. A priced resolution must be present on both the estimate and the provider request.
  *  3. The cents floor happens ONCE, on the batch total. See chooseMediaBatch.
  */
+import type { MediaAudioMode } from "@pikar/core/nativeMedia";
 import { err, ok, type Result } from "@pikar/core/result";
 import { MUSIC_MOODS, type VisualKind } from "@pikar/core/storyboard";
 
@@ -27,7 +28,7 @@ export type VideoRes = "480p" | "720p" | "1080p";
  * 2026-08-14. Reconciliation is the manual procedure in docs/playbooks/media.md. Upgrade path:
  * use a versioned machine-readable price feed if either provider publishes one. */
 
-/** USD per video-second, per resolution. */
+/** Nominal USD per video-second, per resolution. Seedance reservation headroom is applied below. */
 export const MEDIA_VIDEO_PRICING: Record<string, Partial<Record<VideoRes, number>>> = {
   // ── HISTORICAL ONLY, exactly like the two superseded image ids below. No submit path routes to
   // either of these since 33.1-05; they stay so `mediaJobs` rows written before their cutover are
@@ -35,11 +36,16 @@ export const MEDIA_VIDEO_PRICING: Record<string, Partial<Record<VideoRes, number
   // nothing in the code can select a model that is not `MEDIA_DEFAULT_VIDEO.model`.
   "wan2.5-t2v-preview": { "480p": 0.05, "720p": 0.1, "1080p": 0.15 },
 
-  // ── THE LIVE ROW (33.1-04). xAI's published rates, read 2026-08-30 and corroborated by a live
+  // ── HISTORICAL GROK ROW (33.1-04). xAI's published rates, read 2026-08-30 and corroborated by a live
   // paid call the same day: `{duration: 5, resolution: "480p"}` returned `usage.cost` 0.25, which
   // is exactly 5 x $0.05. **No 1080p key**, because xAI publishes none — rule 2 makes that
   // `unknown_model` rather than a silent downgrade to the 720p tier. See ADR-027.
   "x-ai/grok-imagine-video": { "480p": 0.05, "720p": 0.07 },
+
+  // Standard Seedance 2.0, OpenRouter catalogue verified 2026-10-24: $7/M video tokens
+  // with or without native audio. 720x1280x24/1024x0.000007 = $0.1512/s nominally.
+  // Only this reviewed tier is priceable. Do not substitute Mini/Fast or another resolution.
+  "bytedance/seedance-2.0": { "720p": 0.1512 },
 };
 
 /** Provider-supported generated durations. Kept model-specific so historical rows remain
@@ -48,10 +54,10 @@ export const MEDIA_VIDEO_SECONDS: Record<string, readonly number[]> = {
   "wan2.5-t2v-preview": [5, 10],
   // xAI's published grid is **1-15, any integer**, and it is written out rather than generated:
   // this is a money table, and fifteen integers read at a glance where `Array.from` does not.
-  // The GRID is why grok was chosen — it retires `illegal_generated_duration` for every length a
-  // model can sensibly ask for. `@pikar/core`'s `GENERATED_CLIP_SECONDS` is the second copy of
-  // this same list and the two must move together; `media.test.ts` asserts they are equal.
+  // Historical grid retained for existing rows. The current standard Seedance grid below
+  // matches @pikar/core GENERATED_CLIP_SECONDS; media.test.ts enforces that parity.
   "x-ai/grok-imagine-video": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "bytedance/seedance-2.0": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
 };
 
 /** USD per successfully generated image. */
@@ -171,45 +177,18 @@ export const MEDIA_MUSIC_STOCK = {
  *  per-request budget; there is deliberately no $1.00 constant left in this file to pull. */
 export const MEDIA_JOB_CAP_USD = 3.5;
 
-/**
- * The ceiling on TOTAL GENERATED VIDEO SECONDS in ONE reservation (33.1-04, ADR-027).
- *
- * **What it replaces.** Until 2026-08-30 "every legal reel mixes kinds" was ARITHMETIC: sora-2 made
- * only 4, 8 and 12 second clips, so no sum of them was 15 or 30, and a 60 cost $6.00 against the
- * $3.50 job cap. Grok's 1..15 grid is exactly what the phase bought — it retires
- * `illegal_generated_duration` — and it destroys that guarantee in passing: a 15 s all-generated
- * reel is $1.05 and a 30 s is $2.10, both comfortably under the cap. Kind-mixing would drop from
- * structural to advisory, and the only thing left advising it is skill-body prose that
- * `dispatch.ts` already records as "violated twice in six attempts, which is why this is code and
- * not another sentence in the body."
- *
- * **Why 12, derived rather than chosen.** It is the largest number that is below every target
- * duration AND keeps both shipped worked examples legal exactly as written:
- *  - `media-director.md`'s VARIATION A spends `4 + 8 = 12` generated seconds in a 30 s reel
- *    (VARIATION B spends 0). Twelve is the smallest value that does not require editing the body.
- *  - `media.fixtures.json`'s `reel30s.mixed` is `3 generated x 4 s = 12 s`, and the ADR's own
- *    worked economics land on the same number.
- *  - `12 < min(TARGET_DURATIONS) === 15`, which is what makes an all-generated reel impossible at
- *    EVERY target rather than only at 60 — including a target nobody has added yet.
- *  - At $0.07/s it ceilings generated spend at **$0.84** per reel whatever the target duration:
- *    24% of `MEDIA_JOB_CAP_USD`, leaving $2.66 for stills, voice, captions and render.
- *
- * **The uncomfortable part, said out loud: both of those decks sit EXACTLY on the boundary, with
- * zero slack.** A one-second nudge to either makes it illegal. That is why the boundary is
- * inclusive and why `media.test.ts` parses the shipped body and asserts its worked answer prices
- * under this constant — otherwise the body and the money boundary could drift apart in a commit
- * that touches neither. 13 and 15 were considered: 15 destroys the guarantee, 13 is a round number
- * with no argument behind it.
- *
- * **`MEDIA_JOB_CAP_USD` STAYS 3.50.** Lowering it below $2.10 to make the arithmetic work would
- * shrink every legitimate mixed reel's headroom, and ADR-026 is explicit that a successor needing
- * a cap change is a worse outcome wearing a migration's clothes.
- *
- * ponytail: one constant and a two-line check at the choke point every reservation and every
- * estimate already passes through. The ceiling is that this is a POLICY somebody can raise, where
- * what it replaces was an impossibility — ADR-027 §"What the mitigation is not" says so rather
- * than pretending otherwise. The upgrade path, if a long-form product ever needs more, is a
- * per-tenant limit read from `guardrails`, NOT a bigger constant.
+/** Explicit native production policy; never changes tenant/deployment spend rails. */
+export const MEDIA_NATIVE_JOB_CAP_USD = 15;
+export const MEDIA_NATIVE_GENERATED_SECONDS_CAP = 60;
+
+/** Legacy/separate total REQUESTED generated-video seconds, unchanged from ADR-027.
+ * Twelve is below every supported whole-reel target, preserves the4+8worked answer and the
+ * three4-second mixed fixture, and is inclusive. Seedance's billing-policy extra second does
+ * not add requested footage and does not count toward this cap.
+ * At the current4-second minimum, at most three clips fit: nominal12seconds plus three policy
+ * seconds reserve$2.268 before stills, voice, captions and render. The whole-job cap remains$3.50.
+ * ponytail: one shared check covers estimates and reservations. The ceiling is an explicit policy;
+ * the upgrade path for longer generated films is a reviewed per-tenant limit, not a bigger constant.
  */
 export const MEDIA_GENERATED_SECONDS_CAP = 12;
 
@@ -226,20 +205,14 @@ export const MEDIA_GENERATED_SECONDS_CAP = 12;
  * "render (incl. one retry)" so the coverage is explicit on screen. */
 export const MEDIA_SANDBOX_USD_PER_RENDER = 0.04;
 
-/** ROUTE-QUALIFIED, like the image pin: since 33.1-05 the video plane posts to OpenRouter, which
- *  keys on `x-ai/grok-imagine-video`. This string, `MEDIA_VIDEO_PRICING`'s live key,
- *  `MEDIA_VIDEO_SECONDS`'s live key and `media.fixtures.json`'s video id are four copies of one
- *  value and must move together — the fixture-parity test is what enforces that.
- *
- *  720p and 4 s are KEPT from the sora-2 pin. At $0.07/s six four-second clips are $1.68 against
- *  the unchanged $3.50 cap (they were $2.40 on sora-2), so the successor leaves MORE room for
- *  voice, captions and render, not less — the test ADR-026 sets for a migration.
- *
- *  480p exists in the row and is deliberately NOT pinned: dropping the tier is a picture-quality
- *  decision and improvements do not ride in on a migration (33.1-PRICE-EVIDENCE.md makes the same
- *  argument for the still's geometry). */
+/** Standard Seedance 2.0 is the owner-selected quality default. The exact route-qualified
+ * model, reviewed 720p tier and four-second default move with the duration grid and fixtures.
+ * A one-second per-clip POLICY allowance covers observed frame-rounding variance; it is not
+ * a guaranteed invoice maximum. Actual output-token billing remains subject to reconciliation.
+ * Legacy/separate ceilings remain $3.50 and12 requested seconds; explicit native production
+ * has its own $15/60-second policy at chooseMediaBatch, without changing tenant/deployment rails. */
 export const MEDIA_DEFAULT_VIDEO = {
-  model: "x-ai/grok-imagine-video",
+  model: "bytedance/seedance-2.0",
   resolution: "720p",
   seconds: 4,
 } as const;
@@ -303,7 +276,7 @@ export const MEDIA_DEFAULT_STOCK = {
 } as const;
 
 export type MediaSpec =
-  | { kind: "video"; model: string; resolution: VideoRes; seconds: number }
+  | { kind: "video"; model: string; resolution: VideoRes; seconds: number; generateAudio?: boolean }
   | { kind: "image"; model: string; width: number; height: number }
   | { kind: "tts"; model: string; characters: number }
   | { kind: "stt"; model: string; audioMinutes: number }
@@ -346,6 +319,9 @@ const counted = (...ns: number[]) => ns.every((n) => Number.isFinite(n) && n >= 
 export function estimateMediaUsd(spec: MediaSpec): Result<number, MediaCostError> {
   switch (spec.kind) {
     case "video": {
+      if (spec.generateAudio === true && spec.model !== "bytedance/seedance-2.0") {
+        return err({ code: "unknown_model" });
+      }
       const row = MEDIA_VIDEO_PRICING[spec.model];
       if (!row) return err({ code: "unknown_model" });
       // The GRID is asked of the model we are about to submit to — never of `CLIP_SECONDS`, which
@@ -358,7 +334,13 @@ export function estimateMediaUsd(spec: MediaSpec): Result<number, MediaCostError
       const perSecond = row[spec.resolution];
       // A missing resolution is unknown_model — never a fallback to a cheaper tier.
       if (perSecond === undefined) return err({ code: "unknown_model" });
-      return ok(perSecond * spec.seconds);
+      // Seedance bills actual output video tokens. The observed five-second candidate contained
+      // 121 frames, so nominal requested-seconds pricing would under-reserve. One whole extra
+      // second per clip is a documented POLICY allowance, not a provider guarantee
+      // or a claim that output is bounded to one extra second. Settlement uses actual usage;
+      // unknown outcomes retain their holds. Historical Grok/Wan arithmetic is unchanged.
+      const allowanceSeconds = spec.model === "bytedance/seedance-2.0" ? 1 : 0;
+      return ok(perSecond * (spec.seconds + allowanceSeconds));
     }
     case "image": {
       const perMegapixel = MEDIA_IMAGE_PRICING[spec.model];
@@ -440,20 +422,42 @@ export function estimateBatchUsd(specs: readonly MediaSpec[]): Result<number, Me
 export function chooseMediaBatch(
   specs: readonly MediaSpec[],
   capUsd: number,
+  options?: { audioMode?: MediaAudioMode },
 ): Result<{ estUsd: number; estCents: number }, MediaCostError> {
+  const native = options?.audioMode === "native";
+  if (
+    native &&
+    specs.some((spec) =>
+      spec.kind === "video"
+        ? spec.model !== "bytedance/seedance-2.0" ||
+          spec.resolution !== "720p" ||
+          spec.generateAudio !== true
+        : spec.kind !== "render" && spec.kind !== "stt",
+    )
+  )
+    return err({ code: "unknown_model" });
+  if (!native && specs.some((spec) => spec.kind === "video" && spec.generateAudio === true)) {
+    return err({ code: "unknown_model" });
+  }
   const est = estimateBatchUsd(specs);
   if (!est.ok) return est;
   // THE GENERATED-SECONDS CEILING (33.1-04), beside the job cap and before any cents exist.
   // Here rather than at a caller because this is the ONE gate `reserveJobInner`,
   // `reserveSceneJobInner`, `jobEstimate` and `imageEstimate` all pass through — so the estimate
   // the canvas prints and the reservation that spends agree by construction. It is UNIFORM: block
-  // decks are generated-video by construction and are checked too. Passing a per-caller ceiling
-  // was rejected — a cap a deck shape can route around is not a cap (ADR-027).
+  // decks are generated-video by construction and are checked too. The explicit native mode has
+  // its own source-owned60-second/$15policy; callers cannot raise either mode above its ceiling.
   const generatedSeconds = specs.reduce((n, s) => n + (s.kind === "video" ? s.seconds : 0), 0);
-  if (generatedSeconds > MEDIA_GENERATED_SECONDS_CAP) {
+  if (
+    generatedSeconds > (native ? MEDIA_NATIVE_GENERATED_SECONDS_CAP : MEDIA_GENERATED_SECONDS_CAP)
+  ) {
     return err({ code: "over_generated_seconds" });
   }
-  if (!Number.isFinite(capUsd) || capUsd <= 0 || est.value > capUsd) {
+  if (
+    !Number.isFinite(capUsd) ||
+    capUsd <= 0 ||
+    est.value > Math.min(capUsd, native ? MEDIA_NATIVE_JOB_CAP_USD : MEDIA_JOB_CAP_USD)
+  ) {
     return err({ code: "over_job_cap" });
   }
   // Integer cents, fail-closed bias: a sub-cent job still costs 1 cent of budget. ONCE.

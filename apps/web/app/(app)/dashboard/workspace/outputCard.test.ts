@@ -57,10 +57,11 @@ describe("createDocument tells the model WHERE the artifact is and WHAT it is", 
   });
 
   test("the success sentence names the REAL format", () => {
-    // Observed live: the agent reported creating the deck "in PowerPoint format". There is no
-    // format argument on the tool and DocFormat is `pdf | html`.
+    // Phase53 adds a native presentation branch; PDF and Office success receipts must each
+    // name their actual stored format instead of applying the old blanket PowerPoint refusal.
     expect(llm).toContain("Written as markdown, with a PDF to download.");
-    expect(llm).toContain("never PowerPoint, Word or slides");
+    expect(llm).toContain("Written as an editable .pptx PowerPoint deck.");
+    expect(llm).toContain("Written as a spreadsheet — a real .xlsx workbook to download.");
   });
 
   test("the blocked-draft refusal names resetPlan instead of deadlocking on the user", () => {
@@ -93,15 +94,10 @@ describe("the inline PDF mints exactly one URL, for the open thread's selected a
     expect(cards).toMatch(/artifact\?\.storedMimeType === "application\/pdf"/);
   });
 
-  test("the frame is the browser's own viewer — no sandbox, one scroll region", () => {
-    // Scan CODE, not prose: the comment above the iframe deliberately names the banned `sandbox`
-    // attribute so the next reader knows why it is absent, and a naive scan matches that comment
-    // and goes red on a correct file (the xlsText lesson, one package over).
-    const code = cards.replace(/^\s*(?:\/\/|\*|\/\*).*$/gm, "");
-    const frame = code.slice(code.indexOf('data-testid="output-pdf"') - 200, undefined);
-    expect(frame.slice(0, 600)).toMatch(/style=\{\{/);
-    expect(frame.slice(0, 600)).not.toMatch(/sandbox/); // ADR-036: a sandbox frames nothing
-    expect(frame.slice(0, 600)).toMatch(/min\(70vh, 32rem\)/);
-    expect(code).toMatch(/<iframe/);
+  test("the legacy card uses the shared bounded PDF reader", () => {
+    const outputCard = cards.slice(cards.indexOf("function OutputCard("));
+    expect(outputCard).toContain("<PdfDocumentViewer");
+    expect(outputCard).toContain("url={pdfUrl}");
+    expect(outputCard).not.toContain("<iframe");
   });
 });

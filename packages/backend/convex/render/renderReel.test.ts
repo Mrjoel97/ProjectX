@@ -13,6 +13,7 @@
 
 import type { RunId } from "@convex-dev/action-retrier";
 import retrierTest from "@convex-dev/action-retrier/test";
+import { pcm16ToWav } from "@pikar/core/captions";
 import { MUSIC_BLOCK_INDEX, MUSIC_INPUT_NAME } from "@pikar/core/render";
 import { MEDIA_DEFAULT_VIDEO, MEDIA_DEFAULT_VOICE, MEDIA_MUSIC_STOCK } from "@pikar/cost/media";
 import { convexTest, type TestConvex } from "convex-test";
@@ -23,6 +24,7 @@ import workflowSchema from "../../node_modules/@convex-dev/workflow/src/componen
 import workpoolSchema from "../../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
+import { contentHash } from "../lib/hash";
 import schema from "../schema";
 
 // Vite rewrites glob keys for files in THIS directory to "./x.ts" while the rest stay "../y/x.ts",
@@ -49,6 +51,7 @@ const workpoolModules = import.meta.glob(
 );
 
 type T = TestConvex<typeof schema>;
+const liveHarnesses: T[] = [];
 
 /** The media.test.ts harness, verbatim, plus the action-retrier (D2 runs renderReel under it). */
 function harness(): T {
@@ -58,6 +61,7 @@ function harness(): T {
   t.registerComponent("workflow", workflowSchema, workflowModules);
   t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
   retrierTest.register(t);
+  liveHarnesses.push(t);
   return t;
 }
 
@@ -65,9 +69,194 @@ const A = "tenant_a";
 const B = "tenant_b";
 const T0 = 1_754_000_000_000;
 
-afterEach(() => {
+function expectNoOwnedRenderPost(fetchMock: { mock: { calls: unknown[][] } }, batchId: string) {
+  const owned = fetchMock.mock.calls.filter(([url, init]) => {
+    if (String(url) !== "https://app.example.com/api/media/render") return false;
+    const request = init as RequestInit | undefined;
+    if (request?.method !== "POST" || typeof request.body !== "string") return false;
+    try {
+      return (JSON.parse(request.body) as { renderId?: string }).renderId === batchId;
+    } catch {
+      return false;
+    }
+  });
+  expect(owned, "this batch must not purchase a render sandbox").toHaveLength(0);
+}
+
+test("the owned render assertion catches this batch's POST and ignores unrelated work", () => {
+  const post = (batchId: string) => ({
+    mock: {
+      calls: [
+        [
+          "https://app.example.com/api/media/render",
+          {
+            method: "POST",
+            body: JSON.stringify({ renderId: batchId }),
+          },
+        ],
+      ],
+    },
+  });
+  expect(() => expectNoOwnedRenderPost(post("mine"), "mine")).toThrow();
+  expect(() => expectNoOwnedRenderPost(post("foreign"), "mine")).not.toThrow();
+  expect(() =>
+    expectNoOwnedRenderPost(
+      { mock: { calls: [["https://openrouter.ai/api/v1/chat", {}]] } },
+      "mine",
+    ),
+  ).not.toThrow();
+});
+
+afterEach(async () => {
+  // Match media.test.ts: finish due workflow/ingest tails while their own test mocks still apply.
+  // A zero-delay yield never starts the media poller's ten-second retry timers.
+  for (const t of liveHarnesses.splice(0)) {
+    for (let pass = 0; pass < 3; pass++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      try {
+        await t.finishInProgressScheduledFunctions();
+      } catch {
+        /* Deliberately refused fixture work. */
+      }
+    }
+  }
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+});
+
+describe("caption scripts bind to the exact tenant and paid TTS batch", () => {
+  async function seedCaptions(t: T, mismatchedTranscript = false) {
+    const texts = ["Come back.", "Keep it close."];
+    const seeded = await seedMidRender(t, {
+      deckOverrides: { 0: { narration: texts[0] }, 1: { narration: texts[1] } },
+    });
+    await t.run(async (ctx) => {
+      const rows = await ctx.db
+        .query("mediaJobs")
+        .withIndex("by_batch", (q) => q.eq("tenantId", A).eq("batchId", seeded.batchId))
+        .collect();
+      for (const row of rows.filter((row) => row.kind === "tts"))
+        await ctx.db.patch(row._id, { promptHash: await contentHash(texts[row.blockIndex] ?? "") });
+      const words = [
+        { text: mismatchedTranscript ? "Go" : "Come", start: 0.1, end: 0.5, type: "word" },
+        { text: "back", start: 0.5, end: 1, type: "word" },
+        { text: "Keep", start: 2.74, end: 3.24, type: "word" },
+        { text: "it", start: 3.24, end: 3.24, type: "word" },
+        { text: "close", start: 3.5, end: 4, type: "word" },
+      ];
+      const sidecar = JSON.stringify({
+        scene_count: 2,
+        target_duration_s: 8,
+        total_duration_s: 8,
+        actual_duration_s: 8,
+        gates: [],
+        scenes: [0, 1].map((index) => ({
+          index,
+          start_s: index * 4,
+          duration_s: 4,
+          visual: "video",
+          lead_silence_s: 0,
+          speech_abs_s: index * 4 + 1,
+          speech_dur_s: 2.5,
+          overrun: false,
+        })),
+      });
+      const renderStorageId = await ctx.storage.store(
+        new Blob(["synthetic transport fixture"], { type: "video/mp4" }),
+      );
+      const sidecarStorageId = await ctx.storage.store(
+        new Blob([sidecar], { type: "application/json" }),
+      );
+      const transcriptStorageId = await ctx.storage.store(
+        new Blob([JSON.stringify({ words })], { type: "application/json" }),
+      );
+      await ctx.db.patch(seeded.planId, {
+        renderStatus: "rendered",
+        renderStorageId,
+        sidecarStorageId,
+        captionOffsetsS: [0, 3],
+        captionStatus: "pending",
+      });
+      await ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId: seeded.planId,
+        batchId: seeded.batchId,
+        blockIndex: -1,
+        kind: "stt",
+        provider: "openai",
+        model: "openai/whisper-1",
+        spec: { kind: "stt", audioMinutes: 0.1 },
+        status: "succeeded",
+        assetStorageId: transcriptStorageId,
+        promptHash: "0".repeat(64),
+        estUsd: 0.0006,
+        createdAt: T0 + 1,
+        updatedAt: T0 + 1,
+      });
+    });
+    return seeded;
+  }
+
+  test("returns exact batch-verified scripts, and a foreign tenant gets no content", async () => {
+    const t = harness(),
+      { planId } = await seedCaptions(t);
+    const job = await t.query(internal.render.renderReel.captionsToBurn, { tenantId: A, planId });
+    expect(job?.expectedTakeTexts).toEqual(["Come back.", "Keep it close."]);
+    expect(job?.alignmentReason).toBeUndefined();
+    expect(
+      await t.query(internal.render.renderReel.captionsToBurn, { tenantId: B, planId }),
+    ).toBeNull();
+  });
+
+  test("an edited current deck cannot supply new alignment text for old paid audio", async () => {
+    const t = harness(),
+      { planId } = await seedCaptions(t);
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      await ctx.db.patch(planId, {
+        shots: plan?.shots?.map((shot) =>
+          shot.index === 0 ? { ...shot, narration: "Altered private narration" } : shot,
+        ),
+      });
+    });
+    const job = await t.query(internal.render.renderReel.captionsToBurn, { tenantId: A, planId });
+    expect(job?.alignmentReason).toBe("caption_script_binding_failed");
+    expect(job?.expectedTakeTexts).toBeUndefined();
+  });
+
+  test("voice rows in another batch cannot prove the STT batch's script binding", async () => {
+    const t = harness(),
+      { planId, batchId } = await seedCaptions(t);
+    await t.run(async (ctx) => {
+      const rows = await ctx.db
+        .query("mediaJobs")
+        .withIndex("by_batch", (q) => q.eq("tenantId", A).eq("batchId", batchId))
+        .collect();
+      for (const row of rows.filter((row) => row.kind === "tts"))
+        await ctx.db.patch(row._id, { batchId: "unrelated_batch" });
+    });
+    const job = await t.query(internal.render.renderReel.captionsToBurn, { tenantId: A, planId });
+    expect(job?.alignmentReason).toBe("caption_script_binding_failed");
+  });
+
+  test("exact transcript mismatch reaches an explicit degraded terminal before any render request", async () => {
+    const t = harness(),
+      { planId, batchId } = await seedCaptions(t, true);
+    stubRenderEnv();
+    const request = vi.fn();
+    vi.stubGlobal("fetch", request);
+    const outcome = await t.action(internal.render.renderReel.burnCaptions, {
+      tenantId: A,
+      planId,
+    });
+    expect(outcome).toEqual({ ok: false, reason: "caption_expected_text_mismatch" });
+    expectNoOwnedRenderPost(request, batchId);
+    const plan = await planRow(t, planId);
+    expect(plan?.renderStatus).toBe("rendered");
+    expect(plan?.captionStatus).toBe("failed");
+    expect(plan?.captionReason).toBe("caption_expected_text_mismatch");
+    expect(JSON.stringify(await deadLetters(t))).not.toContain("Come back");
+  });
 });
 
 function stubRenderEnv() {
@@ -93,7 +282,7 @@ async function seedMidRender(
   } = {},
 ) {
   const blocks = 2;
-  const batchId = "batch_render";
+  const batchId = crypto.randomUUID();
   const planId = await t.run(
     async (ctx) =>
       await ctx.db.insert("plans", {
@@ -157,6 +346,310 @@ async function seedMidRender(
 
 const planRow = (t: T, planId: Id<"plans">) => t.run(async (ctx) => await ctx.db.get(planId));
 const deadLetters = (t: T) => t.run(async (ctx) => await ctx.db.query("deadLetters").collect());
+
+describe("explicit native audio rendering and captions", () => {
+  async function seedNative(t: T, mismatch = false) {
+    const seeded = await seedMidRender(t, {
+      planPatch: { mediaAudioMode: "native" },
+      deckOverrides: {
+        0: { visual: "generated_video", narration: "Come back." },
+        1: { visual: "generated_video", narration: "Keep it close." },
+      },
+    });
+    return await t.run(async (ctx) => {
+      const rows = await ctx.db.query("mediaJobs").collect();
+      for (const row of rows) {
+        if (row.kind === "tts") await ctx.db.delete(row._id);
+        else if (row.spec.kind === "video")
+          await ctx.db.patch(row._id, {
+            spec: { ...row.spec, generateAudio: true },
+          });
+      }
+      const wav = new Uint8Array(pcm16ToWav(new Uint8Array(8 * 48000), 24000));
+      const nativeCaptionAudioHash = await contentHash(wav);
+      const nativeCaptionAudioStorageId = await ctx.storage.store(
+        new Blob([wav], { type: "audio/wav" }),
+      );
+      const renderStorageId = await ctx.storage.store(
+        new Blob(["native final"], { type: "video/mp4" }),
+      );
+      const sidecarStorageId = await ctx.storage.store(
+        new Blob(
+          [
+            JSON.stringify({
+              scene_count: 2,
+              target_duration_s: 8,
+              total_duration_s: 8,
+              actual_duration_s: 8,
+              gates: ["native_audio_at_scene_start"],
+              scenes: [0, 1].map((index) => ({
+                index,
+                start_s: index * 4,
+                duration_s: 4,
+                visual: "video",
+                lead_silence_s: 0,
+                speech_abs_s: index * 4,
+                speech_dur_s: 0,
+                overrun: false,
+              })),
+            }),
+          ],
+          { type: "application/json" },
+        ),
+      );
+      const words = [
+        { text: mismatch ? "Go" : "Come", start: 0.2, end: 0.6, type: "word" },
+        { text: "back", start: 0.7, end: 1, type: "word" },
+        { text: "Keep", start: 4.3, end: 4.6, type: "word" },
+        { text: "it", start: 4.7, end: 4.9, type: "word" },
+        { text: "close", start: 5, end: 5.5, type: "word" },
+      ];
+      const transcriptStorageId = await ctx.storage.store(
+        new Blob([JSON.stringify({ words })], { type: "application/json" }),
+      );
+      const sttId = await ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId: seeded.planId,
+        batchId: seeded.batchId,
+        blockIndex: -1,
+        kind: "stt",
+        provider: "openai",
+        model: "openai/whisper-1",
+        spec: { kind: "stt", audioMinutes: 8 / 60 },
+        status: "succeeded",
+        assetStorageId: transcriptStorageId,
+        promptHash: await contentHash("Come back.\nKeep it close."),
+        nativeAudioHash: nativeCaptionAudioHash,
+        estUsd: 0.006,
+        createdAt: T0 + 1,
+        updatedAt: T0 + 1,
+      });
+      await ctx.db.patch(seeded.planId, {
+        renderStatus: "rendered",
+        renderStorageId,
+        sidecarStorageId,
+        captionStatus: "pending",
+        captionOffsetsS: [0],
+        nativeCaptionAudioStorageId,
+        nativeCaptionAudioHash,
+        nativeCaptionBatchId: seeded.batchId,
+        nativeCaptionRenderStorageId: renderStorageId,
+      });
+      return { ...seeded, renderStorageId, nativeCaptionAudioHash, sttId };
+    });
+  }
+  test("new native plans render only native video inputs; legacy plans still require their TTS", async () => {
+    const t = harness(),
+      { batchId } = await seedNative(t);
+    const inputs = await t.query(internal.render.renderReel.batchToRender, {
+      tenantId: A,
+      batchId,
+    });
+    expect(inputs.ok).toBe(true);
+    if (!inputs.ok) return;
+    expect(inputs.value.nativeAudio).toBe(true);
+    expect(inputs.value.inputs.map((input) => input.name)).toEqual(["block01.mp4", "block02.mp4"]);
+    expect(inputs.value.music).toBeUndefined();
+    expect(
+      await t.mutation(internal.render.renderReel.markRendering, {
+        planId: inputs.value.planId,
+        batchId,
+      }),
+    ).toBeNull();
+    expect((await planRow(t, inputs.value.planId))?.renderStatus).toBe("rendering");
+    const other = harness(),
+      legacy = await seedMidRender(other);
+    const old = await other.query(internal.render.renderReel.batchToRender, {
+      tenantId: A,
+      batchId: legacy.batchId,
+    });
+    expect(old.ok).toBe(true);
+    if (old.ok)
+      expect(old.value.inputs.filter((input) => input.name.startsWith("voice"))).toHaveLength(2);
+  });
+  test("a native plan refuses a clip reserved without native audio", async () => {
+    const t = harness(),
+      { batchId } = await seedNative(t);
+    await t.run(async (ctx) => {
+      const row = (await ctx.db.query("mediaJobs").collect()).find((job) => job.kind === "video");
+      if (row?.spec.kind !== "video") throw new Error("Missing native fixture");
+      await ctx.db.patch(row._id, { spec: { ...row.spec, generateAudio: false } });
+    });
+    expect(
+      await t.query(internal.render.renderReel.batchToRender, { tenantId: A, batchId }),
+    ).toEqual({ ok: false, reason: "stale_inputs" });
+  });
+  test("native captions bind the reviewed script, final, batch and actual audio fingerprint", async () => {
+    const t = harness(),
+      { planId, sttId } = await seedNative(t);
+    const bound = await t.query(internal.render.renderReel.captionsToBurn, { tenantId: A, planId });
+    expect(bound?.nativeAudio).toBe(true);
+    expect(bound?.expectedTakeTexts).toEqual(["Come back.\nKeep it close."]);
+    await t.run((ctx) => ctx.db.patch(sttId, { nativeAudioHash: "0".repeat(64) }));
+    expect(
+      (await t.query(internal.render.renderReel.captionsToBurn, { tenantId: A, planId }))
+        ?.alignmentReason,
+    ).toBe("caption_native_source_binding_failed");
+  });
+  test("an invented native word refuses checked captions and preserves the uncaptioned video", async () => {
+    const t = harness(),
+      { planId, renderStorageId, batchId } = await seedNative(t, true);
+    stubRenderEnv();
+    const request = vi.fn();
+    vi.stubGlobal("fetch", request);
+    expect(
+      await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId }),
+    ).toEqual({ ok: false, reason: "caption_expected_text_mismatch" });
+    expectNoOwnedRenderPost(request, batchId);
+    const plan = await planRow(t, planId);
+    expect(plan?.renderStorageId).toBe(renderStorageId);
+    expect(plan?.captionStatus).toBe("failed");
+  });
+  test("matching native speech captions the final with its actual timeline", async () => {
+    const t = harness(),
+      { planId, renderStorageId } = await seedNative(t);
+    stubRenderEnv();
+    const captioned = await t.run((ctx) =>
+      ctx.storage.store(new Blob(["captioned native"], { type: "video/mp4" })),
+    );
+    vi.stubEnv(
+      "MEDIA_SANDBOX_FIXTURE",
+      JSON.stringify({ ok: true, mp4StorageId: captioned, renderMs: 10 }),
+    );
+    expect(
+      await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId }),
+    ).toEqual({ ok: true });
+    const plan = await planRow(t, planId);
+    expect(plan?.captionStatus).toBe("captioned");
+    expect(plan?.renderStorageId).toBe(captioned);
+    expect(plan?.renderStorageId).not.toBe(renderStorageId);
+  });
+  test("a late native caption burn cannot overwrite a newer final", async () => {
+    const t = harness(),
+      { planId, batchId, renderStorageId, nativeCaptionAudioHash } = await seedNative(t);
+    const newer = await t.run((ctx) =>
+      ctx.storage.store(new Blob(["newer final"], { type: "video/mp4" })),
+    );
+    await t.run((ctx) => ctx.db.patch(planId, { renderStorageId: newer }));
+    await t.mutation(internal.render.renderReel.recordCaptionBurn, {
+      tenantId: A,
+      planId,
+      batchId,
+      nativeRenderStorageId: renderStorageId,
+      nativeAudioHash: nativeCaptionAudioHash,
+      result: { ok: true, captionedStorageId: renderStorageId, renderMs: 1 },
+    });
+    expect((await planRow(t, planId))?.renderStorageId).toBe(newer);
+  });
+  test("a partial native retry reuses the other scene's older successful clip", async () => {
+    const t = harness(),
+      { planId, batchId } = await seedNative(t);
+    await t.run(async (ctx) => {
+      const selected = (await ctx.db.query("mediaJobs").collect()).find(
+        (row) => row.kind === "video" && row.blockIndex === 0,
+      );
+      if (!selected) throw new Error("Missing scene fixture");
+      await ctx.db.patch(selected._id, { batchId: "native_partial", createdAt: T0 + 2 });
+    });
+    const result = await t.query(internal.render.renderReel.batchToRender, {
+      tenantId: A,
+      batchId: "native_partial",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.planId).toBe(planId);
+    expect(result.value.inputs).toHaveLength(2);
+    const batches = await t.run(
+      async (ctx) =>
+        await Promise.all(
+          result.value.inputs.map(
+            async (input) => (await ctx.db.get(input.jobId as Id<"mediaJobs">))?.batchId,
+          ),
+        ),
+    );
+    expect(new Set(batches)).toEqual(new Set(["native_partial", batchId]));
+  });
+  test("an older native render cannot replace a newer reservation and cleans only its unattached uploads", async () => {
+    const t = harness(),
+      { planId, batchId, renderStorageId } = await seedNative(t);
+    const uploads = await t.run(async (ctx) => {
+      await ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId,
+        batchId: "newer_native",
+        blockIndex: -1,
+        kind: "stt",
+        provider: "openai",
+        model: "openai/whisper-1",
+        spec: { kind: "stt", audioMinutes: 1 },
+        status: "queued",
+        promptHash: "0".repeat(64),
+        estUsd: 0.006,
+        createdAt: T0 + 2,
+        updatedAt: T0 + 2,
+      });
+      return await Promise.all(
+        ["old video", "old sidecar", "old audio"].map((text) =>
+          ctx.storage.store(new Blob([text])),
+        ),
+      );
+    });
+    const [oldVideo, oldSidecar, oldAudio] = uploads;
+    if (!oldVideo || !oldSidecar || !oldAudio) throw new Error("Missing upload fixtures");
+    expect(await t.mutation(internal.render.renderReel.markRendering, { planId, batchId })).toBe(
+      false,
+    );
+    expect((await planRow(t, planId))?.renderStatus).toBe("rendered");
+    await t.mutation(internal.render.renderReel.recordRender, {
+      tenantId: A,
+      planId,
+      batchId,
+      result: {
+        ok: true,
+        renderStorageId: oldVideo,
+        sidecarStorageId: oldSidecar,
+        nativeAudioStorageId: oldAudio,
+        nativeAudioHash: "0".repeat(64),
+        sidecarHash: "0".repeat(64),
+        sceneCount: 2,
+        renderMs: 1,
+        gatesPassed: 1,
+        summary: { durationS: 8, sceneCount: 2, gates: [] },
+      },
+    });
+    expect((await planRow(t, planId))?.renderStorageId).toBe(renderStorageId);
+    await t.run(async (ctx) => {
+      for (const id of uploads) expect(await ctx.storage.get(id)).toBeNull();
+      expect(await ctx.storage.get(renderStorageId)).not.toBeNull();
+    });
+  });
+  test("a known partial native upload is cleaned without deleting the live held final", async () => {
+    const t = harness(),
+      { planId, batchId, renderStorageId } = await seedNative(t);
+    const dangling = await t.run((ctx) => ctx.storage.store(new Blob(["unattached native PCM"])));
+    const held = await planRow(t, planId);
+    if (!held?.sidecarStorageId || !held.nativeCaptionAudioStorageId)
+      throw new Error("Missing held native artifacts");
+    await t.mutation(internal.render.renderReel.recordRender, {
+      tenantId: A,
+      planId,
+      batchId,
+      result: {
+        ok: false,
+        reason: "upload_failed",
+        partialStorageIds: [dangling, held.sidecarStorageId, held.nativeCaptionAudioStorageId],
+      },
+    });
+    await t.run(async (ctx) => {
+      expect(await ctx.storage.get(dangling)).toBeNull();
+      expect(await ctx.storage.get(renderStorageId)).not.toBeNull();
+      expect(await ctx.storage.get(held.sidecarStorageId as Id<"_storage">)).not.toBeNull();
+      const plan = await ctx.db.get(planId);
+      if (!plan?.nativeCaptionAudioStorageId) throw new Error("Missing held native source");
+      expect(await ctx.storage.get(plan.nativeCaptionAudioStorageId)).not.toBeNull();
+    });
+  });
+});
 
 // ── D1: every batchToRender refusal class ends at renderStatus "failed" + its OWN reason ────────
 
@@ -340,7 +833,7 @@ describe("D1: a batchToRender refusal writes a failed terminal + dead letter, ne
       batchId,
     });
     expect(out).toEqual({ ok: false, reason });
-    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expectNoOwnedRenderPost(fetchMock, batchId);
 
     // The terminal the canvas and retryRender can act on — never eternal "assembling".
     const plan = await planRow(t, planId);
@@ -581,10 +1074,15 @@ describe("33.1-06: the music bed is optional — shipped when landed, silently a
       const storageId = landed
         ? await ctx.storage.store(new Blob([new Uint8Array([9, 9, 9])], { type: "audio/mpeg" }))
         : undefined;
+      const source = await ctx.db
+        .query("mediaJobs")
+        .withIndex("by_plan_created", (q) => q.eq("tenantId", A).eq("planId", planId))
+        .first();
+      if (!source) throw new Error("Missing bed fixture batch");
       return ctx.db.insert("mediaJobs", {
         tenantId: A,
         planId,
-        batchId: "batch_render",
+        batchId: source.batchId,
         blockIndex: MUSIC_BLOCK_INDEX,
         provider: "stock",
         kind: "audio",

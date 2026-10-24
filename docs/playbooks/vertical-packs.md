@@ -1,3 +1,11 @@
+> Last verified: 2026-10-24 — Regenerate the current vertical source fingerprint after integrating main c765168d. The 40 cases across six lanes remain byte-equivalent and no historical qualification is relabeled or replayed.
+
+> Combined-source checkpoint: 2026-10-24 — Recompute vertical fingerprints after combining native media/batch approval and direct-social lifecycle sources, preserving all forty cases, six lanes and historical receipts. Dated source pins and offline checks below describe their original candidates; they do not qualify this merged source, activate a pack or establish deployment.
+
+> Last verified: 2026-10-22 — The explicit root declaration of existing Node 26.1.1 types and corrected schema comment index change shared source inputs. Regenerated vertical source revision is `ace853904b28c76f71615cdf79fac15254c9981bc0cb3cd8dc4c95685efe09df`, with all 40 cases and six lanes unchanged. Golden separately fingerprints the caption repair. These mechanical source identities do not qualify any pack or change historical receipts, consent, registry state or provider authorization.
+
+> Last verified: 2026-10-22 — Integrated main PR82 read-only transport repair into the isolated Phase 53 branch while retaining both documentation histories. Refreshed current golden and vertical source identities after Office/media formatting and workspace changes, including the unchanged provider-body extraction into core; the 46 golden and 40 vertical cases/hashes and historical receipts remain unchanged. The separately approved five-dollar operator experiment is not a golden/vertical attempt, skill qualification, release or activation.
+
 > Integrated source checkpoint 2026-10-24: Refreshed evaluator identities after combining the current production fixtures/accounting controls with the direct-social lifecycle/readiness fixes. Official golden manifest generation and offline self-check plus vertical corpus generation/check passed. The production fixture corpus/hash is preserved; no paid evaluation, skill activation or public-provider qualification is implied. Full final-candidate CI remains the merge gate.
 
 > Existing-resource checkpoint 2026-10-23: Owner-account feature verification remains the active path. Dedicated reviewer onboarding and additional provider setup are deferred; no model calls or model charges were incurred. The Resend review key and sender remain verified on the isolated backend, with all publication switches off. Corrected only social tool descriptions to satisfy the existing inline-prompt guard, retaining untrusted-data boundaries, YouTube agent-read restrictions, customer destination/media requirements and human publication choices. Executable tool logic is unchanged. Evaluator source pins/manifests were refreshed and official offline golden self-check plus vertical corpus checks passed; no paid evaluation or skill activation occurred. No optional registry bootstrap change remains.
@@ -25,6 +33,8 @@
 > Last verified: 2026-10-19 — Regenerated native evaluator pins after Buffer changed shared runtime/schema sources; its source inventory now includes the Buffer modules and reused envelope contract. The six-lane, forty-case corpus is unchanged. Old exact-source evidence is retired; no live evaluation, semantic pass or activation is claimed.
 
 > Last verified: 2026-10-17 — regenerated the native evaluator fingerprint after generated-file lifecycle ownership changed. The six-lane, 40-case corpus and source fixtures are unchanged. Offline fingerprint checks are not new live qualification.
+
+> Last verified: 2026-10-24 — Refreshed shared-source vertical fingerprints after native media/batch approval integration, preserving all40 cases, six lanes and historical receipts. This is mechanical source retirement, not a paid evaluation, pack qualification, registry activation or release. Final source identity is recorded with Phase53 integration verification.
 
 # Optional vertical packs
 
@@ -372,3 +382,5 @@ Actual complete six-lane semantic reviews, responsive UAT and release/rollback d
 offline SDK transport shims and authorization tests are implementation verification only.
 
 Last verified: 2026-10-15 — Native evaluator source identity now includes paid model admission, erased-identity admission and shared JWT lifetime. Regenerated the six-lane, 40-case pins after runtime changes. The case corpus is unchanged; prior evaluator evidence is retired. Offline pin checks pass, with no new live/provider evaluation claimed.
+
+> Last verified: 2026-10-24 — Regenerated current source fingerprints after native product-reference integration; all 40 cases across six lanes remain unchanged. No paid evaluation replay.
