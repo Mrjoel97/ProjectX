@@ -379,7 +379,10 @@ describe("25-06: no second OAuth surface exists, and mail readiness is derived n
     // counters and redirects to trusted Vault bytes. It is not another OAuth callback.
     // ADR-058 adds one tenant-bound Buffer OAuth callback, separate from Microsoft.
     // ADR-060 adds POST and OPTIONS for one-use Zernio credential intake, not OAuth callbacks.
-    expect(routes).toBe(17);
+    // ADR-061 adds three declarations inside the fixed four-provider loop: callback GET and webhook GET/POST.
+    // These register twelve native routes and do not add a second Microsoft callback.
+    expect(routes).toBe(20);
+    expect(httpSource).toContain("for (const provider of SOCIAL_PROVIDERS)");
     expect(httpSource.match(/path:\s*"\/zernio\/connect"/g)).toHaveLength(2);
     expect(httpSource.match(/path:\s*"\/buffer\/callback"/g)).toHaveLength(1);
     expect(httpSource.match(/path:\s*"\/uploads"/g)).toHaveLength(2);

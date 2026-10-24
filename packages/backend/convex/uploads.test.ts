@@ -204,3 +204,38 @@ test("expired tickets and unbound completed uploads are purged, bound bytes surv
   expect(await t.mutation(internal.uploads.purgeExpired, {})).toBe(1);
   expect(await t.run((ctx) => ctx.db.system.query("_storage").collect())).toHaveLength(1);
 });
+
+test("upload forwarding failures log only a closed code and fixed phase, never raw errors", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await t.run((ctx) => ctx.db.insert("users", {}));
+  const url = new URL(
+    await t.withIdentity({ subject: String(userId) }).mutation(api.requests.generateUploadUrl, {}),
+  );
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      throw new Error(
+        "UPLOAD_FAILED secret=https://storage.example/upload?ticket=private-synthetic-ticket",
+      );
+    }),
+  );
+  try {
+    const response = await t.fetch(url.pathname + url.search, {
+      method: "POST",
+      headers: { Origin: "https://app.example.com", "Content-Type": "video/mp4" },
+      body: "synthetic-video",
+    });
+    expect(response.status).toBe(400);
+    expect(warning).toHaveBeenCalledWith("UPLOAD_INTERNAL_FAILURE", { phase: "forward" });
+    expect(JSON.stringify(warning.mock.calls)).not.toMatch(
+      /private-synthetic-ticket|https:|storage.example/,
+    );
+    expect(await response.text()).not.toMatch(/private-synthetic-ticket|https:|storage.example/);
+    expect((await t.run((ctx) => ctx.db.query("uploadReceipts").collect()))[0]?.state).toBe(
+      "uploading",
+    );
+  } finally {
+    warning.mockRestore();
+  }
+});

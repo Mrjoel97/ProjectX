@@ -1,3 +1,5 @@
+> Last verified: 2026-10-22 — /connect-social provides customer-selected Meta/TikTok/YouTube assets, bounded reads and human-approved draft/publication orchestration. Expanded isolated test grants and one approved private YouTube upload are verified; all publishing gates are off again. X is deferred. Buffer and Zernio remain separate. [social-connections.md](social-connections.md) owns current evidence and platform-review gates; this does not establish public customer availability.
+
 > Last verified: 2026-10-19 — Marketing mounts optional Zernio Instagram/TikTok reporting beside Buffer publishing, with explicit selection/daily consent, lifetime publication-window labels, unavailable metrics and stale-report retention.
 
 > Last verified: 2026-10-19 — Buffer uses registered app OAuth and its fixed GraphQL API for account/channel reads and approved publishing. Engagement controls and daily opt-ins are disabled because Buffer rejects insights and MCP access for third-party app clients. Existing saved metrics remain historical; no reconnect or personal-key workaround is offered.

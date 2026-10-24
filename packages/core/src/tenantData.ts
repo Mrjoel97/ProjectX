@@ -57,6 +57,10 @@ export const TENANT_TABLE_CLASSIFICATION = {
   telemetry: "tenant_owned",
   notifications: "tenant_owned",
   gmailTokens: "tenant_credential",
+  socialWebhookReceipts: "global", // Last app delivery timestamp/hash only; no user ids, tokens or event content.
+  socialConnections: "tenant_credential",
+  socialPosts: "tenant_owned",
+  socialOAuthStates: "tenant_credential",
   bufferConnections: "tenant_credential",
   zernioConnections: "tenant_credential",
   zernioReports: "tenant_owned",
@@ -313,6 +317,7 @@ export function deletableTables(): readonly DeletableTenantTable[] {
  */
 export const STORAGE_ID_FIELDS = {
   uploadReceipts: ["storageId"],
+  socialPosts: ["storageId"],
   plans: ["renderStorageId", "sidecarStorageId", "attachments[].storageId"],
   attachments: ["storageId"],
   intakeArtifacts: ["storageId"],

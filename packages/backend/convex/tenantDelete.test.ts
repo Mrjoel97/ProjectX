@@ -1,6 +1,7 @@
 import workpoolTest from "@convex-dev/workpool/test";
 import { emptyFoundationProfile } from "@pikar/core/foundation";
 import { deletableTables, type TenantDeletionCursor } from "@pikar/core/tenantData";
+import { importCredentialKey, sealCredential } from "@pikar/revenue";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -34,7 +35,15 @@ const deleteTenantDataPage = makeFunctionReference<
   }
 >("tenantDelete:deleteTenantDataPage");
 type ProviderResult = {
-  provider: "google" | "microsoft" | "billing" | "hubspot" | "quickbooks" | "stripe" | "paypal";
+  provider:
+    | "google"
+    | "microsoft"
+    | "billing"
+    | "hubspot"
+    | "quickbooks"
+    | "stripe"
+    | "paypal"
+    | "youtube";
   localRowDeleted: boolean;
   revokedAtProvider: boolean;
   failure: boolean;
@@ -1449,4 +1458,60 @@ test("foundation transcript and revision content is erased without touching anot
     expect(rows).toHaveLength(1);
     expect(rows[0]?.tenantId).toBe(String(tenantB));
   }
+});
+
+test.each([
+  200, 400,
+])("tenant erasure attempts YouTube project revocation before deleting its sealed grant (HTTP %s)", async (status) => {
+  const { t, tenantA, tenantB } = await seedTwoTenants();
+  const key = btoa("k".repeat(32));
+  vi.stubEnv("CONNECTOR_CREDENTIAL_KEY_V1", key);
+  const sealed = await sealCredential(
+    await importCredentialKey(key, "v1"),
+    {
+      tenantId: String(tenantA),
+      provider: "youtube",
+      connectionId: "erased-grant",
+      environment: "production",
+    },
+    JSON.stringify({ accessToken: "synthetic-access", refreshToken: "synthetic-refresh" }),
+  );
+  await t.run((ctx) =>
+    ctx.db.insert("socialConnections", {
+      tenantId: String(tenantA),
+      provider: "youtube",
+      connectionId: "erased-grant",
+      accountIdHash: "synthetic-hash",
+      accountName: "Synthetic channel",
+      keyVersion: "v1",
+      ciphertextB64: sealed.ciphertextB64,
+      ivB64: sealed.ivB64,
+      scopes: [],
+      expiresAt: Date.now() + 3600000,
+      revision: 1,
+      updatedAt: Date.now(),
+      status: "connected",
+    }),
+  );
+  const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    expect(String(url)).toBe("https://oauth2.googleapis.com/revoke");
+    expect(String(init?.body)).toBe("token=synthetic-refresh");
+    return new Response(null, { status });
+  });
+  vi.stubGlobal("fetch", fetcher);
+  const result = await t
+    .withIdentity({ subject: tenantA + "|delete-session" })
+    .action(deleteTenantData, { confirmation: "DELETE MY DATA" });
+  expect(result.providers.find((provider) => provider.provider === "youtube")).toEqual({
+    provider: "youtube",
+    localRowDeleted: true,
+    revokedAtProvider: status === 200,
+    failure: status !== 200,
+    revokeUpstream: status === 200 ? "confirmed" : "attempted_failed",
+  });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(await t.run((ctx) => ctx.db.get(tenantA))).toBeNull();
+  expect(await t.run((ctx) => ctx.db.get(tenantB))).not.toBeNull();
+  expect(JSON.stringify(result)).not.toMatch(/synthetic-access|synthetic-refresh|ciphertextB64/);
+  vi.unstubAllEnvs();
 });

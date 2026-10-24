@@ -230,6 +230,13 @@ const CONVEX_MODULES = [
   "skills.ts",
   "smoke.ts",
   "smokeAssert.ts",
+  "social.ts",
+  "socialActions.ts",
+  "socialContentActions.ts",
+  "socialMedia.ts",
+  "socialPublishing.ts",
+  "socialTools.ts",
+  "socialWebhooks.ts",
   "spendLedger.ts",
   "stripeAuth.ts",
   "stripeConnector.ts",
@@ -313,6 +320,8 @@ const SCHEDULER_CALL_SITES = [
   "researchControl.ts",
   "review.ts",
   "smoke.ts",
+  // Explicit customer approval schedules one immutable native social post; no recurrence.
+  "socialPublishing.ts",
   "vault.ts",
   "vaultDrive.ts",
   "vaultFolders.ts",
@@ -419,6 +428,7 @@ describe("the scheduling primitives have a CLOSED, PINNED call-site set", () => 
       // Owner-authorized, selected-channel reporting; it never approves or repeats posts.
       "buffer-engagement-reports",
       "zernio-engagement-reports",
+      "social-oauth-retention",
     ]);
   });
 });

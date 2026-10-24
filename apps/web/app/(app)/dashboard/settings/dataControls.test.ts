@@ -8,7 +8,8 @@ import { describe, expect, test, vi } from "vitest";
 import { DataControls } from "./DataControls";
 
 const query = vi.hoisted(() => vi.fn());
-vi.mock("convex/react", () => ({ useConvex: () => ({ query }) }));
+const action = vi.hoisted(() => vi.fn());
+vi.mock("convex/react", () => ({ useConvex: () => ({ query, action }) }));
 
 const read = (relative: string) =>
   readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");
@@ -183,6 +184,55 @@ test("download retains files across same-table and later-table pages, including 
     await act(async () => root.unmount());
     container.remove();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});
+
+test("erasure warns about project-wide Google revocation and reports each social provider correctly", async () => {
+  action.mockReset();
+  action.mockResolvedValueOnce({
+    deletedByTable: { socialConnections: 2 },
+    providers: [
+      { provider: "youtube", localRowDeleted: true, revokedAtProvider: false, failure: false },
+      { provider: "meta", localRowDeleted: true, revokedAtProvider: false, failure: false },
+    ],
+  });
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(createElement(DataControls)));
+    expect(container.textContent).toContain(
+      "Revoking Google or YouTube access revokes all access this Google project has",
+    );
+    expect(container.textContent).toContain("including other integrations using the project");
+    const erase = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Delete my data",
+    )!;
+    expect(erase.disabled).toBe(true);
+    const confirmation = container.querySelector("#erase-confirm")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+        confirmation,
+        "DELETE MY DATA",
+      );
+      confirmation.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => erase.click());
+    expect(action.mock.calls[0]?.[1]).toEqual({ confirmation: "DELETE MY DATA" });
+    const outcomes = [...container.querySelectorAll("li")];
+    expect(outcomes[0].textContent).toContain("YouTube:");
+    expect(outcomes[0].querySelector("a")?.getAttribute("href")).toBe(
+      "https://myaccount.google.com/permissions",
+    );
+    expect(outcomes[1].textContent).toContain("Meta:");
+    expect(outcomes[1].textContent).toContain("platform's connected-app settings");
+    expect(outcomes[1].querySelector("a")).toBeNull();
+    expect(container.textContent).not.toContain("Microsoft:");
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
     vi.unstubAllGlobals();
   }
 });

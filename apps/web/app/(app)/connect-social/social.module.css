@@ -1,0 +1,81 @@
+.workspace {
+  display: grid;
+  gap: 16px;
+  color: var(--ink);
+}
+.workspace p {
+  color: var(--ink-soft);
+  line-height: 1.6;
+  margin: 0;
+}
+.workspace h3 {
+  margin: 8px 0 0;
+  font-size: 1.05rem;
+}
+.workspace h4 {
+  margin: 0 0 8px;
+}
+.workspace label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+}
+.workspace select,
+.workspace textarea,
+.workspace input:not([type="checkbox"]) {
+  min-height: 44px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--card);
+  font: inherit;
+}
+.workspace input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--teal-900);
+}
+.workspace textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+.workspace button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.workspace button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.workspace :is(button, select, textarea, input):focus-visible {
+  outline: 2px solid var(--teal-900);
+  outline-offset: 3px;
+}
+.composer {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  background: var(--canvas);
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+}
+.review {
+  display: grid;
+  gap: 12px;
+  background: var(--card);
+}
+.review button:first-of-type:not(:disabled) {
+  background: var(--teal-900);
+  color: var(--card);
+}

@@ -241,6 +241,8 @@ test("executive via runAgentLoop, lineage present", () => {
     "readBufferChannels",
     "readBufferEngagement",
     "readFinance",
+    "readSocialAccounts",
+    "readSocialContent",
     "readZernioEngagement",
     "recordScorecardAnswer",
     "regenerateAttachment",
@@ -258,6 +260,7 @@ test("executive via runAgentLoop, lineage present", () => {
     "stageCrmWrite",
     "stageFinanceWrite",
     "stageInvoiceReminder",
+    "stageSocialPost",
   ]);
 });
 
@@ -326,6 +329,8 @@ test("executive continue turn (omitRecipientEdits)", () => {
     "readBufferChannels",
     "readBufferEngagement",
     "readFinance",
+    "readSocialAccounts",
+    "readSocialContent",
     "readZernioEngagement",
     "recordScorecardAnswer",
     "regenerateAttachment",
@@ -341,6 +346,7 @@ test("executive continue turn (omitRecipientEdits)", () => {
     "stageCrmWrite",
     "stageFinanceWrite",
     "stageInvoiceReminder",
+    "stageSocialPost",
   ]);
 });
 
@@ -364,6 +370,8 @@ test("executive, gmail disabled", () => {
     "readBufferChannels",
     "readBufferEngagement",
     "readFinance",
+    "readSocialAccounts",
+    "readSocialContent",
     "readZernioEngagement",
     "recordScorecardAnswer",
     "searchVault",
@@ -371,6 +379,7 @@ test("executive, gmail disabled", () => {
     "stageCrmWrite",
     "stageFinanceWrite",
     "stageInvoiceReminder",
+    "stageSocialPost",
   ]);
 });
 
@@ -1020,6 +1029,8 @@ test("SMOKE direct video path", () => {
     "readBufferChannels",
     "readBufferEngagement",
     "readFinance",
+    "readSocialAccounts",
+    "readSocialContent",
     "readZernioEngagement",
     "recordScorecardAnswer",
     "regenerateAttachment",
@@ -1036,6 +1047,7 @@ test("SMOKE direct video path", () => {
     "stageBufferPost",
     "stageCrmWrite",
     "stageFinanceWrite",
+    "stageSocialPost",
   ]);
 });
 
