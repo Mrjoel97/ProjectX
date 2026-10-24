@@ -79,6 +79,18 @@ async function open(
   );
 }
 function callbackUrl(provider: SocialProvider) {
+  if (provider === "youtube" && process.env.YOUTUBE_OAUTH_REDIRECT_URI !== undefined) {
+    // Only this owned production callback is permitted. The default isolated Convex
+    // callback remains unchanged when the override is absent; blank is a refusal.
+    const redirect = process.env.YOUTUBE_OAUTH_REDIRECT_URI;
+    const site = process.env.SITE_URL;
+    if (
+      redirect !== "https://www.pikar-ai.com/social/youtube/callback" ||
+      (site !== "https://www.pikar-ai.com" && site !== "https://www.pikar-ai.com/")
+    )
+      throw new Error("SOCIAL_NOT_CONFIGURED");
+    return redirect;
+  }
   const origin = new URL(process.env.CONVEX_SITE_URL ?? "");
   if (
     origin.protocol !== "https:" ||

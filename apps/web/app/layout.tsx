@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://pikar-ai.com"),
   title: { default: "Pikar AI", template: "%s" },
   description: "Governed agentic AI operating layer",
+  verification: { google: "kaMoPf-oKXQgk1kbCkQkIlqHDmRuSJlFyj-T504HlD8" },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
