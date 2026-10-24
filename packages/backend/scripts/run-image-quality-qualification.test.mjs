@@ -7,8 +7,130 @@ import {
   inspectQualificationLedger,
   main,
   qualificationManifest,
+  reconcileQualificationBilling,
   runImageQualification,
 } from "./run-image-quality-qualification.mjs";
+
+function unresolvedSttLedger() {
+  const files = fixture();
+  const approvalRef = "phase53-owner-2026-10-22-five-usd-testing";
+  const receipt = {
+    event: "request_unresolved",
+    approvalRef,
+    attemptId: "stt",
+    kind: "stt",
+    requestId: "captions",
+    failure: "stt_words_missing",
+    generationId: "gen-stt-known",
+    requestedModel: "openai/whisper-1",
+    costUsd: 0.0056,
+  };
+  writeFileSync(
+    files.ledger,
+    `${[{ event: "budget_opened", approvalRef, allowanceUsd: 5 }, { event: "request_started", approvalRef, attemptId: "stt" }, receipt].map(JSON.stringify).join("\n")}\n`,
+  );
+  return { ...files, receipt };
+}
+
+test("fresh trusted reconciliation appends once without double-counting or erasing failed output", async () => {
+  const files = unresolvedSttLedger(),
+    original = readFileSync(files.ledger, "utf8");
+  let gets = 0;
+  const options = {
+    ledger: files.ledger,
+    apiKey: "synthetic-credential",
+    fetchImpl: async (url, init) => {
+      gets++;
+      assert.equal(url, "https://openrouter.ai/api/v1/generation?id=gen-stt-known");
+      assert.equal(init.redirect, "error");
+      assert.equal(init.method, undefined);
+      return new Response(
+        JSON.stringify({
+          data: {
+            id: "gen-stt-known",
+            model: "openai/whisper-1",
+            total_cost: 0.0056,
+            is_byok: false,
+            cancelled: false,
+          },
+        }),
+      );
+    },
+  };
+  const result = await reconcileQualificationBilling(options);
+  assert.equal(result.status, "billing_reconciled_output_still_failed");
+  assert.equal(result.spentUsd, 0.0056);
+  assert.equal(result.unsettled, 0);
+  assert.ok(readFileSync(files.ledger, "utf8").startsWith(original));
+  assert.equal(inspectQualificationLedger(files.ledger).attempts, 1);
+  assert.equal((await reconcileQualificationBilling(options)).status, "already_reconciled");
+  assert.equal(gets, 1);
+});
+test("ledger refuses altered reconciliation proof and duplicate reconciliation without changing counts", async () => {
+  const files = unresolvedSttLedger();
+  await reconcileQualificationBilling({
+    ledger: files.ledger,
+    apiKey: "synthetic",
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          data: {
+            id: "gen-stt-known",
+            model: "openai/whisper-1",
+            total_cost: 0.0056,
+            is_byok: false,
+            cancelled: false,
+          },
+        }),
+      ),
+  });
+  const valid = readFileSync(files.ledger, "utf8"),
+    rows = valid.trim().split("\n").map(JSON.parse);
+  const proof = rows.at(-1);
+  writeFileSync(files.ledger, `${valid}${JSON.stringify(proof)}\n`);
+  assert.throws(() => inspectQualificationLedger(files.ledger), /ledger_invalid_reconciliation/);
+  proof.priorReceiptSha256 = "0".repeat(64);
+  writeFileSync(
+    files.ledger,
+    `${rows.slice(0, -1).map(JSON.stringify).join("\n")}\n${JSON.stringify(proof)}\n`,
+  );
+  assert.throws(() => inspectQualificationLedger(files.ledger), /ledger_invalid_reconciliation/);
+});
+for (const [name, patch] of [
+  ["wrong id", { id: "other" }],
+  ["wrong model", { model: "other" }],
+  ["changed charge", { total_cost: 0 }],
+  ["BYOK", { is_byok: true }],
+  ["cancelled", { cancelled: true }],
+  ["missing cost", { total_cost: undefined }],
+]) {
+  test(`billing reconciliation refuses ${name} without changing the original ledger`, async () => {
+    const files = unresolvedSttLedger(),
+      original = readFileSync(files.ledger, "utf8");
+    await assert.rejects(
+      reconcileQualificationBilling({
+        ledger: files.ledger,
+        apiKey: "synthetic",
+        fetchImpl: async () =>
+          new Response(
+            JSON.stringify({
+              data: {
+                id: "gen-stt-known",
+                model: "openai/whisper-1",
+                total_cost: 0.0056,
+                is_byok: false,
+                cancelled: false,
+                ...patch,
+              },
+            }),
+          ),
+      }),
+      /generation_billing_proof_mismatch/,
+    );
+    assert.equal(readFileSync(files.ledger, "utf8"), original);
+    assert.equal(inspectQualificationLedger(files.ledger).unsettled.length, 1);
+  });
+}
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const fixture = () => {

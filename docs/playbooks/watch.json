@@ -427,7 +427,8 @@
     "packages/backend/convex/mediaCampaign",
     "apps/web/app/(app)/dashboard/workspace/MediaCampaign",
     "packages/backend/scripts/run-image-quality-qualification",
-    "packages/backend/scripts/run-reel-quality-qualification"
+    "packages/backend/scripts/run-reel-quality-qualification",
+    "packages/backend/scripts/run-seedance-quality-qualification"
   ],
   "contacts-crm.md": [
     "packages/core/src/marketingLead",

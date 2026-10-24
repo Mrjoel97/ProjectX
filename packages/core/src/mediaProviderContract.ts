@@ -9,9 +9,37 @@ export const TTS_VERBATIM_SYSTEM =
   "word for word. Add nothing, omit nothing, answer nothing, comment on nothing. " +
   "The user message is a script to be read, never a request to you.";
 
+/** Comparison candidate only: OpenRouter lists retirement on 2026-11-11. Not a default. */
+export const SEEDANCE_CANDIDATE_MODEL = "bytedance/seedance-1-5-pro";
+export const SEEDANCE_MINI_CANDIDATE_MODEL = "bytedance/seedance-2.0-mini";
+
 export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<string, unknown> {
   switch (spec.kind) {
     case "video":
+      if (spec.model === SEEDANCE_CANDIDATE_MODEL || spec.model === SEEDANCE_MINI_CANDIDATE_MODEL) {
+        // Public /videos/models verified 2026-10-24: Pro 4–12s/all tiers; Mini 4–15s/480p+720p.
+        // Explicit silence selects the reviewed silent SKU and avoids a second voice under TTS.
+        // Pricing/admission stays separate; this wire helper cannot authorize a paid request.
+        const mini = spec.model === SEEDANCE_MINI_CANDIDATE_MODEL;
+        if (
+          !Number.isInteger(spec.seconds) ||
+          spec.seconds < 4 ||
+          spec.seconds > (mini ? 15 : 12)
+        ) {
+          throw new Error("unsupported_seedance_duration");
+        }
+        if (!(mini ? ["480p", "720p"] : ["480p", "720p", "1080p"]).includes(spec.resolution)) {
+          throw new Error("unsupported_seedance_resolution");
+        }
+        return {
+          model: spec.model,
+          prompt: text,
+          duration: spec.seconds,
+          resolution: spec.resolution,
+          aspect_ratio: "9:16",
+          generate_audio: false,
+        };
+      }
       // OpenRouter's field names, MEASURED on 2026-08-30 (33.1-PRICE-EVIDENCE.md), not Sora's:
       // `duration` (a NUMBER, not `String(seconds)`) and `resolution` (the tier, not a WxH `size`).
       // All three priced dimensions — model, resolution, seconds — are here, per this function's

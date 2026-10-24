@@ -110,9 +110,36 @@ export function inspectQualificationLedger(path) {
     );
     if (row.event === "request_started") {
       requireCondition(!attempts.has(row.attemptId), "ledger_duplicate_start");
-      attempts.set(row.attemptId, "started");
+      attempts.set(row.attemptId, { status: "started" });
+    } else if (row.event === "request_reconciled") {
+      const prior = attempts.get(row.attemptId);
+      requireCondition(
+        prior?.status === "unresolved" &&
+          prior.receipt.kind === "stt" &&
+          prior.receipt.failure === "stt_words_missing" &&
+          row.priorReceiptSha256 === hash(JSON.stringify(prior.receipt)) &&
+          row.generationId === prior.receipt.generationId &&
+          row.requestedModel === prior.receipt.requestedModel &&
+          row.costUsd === prior.receipt.costUsd &&
+          positive(row.costUsd) &&
+          row.billingProof?.id === row.generationId &&
+          row.billingProof.model === row.requestedModel &&
+          row.billingProof.total_cost === row.costUsd &&
+          row.billingProof.is_byok === false &&
+          row.billingProof.cancelled === false &&
+          row.authoritativeCostSource === "read_only_generation_total_cost" &&
+          typeof row.checkedAt === "string" &&
+          Number.isFinite(Date.parse(row.checkedAt)),
+        "ledger_invalid_reconciliation",
+      );
+      // The original known charge was already counted. This closes only billing uncertainty;
+      // the failed transcript/output receipt remains immutable and is never called successful.
+      attempts.set(row.attemptId, { status: "settled" });
     } else {
-      requireCondition(attempts.get(row.attemptId) === "started", "ledger_invalid_completion");
+      requireCondition(
+        attempts.get(row.attemptId)?.status === "started",
+        "ledger_invalid_completion",
+      );
       requireCondition(
         ["request_settled", "request_unresolved"].includes(row.event),
         "ledger_invalid_event",
@@ -121,14 +148,98 @@ export function inspectQualificationLedger(path) {
         requireCondition(positive(row.costUsd), "ledger_invalid_cost");
         spentUsd += row.costUsd;
       }
-      attempts.set(row.attemptId, row.event === "request_settled" ? "settled" : "unresolved");
+      attempts.set(row.attemptId, {
+        status: row.event === "request_settled" ? "settled" : "unresolved",
+        receipt: row,
+      });
     }
   }
   return {
     spentUsd,
-    unsettled: [...attempts].filter(([, status]) => status !== "settled").map(([id]) => id),
+    unsettled: [...attempts].filter(([, value]) => value.status !== "settled").map(([id]) => id),
     attempts: attempts.size,
   };
+}
+
+/** Narrow recovery for the preserved Phase53 STT output failure, using a fresh trusted GET.
+ * It never submits work, refunds a known charge, edits the original receipt, or retries STT. */
+export async function reconcileQualificationBilling({ ledger, apiKey, fetchImpl = fetch }) {
+  ledger = privatePath(ledger);
+  requireCondition(apiKey, "missing_qualification_key");
+  const lock = openSync(`${ledger}.lock`, "wx", 0o600);
+  try {
+    const state = inspectQualificationLedger(ledger);
+    const rows = readFileSync(ledger, "utf8").split("\n").filter(Boolean).map(JSON.parse);
+    if (state.unsettled.length === 0) {
+      requireCondition(
+        rows.some((r) => r.event === "request_reconciled"),
+        "no_reconciliation_needed",
+      );
+      return { status: "already_reconciled", spentUsd: state.spentUsd };
+    }
+    requireCondition(state.unsettled.length === 1, "ambiguous_unresolved_attempts");
+    const receipt = rows.find(
+      (r) => r.attemptId === state.unsettled[0] && r.event === "request_unresolved",
+    );
+    requireCondition(
+      receipt?.kind === "stt" &&
+        receipt.requestId === "captions" &&
+        receipt.failure === "stt_words_missing" &&
+        positive(receipt.costUsd) &&
+        typeof receipt.generationId === "string" &&
+        /^[A-Za-z0-9._-]+$/.test(receipt.generationId) &&
+        typeof receipt.requestedModel === "string" &&
+        receipt.requestedModel.length > 0,
+      "unsupported_reconciliation",
+    );
+    const response = await fetchImpl(
+      `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(receipt.generationId)}`,
+      {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        redirect: "error",
+        signal: AbortSignal.timeout(30_000),
+      },
+    );
+    requireCondition(response.ok, "generation_metadata_unavailable");
+    const data = (await response.json()).data;
+    requireCondition(
+      data?.id === receipt.generationId &&
+        data.model === receipt.requestedModel &&
+        positive(data.total_cost) &&
+        data.total_cost === receipt.costUsd &&
+        data.is_byok === false &&
+        data.cancelled === false,
+      "generation_billing_proof_mismatch",
+    );
+    appendReceipt(ledger, {
+      event: "request_reconciled",
+      approvalRef: APPROVAL,
+      attemptId: receipt.attemptId,
+      priorReceiptSha256: hash(JSON.stringify(receipt)),
+      generationId: receipt.generationId,
+      requestedModel: receipt.requestedModel,
+      costUsd: data.total_cost,
+      billingProof: {
+        id: data.id,
+        model: data.model,
+        total_cost: data.total_cost,
+        is_byok: false,
+        cancelled: false,
+      },
+      authoritativeCostSource: "read_only_generation_total_cost",
+      checkedAt: new Date().toISOString(),
+      outputFailure: receipt.failure,
+    });
+    const verified = inspectQualificationLedger(ledger);
+    return {
+      status: "billing_reconciled_output_still_failed",
+      spentUsd: verified.spentUsd,
+      unsettled: verified.unsettled.length,
+    };
+  } finally {
+    closeSync(lock);
+    unlinkSync(`${ledger}.lock`);
+  }
 }
 
 function parseUsage(body) {
