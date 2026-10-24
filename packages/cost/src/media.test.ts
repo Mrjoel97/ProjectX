@@ -59,10 +59,10 @@ describe("explicit native production keeps separate admission policies", () => {
     seconds,
     generateAudio: true,
   });
-  it("prices full30,45,60 second generated films without external TTS/music/stock", () => {
+  it("prices full15,30,45,60 second generated films without external TTS/music/stock", () => {
     expect(MEDIA_NATIVE_JOB_CAP_USD).toBe(15);
     expect(MEDIA_NATIVE_GENERATED_SECONDS_CAP).toBe(60);
-    for (const seconds of [30, 45, 60]) {
+    for (const seconds of [15, 30, 45, 60]) {
       const specs = [
         ...Array.from({ length: seconds / 5 }, () => nativeClip(5)),
         { kind: "render" } as const,
@@ -78,6 +78,22 @@ describe("explicit native production keeps separate admission policies", () => {
     ];
     const result = chooseMediaBatch(worst, 15, { audioMode: "native" });
     expect(result.ok && result.value.estUsd).toBeCloseTo(11.386, 10);
+  });
+  it("reserves a fifteen-second native test film with captions inside the remaining operator allowance", () => {
+    const result = chooseMediaBatch(
+      [
+        nativeClip(15),
+        { kind: "render" },
+        { kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes: 1 },
+      ],
+      MEDIA_NATIVE_JOB_CAP_USD,
+      { audioMode: "native" },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("fifteen-second native estimate refused");
+    expect(result.value.estUsd).toBeCloseTo(2.4652, 10);
+    expect(result.value.estCents).toBe(247);
+    expect(result.value.estUsd).toBeLessThan(2.8250132);
   });
   it("legacy absence and explicit separate retain12 generated seconds and3.50dollars", () => {
     for (const audioMode of [undefined, "separate"] as const) {

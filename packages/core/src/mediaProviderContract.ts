@@ -21,7 +21,38 @@ export const SEEDANCE_CANDIDATE_MODEL = "bytedance/seedance-1-5-pro";
 export const SEEDANCE_MINI_CANDIDATE_MODEL = "bytedance/seedance-2.0-mini";
 export const SEEDANCE_STANDARD_MODEL = "bytedance/seedance-2.0";
 
-export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<string, unknown> {
+export type VideoReferenceInputs = { imageReferences?: readonly { url: string }[] };
+
+/** File metadata can omit MIME. Confirm image signatures before any paid reference submission. */
+export function referenceImageHasExpectedType(bytes: Uint8Array, mimeType: string): boolean {
+  if (mimeType === "image/png")
+    return [137, 80, 78, 71, 13, 10, 26, 10].every((value, i) => bytes[i] === value);
+  if (mimeType === "image/jpeg") return bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+  if (mimeType === "image/webp")
+    return (
+      [82, 73, 70, 70].every((value, i) => bytes[i] === value) &&
+      [87, 69, 66, 80].every((value, i) => bytes[i + 8] === value)
+    );
+  return false;
+}
+
+export function buildSubmitBody(
+  spec: SubmittableSpec,
+  text: string,
+  inputs: VideoReferenceInputs = {},
+): Record<string, unknown> {
+  const references = inputs.imageReferences ?? [];
+  if (
+    references.length > 3 ||
+    (references.length > 0 &&
+      (spec.kind !== "video" || spec.model !== SEEDANCE_STANDARD_MODEL || !spec.generateAudio))
+  )
+    throw new Error("unsupported_video_references");
+  for (const { url } of references) {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password)
+      throw new Error("unsupported_video_reference_url");
+  }
   switch (spec.kind) {
     case "video":
       if (
@@ -50,6 +81,14 @@ export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<str
           resolution: spec.resolution,
           aspect_ratio: "9:16",
           generate_audio: spec.model === SEEDANCE_STANDARD_MODEL && spec.generateAudio === true,
+          ...(references.length > 0
+            ? {
+                input_references: references.map(({ url }) => ({
+                  type: "image_url",
+                  image_url: { url },
+                })),
+              }
+            : {}),
         };
       }
       // OpenRouter's field names, MEASURED on 2026-08-30 (33.1-PRICE-EVIDENCE.md), not Sora's:

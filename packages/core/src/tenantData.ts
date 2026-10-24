@@ -324,6 +324,7 @@ export const STORAGE_ID_FIELDS = {
     "renderStorageId",
     "sidecarStorageId",
     "nativeCaptionAudioStorageId",
+    "mediaProductReferences[].storageId",
     "nativeCaptionRenderStorageId",
     "attachments[].storageId",
   ],

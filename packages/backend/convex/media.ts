@@ -1,5 +1,5 @@
 import { mediaDailyCharge } from "@pikar/core/mediaBudget";
-import { buildSubmitBody } from "@pikar/core/mediaProviderContract";
+import { buildSubmitBody, referenceImageHasExpectedType } from "@pikar/core/mediaProviderContract";
 import {
   buildNativeScenePrompt,
   NATIVE_TARGET_DURATIONS,
@@ -108,6 +108,7 @@ export type ReserveRefusal =
   | "over_generated_seconds"
   | "unrenderable_block"
   | "native_deck_invalid"
+  | "product_reference_unavailable"
   /** 20.2 wave 6 — regenerating a scene that BUYS NOTHING. A `text_card` is drawn by ffmpeg and an
    *  `uploaded_video`'s bytes are already the tenant's, so a silent one of either has no provider
    *  line to reserve: there is literally nothing to re-buy. Editing its words and generating the
@@ -570,6 +571,8 @@ export async function reserveSceneJobInner(
   if (native && !validateNativeSceneDeck(a).ok) {
     return { ok: false, reason: "native_deck_invalid" };
   }
+  if (native && planRow && !(await checkedProductReferences(ctx, planRow)))
+    return { ok: false, reason: "product_reference_unavailable" };
   const claim = firstUnconfirmedClaim(
     planRow && planRow.tenantId === a.tenantId ? planRow.shots : undefined,
   );
@@ -646,6 +649,12 @@ export async function reserveSceneJobInner(
           promptHash: await contentHash(
             native ? buildNativeScenePrompt(scene, planRow?.artDirection?.music) : scene.prompt,
           ),
+          ...(native && planRow
+            ? {
+                nativeReviewHash: await nativeReelReviewHash(planRow),
+                nativeProductReferenceHash: await nativeProductReferenceHash(planRow),
+              }
+            : {}),
           status: "queued",
           estUsd: usd,
           createdAt: now,
@@ -1208,7 +1217,11 @@ function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
  *  synchronously in the same response, video returns an asynchronous id which
  *  `pollOpenRouterVideoTask` owns. The credential follows the vendor, not the function — and with
  *  one vendor for both visual kinds there is now one credential. */
-export async function submitLine(spec: VisualSpec, text: string): Promise<SubmitResult> {
+export async function submitLine(
+  spec: VisualSpec,
+  text: string,
+  inputs: { imageReferences?: readonly { url: string }[] } = {},
+): Promise<SubmitResult> {
   // Deliberately still ABOVE the fixture short-circuit: "fixture mode is free but still requires
   // configured credentials" is an existing invariant with its own test, and an offline run that
   // stops proving the credential exists is an offline run that stops catching the misconfiguration
@@ -1231,7 +1244,7 @@ export async function submitLine(spec: VisualSpec, text: string): Promise<Submit
 
   let response: Response;
   try {
-    const body = buildSubmitBody(spec, text);
+    const body = buildSubmitBody(spec, text, inputs);
     // One host, two paths, both JSON. The `FormData` the video arm used to build is gone with the
     // endpoint that wanted it: OpenAI's Videos API was multipart, OpenRouter's is not.
     response = await fetch(
@@ -1382,7 +1395,7 @@ export const batchToSubmit = internalQuery({
         spec: r.spec,
         provider: r.provider,
         ...(r.spec.kind === "video" && r.spec.generateAudio === true
-          ? { promptHash: r.promptHash }
+          ? { promptHash: r.promptHash, nativeReviewHash: r.nativeReviewHash }
           : {}),
       })),
       shots: (plan?.shots ?? []).map((s) => ({
@@ -2272,7 +2285,39 @@ export const submitBatch = internalAction({
           tally.submitted += 1;
           continue;
         }
-        const res = await submitLine(spec, text);
+        const imageReferences: Array<{ url: string }> = [];
+        if (spec.kind === "video" && spec.generateAudio === true) {
+          const references = await ctx.runQuery(internal.media.productReferencesForSubmit, {
+            jobId: line.jobId,
+          });
+          let valid = references !== null;
+          for (const reference of references ?? []) {
+            // Read owned immutable storage directly. Never fetch an agent/user-supplied URL.
+            const blob = await ctx.storage.get(reference.storageId);
+            if (!blob || blob.size !== reference.size) {
+              valid = false;
+              break;
+            }
+            const bytes = new Uint8Array(await blob.arrayBuffer());
+            if (
+              (await contentHash(bytes)) !== reference.contentHash ||
+              !referenceImageHasExpectedType(bytes, reference.mimeType)
+            ) {
+              valid = false;
+              break;
+            }
+            imageReferences.push({ url: reference.url });
+          }
+          if (!valid) {
+            await ctx.runMutation(internal.media.recordSubmission, {
+              jobId: line.jobId,
+              result: { ok: false, blocked: false, code: "product_reference_unavailable" },
+            });
+            tally.failed += 1;
+            continue;
+          }
+        }
+        const res = await submitLine(spec, text, { imageReferences });
         if (!res.ok) {
           await ctx.runMutation(internal.media.recordSubmission, {
             jobId: line.jobId,
@@ -2832,12 +2877,16 @@ export const byPlan = tenantQuery({
            *  the job's own `promptHash` against the shot's current text — the same hash the
            *  reserve wrote, so it cannot drift from what was actually bought. */
           clipStale: clipRow
-            ? clipRow.promptHash !==
-              (await contentHash(
-                clipRow.spec.kind === "video" && clipRow.spec.generateAudio === true
-                  ? buildNativeScenePrompt(shot, plan.artDirection?.music)
-                  : shot.prompt,
-              ))
+            ? (plan.mediaAudioMode === "native" &&
+                (clipRow.nativeProductReferenceHash !== undefined ||
+                  (plan.mediaProductReferences ?? []).length > 0) &&
+                clipRow.nativeProductReferenceHash !== (await nativeProductReferenceHash(plan))) ||
+              clipRow.promptHash !==
+                (await contentHash(
+                  clipRow.spec.kind === "video" && clipRow.spec.generateAudio === true
+                    ? buildNativeScenePrompt(shot, plan.artDirection?.music)
+                    : shot.prompt,
+                ))
             : false,
           voiceStale: voiceRow
             ? voiceRow.promptHash !== (await contentHash(shot.narration))
@@ -2942,6 +2991,212 @@ export const reel = tenantQuery({
 /** One itemised cost line, as the canvas prints it. */
 type EstimateLine = { label: string; qty: number; unit: string; cents: number };
 
+type ProductReference = NonNullable<Doc<"plans">["mediaProductReferences"]>[number];
+const PRODUCT_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const MAX_PRODUCT_IMAGE_BYTES = 5 * 1024 * 1024;
+
+async function productReferenceFromDocument(
+  ctx: QueryCtx,
+  tenantId: string,
+  docId: Id<"vaultDocuments">,
+): Promise<ProductReference | null> {
+  const doc = await ctx.db.get(docId);
+  const mimeType = doc?.storedMimeType ?? doc?.mimeType;
+  if (
+    !doc ||
+    doc.tenantId !== tenantId ||
+    !doc.storageId ||
+    doc.status !== "ready" ||
+    !mimeType ||
+    !PRODUCT_IMAGE_TYPES.has(mimeType)
+  )
+    return null;
+  const metadata = await ctx.db.system.get(doc.storageId);
+  if (
+    !metadata ||
+    metadata.size < 1 ||
+    metadata.size > MAX_PRODUCT_IMAGE_BYTES ||
+    (metadata.contentType !== undefined && metadata.contentType !== mimeType)
+  )
+    return null;
+  const hash = /^[a-f0-9]{64}$/i.test(metadata.sha256)
+    ? metadata.sha256.toLowerCase()
+    : Array.from(decodeBase64(metadata.sha256))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+  if (hash.length !== 64) return null;
+  return {
+    docId,
+    storageId: doc.storageId,
+    contentHash: hash,
+    mimeType,
+    size: metadata.size,
+  };
+}
+
+/** Revalidate picks at estimate/reservation/submission. A citation never becomes a media input. */
+async function checkedProductReferences(
+  ctx: QueryCtx,
+  plan: Doc<"plans">,
+): Promise<ProductReference[] | null> {
+  const references = plan.mediaProductReferences ?? [];
+  if (references.length > 3 || new Set(references.map((r) => r.docId)).size !== references.length)
+    return null;
+  for (const reference of references) {
+    const current = await productReferenceFromDocument(ctx, plan.tenantId, reference.docId);
+    if (
+      !current ||
+      current.storageId !== reference.storageId ||
+      current.contentHash !== reference.contentHash ||
+      current.mimeType !== reference.mimeType ||
+      current.size !== reference.size
+    )
+      return null;
+  }
+  return references;
+}
+
+/** Explicit human picks belong to this film/product; never copy all images into a mixed batch. */
+export const setProductReferences = tenantMutation({
+  args: { planId: v.id("plans"), docIds: v.array(v.id("vaultDocuments")) },
+  handler: async (ctx, { planId, docIds }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    if (plan.mediaAudioMode !== "native")
+      return { ok: false as const, reason: "native_only" as const };
+    if (docIds.length > 3 || new Set(docIds).size !== docIds.length)
+      return { ok: false as const, reason: "too_many_references" as const };
+    if (plan.mediaCampaignId) {
+      const campaign = await ctx.db.get(plan.mediaCampaignId);
+      const item = campaign?.items.find((entry) => entry.planId === planId);
+      if (
+        !campaign ||
+        campaign.tenantId !== ctx.tenantId ||
+        campaign.threadId !== plan.threadId ||
+        !item ||
+        campaign.status === "running" ||
+        campaign.status === "needs_reconciliation" ||
+        item.status === "reserved" ||
+        item.status === "running" ||
+        item.status === "needs_reconciliation"
+      )
+        return { ok: false as const, reason: "media_busy" as const };
+    }
+    if (
+      plan.renderStatus === "rendering" ||
+      (await activeMediaJobs(ctx, ctx.tenantId, planId)).length > 0
+    )
+      return { ok: false as const, reason: "media_busy" as const };
+    const references: ProductReference[] = [];
+    for (const docId of docIds) {
+      const reference = await productReferenceFromDocument(ctx, ctx.tenantId, docId);
+      if (!reference) return { ok: false as const, reason: "reference_unavailable" as const };
+      references.push(reference);
+    }
+    // A changed product is a changed picture. Prior paid siblings cannot be reused as that product.
+    if (
+      JSON.stringify(
+        references.map((r) => [r.docId, r.storageId, r.contentHash, r.mimeType, r.size]),
+      ) !==
+      JSON.stringify(
+        (plan.mediaProductReferences ?? []).map((r) => [
+          r.docId,
+          r.storageId,
+          r.contentHash,
+          r.mimeType,
+          r.size,
+        ]),
+      )
+    ) {
+      await ctx.db.patch(planId, {
+        mediaProductReferences: references,
+        shotsChangedAt: Date.now(),
+      });
+      await clearRender(ctx, planId);
+    }
+    return { ok: true as const };
+  },
+});
+
+export const productReferenceOptions = tenantQuery({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const plan = await ownedPlan(ctx, planId, ctx.tenantId);
+    if (!plan) throw new Error("Plan not found");
+    const selectedDocIds = (plan.mediaProductReferences ?? []).map((r) => r.docId);
+    const images: Array<{
+      docId: Id<"vaultDocuments">;
+      title: string;
+      url: string | null;
+      mimeType: string;
+      size: number;
+    }> = [];
+    if (plan.mediaAudioMode !== "native") return { selectedDocIds: [], images };
+    // ponytail: bounded recent-image picker; selected older references are always included.
+    const recent = await ctx.db
+      .query("vaultDocuments")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .order("desc")
+      .take(200);
+    const candidates = [...selectedDocIds, ...recent.map((doc) => doc._id)];
+    for (const docId of [...new Set(candidates)]) {
+      const reference = await productReferenceFromDocument(ctx, ctx.tenantId, docId);
+      const selected = selectedDocIds.includes(docId);
+      if (!reference) {
+        if (selected)
+          images.push({ docId, title: "Unavailable reference", url: null, mimeType: "", size: 0 });
+        continue;
+      }
+      const doc = await ctx.db.get(docId);
+      images.push({
+        docId,
+        title: doc?.title ?? "Product image",
+        url: await ctx.storage.getUrl(reference.storageId),
+        mimeType: reference.mimeType,
+        size: reference.size,
+      });
+      if (images.length >= 50) break;
+    }
+    return { selectedDocIds, images };
+  },
+});
+
+/** No arbitrary URL input. The submit action receives only current owned-storage download URLs. */
+export const productReferencesForSubmit = internalQuery({
+  args: { jobId: v.id("mediaJobs") },
+  handler: async (ctx, { jobId }) => {
+    const job = await ctx.db.get(jobId);
+    if (!job || job.spec.kind !== "video" || job.spec.generateAudio !== true) return null;
+    const plan = await ctx.db.get(job.planId);
+    if (!plan || plan.tenantId !== job.tenantId || plan.mediaAudioMode !== "native") return null;
+    // Historical native rows with no references keep their original path; no new refs may attach.
+    if (!job.nativeReviewHash && (plan.mediaProductReferences ?? []).length === 0) return [];
+    if (job.nativeReviewHash !== (await nativeReelReviewHash(plan))) return null;
+    const references = await checkedProductReferences(ctx, plan);
+    if (!references) return null;
+    const resolved: Array<ProductReference & { url: string }> = [];
+    for (const reference of references) {
+      const url = await ctx.storage.getUrl(reference.storageId);
+      if (!url || !url.startsWith("https://")) return null;
+      resolved.push({ ...reference, url });
+    }
+    return resolved;
+  },
+});
+
+export async function nativeProductReferenceHash(plan: Doc<"plans">): Promise<string> {
+  return contentHash(
+    JSON.stringify(
+      (plan.mediaProductReferences ?? []).map((r) => [
+        r.docId,
+        r.storageId,
+        r.contentHash,
+        r.mimeType,
+        r.size,
+      ]),
+    ),
+  );
+}
+
 export async function nativeReelReviewHash(plan: Doc<"plans">): Promise<string> {
   return await contentHash(
     JSON.stringify({
@@ -2950,6 +3205,7 @@ export async function nativeReelReviewHash(plan: Doc<"plans">): Promise<string> 
       shots: plan.shots,
       targetDurationSeconds: plan.targetDurationSeconds,
       artDirection: plan.artDirection,
+      productReferences: plan.mediaProductReferences,
       profile: MEDIA_DEFAULT_VIDEO,
       policy: {
         capUsd: MEDIA_NATIVE_JOB_CAP_USD,
@@ -3049,6 +3305,8 @@ export async function estimateReelPlanInner(
     const { scenes, targetDurationSeconds } = sceneDeck;
     if (native && !validateNativeSceneDeck(sceneDeck).ok)
       return { ...empty, refusal: { reason: "native_deck_invalid" } };
+    if (native && !(await checkedProductReferences(ctx, plan)))
+      return { ...empty, refusal: { reason: "product_reference_unavailable" } };
 
     // The SAME pre-flight refusals `reserveSceneJobInner` applies, in the same order.
     if (scenes.reduce((n, s) => n + s.durationMs, 0) / 1000 !== targetDurationSeconds) {

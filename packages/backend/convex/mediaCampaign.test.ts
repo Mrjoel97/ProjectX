@@ -131,6 +131,27 @@ async function approveReviewed(
   });
 }
 
+test("free simulation admits exactly twenty hundred-dollar customers and refuses the next shared cent", async () => {
+  const t = harness();
+  expect(MEDIA_DAILY_BUDGET_CENTS).toBe(10_000);
+  expect(DEPLOYMENT_MEDIA_BUDGET_CENTS).toBe(200_000);
+  await t.run(async (ctx) => {
+    for (let customer = 0; customer < 20; customer += 1) {
+      const key = `beta_budget_${customer}`;
+      expect((await rateLimiter.check(ctx, "mediaSpendCents", { key, count: 10_000 })).ok).toBe(true);
+      expect((await rateLimiter.check(ctx, "deploymentMediaSpendCents", { count: 10_000 })).ok).toBe(true);
+      await rateLimiter.limit(ctx, "mediaSpendCents", { key, count: 10_000, reserve: true });
+      await rateLimiter.limit(ctx, "deploymentMediaSpendCents", { count: 10_000, reserve: true });
+      expect((await rateLimiter.check(ctx, "mediaSpendCents", { key, count: 1 })).ok).toBe(false);
+    }
+    expect((await rateLimiter.getValue(ctx, "deploymentMediaSpendCents")).value).toBe(0);
+    expect((await rateLimiter.check(ctx, "deploymentMediaSpendCents", { count: 1 })).ok).toBe(false);
+    expect((await rateLimiter.check(ctx, "mediaSpendCents", { key: "beta_budget_21", count: 1 })).ok).toBe(true);
+  });
+  expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+  expect(await t.run((ctx) => ctx.db.query("spendEvents").collect())).toHaveLength(0);
+});
+
 test("native30/45/60 videos and an image share batch rails with two whole-film workers", async () => {
   const t = harness();
   const { campaignId } = await nativeCampaign(t, [30, 45, 60], true);

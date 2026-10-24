@@ -233,6 +233,13 @@ describe("tenant table classification registry", () => {
 // behaviour test cannot see: a row whose attachments array is missing looks identical to one whose
 // attachments carried no bytes.
 describe("storageIdsIn — every byte reachable from one row", () => {
+  test("explicit product references remain reachable for export and tenant erasure", () => {
+    expect(
+      storageIdsIn("plans", {
+        mediaProductReferences: [{ storageId: "product_front" }, { storageId: "product_side" }],
+      }),
+    ).toEqual(["product_front", "product_side"]);
+  });
   // MUTATION: drop the `attachments[].storageId` entry from STORAGE_ID_FIELDS → red. That entry is
   // the single largest class of generated file in the product, and it is the one a top-level-fields
   // -only map would silently miss.

@@ -65,6 +65,7 @@ import {
   voiceLine,
   windowLabel,
 } from "./mediaCanvasView";
+import { NativeProductReferences } from "./NativeProductReferences";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
 /**
@@ -332,13 +333,14 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   const cites = useQuery(api.media.sceneCitations, { planId });
 
   const generateReel = useMutation(api.media.generateReel);
+  const [referenceBusy, setReferenceBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
   // The `approve()` / `busy` / `note` shape from `PlanCard`, verbatim: the busy flag makes a second
   // click a client-side no-op, and the server's own transition makes a double-generate spend once.
   async function generate() {
-    if (busy) return;
+    if (busy || referenceBusy) return;
     setBusy(true);
     setNote(null);
     try {
@@ -473,6 +475,14 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
           lighting and spoken lines before generating.
         </p>
       )}
+      {plan.mediaAudioMode === "native" && (
+        <NativeProductReferences
+          key={plan._id}
+          planId={planId}
+          locked={locked || busy}
+          onSavingChange={setReferenceBusy}
+        />
+      )}
 
       {/* WHAT THE PARSER DID (33-13). Between the ask and the answer, because it changes what
           the answer IS — and never behind a disclosure widget. */}
@@ -500,7 +510,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
       <GenerateBar
         view={cost}
         pricedAs={pricedAsLine(plan.targetDurationSeconds ?? null, deck.length, clipSeconds)}
-        busy={busy}
+        busy={busy || referenceBusy}
         note={note}
         blockLine={citations.blockLine}
         onGenerate={() => void generate()}

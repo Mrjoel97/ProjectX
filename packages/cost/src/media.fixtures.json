@@ -150,10 +150,10 @@
       }
     },
     "targetsUnreachableByGeneratedVideoAlone": [15, 30, 45, 60],
-    "_targetsUnreachableByGeneratedVideoAlone": "Legacy/separate audio uses the12-requested-generated-second cap and cannot fill any target solely with generated clips. Explicit native mode instead permits30/45/60seconds under separate60second/$15whole-job policy; tenant/deployment rails remain."
+    "_targetsUnreachableByGeneratedVideoAlone": "Legacy/separate audio uses the12-requested-generated-second cap and cannot fill any target solely with generated clips. Explicit native mode instead permits15/30/45/60seconds under separate60second/$15whole-job policy; tenant/deployment rails remain."
   },
   "native": {
-    "targets": [30, 45, 60],
+    "targets": [15, 30, 45, 60],
     "jobCapUsd": 15,
     "generatedSecondsCap": 60,
     "worst60SecondVideoUsd": 11.34,

@@ -873,6 +873,17 @@ describe("the brief chips are what was captured, and only two of them may block"
     }
   });
 
+  test("native film length includes the explicit15second product film option", () => {
+    const length = chipFor(
+      briefChips(aBrief({ durationSeconds: 15 }), false, "native"),
+      "durationSeconds",
+    );
+    expect(length.options.map((option) => option.seconds)).toEqual([15, 30, 45, 60]);
+    expect(
+      length.options.filter((option) => option.current).map((option) => option.seconds),
+    ).toEqual([15]);
+  });
+
   test("60 SECONDS SHOWS ITS COST UP FRONT — on the option and, when picked, on the chip", () => {
     const options = chipFor(briefChips(aBrief(), false), "durationSeconds").options;
     expect(options.find((o) => o.seconds === 60)?.note).toBe(DURATION_COST_NOTE);

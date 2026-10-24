@@ -852,7 +852,7 @@ export const SCENE_REFUSAL_WHY: Record<string, string> = {
     "the scene deck is there, but its table could not be read — the columns must include " +
     "Visual, Seconds, Description and Narration",
   empty_deck: "the scene deck came back empty",
-  bad_target_duration: "the reel length was not one of the supported 15, 30 or 60 seconds",
+  bad_target_duration: "the reel length was not one of the supported 15, 30, 45 or 60 seconds",
   unknown_visual_kind: "a scene asked for a kind of visual the renderer does not have",
   bad_scene_duration: "a scene did not say how many whole seconds it runs for",
   illegal_generated_duration: "a generated scene asked for a length the video model cannot produce",

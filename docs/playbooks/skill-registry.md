@@ -3187,3 +3187,6 @@ The owner supplied https://github.com/leonxlnx/taste-skill for review. Treat its
 
 New shared llm/schema/contracts/writer sources change exact-source evaluator identity; historical passing receipts cannot certify this source. Root must reconcile current pins/gates before any separately admitted evaluation, registry change or release. Lane file/spec tests and no-drift checks do not close Phase23/27 or paid semantic qualification.
 > Last verified: 2026-10-21 — Phase 53 expands the exact evaluator fingerprint to include campaign, Office writer/spec/preview, stock selection and renderer dependencies. The code-owned revision and current manifest are refreshed together, preserving the 46-case corpus and every historical receipt. Previous-source evidence cannot qualify this runtime. No live seed, activation, deployment or paid evaluation was performed.
+
+
+> Last verified: 2026-10-24 — The media director now documents the 15-second native option and explicitly selected product images. Source changes require normal registry activation; they do not activate a hosted skill automatically.

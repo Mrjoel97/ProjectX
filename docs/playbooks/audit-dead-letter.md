@@ -1375,3 +1375,6 @@ TENANT_TABLE_CLASSIFICATION adds mediaCampaigns and vaultPresentations as tenant
 Tenant export/erasure must traverse the added tables. Presentation preview sidecars must also retire with their document/replacement, while immutable audit remains insert-only. Preserve owned-byte receipt promotion, late-write erasure fences and replacement-before-deleting-good-bytes ordering. A JSON campaign manifest must not persist temporary download capabilities.
 
 Local registry and artifact/campaign tests do not prove hosted late-provider cleanup, Office export fidelity, physical erasure or WORM acceptance. No paid/provider or historical Phase23 retention receipt was changed by this lane. See Phase53 partial summary for exact remaining gates.
+
+
+> Last verified: 2026-10-24 — The tenant storage inventory includes plans.mediaProductReferences[].storageId so owned product references participate in existing export and erasure handling. Reference content stays outside audit payloads.

@@ -2,7 +2,7 @@ import { GENERATED_CLIP_SECONDS, MAX_CHARS_PER_SECOND, MUSIC_MOODS } from "./sto
 
 /** Absence on existing plans means separate audio; new native plans opt in explicitly. */
 export type MediaAudioMode = "native" | "separate";
-export const NATIVE_TARGET_DURATIONS = [30, 45, 60] as const;
+export const NATIVE_TARGET_DURATIONS = [15, 30, 45, 60] as const;
 
 type NativeScene = {
   index?: number;

@@ -1152,6 +1152,7 @@ export const resetPlan = internalMutation({
       // show the PREVIOUS thread's reel under a brand-new proposal — a lie the user can watch.
       mediaMode: undefined,
       mediaAudioMode: undefined,
+      mediaProductReferences: undefined,
       nativeCaptionAudioStorageId: undefined,
       nativeCaptionAudioHash: undefined,
       nativeCaptionBatchId: undefined,

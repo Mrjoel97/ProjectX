@@ -44,7 +44,7 @@ import { retrier } from "./../index";
 import { contentHash } from "./../lib/hash";
 import { currentMediaJobs, readMediaBatch } from "../lib/mediaRead";
 import { internalAction, internalMutation } from "../lib/tenantLifecycle";
-import { requireEnvMedia } from "./../media";
+import { nativeProductReferenceHash, requireEnvMedia } from "./../media";
 import { latestBatch, maybeBurnCaptions, maybeStartCaptions } from "./../mediaComplete";
 import { startIngest } from "./../vaultIngest";
 
@@ -181,6 +181,7 @@ export const batchToRender = internalQuery({
     }
     const deck = [...plan.shots].sort((l, r) => l.index - r.index);
     const native = plan.mediaAudioMode === "native";
+    const reviewedNativeInputs = native ? await nativeProductReferenceHash(plan) : undefined;
     if (
       native &&
       (deck.some((shot) => shot.visual !== "generated_video") ||
@@ -303,7 +304,10 @@ export const batchToRender = internalQuery({
           (slot.video.model !== SEEDANCE_STANDARD_MODEL ||
             slot.video.spec.kind !== "video" ||
             slot.video.spec.generateAudio !== true ||
-            slot.video.spec.seconds !== shot.seconds)
+            slot.video.spec.seconds !== shot.seconds ||
+            ((slot.video.nativeProductReferenceHash !== undefined ||
+              (plan.mediaProductReferences ?? []).length > 0) &&
+              slot.video.nativeProductReferenceHash !== reviewedNativeInputs))
         )
           return { ok: false, reason: "stale_inputs" };
         inputs.push({ name: renderInputName("video", i), jobId: slot.video._id });

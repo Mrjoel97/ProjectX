@@ -20,16 +20,21 @@ const nativeScene = (index = 0, seconds = 5) => ({
 const scenes = (count: number, seconds = 5) =>
   Array.from({ length: count }, (_, index) => nativeScene(index, seconds));
 describe("native audiovisual deck admission", () => {
-  it("admits exact 30,45,60 second generated decks", () => {
-    expect(NATIVE_TARGET_DURATIONS).toEqual([30, 45, 60]);
+  it("admits exact 15,30,45,60 second generated decks", () => {
+    expect(NATIVE_TARGET_DURATIONS).toEqual([15, 30, 45, 60]);
     for (const seconds of NATIVE_TARGET_DURATIONS) {
       expect(
         validateNativeSceneDeck({ targetDurationSeconds: seconds, scenes: scenes(seconds / 5) }),
       ).toEqual({ ok: true });
     }
   });
+  it("admits one continuous fifteen-second native clip without changing clip limits", () => {
+    expect(
+      validateNativeSceneDeck({ targetDurationSeconds: 15, scenes: [nativeScene(0, 15)] }),
+    ).toEqual({ ok: true });
+  });
   it("refuses wrong target, external assets, mixed scenes and malformed timing", () => {
-    expect(validateNativeSceneDeck({ targetDurationSeconds: 15, scenes: scenes(3) })).toMatchObject(
+    expect(validateNativeSceneDeck({ targetDurationSeconds: 20, scenes: scenes(4) })).toMatchObject(
       { ok: false, reason: "bad_target_duration" },
     );
     for (const visual of [

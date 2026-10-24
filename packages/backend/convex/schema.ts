@@ -1457,6 +1457,18 @@ export default defineSchema({
     mediaMode: v.optional(v.union(v.literal("reel"), v.literal("image"))),
     /** Absent historical reels retain separately generated narration and music. */
     mediaAudioMode: v.optional(v.union(v.literal("native"), v.literal("separate"))),
+    /** Explicit per-product human picks. SHA identifies immutable image bytes, not citation text. */
+    mediaProductReferences: v.optional(
+      v.array(
+        v.object({
+          docId: v.id("vaultDocuments"),
+          storageId: v.id("_storage"),
+          contentHash: v.string(),
+          mimeType: v.string(),
+          size: v.number(),
+        }),
+      ),
+    ),
     /** Same-render WAV extracted by the native assembly worker for the reserved captions pass. */
     nativeCaptionAudioStorageId: v.optional(v.id("_storage")),
     nativeCaptionAudioHash: v.optional(v.string()),
@@ -3283,6 +3295,9 @@ export default defineSchema({
       }),
     ),
     promptHash: v.string(),
+    /** Exact native plan review, including ordered product references, frozen at reservation. */
+    nativeReviewHash: v.optional(v.string()),
+    nativeProductReferenceHash: v.optional(v.string()),
     nativeAudioHash: v.optional(v.string()),
     status: v.union(
       v.literal("queued"),

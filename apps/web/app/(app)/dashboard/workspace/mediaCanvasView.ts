@@ -303,7 +303,7 @@ export function refusalText(
     case "unknown_model":
       return `This ${o.noun} names a model we can't price, so it won't run.`;
     case "native_deck_invalid":
-      return "This storyboard needs 30, 45 or 60 seconds of Seedance scenes, each 4–15 seconds long, with spoken lines that fit each scene. Revise the storyboard before generating.";
+      return "This storyboard needs 15, 30, 45 or 60 seconds of Seedance scenes, each 4–15 seconds long, with spoken lines that fit each scene. Revise the storyboard before generating.";
     // ── 33-06: four codes that existed on the rail with no sentence on the canvas ───────────────
     // 33-03's confirm gate. The lever is NOT a rewrite: the model proposed a figure and only the
     // owner may vouch for it, so the sentence points at the badge that does the vouching.

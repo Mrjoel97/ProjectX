@@ -382,3 +382,5 @@ Actual complete six-lane semantic reviews, responsive UAT and release/rollback d
 offline SDK transport shims and authorization tests are implementation verification only.
 
 Last verified: 2026-10-15 — Native evaluator source identity now includes paid model admission, erased-identity admission and shared JWT lifetime. Regenerated the six-lane, 40-case pins after runtime changes. The case corpus is unchanged; prior evaluator evidence is retired. Offline pin checks pass, with no new live/provider evaluation claimed.
+
+> Last verified: 2026-10-24 — Regenerated current source fingerprints after native product-reference integration; all 40 cases across six lanes remain unchanged. No paid evaluation replay.

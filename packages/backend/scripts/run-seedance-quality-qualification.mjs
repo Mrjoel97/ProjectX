@@ -55,8 +55,38 @@ function append(path, value) {
     closeSync(fd);
   }
 }
-export function seedanceManifest(baselineDir = BASELINE, profile = "comparison") {
-  check(["comparison", "standard_native_audio"].includes(profile), "unknown_profile");
+export function seedanceManifest(baselineDir = BASELINE, profile = "comparison", reference) {
+  check(
+    ["comparison", "standard_native_audio", "standard_reference_launch"].includes(profile),
+    "unknown_profile",
+  );
+  if (profile === "standard_reference_launch") {
+    check(reference && typeof reference === "object", "reviewed_reference_required");
+    const url = new URL(reference.url);
+    check(
+      url.protocol === "https:" &&
+        url.hostname === "woozy-wren-368.convex.cloud" &&
+        !url.username &&
+        !url.password &&
+        !url.search &&
+        !url.hash &&
+        url.pathname.startsWith("/api/storage/"),
+      "owned_staging_reference_url_required",
+    );
+    const image = readFileSync(privatePath(resolve(ROOT, reference.path)));
+    check(
+      image.length > 8 &&
+        image.length <= 5 * 1024 * 1024 &&
+        image.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) &&
+        hash(image) === reference.sha256,
+      "reviewed_reference_changed",
+    );
+    check(
+      hash(readFileSync(privatePath(resolve(ROOT, reference.sourceVideoPath)))) ===
+        reference.sourceVideoSha256,
+      "approved_source_changed",
+    );
+  } else check(reference === undefined, "unexpected_reference");
   baselineDir = privatePath(baselineDir);
   const original = JSON.parse(readFileSync(resolve(baselineDir, "manifest.json"), "utf8"));
   const result = JSON.parse(readFileSync(resolve(baselineDir, "result.json"), "utf8"));
@@ -120,9 +150,28 @@ export function seedanceManifest(baselineDir = BASELINE, profile = "comparison")
       },
     });
   }
+  if (profile === "standard_reference_launch") {
+    shots.splice(0, shots.length, {
+      id: "seedance-reference-launch-15",
+      kind: "video",
+      policyAllowanceUsd: 2.6,
+      estimatedUsd: 2.4192,
+      body: {
+        model: STANDARD,
+        prompt:
+          'Create a complete fifteen-second premium launch film for the exact fictional matte black bottle in the supplied image. Preserve its silhouette, proportions, rounded shoulder, black screw cap, finish and grounded contact in every shot. The reference is the product identity, not a suggestion to invent a new bottle. One cohesive black-stone studio, warm golden-hour amber rim light, restrained premium contrast. 0–4s: three-quarter hero reveal, gentle camera orbit. 4–8s: close detail of the same cap and shoulder, soft grazing light. 8–12s: medium product angle, motivated warm side light, continuous material and proportions. 12–15s: composed hero hold. Intentional clean cuts, no new accessories, no people, no floating product, no logos, lettering, captions or watermarks. One consistent warm confident English voice throughout says exactly: "Meet your everyday upgrade. Made for the moments that move you." Clear intelligible speech over a very quiet restrained modern instrumental pulse, smooth sound across all cuts, no other speech. Do not invent product performance claims. This is an illustrative fictional product.',
+        duration: 15,
+        resolution: "720p",
+        aspect_ratio: "9:16",
+        generate_audio: true,
+        input_references: [{ type: "image_url", image_url: { url: reference.url } }],
+      },
+    });
+  }
   const manifest = {
     version: 1,
     profile,
+    ...(reference ? { reference } : {}),
     approvalRef: APPROVAL,
     sharedPolicyAllowanceUsd: 5,
     guaranteedInvoiceCeilingUsd: null,
@@ -140,7 +189,9 @@ export function seedanceManifest(baselineDir = BASELINE, profile = "comparison")
     comparison:
       profile === "comparison"
         ? "Two exact purchased text-to-video briefs; no new Grok charge. Not image-to-video, branded-product preservation, a complete launch film, or evidence of faster 30/45/60-second production."
-        : "One standard Seedance 2.0 native-audio request with a new four-second product brief. No separate TTS, music, stock, image or STT request. This is not a matched quality benchmark, a complete film or proof of exact spoken-script fidelity.",
+        : profile === "standard_reference_launch"
+          ? "One fifteen-second standard Seedance 2.0 native-audio film using the exact approved bottle frame as an actual image reference. No separate TTS, music, stock, image-generation or STT purchase; no automatic retries. Owner creative/voice/product acceptance remains required; one continuous generation does not qualify cross-job batch consistency."
+          : "One standard Seedance 2.0 native-audio request with a new four-second product brief. No separate TTS, music, stock, image or STT request. This is not a matched quality benchmark, a complete film or proof of exact spoken-script fidelity.",
     requests: shots,
     catalogue:
       profile === "comparison"
@@ -148,7 +199,25 @@ export function seedanceManifest(baselineDir = BASELINE, profile = "comparison")
             { model: MODEL, silentVideoTokenUsd: 0.0000012 },
             { model: MINI, silentVideoTokenUsd: 0.0000035 },
           ]
-        : [{ model: STANDARD, audioVideoTokenUsd: 0.000007 }],
+        : [
+            {
+              model: STANDARD,
+              audioVideoTokenUsd: 0.000007,
+              ...(profile === "standard_reference_launch"
+                ? {
+                    pricingSkus: {
+                      video_tokens: 0.000007,
+                      video_tokens_4k: 0.000004,
+                      video_tokens_1080p: 0.0000077,
+                      video_tokens_without_audio: 0.000007,
+                      video_tokens_with_video_input: 0.0000043,
+                      video_tokens_4k_with_video_input: 0.0000024,
+                      video_tokens_1080p_with_video_input: 0.0000047,
+                    },
+                  }
+                : {}),
+            },
+          ],
   };
   return { manifest, sha256: hash(JSON.stringify(manifest)) };
 }
@@ -199,7 +268,11 @@ export async function runSeedanceQualification({
   ledger = privatePath(ledger);
   check(policyAllowanceAck && creditBillingOnly, "policy_ack_required");
   const saved = JSON.parse(readFileSync(resolve(out, "manifest.json"), "utf8"));
-  const plan = seedanceManifest(resolve(ROOT, saved.manifest.baselineDir), saved.manifest.profile);
+  const plan = seedanceManifest(
+    resolve(ROOT, saved.manifest.baselineDir),
+    saved.manifest.profile,
+    saved.manifest.reference,
+  );
   check(reviewHash === plan.sha256 && saved.sha256 === plan.sha256, "review_digest_mismatch");
   const state = inspectQualificationLedger(ledger);
   check(state.attempts > 0 && !state.unsettled.length, "unsettled_shared_ledger");
@@ -224,6 +297,33 @@ export async function runSeedanceQualification({
         Number(model.pricing_skus?.[audio ? "video_tokens" : "video_tokens_without_audio"]) ===
           (audio ? expected.audioVideoTokenUsd : expected.silentVideoTokenUsd),
       "catalogue_contract_changed",
+    );
+    if (expected.pricingSkus) {
+      const normalized = (value) =>
+        JSON.stringify(
+          Object.entries(value ?? {})
+            .map(([key, rate]) => [key, Number(rate)])
+            .sort(),
+        );
+      check(
+        normalized(model.pricing_skus) === normalized(expected.pricingSkus),
+        "reference_pricing_changed",
+      );
+    }
+  }
+  if (plan.manifest.reference) {
+    const response = await fetchImpl(plan.manifest.reference.url, {
+      redirect: "error",
+      signal: AbortSignal.timeout(30_000),
+    });
+    check(
+      response.headers.get("content-type")?.split(";")[0] === "image/png",
+      "reference_type_changed",
+    );
+    const downloaded = await bytes(response);
+    check(
+      downloaded.length <= 5 * 1024 * 1024 && hash(downloaded) === plan.manifest.reference.sha256,
+      "reference_bytes_changed",
     );
   }
   const auth = { Authorization: `Bearer ${apiKey}` };

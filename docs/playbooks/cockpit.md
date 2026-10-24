@@ -6768,3 +6768,6 @@ The optional presentation sidecar supplies a scriptless same-spec layout preview
 createMediaCampaign stages image/video/mixed proposals. Reel director turns run through existing governed dispatch and can incur ordinary planning-token cost; staging does not buy media or publish. The human reviews exact plans, maximum media cost and each reel before campaign Generate. Campaign-private child plans cannot be executed through ordinary executePlan or individual Generate. threadRoots excludes mediaCampaignId in the index before ROOT_SCAN, and isRoot also refuses campaign children. Preserve foreign-tenant checks and exact plan/version review.
 
 Verification: focused workbook (23+6), presentation (23+5) and campaign (4+7) lane checks are local observations only. Root consolidated regressions, hosted authenticated downloads, registry readiness, native Office opening/editing and paid visual review remain open under 53-01. No seed/activation/deployment/publication occurred.
+
+
+> Last verified: 2026-10-24 — Native media supports a 15-second option and explicit selection of up to three owned product images. Saving references requires fresh review before generation. Local browser checks cover output tabs, batch items, clean PDF pages and exact original downloads; hosted acceptance remains outstanding.

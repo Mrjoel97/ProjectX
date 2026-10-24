@@ -53,7 +53,30 @@ function fixture(t, profile = "comparison") {
       },
     }),
   );
-  const plan = seedanceManifest(baseline, profile);
+  const reference =
+    profile === "standard_reference_launch"
+      ? {
+          url: "https://woozy-wren-368.convex.cloud/api/storage/approved-reference",
+          path: `${out}/reference.png`,
+          sourceVideoPath: `${baseline}/delivered/video-0.mp4`,
+          sourceVideoSha256: requests[0].assetSha256,
+          sha256: hash(
+            Buffer.concat([
+              Buffer.from("89504e470d0a1a0a", "hex"),
+              Buffer.from("approved bottle fixture"),
+            ]),
+          ),
+        }
+      : undefined;
+  if (reference)
+    writeFileSync(
+      reference.path,
+      Buffer.concat([
+        Buffer.from("89504e470d0a1a0a", "hex"),
+        Buffer.from("approved bottle fixture"),
+      ]),
+    );
+  const plan = seedanceManifest(baseline, profile, reference);
   writeFileSync(resolve(out, "manifest.json"), JSON.stringify(plan));
   const ledger = resolve(out, "charges.jsonl");
   writeFileSync(
@@ -79,7 +102,7 @@ function fixture(t, profile = "comparison") {
       streams: [{ codec_type: "video", width: 720, height: 1280 }],
     }),
   };
-  return { out, ledger, plan, options };
+  return { out, ledger, plan, options, reference };
 }
 function transport(f, change = {}) {
   const calls = [];
@@ -159,6 +182,103 @@ test("fixed comparison preserves both original briefs without repurchasing basel
   assert.equal(f.plan.manifest.requests[2].body.model, "bytedance/seedance-2.0-mini");
   assert.equal(f.plan.manifest.requests[2].body.prompt, f.plan.manifest.requests[0].body.prompt);
   assert.equal(f.plan.manifest.requests[2].estimatedUsd, 0.378);
+});
+
+test("15-second launch binds the exact approved reference, native sound and remaining shared allowance", async (t) => {
+  const f = fixture(t, "standard_reference_launch");
+  const request = f.plan.manifest.requests[0];
+  assert.equal(f.plan.manifest.requests.length, 1);
+  assert.equal(request.body.duration, 15);
+  assert.equal(request.body.generate_audio, true);
+  assert.equal(request.policyAllowanceUsd, 2.6);
+  assert.equal(f.plan.manifest.automaticRetries, 0);
+  assert.deepEqual(request.body.input_references, [
+    { type: "image_url", image_url: { url: f.reference.url } },
+  ]);
+  let posts = 0;
+  const fetchImpl = async (url, init = {}) => {
+    if (url === f.reference.url)
+      return new Response(readFileSync(f.reference.path), {
+        headers: { "content-type": "image/png" },
+      });
+    if (url.endsWith("/videos/models"))
+      return json({
+        data: [
+          {
+            id: request.body.model,
+            supported_durations: [15],
+            supported_resolutions: ["720p"],
+            supported_aspect_ratios: ["9:16"],
+            supported_sizes: ["720x1280"],
+            generate_audio: true,
+            pricing_skus: f.plan.manifest.catalogue[0].pricingSkus,
+          },
+        ],
+      });
+    if (url.endsWith("/key")) return json({ data: { is_free_tier: false } });
+    if (init.method === "POST") {
+      posts++;
+      assert.deepEqual(JSON.parse(init.body), request.body);
+      assert.equal(inspectQualificationLedger(f.ledger).unsettled.length, 1);
+      return json({ id: "launch-job", status: "pending" }, 202);
+    }
+    if (url.includes("/content?index=0")) return new Response(Buffer.from("native launch bytes"));
+    return json({
+      id: "launch-job",
+      status: "completed",
+      model: request.body.model,
+      usage: { cost: 2.2743, is_byok: false },
+    });
+  };
+  const result = await runSeedanceQualification({
+    ...f.options,
+    fetchImpl,
+    probeMedia: () => ({
+      format: { duration: "15.064" },
+      streams: [{ codec_type: "video", width: 720, height: 1280 }, { codec_type: "audio" }],
+    }),
+  });
+  assert.equal(result.status, "completed");
+  assert.equal(posts, 1);
+});
+
+test("changed launch reference bytes refuse before any egress", async (t) => {
+  const f = fixture(t, "standard_reference_launch");
+  writeFileSync(f.reference.path, Buffer.from("changed image bytes"));
+  await assert.rejects(
+    runSeedanceQualification({
+      ...f.options,
+      fetchImpl: () => {
+        throw Error("must not call");
+      },
+    }),
+    /reviewed_reference_changed/,
+  );
+});
+
+test("new reference pricing SKU refuses before a paid launch", async (t) => {
+  const f = fixture(t, "standard_reference_launch");
+  await assert.rejects(
+    runSeedanceQualification({
+      ...f.options,
+      fetchImpl: async () =>
+        json({
+          data: [
+            {
+              id: "bytedance/seedance-2.0",
+              supported_durations: [15],
+              supported_resolutions: ["720p"],
+              supported_aspect_ratios: ["9:16"],
+              supported_sizes: ["720x1280"],
+              generate_audio: true,
+              pricing_skus: { ...f.plan.manifest.catalogue[0].pricingSkus, image_input: 1 },
+            },
+          ],
+        }),
+    }),
+    /reference_pricing_changed/,
+  );
+  assert.equal(inspectQualificationLedger(f.ledger).attempts, 1);
 });
 
 for (const hasAudio of [true, false])

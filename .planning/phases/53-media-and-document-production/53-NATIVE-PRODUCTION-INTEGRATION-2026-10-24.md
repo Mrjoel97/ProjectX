@@ -148,3 +148,11 @@ policy work. Only current source pins needed conflict resolution; original quali
 remain unchanged. The new callback route is registered under the existing social playbook.
 Focused follow-up checks pass 8 workspace, 69 cleanup-inventory, 24 audit-projection and
 18 governance checks. Exact final-head CI is recorded on PR83.
+
+## Short launch film and owned references — 2026-10-24
+
+The owner approved one 15-second black-bottle reference film under the existing $5 operator allowance. Native targets now include 15 seconds. Product selection is explicit, tenant-owned and limited to three PNG/JPEG/WebP images. Review hashes bind the selected images; provider submission verifies their bytes. Reference changes invalidate old product footage, including same-millisecond edits, without invalidating unrelated scene retries.
+
+Free verification passed 43 campaign cases, including twenty $100 customer reservations filling the $2,000 shared limit, 10 native-duration and 67 cost cases, 61 provider-wire/storage cases, 170 focused workspace cases, 30 browser component cases across three viewport sizes, and 19 operator cases. Browser evidence is local with fixture data, not hosted authentication acceptance. The existing full CI passed at d67ade3; updated source requires its own CI run. Newly added backend reference regressions require CI after storage-metadata fixture corrections.
+
+Paid sample status and final cost are recorded separately after the provider completes. No beta deployment or registry activation is implied. Phase 53 remains partial pending owner creative acceptance and hosted release checks.`nThe single reference-conditioned Seedance 2.0 sample completed: 15.072 seconds, 720x1280, one native audio stream, actual charge $2.2743. Shared operator spend is $4.4492868 of $5, with zero unresolved charges. Provider elapsed time was 361 seconds. This is one sample, not proof of identical voices/products across batches; owner creative acceptance remains open.

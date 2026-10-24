@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   buildSubmitBody,
+  referenceImageHasExpectedType,
   SEEDANCE_CANDIDATE_MODEL,
   SEEDANCE_MINI_CANDIDATE_MODEL,
   SEEDANCE_STANDARD_MODEL,
@@ -9,6 +10,87 @@ import {
 } from "./mediaProviderContract";
 
 describe("existing media provider wire contract", () => {
+  test("reference image metadata cannot disguise non-image bytes", () => {
+    expect(
+      referenceImageHasExpectedType(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), "image/png"),
+    ).toBe(true);
+    expect(referenceImageHasExpectedType(new Uint8Array([255, 216, 255]), "image/jpeg")).toBe(true);
+    expect(
+      referenceImageHasExpectedType(new TextEncoder().encode("RIFFxxxxWEBP"), "image/webp"),
+    ).toBe(true);
+    expect(
+      referenceImageHasExpectedType(
+        new TextEncoder().encode("<html>not an image</html>"),
+        "image/png",
+      ),
+    ).toBe(false);
+  });
+  test("attaches only explicit standard native product-image references in reviewed order", () => {
+    const inputs = {
+      imageReferences: [
+        { url: "https://example.com/front.png" },
+        { url: "https://example.com/side.png" },
+      ],
+    };
+    expect(
+      buildSubmitBody(
+        {
+          kind: "video",
+          model: SEEDANCE_STANDARD_MODEL,
+          resolution: "720p",
+          seconds: 15,
+          generateAudio: true,
+        },
+        "Keep the pictured product consistent",
+        inputs,
+      ),
+    ).toMatchObject({
+      model: SEEDANCE_STANDARD_MODEL,
+      duration: 15,
+      generate_audio: true,
+      input_references: [
+        { type: "image_url", image_url: { url: "https://example.com/front.png" } },
+        { type: "image_url", image_url: { url: "https://example.com/side.png" } },
+      ],
+    });
+    expect(() =>
+      buildSubmitBody(
+        { kind: "video", model: "x-ai/grok-imagine-video", resolution: "720p", seconds: 5 },
+        "p",
+        inputs,
+      ),
+    ).toThrow("unsupported_video_references");
+    expect(() =>
+      buildSubmitBody(
+        {
+          kind: "video",
+          model: SEEDANCE_STANDARD_MODEL,
+          resolution: "720p",
+          seconds: 15,
+          generateAudio: true,
+        },
+        "p",
+        { imageReferences: [{ url: "data:image/png;base64,AA==" }] },
+      ),
+    ).toThrow("unsupported_video_reference_url");
+    expect(() =>
+      buildSubmitBody(
+        {
+          kind: "video",
+          model: SEEDANCE_STANDARD_MODEL,
+          resolution: "720p",
+          seconds: 15,
+          generateAudio: true,
+        },
+        "p",
+        {
+          imageReferences: Array.from({ length: 4 }, () => ({
+            url: "https://example.com/front.png",
+          })),
+        },
+      ),
+    ).toThrow("unsupported_video_references");
+  });
   test("preserves pinned video fields without adding unpriced options", () => {
     expect(
       buildSubmitBody(
