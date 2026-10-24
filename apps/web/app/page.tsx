@@ -4,7 +4,7 @@ import { CONTACT, SITE } from "./legal";
 export const metadata: Metadata = {
   title: "Pikar AI — your work done, nothing sent without your approval",
   description:
-    "Tell Pikar what you need done. It drafts the reply, books the meeting or writes the document, shows you first, and sends only what you approve. Every week it reads your business and proposes the next move.",
+    "Pikar AI helps businesses draft replies, prepare documents and plan social content. Connect your own accounts and approve original posts before publishing.",
   alternates: { canonical: SITE },
 };
 
@@ -76,9 +76,8 @@ export default function Home() {
               It does the work. <em>You</em> approve it.
             </h1>
             <p className="lede">
-              Tell Pikar what you need: a reply, a meeting, a document. It prepares it from your own
-              files and figures, shows you first, and sends only what you approve. Every Monday it
-              reads your business and proposes the next move.
+              Pikar AI helps businesses prepare replies, meetings, documents and social posts from
+              their own files and connected accounts.
             </p>
             <div className="cta-row">
               <a className="cta" href="/signin">
@@ -145,6 +144,22 @@ export default function Home() {
               </p>
             </div>
           </div>
+          <p>
+            With social features enabled, each customer connects their own accounts and selects
+            which accounts Pikar may use. YouTube access is used to review your own channel and
+            public video information for content planning. Uploading an original video requires your
+            explicit approval of the saved video, channel, title, visibility and disclosures.
+          </p>
+          <p>
+            Pikar AI is a free, invite-only private beta. Social connections and publishing may
+            remain unavailable while platform permissions and approvals are pending. See our{" "}
+            <a href="/privacy#social-accounts">social account data and privacy controls</a>.
+          </p>
+          <p>
+            Use only accounts and media you own or are authorised to use. Creating or sharing
+            non-consensual intimate imagery is prohibited. See our{" "}
+            <a href="/terms">acceptable use and media rights terms</a>.
+          </p>
         </section>
 
         <section className="section" id="how">
@@ -195,8 +210,9 @@ export default function Home() {
             <div>
               <h3>Start without you</h3>
               <p>
-                Pikar shows you the plan and waits. Nothing runs until you approve it, and you can
-                halt a running automation at any time.
+                Pikar can read authorised context and prepare drafts as you work. Sending mail or
+                publishing a social post waits for your approval, and you can halt a running
+                automation.
               </p>
             </div>
             <div>
