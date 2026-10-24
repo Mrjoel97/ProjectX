@@ -107,8 +107,18 @@ export function buildOnlinePresenceTools(context: {
               offer: { type: "string", maxLength: 4000 },
               services: { type: "array", items: { type: "string", maxLength: 512 }, maxItems: 8 },
               about: { type: "string", maxLength: 4000 },
-              ctaLabel: { type: "string", maxLength: 128 },
-              ctaHref: { type: "string", maxLength: 256 },
+              ctaLabel: {
+                type: "string",
+                maxLength: 128,
+                description:
+                  "Optional paired CTA label. Omit both CTA fields for the built-in contactConsent inquiry form.",
+              },
+              ctaHref: {
+                type: "string",
+                maxLength: 256,
+                description:
+                  "Evidence-backed HTTPS destination, or supported landing-page local path. Never mailto. Omit for the built-in inquiry form.",
+              },
               proof: { type: "array", items: { type: "string", maxLength: 512 }, maxItems: 6 },
               design: {
                 type: "object",
@@ -127,7 +137,12 @@ export function buildOnlinePresenceTools(context: {
                 },
                 additionalProperties: false,
               },
-              contactConsent: { type: "string", maxLength: 512 },
+              contactConsent: {
+                type: "string",
+                maxLength: 512,
+                description:
+                  "Exact owner-supplied disclosure enables the built-in email inquiry form without ctaLabel, ctaHref or an external URL.",
+              },
               sourceRefs: {
                 type: "array",
                 items: { type: "string", maxLength: 256 },

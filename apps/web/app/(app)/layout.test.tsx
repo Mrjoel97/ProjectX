@@ -79,6 +79,29 @@ const render = async () => {
 const hasPage = () => container.querySelector("h1")?.textContent === "Protected page";
 
 describe("Shell onboarding gate", () => {
+  test("Sites is reachable and current in the full and collapsed customer sidebar", async () => {
+    state.pathname = "/dashboard/sites";
+    state.viewer = { isOwner: false };
+    state.onboarding = { needsOnboarding: false };
+    await render();
+    const sites = () =>
+      container.querySelector('nav[aria-label="Primary"] a[href="/dashboard/sites"]');
+    expect(sites()?.textContent).toBe("Sites");
+    expect(sites()?.getAttribute("aria-current")).toBe("page");
+    const collapse = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Collapse",
+    );
+    expect(collapse).toBeDefined();
+    await act(async () => collapse?.click());
+    expect(sites()?.getAttribute("title")).toBe("Sites");
+    expect(sites()?.getAttribute("aria-current")).toBe("page");
+    expect(localStorage.getItem("pikar:rail-collapsed")).toBe("1");
+    state.pathname = "/dashboard/workspace";
+    await render();
+    expect(sites()?.hasAttribute("aria-current")).toBe(false);
+    expect(state.replace).not.toHaveBeenCalled();
+  });
+
   test.each([
     "/ops",
     "/ops/web-recipes",

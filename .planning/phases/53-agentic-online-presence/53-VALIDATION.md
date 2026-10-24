@@ -120,3 +120,31 @@ warnings require reviewing the actual public copy. Commerce is explicitly unavai
 
 Next work is53-02 hosted acceptance/release admission and53-03 merchant commerce. Requirements
 OPRES-01..04 stay open until their corresponding acceptance exists.
+
+
+## Native checkpoint and source repair boundary — 2026-10-24
+
+Native owner sign-in and36 exact v2 recipe protocol outcomes were observed and independently
+matched to three sealed revision12 transcripts. Existing issuer readback confirmed browser
+evidence; trusted operator activation enabled business-site/campaign-landing v2 only.
+Catalogue v2 stays candidate/private with ordering unavailable. This is exact native
+protocol acceptance, with preview clipping limitations, not full website acceptance.
+See the [recipe receipt](../../../docs/releases/2026-10-24-native-recipe-qualification.json).
+
+Legacy onboarding confirmation and ready/reviewed Vault illustration succeeded natively.
+The first website attempt failed to build: stored consent was present but the model supplied
+a mailto CTA, which the HTTPS gate refused. A consent-only form remains supported. Four
+brief saves/three context reads ended with no build call and no artifact. Raw inputs/DOM
+and private identities remain ignored. The early-closed native window restored both kill
+switches true at11:10:07.314Z, with no error/breach/unknown hold. Whole-window incremental
+upper spend$0.01160077 and cumulative stage upper spend$0.04668851 are separate from the
+eight-call website-owner/time subset$0.00465075. See the
+[partial lifecycle receipt](../../../docs/releases/2026-10-24-native-lifecycle.json).
+
+Current navigation/form guidance source pins: recipe`020145277a86e1023eadb14b02d95f730a45bad959912e5547d8f087e38d69ff`,
+golden`2026-09-11.budgeted-evaluator.4bd4583fafc728a67599750d6faf22d77511d888070e9f952c9f056d8314c60f`,
+vertical`ed197a084b072554deb8c0648df2d0445cf0f2d6b172fc335c5a815e3da072cb`. Deployment and fresh native qualification remain pending;
+these pins do not carry the historical v2 verdict forward. No new paid window or source
+qualification is created by this checkpoint.53-02/53-06 stay partial and53-03 commerce
+remains open; artifact/revision/review/publication/inquiry/offline/rollback and tenant
+acceptance are not complete.

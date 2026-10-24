@@ -206,3 +206,44 @@ A fresh actual browser reload shows email/password and verification/recovery con
 with no Google button or OR separator. Google login was not configured or exercised.
 The user's owner sign-in and authenticated recipe/lifecycle qualification remain pending;
 53-06/53-02 remain partial. No activation, publication or working checkout is claimed.
+
+
+## Native recipe qualification and paused website checkpoint — 2026-10-24
+
+The owner signed in natively on the dedicated stage. The three exact v2 recipes completed
+36 observed desktop/mobile protocol outcomes through the documented CUA Playwright API,
+with independent identity/input/artifact/frozen-transcript checks. The closed protocol ID
+remains `playwright:web-recipe`; no npm CLI execution is asserted. Existing issuer readback
+confirmed all three browser evidence rows. A trusted internal operator then activated only
+business-site v2 and campaign-landing v2 through the existing gates. This was not an owner
+UI activation; catalogue v2 remains a candidate and visibly states that ordering is
+unavailable. See the [native recipe receipt](../../../docs/releases/2026-10-24-native-recipe-qualification.json).
+Operator preview clipping remains a documented limit, not full desktop layout acceptance.
+
+Actual legacy business onboarding was reviewed/confirmed, and the native Vault upload
+reached ready with a rendered illustrative-image preview and a saved generated-demo label.
+These observations do not certify complete Foundation publishing or website media delivery.
+The first requested four-page website did not produce an artifact. Its saved brief had
+contact consent plus an unsupported mailto CTA; the existing URL gate correctly refused
+that defined target. A consent-only inquiry form does not require an external HTTPS URL.
+Four brief saves and three context reads ended without any build call; all eight trace
+steps were done by10:55:11.756Z. No automatic retry followed.
+
+The native provider window was stopped early at11:10:07.314Z. Readback confirmed provider
+access off, meaning both killSwitch and mediaKillSwitch true, no restoration error,
+zero unknown holds/held cents and no breach. Its incremental ledger upper bound is
+$0.01160077; cumulative dedicated-stage actual-charge upper bound is$0.04668851.
+The eight-call website-owner/time-window subset is$0.00465075 and is not the whole window.
+Paid UUID correlations do not establish a stronger exact-thread attribution. See the
+[partial lifecycle receipt](../../../docs/releases/2026-10-24-native-lifecycle.json).
+The two historical failed shop attempts remain unchanged.
+
+Sites navigation and form/CTA guidance repairs are source-frozen, with deployment and
+current native qualification pending. The new pins are recipe`020145277a86e1023eadb14b02d95f730a45bad959912e5547d8f087e38d69ff`,
+golden`2026-09-11.budgeted-evaluator.4bd4583fafc728a67599750d6faf22d77511d888070e9f952c9f056d8314c60f`, and
+vertical`ed197a084b072554deb8c0648df2d0445cf0f2d6b172fc335c5a815e3da072cb`.
+The earned v2 receipt is preserved as historical evidence; it does not admit the changed
+source. Complete reviewed deployment and fresh exact-source qualification before a new
+explicitly admitted native test window. No new window, complete website lifecycle,
+publication or merchant commerce is claimed.53-06/53-02/53-03 and OPRES acceptance remain
+partial/open; the separate readiness programme and progress counters are unchanged.

@@ -1,0 +1,226 @@
+{
+  "recordedAt": "2026-10-24T10:51:39.634Z",
+  "scope": "Dedicated online-presence staging recipe qualification and two recipe activations only",
+  "deployment": "third-gecko-977",
+  "frontendOrigin": "https://pikar-presence-stg.vercel.app",
+  "backendHttpOrigin": "https://third-gecko-977.convex.site",
+  "auditedCheckoutSource": "f296dc9616963cea8b877aa265ec195fbe298b18",
+  "actualDriver": "CUA documented Playwright API",
+  "protocolRunnerId": "playwright:web-recipe",
+  "protocolRoute": "/ops",
+  "nativeRoute": "/ops?view=web-recipes",
+  "evidenceRevision": "browser-observed-v5",
+  "rendererVersion": "web-design-renderer-v5",
+  "compilerId": "web-recipes-v5",
+  "modelProviderCallsForThisQualificationAndActivation": 0,
+  "nativeQualification": {
+    "nativeAuthenticatedOwnerSessionObserved": true,
+    "currentVerifiedOwnerIndependentlyMatched": true,
+    "nativeOutcomeCount": 36,
+    "recipeCount": 3,
+    "viewports": ["desktop", "mobile"],
+    "orderedOutcomes": ["selected", "partial", "refusal", "recovery", "edit", "preview"],
+    "nativeDesktopWidth": 1280,
+    "independentAuditCompletedAt": "2026-10-24T10:33:32.630Z",
+    "checks": [
+      "Exact native candidate, run and body identities matched each server observation",
+      "Native input hashes matched after actual Convex wire encoding",
+      "Refusal removed the preview artifact; recovery rendered valid input",
+      "Edit changed input and artifact hashes; preview repeated the exact edit",
+      "Both six-step lanes completed per recipe at actual allowed browser widths",
+      "Frozen transcript hash independently recomputed, matched native display and retained current owner/candidate identity"
+    ],
+    "recipes": [
+      {
+        "name": "web-recipe-business-site",
+        "version": 2,
+        "runId": "web-recipe-browser-6cfee47f-17d9-4e22-ad4a-bfb788512751",
+        "bodyHash": "1cc9754591a584a32e9518789afbb69e07a2cfb5b36bb24d68460f21209904f0",
+        "definitionHash": "sha256:23bb19c0b6305ec0f5c34ee978cd996097ca98144ab2a861c6f66db75d3807f6",
+        "bundleHash": "d818e4d9ab6fcf85b3725d578edf2fbace642dc0472e1d94922c030f7df016a8",
+        "rendererVersion": "web-design-renderer-v5",
+        "nativeViewportWidths": {
+          "desktop": 1280,
+          "mobile": 390
+        },
+        "nativeOutcomes": 12,
+        "revision": 12,
+        "frozenTranscriptHash": "c55ba115e267c6c097a52432d212920bfec6023960b488b09ff71610e3e6541f",
+        "nativeWitnessSliceSha256": "3ed050e887c4ec2b9837813d2b8ebdd20cb7ef3e9f03e0c4bd2486648f50c968",
+        "currentProvenanceValid": true,
+        "currentDeterministicEvidenceValid": true,
+        "browserEvidenceSha256": "6af53d12613397dde3bbf5f5e009909976a2d8cff83b36b3c0f670f89ef1b4b6",
+        "statusAfterActivation": "active"
+      },
+      {
+        "name": "web-recipe-campaign-landing",
+        "version": 2,
+        "runId": "web-recipe-browser-bdc3221d-0bc7-4140-95ab-d82949dff60c",
+        "bodyHash": "5463d55b930d04053da5d3a7ab72c704dcc197b3a52a6dfc08390fa0ebfc2b4c",
+        "definitionHash": "sha256:eb3fb1e997d36244c3388b344e9da3dfc3f86d7aeacba84da6866e03ef35b0bd",
+        "bundleHash": "d818e4d9ab6fcf85b3725d578edf2fbace642dc0472e1d94922c030f7df016a8",
+        "rendererVersion": "web-design-renderer-v5",
+        "nativeViewportWidths": {
+          "desktop": 1280,
+          "mobile": 480
+        },
+        "nativeOutcomes": 12,
+        "revision": 12,
+        "frozenTranscriptHash": "8d103df78d5000031a99d391e858fb3ea0a0a5820dbfda7a2075097ea195a080",
+        "nativeWitnessSliceSha256": "369e278b39659d845580f0f863fff32e027205cef5f128632b853e086d46c62b",
+        "currentProvenanceValid": true,
+        "currentDeterministicEvidenceValid": true,
+        "browserEvidenceSha256": "9a0a3d927ea9b798cc5c8c2009803f16c9906519348c62781aae104335119748",
+        "statusAfterActivation": "active"
+      },
+      {
+        "name": "web-recipe-storefront-catalogue",
+        "version": 2,
+        "runId": "web-recipe-browser-eca7103e-82a8-4335-8eb2-a266637dd36d",
+        "bodyHash": "3eb3edcb83833e902a72c7d44a42e2a4dfae0b262758bda475d366afab30a634",
+        "definitionHash": "sha256:7db025973a4f403fd41032aaababba2a00e1da6fdfbfb6d12da7f99f62b745e3",
+        "bundleHash": "d818e4d9ab6fcf85b3725d578edf2fbace642dc0472e1d94922c030f7df016a8",
+        "rendererVersion": "web-design-renderer-v5",
+        "nativeViewportWidths": {
+          "desktop": 1280,
+          "mobile": 480
+        },
+        "nativeOutcomes": 12,
+        "revision": 12,
+        "frozenTranscriptHash": "0f1df7dbcd5d0daf7e69a344067f2b32b0f86494e65303333d2e9fd5deef67c8",
+        "nativeWitnessSliceSha256": "129051d76f9e25e6e804a7fb3afcc42500adb52b072d3fd6097ef0597b2c036f",
+        "currentProvenanceValid": true,
+        "currentDeterministicEvidenceValid": true,
+        "browserEvidenceSha256": "71640ca147cc2122282c26165267752221add34b4d61fa28e381f8dd5be68cc6",
+        "statusAfterActivation": "candidate"
+      }
+    ],
+    "additionalBusinessMobileReviewWidth": 480,
+    "interpretation": "The actual driver is the documented CUA Playwright API; the closed protocol identifier does not assert npm Playwright CLI execution"
+  },
+  "evidenceIssuance": {
+    "issuer": "Existing internal skills.recordWebRecipeBrowserEvidence",
+    "actor": "Trusted operator attesting independently reviewed actual native owner observations",
+    "initialAttemptStartedAt": "2026-10-24T10:42:12.325Z",
+    "initialAttempt": "Business evidence was written successfully; a local helper then failed parsing the void issuer return",
+    "recovery": "Read-only reconciliation confirmed the exact business payload before explicit resume; business was skipped and only the two missing payloads were written",
+    "resumedAt": "2026-10-24T10:46:18.105Z",
+    "completedAt": "2026-10-24T10:46:45.510Z",
+    "resumeWrites": 2,
+    "evidenceRowsReadBack": 3,
+    "exactReadbackConfirmed": true,
+    "activationPerformedByIssuer": false,
+    "publicationPerformedByIssuer": false
+  },
+  "activation": {
+    "actor": "trusted internal operator; not an impersonated browser owner",
+    "mechanism": "Existing trusted internal skills.activateSkill with the shared recipe evidence gate; not a native owner UI click",
+    "startedAt": "2026-10-24T10:48:02.943Z",
+    "completedAt": "2026-10-24T10:48:11.768Z",
+    "activated": [
+      {
+        "name": "web-recipe-business-site",
+        "version": 2
+      },
+      {
+        "name": "web-recipe-campaign-landing",
+        "version": 2
+      }
+    ],
+    "exactReadbackConfirmed": true,
+    "storefrontCatalogueRemainsCandidate": true,
+    "providerCalls": false,
+    "publication": false
+  },
+  "catalogueBoundary": {
+    "privatePresentationOnly": true,
+    "nativeAccessibilityAndScreenshotNoticeObserved": true,
+    "observedNotice": "Ordering is unavailable in this presentation-only catalogue.",
+    "editedItemAndDescriptionObserved": true,
+    "storefrontRecipeActivated": false,
+    "checkoutEnabled": false,
+    "ordersCreated": false,
+    "interpretation": "Earned browser evidence for a private catalogue presentation is not merchant checkout, payment, inventory, fulfilment or public shop acceptance"
+  },
+  "evidenceFiles": {
+    "privateDirectory": ".tmp/presence-native-20261024/",
+    "records": [
+      {
+        "name": "all-recipes-independent-audit.json",
+        "sha256": "23d565c9fe72f760893ce5665a1e9c040be85a4d9dde5ee8b48380f7c6b51ae3"
+      },
+      {
+        "name": "sealed-protocol-witness.private.json",
+        "sha256": "6ed2f38059c6fed1f15368e5a4e00b2d11aae8f214b59c23fd0bf254b7d38a7d"
+      },
+      {
+        "name": "all-recipe-seals-readback.private.json",
+        "sha256": "537f14a6cc5f28c7d23c76329547c56622b510e43e2664a598c039903649bf8e"
+      },
+      {
+        "name": "recipe-browser-evidence-payloads.private.json",
+        "sha256": "e0b8161afe0c45c97d9ac9af72df069ff2ce2c496ea3eb8d9d02c294831bfe0b"
+      },
+      {
+        "name": "browser-evidence-issuance-first-attempt.private.json",
+        "sha256": "134624da524f0f9c820bd5a74b4be55ab506987649157ae6221d3403f701f0c1"
+      },
+      {
+        "name": "browser-evidence-issuance.private.json",
+        "sha256": "c9a05605d0750db1f3e2b71bd5af4befa84d75b1b7cdae74c003a099620d5a07"
+      },
+      {
+        "name": "service-recipe-activation.private.json",
+        "sha256": "41856bcd023a40e9012bb4bcb35a4dd2d3723825dfbcde87a78a925092c6c37e"
+      }
+    ],
+    "screenshots": [
+      {
+        "name": "business-desktop.jpg",
+        "sha256": "a47a2ce6df56a64ea79cb3a1c3bee30ace9401a26cba1a41ba7fdd31d8f651fa"
+      },
+      {
+        "name": "business-mobile.jpg",
+        "sha256": "792e43a7d4d7a3e299efc0bb8713827c38d21243b89edc00cf3397b4ad8b3df1"
+      },
+      {
+        "name": "business-mobile-visible.jpg",
+        "sha256": "ce2bd3c0ee8ae44019a8985c05275584d83db8c9458e4595fc535e8b1421151f"
+      },
+      {
+        "name": "campaign-desktop.jpg",
+        "sha256": "8ffe8833c87c427d3de6fb83efebba9f88e8dd8b357e4ec0dc84e350ecba02ea"
+      },
+      {
+        "name": "campaign-mobile.jpg",
+        "sha256": "f35291afaa303069fca1e4d183d6a6e56e28d8bc0896a594bd2000f7003d0eae"
+      },
+      {
+        "name": "catalogue-desktop.jpg",
+        "sha256": "cdbc26402860e39d60b195964f4eaae8d81b9bb51c9a105fe39cbe5754c879bc"
+      },
+      {
+        "name": "catalogue-mobile.jpg",
+        "sha256": "0cb78ce57d29a5e33ca5eaf89ee95cc9a2e5290163758965cad189a78582e99c"
+      },
+      {
+        "name": "catalogue-mobile-bottom.jpg",
+        "sha256": "fa3aef83cd8782e1f62810792160418402ab9452bdc3fca81d97af4da3b55154"
+      }
+    ]
+  },
+  "limits": [
+    "This receipt certifies the exercised native recipe protocol and exact operator activations only; it does not claim a completed website lifecycle",
+    "The operator panel clips fixed preview frames at desktop1280 and business-mobile390; an additional480-wide business review shows the full edited heading and frozen hash",
+    "Inert previews disable navigation, forms, scripts and image loading; original interactive pages, image delivery and inquiry behavior require separate acceptance",
+    "No full desktop viewport-fit, customer business quality, merchant checkout or production release acceptance is inferred",
+    "No raw emails, native user IDs, registry row IDs, browser credentials, model document text or raw DOM snapshots are included",
+    "Historical failed paid evaluations and previous release receipts remain unchanged"
+  ],
+  "pending": [
+    "Native customer Foundation/documents and missing-answer flow through an image-backed private website draft",
+    "Actual draft revision, exact content review and explicit approved publication",
+    "Native inquiry handling, unpublish/offline, rollback and cross-tenant isolation acceptance",
+    "Passing shop model-quality acceptance and any live merchant commerce implementation"
+  ]
+}

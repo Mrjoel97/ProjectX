@@ -310,6 +310,43 @@ test("a model cannot invent consent wording or a booking destination", async () 
   }
 });
 
+test("a same-thread consent-only brief replaces and clears an earlier unsupported mailto CTA", async () => {
+  const consent = "I consent to Acme contacting me about my inquiry.";
+  const { t, tenantId, planId, session, brief, threadId } = await setup(
+    `Acme designs gardens. Use an email inquiry form. ${consent}`,
+  );
+  const refused = await t.mutation(internal.onlinePresence.saveBrief, {
+    tenantId,
+    planId,
+    expectedRevision: session.revision,
+    brief: {
+      ...brief,
+      contactConsent: consent,
+      ctaLabel: "Inquire now",
+      ctaHref: "mailto:inquiry@example.com",
+    },
+  });
+  expect(refused.ok).toBe(false);
+  const before = await t
+    .withIdentity({ subject: `${tenantId}|session` })
+    .query(api.onlinePresence.sessionForThread, { threadId });
+  expect(before?.brief.ctaHref).toBe("mailto:inquiry@example.com");
+  const saved = await t.mutation(internal.onlinePresence.saveBrief, {
+    tenantId,
+    planId,
+    expectedRevision: refused.revision,
+    brief: { ...brief, contactConsent: consent },
+  });
+  expect(saved.ok).toBe(true);
+  const after = await t
+    .withIdentity({ subject: `${tenantId}|session` })
+    .query(api.onlinePresence.sessionForThread, { threadId });
+  expect(after?.brief).toMatchObject({ contactConsent: consent });
+  expect(after?.brief).not.toHaveProperty("ctaLabel");
+  expect(after?.brief).not.toHaveProperty("ctaHref");
+  expect(after?.status).toBe("ready");
+});
+
 test("brand color must be explicit in selected business evidence and survives actual materialization", async () => {
   const { t, tenantId, planId, session, brief } = await setup(
     "Acme designs gardens. Our existing brand color is #246B58.",

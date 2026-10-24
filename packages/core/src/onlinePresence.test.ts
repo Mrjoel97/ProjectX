@@ -6,7 +6,7 @@ import {
   type OnlinePresenceSource,
   onlinePresenceServiceState,
 } from "./onlinePresence";
-import { validateWebRecipeInput } from "./webRecipes";
+import { materializeWebRecipe, validateWebRecipeInput } from "./webRecipes";
 
 const source: OnlinePresenceSource = {
   ref: "foundation:business:3",
@@ -160,6 +160,51 @@ describe("attended online presence brief", () => {
       if (result.ok)
         expect(result.input).toHaveProperty("ctaHref", "https://example.com/consultation");
     }
+  });
+
+  test.each([
+    "landing",
+    "website",
+  ] as const)("materializes a consent-only %s inquiry form without an external CTA", (kind) => {
+    const consent = "I consent to Acme contacting me about my inquiry.";
+    const result = assess({ kind, contactConsent: consent });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected a complete built-in inquiry brief");
+    expect(result.input).not.toHaveProperty("ctaLabel");
+    expect(result.input).not.toHaveProperty("ctaHref");
+    expect(result.input).not.toHaveProperty("ctaPath");
+    const document = materializeWebRecipe(
+      result.recipeId,
+      kind === "website"
+        ? { ...result.input, pageMode: "multi-page", projectSlug: "acme-inquiry" }
+        : result.input,
+    );
+    const nodes = document.pages.flatMap((page) => page.nodes);
+    expect(nodes.filter((node) => node.kind === "form")).toEqual([
+      expect.objectContaining({ fields: ["email"], consent }),
+    ]);
+    expect(nodes.some((node) => node.kind === "cta")).toBe(false);
+    if (kind === "website") {
+      expect(document.pages.find((page) => page.slug === "contact")?.nodes).toContainEqual(
+        expect.objectContaining({ kind: "form", consent }),
+      );
+      expect(document.navigation).toContainEqual(
+        expect.objectContaining({ path: "/p/acme-inquiry/contact" }),
+      );
+    }
+  });
+
+  test("still refuses a mailto CTA when a valid built-in inquiry consent is supplied", () => {
+    const result = assess({
+      ctaLabel: "Inquire now",
+      ctaHref: "mailto:inquiry@example.com",
+      contactConsent: "I consent to Acme contacting me about my inquiry.",
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("Expected unsupported CTA refusal");
+    expect(result.missing).toContainEqual(
+      expect.objectContaining({ field: "ctaHref", reason: "unsupported_sales_path" }),
+    );
   });
 
   test("blocks executable destinations, unsupported text and incomplete CTA pairs", () => {

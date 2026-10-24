@@ -14,7 +14,7 @@ export const WEB_RECIPE_EVAL_RUNNER = "eval:web-recipe-deterministic" as const;
 export const WEB_RECIPE_EVAL_FIXTURE_HASH =
   "fc9ff50300ef7de36d4b2e7f28ea32518e10d7f2ad4e18d258ec6e80caa2b379" as const;
 export const WEB_RECIPE_EVAL_IMPLEMENTATION_HASH =
-  "9dcc29ebea307d30fd9f998d34fefa37a2136ab88c2931079c050fac608d3410" as const;
+  "020145277a86e1023eadb14b02d95f730a45bad959912e5547d8f087e38d69ff" as const;
 export const WEB_RECIPE_BROWSER_RUNNER = "playwright:web-recipe" as const;
 export const WEB_RECIPE_BROWSER_ROUTE = "/ops" as const;
 export const WEB_RECIPE_BROWSER_EVIDENCE_REVISION = "browser-observed-v5" as const;

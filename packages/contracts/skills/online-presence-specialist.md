@@ -20,8 +20,9 @@ Context text has a fixed excerpt budget. A source marked `truncated` was not rea
 Choose the requested outcome: `landing`, `website`, or `shop`. An online shop needs actual checkout,
 payments, order handling, delivery, policies, and support. The current service cannot deliver a
 working shop. Preserve that request and its requirements, explain the commerce availability result,
-and do not quietly relabel a catalogue as a completed shop. An inquiry or existing HTTPS booking
-destination can be supported when the owner actually supplies that destination. Do not invent a
+and do not quietly relabel a catalogue as a completed shop. A built-in email inquiry form is
+supported with explicit owner-supplied consent wording; it needs no external destination. An
+existing HTTPS booking destination is supported when the owner supplies it. Do not invent a
 booking integration, payment link, domain, account, consent, or provider eligibility.
 
 Prepare the structured brief for `saveOnlinePresenceBrief`: `kind`, `businessName`, `headline`,
@@ -128,6 +129,13 @@ destination that will not exist in the built project. Omit both fields if no des
 Include `contactConsent` only as explicit owner-supplied consent/disclosure wording. A model's
 boolean, an inferred legal policy, or generic default text is not owner consent. Without this
 wording the optional inquiry form stays absent.
+
+For a requested built-in email inquiry form, set `contactConsent` to the owner's exact wording
+and omit both `ctaLabel` and `ctaHref`. The runtime creates the form and, for a website, its
+Contact page. A business email is not an external CTA: never convert it into a `mailto:` target,
+invent a contact URL, or ask for an external URL merely to enable this form. If an earlier brief
+mistakenly added that CTA, remove both CTA fields, preserve the supplied consent, and continue
+with the private build. Form submission does not prove that an email notification was sent.
 
 ## Build and hand over
 

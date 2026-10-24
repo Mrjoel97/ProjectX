@@ -146,3 +146,30 @@ Final parity/native/probe/responsive observations and [23-06 completion](phases/
 Separate offline diagnosis reproduced malformed-recipient email intent falling through to general/gmailRequired=false, with synthetic case 08 media/team dispatch and CRM writes before email tools appeared on a media-kind plan. This does not identify the generic exception branch. The narrow routing repair is implemented: 39 routing/four diagnostic tests pass. The later emailOnly oracle correction passes 25 scoped-query tests and the 57-fixture/12-skill self-check; fixture 08's stronger expectation changes the corpus hash while retaining 46 cases, with exact new pins in 23-07-SUMMARY. These offline checks supply no live semantic pass; original preflight remains evidence only for the old attempt. A separate 14:58:53.908Z read-only postcheck confirmed unchanged candidate provenance/global registry/protected retention and the closed 89-call budget at the same cost. The later current-source handoff is recorded below, without new paid consent.
 
 Approved PR79 merged `2314691a6fd34f85b3b0fd8febdbf43bf500ee45`; [staging release](phases/48-readiness-and-qualification-closure/48-STAGING-PR79-RELEASE-2026-10-20.json) run `39460078883`/job `118756953910` succeeded for source `b10740d6466db155c48519aba6323d5b0c27c406`/CI `39446162910`. Apply, postflight, zero parity, preservation and billing verification passed; watched configuration/registry/protected retention unchanged. Approval hash `53269cc546d1e7b6be1ba17a49f310591e5c6a564513f343bf1a0a41cd102371` covers staging/current A/B checks/versioned handoff only. Current read-only/native checks preserved candidate/provenance/baseline/effective/global/foreign and closed budget. At 17:01:27.296Z the new [current handoff](phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json), SHA `ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61`, passed immutable writer/scanner/live match with six stable reads; [refresh receipt](phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-HANDOFF-REFRESH.json) records actual 1440x900/390x900 iframe proof and direct native keyboard review (embedded controls untested). It supersedes only the next-input reference; historical bytes remain unchanged. PaidReady/paidAuthorized false; no new paid evaluation/B mutation/activation/production release. Phase 23 six of nine/48 partial,49 not started.
+
+
+## Online-presence native checkpoint — 2026-10-24
+
+This dated continuation supersedes only October23's pending owner/recipe statements.
+The native owner signed in, three exact v2 recipes earned36 observed outcomes and sealed
+browser evidence, and a trusted operator activated business/campaign v2 through existing
+gates. Catalogue v2 remains a private candidate with ordering unavailable. See the
+[native recipe receipt](../docs/releases/2026-10-24-native-recipe-qualification.json).
+
+Legacy onboarding and ready/reviewed Vault illustration succeeded. The first website
+attempt produced no artifact: the model supplied an unsupported mailto CTA despite stored
+contact consent; the URL gate correctly refused it. No build tool was called. A consent-only
+inquiry form is supported. Early closure at11:10:07.314Z restored both kill switches true,
+with0unknown holds/held cents and no breach. Incremental native-window upper spend is
+$0.01160077 and cumulative dedicated-stage upper spend$0.04668851; the website-owner/time
+subset of8settled calls/$0.00465075 is not the whole window. See the
+[partial lifecycle receipt](../docs/releases/2026-10-24-native-lifecycle.json).
+
+Navigation/form guidance repairs are source-frozen, pending reviewed deployment and fresh
+native qualification: recipe`020145277a86e1023eadb14b02d95f730a45bad959912e5547d8f087e38d69ff`,
+golden`2026-09-11.budgeted-evaluator.4bd4583fafc728a67599750d6faf22d77511d888070e9f952c9f056d8314c60f`,
+vertical`ed197a084b072554deb8c0648df2d0445cf0f2d6b172fc335c5a815e3da072cb`. Preserve the v2 receipt as historical, not admission for the
+changed source. No new model window, completed website lifecycle, publication or working
+checkout is claimed.53-02/53-06/53-03 and OPRES acceptance remain partial/open. Existing
+Phase48/production scopes, historical failed paid attempts and progress counters remain
+unchanged.

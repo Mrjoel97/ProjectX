@@ -66,6 +66,7 @@ const NAV: Array<{ label: string; icon: ReactNode; href: string }> = [
     href: "/dashboard/skills-workflows",
     icon: <BrainIcon size={18} />,
   },
+  { label: "Sites", href: "/dashboard/sites", icon: <GlobeIcon /> },
   { label: "Live Voice", href: "/dashboard/voice", icon: <MicIcon size={18} /> },
   // 26-17 Task 3: LIVE on the owner UAT verdict, 2026-08-22 ("The report interface is okay").
   // The branch keys off `href`, so ROLLBACK IS DELETING IT — and rollback touches no data: a
