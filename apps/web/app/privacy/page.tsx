@@ -457,6 +457,32 @@ export default function Privacy() {
         required by Article 12(3) GDPR.
       </p>
       <p>
+        <strong>YouTube-specific limits override the general retention periods.</strong> YouTube
+        API-derived channel and video metadata must be refreshed or deleted within 30 calendar days.
+        We retain authorisation tokens only while needed for the access you consented to. General
+        account or audit retention does not extend these limits to YouTube API data in histories or
+        other retained records.
+      </p>
+      <p>
+        When you disconnect YouTube in Pikar, we immediately request token revocation from Google.
+        Data obtained under that consent must be deleted as soon as possible and within 7 calendar
+        days. The same 7-calendar-day deadline applies when you request deletion of stored YouTube
+        data by contacting us, or erase your Pikar account. If you revoke through Google Account
+        connections instead, related YouTube API data must be deleted as soon as possible and within
+        30 calendar days; authorisation must be periodically checked and data deleted when the token
+        cannot be refreshed. These deadlines take precedence over the one-month response period in
+        section 10.
+      </p>
+      <p>
+        These limits concern data obtained through YouTube APIs, rather than original drafts or
+        media you supplied independently. Removing Pikar data does not delete videos on YouTube;
+        manage those in YouTube. YouTube API-derived data remains unavailable to agents, and new
+        connections and publishing remain restricted pending platform and retention checks. We have
+        not verified removal of every historical copy from conversations or other retained records.
+        A disconnect or account-closed message alone does not confirm that verification; contact us
+        for the status of your deletion request.
+      </p>
+      <p>
         Account access ends during erasure. Removal of search copies can continue in the background
         after the account-closed message appears. That message does not confirm that background
         removal has finished; contact us for confirmation of completion.
