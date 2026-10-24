@@ -116,6 +116,7 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
   "managed_service.run_reconciled": ["serviceRef", "runRef", "revision", "controlRevision"],
   "managed_service.goal_linked": ["serviceRef", "goalRef", "revision", "controlRevision"],
   "managed_service.usefulness_recorded": ["runRef", "usefulness"],
+  "service.knowledge_confirmed": ["serviceRef", "conversationRevision", "reviewHash", "fieldCount"],
   // 28.1-10. An owner-raised charge on a tenant's bill. `ref` and `periodKey` are the two halves of
   // the Stripe idempotency identity, `charges` is the resulting line COUNT, and there is no
   // description field anywhere in the payload — the owner's reason for a charge belongs in their

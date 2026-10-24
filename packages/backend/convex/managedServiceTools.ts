@@ -107,7 +107,7 @@ export function buildManagedServiceTools(
       Record<string, never>
     >({
       description:
-        "Propose the user's answer to the current social setup question as a reviewable draft. Reuse their words or a clearly reviewable summary. Does not confirm business facts, start work, or approve publication. Read the current conversation first; the user confirms the visible review card.",
+        "Propose the user's answer as a draft for review. Read the current question first. The user confirms it; this tool cannot confirm facts, start work or approve publishing.",
       inputSchema: jsonSchema<{ key: ServiceKnowledgeKey; value: string }>({
         type: "object",
         additionalProperties: false,

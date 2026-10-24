@@ -30,6 +30,43 @@ const row = (over: Partial<Row> = {}): Row => ({
 });
 
 describe("audit viewer projection — the payload boundary", () => {
+  test("knowledge confirmation shows references and counts without source details or business statements", () => {
+    const visible = {
+      serviceRef: "service_1",
+      conversationRevision: 6,
+      reviewHash: "b".repeat(64),
+      fieldCount: 2,
+    };
+    const projected = projectAuditRow(
+      row({
+        eventType: "service.knowledge_confirmed",
+        payload: {
+          ...visible,
+          fieldRefs: [
+            "offering:svc_service-intake-12345678-1234-4234-8234-123456789abc_6_offering:" +
+              "a".repeat(64),
+          ],
+          text: "Private offering details",
+          answers: { offering: "private source text" },
+          email: "owner@example.com",
+        },
+      }),
+    );
+    expect(projected.known).toBe(true);
+    expect(projected.refs).toEqual(visible);
+    expect(projected.unsafeDrops).toBe(0);
+    expect(JSON.stringify(projected)).not.toMatch(
+      /Private offering|private source|owner@example|svc_service-intake/,
+    );
+    const malformed = projectAuditRow(
+      row({
+        eventType: "service.knowledge_confirmed",
+        payload: { ...visible, serviceRef: "Private business details" },
+      }),
+    );
+    expect(malformed.refs).not.toHaveProperty("serviceRef");
+    expect(malformed.unsafeDrops).toBe(1);
+  });
   test("service recovery, goals and feedback expose references without private content", () => {
     for (const [eventType, refs] of [
       [

@@ -114,19 +114,19 @@ test("runCockpitAgent has one spine-first turn-prompt assembly with the exact le
   );
 
   expect(handler).toMatch(
-    /prompt:\s*buildTurnPrompt\(\{\s*spine,\s*finance,\s*history,\s*plan,\s*tz:\s*clientContext\?\.tz,\s*text\s*\}\)/,
+    /prompt:\s*buildTurnPrompt\(\{\s*spine,\s*finance,\s*knowledge,\s*history,\s*plan,\s*tz:\s*clientContext\?\.tz,\s*text,?\s*\}\)/,
   );
   expect(handler.match(/\bprompt:/g) ?? []).toHaveLength(1);
   expect(src).not.toContain(
     "prompt: `${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, clientContext?.tz)}\\n\\nThe user says: ${text}`",
   );
 
-  // TWO standing-context channels since 2026-08-10, joined HERE and nowhere else: the blueprint
+  // Three independent standing-context channels, joined HERE and nowhere else: the blueprint
   // spine (`internal.blueprint.spineForTenant`, which is also `evaluations.ts`'s grounding chunk)
-  // and the finance line (`internal.cash.financeSpineFor`). Still one expression, still
-  // zero bytes when both are null, still the current user turn as the final line.
+  // and finance line, then scoped confirmed service information. Service statements must not enter
+  // the Blueprint grounding string. Still zero bytes when absent and the user turn remains last.
   expect(code).toMatch(
-    /const standing = \[spine, finance\]\.filter\(\(p\) => p !== null\)\.join\("\\n"\);/,
+    /const standing = \[spine, finance, knowledge\]\.filter\(\(p\) => p != null\)\.join\("\\n"\);/,
   );
   expect(code).toMatch(
     /return `\$\{standing === "" \? "" : `\$\{standing\}\\n\\n`\}\$\{buildHistoryBlock\(history\)\}\$\{buildAgentContext\(plan \?\? \{\}, tz\)\}\\n\\nThe user says: \$\{text\}`;/,
