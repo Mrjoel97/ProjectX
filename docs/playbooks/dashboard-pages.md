@@ -3247,3 +3247,10 @@ Last verified: 2026-09-12 — `e2e/marketing-uat.spec.ts` collects three serial,
 Last verified: 2026-10-15 — Delivery report badges distinguish unknown external outcomes and expose mailbox reconciliation. Ordinary status labels remain readable.
 
 Last verified: 2026-10-15 — The operator confirmed legal name pikar-ai, operating country Tanzania and support joel@pikar-ai.com. Legal banners now accurately describe unresolved address/review rather than asserting an unformed entity or an active build block. Commercial billing must stay disabled for this release by explicit operator instruction; registered address remains pending.
+
+### 2026-10-23 — Service supervision
+
+The Skills and Workflows service card links an owned business goal using current configuration/control revisions. The results panel separates completed work, the user's usefulness feedback, supported account measurements and unproven business improvement. Feedback cannot complete a goal or approve a post. Pending work disables goal edits. Check interrupted work asks the native workflow and ledger before closing an interrupted claim; unresolved cost or unavailable liveness keeps it blocked. Closing never automatically starts another run. Synthetic interface states were reviewed at390/768/1440 pixels without horizontal overflow; this is not hosted authenticated acceptance.
+# Finance projection update
+
+> Last verified: 2026-10-24 — Finance reports a recurring service's prepaid standing envelope once. Its `paid_call_standing` provider-detail receipts remain in the append-only ledger for exact run reconciliation but are excluded from displayed money totals and chart buckets. Reads bound the raw ledger scan before filtering and derive the partial indicator from the scanned count, so a full detail page cannot quietly become a complete zero. Native Finance/accounting regression covers cumulative sub-cent usage without duplicate charges; hosted financial and recurring-service acceptance remain separate.

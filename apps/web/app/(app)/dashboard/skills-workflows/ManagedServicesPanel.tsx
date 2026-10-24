@@ -5,6 +5,9 @@ import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { type CSSProperties, useRef, useState } from "react";
+import { ServiceKnowledgeConversation } from "./ServiceKnowledgeConversation";
+import { ServiceGoalLink, ServiceOutcomesPanel } from "./ServiceOutcomesPanel";
+import { ServiceRecurrencePanel } from "./ServiceRecurrencePanel";
 
 type Service = NonNullable<FunctionReturnType<typeof api.managedServices.status>>;
 type Options = FunctionReturnType<typeof api.managedServices.setupOptions>;
@@ -58,6 +61,8 @@ const reasons: Record<string, string> = {
   unsupported_service_operation: unavailable,
   budget_limit_unavailable: "Review the maximum spend per run in setup before starting.",
   source_unavailable: "Complete your business profile before running this activity.",
+  business_information_required:
+    "Pikar needs a few business details. Continue the conversation below.",
   service_paused_or_stopped: "This service is paused or stopped.",
 };
 const accountKey = (a: { provider: string; accountId: string }) => `${a.provider}:${a.accountId}`;
@@ -191,7 +196,6 @@ function ServiceSetup({
   const valid =
     goal.trim().length > 0 &&
     selectedOps.length > 0 &&
-    !missing &&
     usable.length === selected.length &&
     selected.length <= 8 &&
     options.skills.length > 0 &&
@@ -333,7 +337,8 @@ function ServiceSetup({
       </fieldset>
       {missing && (
         <p style={muted}>
-          Choose a Buffer account to prepare content and a Zernio account to review engagement, or
+          You can save this setup and answer business questions now. Before work starts, choose a
+          Buffer account for content preparation and a Zernio account for engagement reports, or
           turn off the activity you do not need.
         </p>
       )}
@@ -409,6 +414,7 @@ function ServiceCard({
   const service = useQuery(api.managedServices.status, { serviceId });
   const runs = useQuery(api.managedServiceRuns.list, { serviceId });
   const start = useAction(api.managedServiceRuns.start);
+  const reconcile = useMutation(api.managedServiceRuns.reconcile);
   const setControl = useMutation(api.managedServices.setControl);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -422,6 +428,7 @@ function ServiceCard({
   const blockedByRun = runs?.items.some((run) =>
     ["claimed", "running", "unknown"].includes(run.state),
   );
+  const pending = runs?.items.find((run) => ["claimed", "running", "unknown"].includes(run.state));
   const canStart =
     service.readiness.ready &&
     service.controlState === "active" &&
@@ -477,6 +484,13 @@ function ServiceCard({
         </span>
       </div>
       <p style={{ margin: 0, overflowWrap: "anywhere" }}>{service.goal}</p>
+      <ServiceGoalLink
+        serviceId={service.id}
+        revision={service.revision}
+        controlRevision={service.controlRevision}
+        goalId={service.goalId}
+        disabled={Boolean(pending) || busy}
+      />
       <p style={muted}>
         {service.operationIds
           .map((id) => operations.find((op) => op.id === id)?.label ?? "Other service activity")
@@ -520,11 +534,60 @@ function ServiceCard({
           </Link>
         )}
       </div>
+      {supportsEditor && (
+        <ServiceKnowledgeConversation
+          serviceId={serviceId}
+          disabled={Boolean(pending) || busy || service.controlState !== "active"}
+          budgetLimitCents={service.budgetLimitCents}
+          runReadiness={{
+            revision: service.revision,
+            controlRevision: service.controlRevision,
+            reasons: service.readiness.reasons,
+          }}
+        />
+      )}
+      {supportsEditor && (
+        <ServiceRecurrencePanel service={service} disabled={Boolean(pending) || busy} />
+      )}
+      {latest && <ServiceOutcomesPanel key={latest.runId} runId={latest.runId} />}
       {blockedByRun && (
         <p style={muted}>
           A run is still active or has an uncertain outcome. Another run cannot start until it is
           resolved.
         </p>
+      )}
+      {pending && (
+        <button
+          type="button"
+          style={controlStyle(busy)}
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setNotice("");
+            void reconcile({
+              runId: pending.runId,
+              expectedRevision: service.revision,
+              expectedControlRevision: service.controlRevision,
+            })
+              .then((result) =>
+                setNotice(
+                  result.resolved
+                    ? "Interrupted work closed. Review any saved drafts before starting a new run."
+                    : result.reason === "still_running"
+                      ? "Pikar is still working. No additional run was started."
+                      : result.reason === "unsettled_cost"
+                        ? "The final cost is not confirmed yet. The service stays on hold."
+                        : "Could not confirm the job status. The service stays on hold.",
+                ),
+              )
+              .catch(() =>
+                setNotice("Could not check this run. Refresh to check its latest state."),
+              )
+              .finally(() => setBusy(false));
+          }}
+        >
+          Check interrupted work
+        </button>
       )}
       <div style={row}>
         <button

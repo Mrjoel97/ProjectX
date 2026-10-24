@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: "Platform -> Private Beta"
-current_phase: 48
-current_plan: "49-01–05 — Local attended social boundary, scoped execution and supervision built; release admission and composition/live acceptance remain open. Phase48 qualification is retained as a separate release prerequisite."
+current_phase: 52
+current_plan: "50–52 — Recurring social operations and conversational business enrichment integrated locally under ADR067/068. Final exact-source CI, authenticated hosted acceptance and production release remain open."
 status: in_progress
-stopped_at: "2026-10-23 — Joined local UI/Executive start → durable claim → scoped SDK → draft/result path passes. Budget, isolation and control checks pass. No paid evaluation, activation or production deployment."
-last_updated: "2026-10-23"
+stopped_at: "2026-10-24 — Integrated recurring social and conversational setup. Focused native/UI checks, strict backend/web types and 22 offline gates pass; exact-source hosted CI/release pending. Production unchanged."
+last_updated: "2026-10-24"
 progress:
   total_phases: 79
   completed_phases: 54
@@ -18,6 +18,8 @@ progress:
 # Project State
 
 ## Current execution order
+
+October 24 continuation: the owner requested completing recurrence and the live social pilot before production merge, then approved social-first conversational post-onboarding enrichment. The ADR067 dispatcher, opt-in schedule UI, whole-run accounting, draft editing/rejection/recovery, authoritative permalink linkage and ADR068 confirmed business conversation are implemented in the working release candidate. See [current execution and remaining hosted acceptance](phases/50-recurring-read-and-prepare-services/50-EXECUTION-2026-10-24.md) and [conversational business operations](design/conversational-business-operations.md). Actual existing Auckland/Lord Howe DST receipts were collected; they do not certify the new runtime. No production merge or live-pilot completion is claimed. The historical qualification pointers below retain their original scope.
 
 The owner approved the managed-service programme on 2026-10-19: **48 readiness → 49 shared boundary → 50 recurring read/prepare → 51 brain outcomes → 52 complete social pilot**. Release/live admission retain that order. Following the owner's 2026-10-22 instruction to correct the delivery hindrance and get the engine built, independent reversible offline implementation may run in parallel; unfinished capabilities remain unavailable. See the programme's execution correction. This changes development sequencing, not qualification results, spending consent or release readiness.
 
@@ -126,3 +128,14 @@ Final parity/native/probe/responsive observations and [23-06 completion](phases/
 Separate offline diagnosis reproduced malformed-recipient email intent falling through to general/gmailRequired=false, with synthetic case 08 media/team dispatch and CRM writes before email tools appeared on a media-kind plan. This does not identify the generic exception branch. The narrow routing repair is implemented: 39 routing/four diagnostic tests pass. The later emailOnly oracle correction passes 25 scoped-query tests and the 57-fixture/12-skill self-check; fixture 08's stronger expectation changes the corpus hash while retaining 46 cases, with exact new pins in 23-07-SUMMARY. These offline checks supply no live semantic pass; original preflight remains evidence only for the old attempt. A separate 14:58:53.908Z read-only postcheck confirmed unchanged candidate provenance/global registry/protected retention and the closed 89-call budget at the same cost. The later current-source handoff is recorded below, without new paid consent.
 
 Approved PR79 merged `2314691a6fd34f85b3b0fd8febdbf43bf500ee45`; [staging release](phases/48-readiness-and-qualification-closure/48-STAGING-PR79-RELEASE-2026-10-20.json) run `39460078883`/job `118756953910` succeeded for source `b10740d6466db155c48519aba6323d5b0c27c406`/CI `39446162910`. Apply, postflight, zero parity, preservation and billing verification passed; watched configuration/registry/protected retention unchanged. Approval hash `53269cc546d1e7b6be1ba17a49f310591e5c6a564513f343bf1a0a41cd102371` covers staging/current A/B checks/versioned handoff only. Current read-only/native checks preserved candidate/provenance/baseline/effective/global/foreign and closed budget. At 17:01:27.296Z the new [current handoff](phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json), SHA `ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61`, passed immutable writer/scanner/live match with six stable reads; [refresh receipt](phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-HANDOFF-REFRESH.json) records actual 1440x900/390x900 iframe proof and direct native keyboard review (embedded controls untested). It supersedes only the next-input reference; historical bytes remain unchanged. PaidReady/paidAuthorized false; no new paid evaluation/B mutation/activation/production release. Phase 23 six of nine/48 partial,49 not started.
+
+
+## Source delivery progress, 2026-10-23
+
+Phase49 now includes native interruption reconciliation: only authoritative workflow completion and a clean settled ledger can close an uncertain run. It never retries or invents success. Phase50 has the pure closed policy and named disabled native construction under ADR063; historical defer and elapsed/live evidence remain open. Phase51 includes tenant-owned goal links, actual accepted Zernio snapshot history, user usefulness feedback and a cited source/freshness brain read. Phase52 includes run-bound Buffer draft lineage and a responsive outcome panel; cross-provider publication attribution is explicitly unverified without an authoritative mapping. New partial execution summaries preserve these distinctions and do not complete requirements or phases. PR85's9e81dc4 baseline passed full CI39948634205; current follow-up evidence belongs to its own source/PR. The qualification checkout and historical paid attempts remain unchanged.
+
+### 2026-10-23 integration continuation
+
+ADR066 replaces the blanket placeholder admission with the existing attended built-in social draft/report slice, using actual native registry/account/budget/control readiness. The ordinary loader's already-active global authority includes supported bootstrap/rollback versions; no new evaluation is required merely to wrap an unchanged live body. Candidate activation and all authored/pack/vertical gates remain unchanged. Exact one-global-cockpit scope, current pins and no overlay are still required. This is independent capability delivery rather than a Phase48 composite qualification stamp. Current-source CI, joined native public-start proof and authenticated release checks remain required before release. The recurring adapter remains disabled.
+
+The same continuation adds a field-level Business Ledger and shared standing context under ADR065, with exact native source/review binding, source-race refusal and legacy/withdrawn exclusion from assured context. Phases and requirements are not marked complete by these local source changes.

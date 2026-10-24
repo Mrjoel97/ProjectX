@@ -1,4 +1,4 @@
-// Tenant-owned setup only. No runtime import, scheduler, provider call or execution permission.
+// Tenant-owned setup and built-in attended readiness. No runtime import, scheduler or provider call.
 import {
   hasPassingAgentTenantEvidence,
   hasPassingEvidence,
@@ -9,20 +9,27 @@ import { isWorkflowPackSkill } from "@pikar/core";
 import {
   deriveManagedServiceReadiness,
   type ManagedServiceConfig,
+  managedServiceToolNames,
   type ServiceAccountPin,
   type ServiceSkillPin,
   validateManagedServiceConfig,
 } from "@pikar/core/managedServices";
-import { NO_GRANTS } from "@pikar/core/toolGrants";
+import { grantsFor, NO_GRANTS } from "@pikar/core/toolGrants";
 import { EVAL_MAX_BUDGET_CENTS } from "@pikar/cost/evalBudget";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { appendAudit } from "./audit";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { reconcileStandingServiceAccounting } from "./lib/managedServiceBudget";
+import { serviceKnowledgeFor } from "./serviceConversations";
 
 const LIMIT = 50;
+// ADR-066: existing built-in attended social operations only. This supplies no publishing,
+// authored-skill, pack, business-review, vertical or recurrence admission.
+const ATTENDED_SOCIAL_OPERATIONS = ["social.prepare", "social.report"] as const;
 const account = v.object({
   provider: v.union(v.literal("buffer"), v.literal("zernio")),
   connectionId: v.string(),
@@ -82,9 +89,35 @@ async function skillFor(ctx: QueryCtx, tenantId: string, pin: ServiceSkillPin) {
   return row?.tenantId === tenantId ? row : null;
 }
 
+/** Same registry authority as skills.loadSkill, with tenant overrides explicitly excluded.
+ * Bootstrap/rollback ACTIVE rows remain runnable; this reader neither activates nor certifies. */
+async function activeBuiltinCockpitFor(ctx: QueryCtx, tenantId: string) {
+  const active = await ctx.db
+    .query("skills")
+    .withIndex("by_name_status", (q) => q.eq("name", "cockpit-agent").eq("status", "active"))
+    .take(2);
+  const overlay = await ctx.db
+    .query("tenantSkills")
+    .withIndex("by_tenant_name_status", (q) =>
+      q.eq("tenantId", tenantId).eq("name", "cockpit-agent").eq("status", "active"),
+    )
+    .first();
+  return active.length === 1 && !overlay ? (active[0] ?? null) : null;
+}
+
 /** Built solely from indexed tenant reads; client flags cannot open admission. */
 export async function managedServiceReadiness(ctx: QueryCtx, row: Doc<"managedServices">) {
   const config = managedServiceConfig(row);
+  const socialOperations = config.operationIds.every((operation) =>
+    ATTENDED_SOCIAL_OPERATIONS.some((admitted) => admitted === operation),
+  );
+  const globalCockpitOnly =
+    config.skills.length === 1 &&
+    config.skills[0]?.name === "cockpit-agent" &&
+    config.skills[0]?.tenantId === null;
+  const builtInScope =
+    row.serviceId === "social-marketing" && socialOperations && globalCockpitOnly;
+  const builtinCockpit = builtInScope ? await activeBuiltinCockpitFor(ctx, row.tenantId) : null;
   const accounts = [];
   for (const pin of config.accounts) {
     const current = await connectionFor(ctx, row.tenantId, pin);
@@ -109,12 +142,14 @@ export async function managedServiceReadiness(ctx: QueryCtx, row: Doc<"managedSe
   const skills = [];
   for (const pin of config.skills) {
     const current = await skillFor(ctx, row.tenantId, pin);
-    const overlay = await ctx.db
-      .query("tenantSkills")
-      .withIndex("by_tenant_name_status", (q) =>
-        q.eq("tenantId", row.tenantId).eq("name", pin.name).eq("status", "active"),
-      )
-      .take(2);
+    const overlay = builtInScope
+      ? []
+      : await ctx.db
+          .query("tenantSkills")
+          .withIndex("by_tenant_name_status", (q) =>
+            q.eq("tenantId", row.tenantId).eq("name", pin.name).eq("status", "active"),
+          )
+          .take(2);
     let qualified = false;
     if (current && current.status === "active" && !isWorkflowPackSkill(current.name)) {
       if ("tenantId" in current) {
@@ -132,6 +167,8 @@ export async function managedServiceReadiness(ctx: QueryCtx, row: Doc<"managedSe
               ? current.ownerApproval !== undefined &&
                 hasPassingAgentTenantEvidence(current.evidence, target)
               : hasPassingTenantEvidence(current.evidence, target)));
+      } else if (builtInScope) {
+        qualified = builtinCockpit?._id === current._id;
       } else {
         const active = await ctx.db
           .query("skills")
@@ -166,34 +203,44 @@ export async function managedServiceReadiness(ctx: QueryCtx, row: Doc<"managedSe
     config.operationIds.includes("business.review") && !businessProfileReady
       ? ["business_profile" as const]
       : [];
-  // There is no Phase48 seal in this implementation. Deliberately NO environment/client override.
+  // Admission is a code-owned capability boundary. Exact native account/skill evidence below
+  // remains mandatory; neither a browser flag nor an unrelated qualification can supply it.
   const readiness = deriveManagedServiceReadiness(config, {
     tenantId: row.tenantId,
     permissionRevision: row.controlRevision,
-    admittedOperationIds: [],
-    toolGrants: NO_GRANTS,
-    availableToolNames: [],
+    admittedOperationIds: builtInScope ? ATTENDED_SOCIAL_OPERATIONS : [],
+    toolGrants: builtInScope ? grantsFor({}) : NO_GRANTS,
+    availableToolNames: builtInScope ? managedServiceToolNames(ATTENDED_SOCIAL_OPERATIONS) : [],
     accounts,
     skills,
   });
+  const businessKnowledge = await serviceKnowledgeFor(ctx, row);
+  const reasons = [
+    ...readiness.reasons,
+    ...(!socialOperations ? ["unsupported_service_operation" as const] : []),
+    ...(row.serviceId !== "social-marketing" ? ["unsupported_service_identity" as const] : []),
+    ...(!globalCockpitOnly ? ["unsupported_skill_scope" as const] : []),
+    ...(config.budgetLimitCents < 1 || config.budgetLimitCents > EVAL_MAX_BUDGET_CENTS
+      ? ["budget_limit_unavailable" as const]
+      : []),
+    ...(missingSources.length ? ["source_unavailable" as const] : []),
+    ...(!businessKnowledge.assessment.ready ? ["business_information_required" as const] : []),
+    ...(row.controlState !== "active" ? ["service_paused_or_stopped" as const] : []),
+  ];
+  const ready = reasons.length === 0;
   return {
-    ready: false as const,
-    reasons: [
-      ...readiness.reasons,
-      ...(!config.operationIds.every((op) => op === "social.prepare" || op === "social.report")
-        ? ["unsupported_service_operation" as const]
-        : []),
-      ...(config.budgetLimitCents < 1 || config.budgetLimitCents > EVAL_MAX_BUDGET_CENTS
-        ? ["budget_limit_unavailable" as const]
-        : []),
-      ...(missingSources.length ? ["source_unavailable" as const] : []),
-      ...(row.controlState !== "active" ? ["service_paused_or_stopped" as const] : []),
-    ],
+    ready,
+    reasons,
     accounts,
     skills,
     sources: { businessProfileReady },
+    businessKnowledge: {
+      ready: businessKnowledge.assessment.ready,
+      gaps: businessKnowledge.assessment.gaps,
+      nextQuestion: businessKnowledge.assessment.nextQuestion,
+    },
     missingSources,
-    qualification: "unavailable" as const,
+    qualification: ready ? ("builtin_attended_social" as const) : ("unavailable" as const),
   };
 }
 
@@ -204,6 +251,7 @@ const serviceFor = (ctx: QueryCtx, tenantId: string, serviceId: string) =>
     .unique();
 const view = (row: Doc<"managedServices">) => ({
   id: row._id,
+  goalId: row.goalId ?? null,
   ...managedServiceConfig(row),
   controlState: row.controlState,
   controlRevision: row.controlRevision,
@@ -265,7 +313,14 @@ export const setup = tenantMutation({
       controlRevision: (existing?.controlRevision ?? 0) + 1,
       updatedAt: now,
     };
-    if (existing) await ctx.db.patch(existing._id, changes);
+    if (existing) {
+      await ctx.db.patch(existing._id, changes);
+      await ctx.runMutation(internal.managedServiceRecurrence.suspendForService, {
+        tenantId: ctx.tenantId,
+        serviceId: existing._id,
+        reason: "approval_stale",
+      });
+    }
     const id = existing
       ? existing._id
       : await ctx.db.insert("managedServices", {
@@ -315,23 +370,8 @@ export const setupOptions = tenantQuery({
         });
     }
     const skills: ServiceSkillPin[] = [];
-    const current = await ctx.db
-      .query("skills")
-      .withIndex("by_name_status", (q) => q.eq("name", "cockpit-agent").eq("status", "active"))
-      .take(2);
-    const overlay = await ctx.db
-      .query("tenantSkills")
-      .withIndex("by_tenant_name_status", (q) =>
-        q.eq("tenantId", ctx.tenantId).eq("name", "cockpit-agent").eq("status", "active"),
-      )
-      .first();
-    const cockpit = current.length === 1 ? current[0] : undefined;
-    if (
-      cockpit &&
-      !overlay &&
-      (!isGatedSkill(cockpit.name) ||
-        hasPassingEvidence(cockpit.evidence, cockpit.name, cockpit.version))
-    )
+    const cockpit = await activeBuiltinCockpitFor(ctx, ctx.tenantId);
+    if (cockpit)
       skills.push({
         skillId: cockpit._id,
         name: cockpit.name,
@@ -403,6 +443,11 @@ export const setControl = tenantMutation({
     const controlRevision = row.controlRevision + 1;
     await ctx.db.patch(row._id, { controlState, controlRevision, updatedAt: Date.now() });
     if (args.action !== "resume") {
+      await ctx.runMutation(internal.managedServiceRecurrence.suspendForService, {
+        tenantId: ctx.tenantId,
+        serviceId: row._id,
+        reason: "paused",
+      });
       const unbound = await ctx.db
         .query("managedServiceRuns")
         .withIndex("by_service_state", (q) =>
@@ -415,12 +460,14 @@ export const setControl = tenantMutation({
         !unbound[0].workflowId &&
         !unbound[0].threadId &&
         !unbound[0].planId
-      )
+      ) {
         await ctx.db.patch(unbound[0]._id, {
           state: "stopped",
           terminalCode: "control_changed",
           updatedAt: Date.now(),
         });
+        await reconcileStandingServiceAccounting(ctx, ctx.tenantId, unbound[0]._id, true);
+      }
     }
     await appendAudit(ctx, {
       tenantId: ctx.tenantId,

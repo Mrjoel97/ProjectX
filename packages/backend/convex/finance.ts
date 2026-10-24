@@ -96,7 +96,11 @@ function railView(rail: "reasoning" | "media" | "ingest", capCents: number, wind
 
 /** The reported window's movements, plus whether the row cap truncated them. */
 async function readWindow(ctx: QueryCtx, tenantId: string, sinceMs: number, untilMs: number) {
-  const rows = await listEventsFor(ctx, { tenantId, sinceMs, untilMs });
+  const scanned = await listEventsFor(ctx, { tenantId, sinceMs, untilMs });
+  // The prepaid standing envelope is the money movement. Child provider receipts are retained
+  // for exact run reconciliation, not charged again. Bound the scan BEFORE filtering so a large
+  // provider-detail history cannot silently exhaust a query or report an uncapped complete bill.
+  const rows = scanned.filter((row) => row.kind !== "paid_call_standing");
   const movements: SpendMovement[] = rows.map((row) => ({
     rail: row.rail,
     phase: row.phase,
@@ -107,7 +111,7 @@ async function readWindow(ctx: QueryCtx, tenantId: string, sinceMs: number, unti
   }));
   // A window that fills the cap is UNDER-reported, and a quietly small total is the exact lie this
   // whole subsystem exists to prevent. The playbook names the vocabulary: partial + "row-cap".
-  const partial = rows.length >= SPEND_EVENT_PAGE_LIMIT;
+  const partial = scanned.length >= SPEND_EVENT_PAGE_LIMIT;
   return {
     rows,
     movements,

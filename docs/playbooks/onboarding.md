@@ -1,3 +1,5 @@
+> Last verified: 2026-10-24 — Post-onboarding social-service conversations reuse Foundation answers for explicitly reviewed business statements. They keep the current profile and tier slots intact and use nonessential sections; no coaching model call or six-document publication occurs merely because a service answer is confirmed. Per-field service confirmations are exact native audit/hash references and do not imply that the complete business profile or every uploaded source was published or verified. Normal Foundation review, publication, editing, export and deletion remain available. Editing/removing a referenced answer invalidates dependent service readiness.
+
 > Last verified: 2026-10-20 — `__seedOnboardedTenant` marks both inserted and patched synthetic tenant profiles with the closed `qualificationFixture: "onboarding-harness-v1"` provenance field. Ordinary native onboarding does not create this marker. Weekly review skips explicit fixtures both when enumerating and when executing an already-queued review; explicit qualification authoring still follows its own scope and budget. The helper performs database-only fixture preparation, not approved native foundation publication, retrieval grounding or onboarding acceptance. Existing users are not backfilled or relabeled.
 
 > Last verified: 2026-10-19 — Settings is the only profile-related sidebar entry. The existing Business Profile, Connections and Settings tabs, URL-derived selection and legacy deep links remain available; onboarding and account identity behavior are unchanged.
@@ -1660,3 +1662,7 @@ cannot see:
   instruction so one call covers the last turn. A backend change; plan 15.1-07 did not own it.
 
 Verification 2026-10-15: foundation flag-off direct RPC tests cover unset and explicit-off configuration, no provider calls or content writes, preserved reads/discard, and read-only UI without save/publish controls.
+
+### Last verified: 2026-10-23 — Existing profile source authority
+
+The profile's existing Blueprint panel now includes the Business Ledger, using native field/source/review references and explicit unknown observation times. Synthesis witnesses and later confirmation fences reject changed sources; old title-only values remain visible as unverified and are excluded from assured standing context. Original values/files and unchanged review clocks are retained. This adds no onboarding step, provider call, new fact store or automatic confirmation. Source/native/UI tests are local; authenticated release acceptance remains separate.

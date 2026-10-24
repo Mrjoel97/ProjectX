@@ -1,3 +1,13 @@
+> Last verified: 2026-10-24 — Platform-specific Buffer draft requirements and fresh native Pinterest-board ownership checks change existing pinned runtime sources. After source freeze, the computed evaluator revision, golden manifest and vertical generated corpus are refreshed together. All fixture bytes remain unchanged, including the forty-six selected golden cases and forty vertical cases. The vertical generator check and five source-identity regressions pass. This mechanical refresh changes no registry instruction body, grant, activation or historical evidence.
+
+> Last verified: 2026-10-24 — The recurring social release candidate continues using the exact existing active global cockpit instruction; no candidate, pack, vertical or tenant instruction is activated. Both generated identities now cover the dispatcher, accounting bridge, native publication/report linkage, conversational adapter and reused Foundation/profile dependencies. Forty-six golden and forty vertical fixture bodies and corpus hashes remain unchanged. The generator checks and five source-identity regressions pass; these fingerprints do not create live qualification evidence.
+
+The inline-prompt guard separately recognizes one exact named Buffer GraphQL protocol document in its exact source file. Changed queries, prose, other files and nested same-name files remain guarded, and the 200-character threshold is unchanged. The draft-answer tool's concise description remains a proposal-only contract; no registry instruction body changes. Fifteen focused inline/registry checks pass.
+
+The October24 native-Node Zernio helper import correction refreshes the evaluator revision and both generated manifests. All 46 golden and 40 vertical fixture cases remain unchanged; this mechanical source identity update performs no paid evaluation or activation.
+
+> Last verified: 2026-10-23 — The evaluator source identity includes the Zernio permission-generation correction and schema/history consumers. The current contract revision and mechanical manifest are refreshed together; golden fixture bodies and case hashes remain unchanged. This retires stale evaluator identities without recording new live qualification or activating any skill.
+
 > Last verified: 2026-10-23 — The local attended-service runtime imports new managed-service helpers. Both evaluator source inventories explicitly pin these dependencies; a source-edit regression ensures each retires both identities. Mechanical revision/manifest refresh preserves all46 golden and40 vertical cases and historical handoffs, including after the tenant-first service budget index repair. No paid evaluation, passing evidence or activation follows from this bookkeeping.
 
 > Last verified: 2026-10-21 — The shared smokeRun helper's bounded read-only transport retry changes evaluator source identity, not skill bodies or either held-out corpus. Golden already fingerprints the helper; the vertical collector also imports it and its closed inventory now explicitly includes it. Regenerate both exact identities after source freeze, preserving all 46 golden and 40 vertical cases and historical handoff/partial/startup receipts. The retry remains opt-in, restricted to exact CLI fetch failures for 23 actual internalQuery exports and capped at two total query invocations across empty-output/transport paths. Native authority failures and paid/action/mutation transport errors are not retried. The legacy unqualified pack empty-output retry remains unchanged and gains no acceptance. Refreshed pins provide no semantic pass or reusable spending authority; current-source handoff, fresh exact paid consent, full observed evidence and separate owner actions remain required.
@@ -3143,3 +3153,21 @@ neuter the `row.tenantId !== tenantId` comparison in `runPackTurn`; drop the `te
 into `runSpecialistTurn`; hardcode `const name = "pack-business-pulse"` in
 `publishPackCustomization`; delete the `template_not_active` early return; remove the `pack-`
 refusal from `assertEvaluableCandidate`.
+
+### 2026-10-23 — Managed-service outcomes and inert construction identities
+
+The closed golden/vertical evaluator inventories now include the service brain/history/projection policy dependencies and named inert recurrence construction. Refresh generated fingerprints only after final formatting; corpus bytes and historical handoffs remain unchanged. This mechanical retirement prevents prior evidence silently qualifying new runtime/schema dependencies. It does not run an evaluator, spend money or supply qualification. ADR063 keeps recurrence activation deferred.
+
+### 2026-10-23 — Legacy fixture preflight
+
+The isolated golden blueprint seed remains a synthetic unreviewed record. Current-source preflight separately proves the owned fixture document/needle exists and that its needle does not leak into assured standing context. No fake user review is inserted. Case37's expectations and all corpus cases remain unchanged; the source fingerprint is refreshed after this real authority-contract change. These offline controls do not authorize or execute another paid evaluation.
+
+### 2026-10-23 — Bounded attended admission
+
+ADR066 replaces the blanket empty admission with the existing built-in attended social draft/report capability. Only social-marketing, social.prepare/social.report, exactly one active global cockpit pin, current native account scopes and Executive grants may be ready; budget/control/identity and per-step fences still apply. Tenant overrides, additional skills, packs, business review and verticals remain outside admission. This source slice is accepted by its own current-source CI/native public-start proof and authenticated release checks, not by qualifying an unrelated offer-architect candidate. No prior phase/evidence is rewritten. Recurrence stays disabled, drafts still need exact-content review for scheduling, and unknown costs/effects block replay. No paid run or deployment occurred during construction.
+
+Registry compatibility: the narrow built-in cockpit slice reuses the ordinary loader's unique already-active global authority, including supported bootstrap/rollback versions. Exact saved row/version/body and no active tenant overlay remain mandatory in both setup options and readiness. It does not require a new evaluation of an unchanged already-live body. Candidate/tenant activation and all existing evaluator/owner-approval transitions are unchanged; no evidence is manufactured.
+
+### Last verified: 2026-10-23 — Native reviewed test fixtures
+
+Older positive context fixtures now use a shared test-only helper that creates an actual synthetic source/hash and calls native draft writing plus authenticated public confirmation. It obtains real offline audit/field references rather than inserting pretend review metadata. Positive cockpit/evaluation/search/voice context assertions remain; legacy exclusion and the exact ADR063 absence exception remain explicit. This is simulated native test-user behavior, not live owner approval or golden evidence. Production source behavior and corpus cases are unchanged by the fixture correction.

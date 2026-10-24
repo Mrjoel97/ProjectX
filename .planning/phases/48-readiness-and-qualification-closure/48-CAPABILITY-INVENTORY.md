@@ -50,3 +50,7 @@ Method: three parallel read-only source/planning investigations plus integration
 ## Next action
 
 48-02 remains partial: revalidate the released PR82 source/current handoff and obtain fresh exact-run consent before another full 23-07 attempt; do not replay 23-06 or reuse either closed interrupted envelope. The successful PR82 release and new handoff do not authorize a paid run. Plans 23-08/09 remain dependent on complete passing evidence and their owner-action boundary. Free 48-03 protocol preparation can be reviewed without filling its behavioral matrix; live execution retains its separate prerequisites and scope. Phase 49 stays blocked on 48-04's readiness seal. Work cannot be reported qualified from a generated checklist.
+
+## 2026-10-23 source delivery: built-in attended slice
+
+PR86 adds the local built-in social draft/report engine, safe interruption recovery, goal/outcome/history views and field-level source-aware Ledger/context. ADR066 scopes code-owned attended admission to the already-runnable unique global cockpit instruction with exact native pins/accounts/budget/control. This slice uses its own current-source CI and native public-start acceptance; it does not wait for unrelated offer-architect or pack qualification. It is not a Phase48 composite seal or a production deployment. Authored overrides, packs, business review and verticals retain their prior unqualified/unavailable status. ADR063's recurring adapter remains disabled, with activation/live evidence outstanding. Historical source/evidence dispositions above are not rewritten.

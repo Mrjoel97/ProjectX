@@ -5,6 +5,7 @@ import { MANAGED_SERVICE_RUN_LIFETIME_MS } from "@pikar/core/managedServices";
 import { v } from "convex/values";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { confirmServiceKnowledgeFixture } from "../__fixtures__/serviceKnowledge";
 import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
@@ -19,16 +20,28 @@ import { internalAction } from "./lib/tenantLifecycle";
 import { buildManagedServiceTools } from "./managedServiceTools";
 import schema from "./schema";
 
-// Only the authoritative read-only admission result is mocked for future qualified environments.
-// Native claims, CAS, component workflow, thread store, fences, and accounting stay real.
-const flags = vi.hoisted(() => ({ admitted: false, calls: 0, fail: false, scripted: false }));
-vi.mock("./managedServices", async (original) => ({
-  ...(await original<typeof import("./managedServices")>()),
-  managedServiceReadiness: async () => ({
-    ready: flags.admitted,
-    reasons: flags.admitted ? [] : ["operation_unqualified"],
-  }),
+// Isolated fence fixtures can control admission. The joined public-start acceptance explicitly
+// uses production readiness with real owned accounts and an exact qualified global body.
+const flags = vi.hoisted(() => ({
+  admitted: false,
+  nativeReadiness: false,
+  calls: 0,
+  fail: false,
+  scripted: false,
 }));
+vi.mock("./managedServices", async (original) => {
+  const actual = await original<typeof import("./managedServices")>();
+  return {
+    ...actual,
+    managedServiceReadiness: async (...args: Parameters<typeof actual.managedServiceReadiness>) =>
+      flags.nativeReadiness
+        ? actual.managedServiceReadiness(...args)
+        : {
+            ready: flags.admitted,
+            reasons: flags.admitted ? [] : ["operation_unqualified"],
+          },
+  };
+});
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const agentModules = import.meta.glob(
   "../node_modules/@convex-dev/agent/src/component/**/!(*.test).ts",
@@ -102,7 +115,9 @@ const ownedTimers = new Set<ReturnType<typeof setTimeout>>();
 const realSetTimeout = globalThis.setTimeout;
 const realClearTimeout = globalThis.clearTimeout;
 beforeEach(() => {
+  vi.stubEnv("FOUNDATION_ONBOARDING_ENABLED", "1");
   flags.admitted = false;
+  flags.nativeReadiness = false;
   flags.calls = 0;
   flags.fail = false;
   flags.scripted = false;
@@ -130,12 +145,15 @@ afterEach(async () => {
   for (const timer of ownedTimers) realClearTimeout(timer);
   ownedTimers.clear();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 async function terminal(t: ReturnType<typeof convexTest>, runId: Id<"managedServiceRuns">) {
   for (let i = 0; i < 200; i++) {
+    await new Promise((resolve) => realSetTimeout(resolve, 10));
+    // Await real started workers (including cold module loading), rather than racing them.
+    await t.finishInProgressScheduledFunctions();
     const row = await t.run((ctx) => ctx.db.get(runId));
     if (row && row.state !== "claimed" && row.state !== "running") return row;
-    await new Promise((resolve) => realSetTimeout(resolve, 10));
   }
   throw new Error("LOCAL_WORKFLOW_DID_NOT_REACH_TERMINAL");
 }
@@ -213,6 +231,7 @@ async function harness() {
     budgetLimitCents: 100,
   };
   const saved = await asA.mutation(api.managedServices.setup, config);
+  await confirmServiceKnowledgeFixture(t, a);
   const claimArgs = {
     tenantId: a,
     serviceId: "social-marketing",
@@ -251,7 +270,11 @@ async function harness() {
 }
 
 test("unqualified production admission stops public start before claims, threads or provider work", async () => {
-  const { t, asA, claimArgs } = await harness();
+  const { t, asA, claimArgs, config } = await harness();
+  flags.nativeReadiness = true;
+  const [cockpit] = config.skills;
+  if (!cockpit) throw new Error("MISSING_NATIVE_COCKPIT_FIXTURE");
+  await t.run((ctx) => ctx.db.patch(cockpit.skillId, { status: "candidate" }));
   const { tenantId: _tenant, ...args } = claimArgs;
   await expect(asA.action(api.managedServiceRuns.start, args)).rejects.toThrow(
     "SERVICE_EXECUTION_UNAVAILABLE",
@@ -329,6 +352,40 @@ test("execution context binds tenant/run/plan/thread and never returns credentia
   await expect(
     t.query(internal.managedServiceRuns.getExecutionContext, { tenantId: a, ...run }),
   ).rejects.toThrow("SERVICE_EXECUTION_UNAVAILABLE");
+});
+
+test("prepare pins confirmed source identity, ignores unrelated revision metadata and refuses withdrawal or a missing pin", async () => {
+  for (const change of ["withdrawn", "missing_pin"] as const) {
+    const { t, a, running } = await harness();
+    const run = await running();
+    const pinned = await t.run((ctx) => ctx.db.get(run.runId));
+    expect(pinned?.knowledgeHash).toMatch(/^[a-f0-9]{64}$/);
+    await t.run(async (ctx) => {
+      const interview = await ctx.db
+        .query("foundationInterviews")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", a))
+        .unique();
+      if (!interview) throw new Error("MISSING_FOUNDATION_FIXTURE");
+      await ctx.db.patch(interview._id, { revision: interview.revision + 1 });
+    });
+    await t.query(internal.managedServiceRuns.getExecutionContext, { tenantId: a, ...run });
+    await t.run(async (ctx) => {
+      if (change === "missing_pin") await ctx.db.patch(run.runId, { knowledgeHash: undefined });
+      else {
+        const interview = await ctx.db
+          .query("foundationInterviews")
+          .withIndex("by_tenant", (q) => q.eq("tenantId", a))
+          .unique();
+        if (!interview) throw new Error("MISSING_FOUNDATION_FIXTURE");
+        await ctx.db.patch(interview._id, { answers: [] });
+      }
+    });
+    await expect(
+      t.query(internal.managedServiceRuns.getExecutionContext, { tenantId: a, ...run }),
+    ).rejects.toThrow(/SERVICE_(KNOWLEDGE_CHANGED|EXECUTION_UNAVAILABLE)/);
+    expect(await t.run((ctx) => ctx.db.query("spendEvents").collect())).toHaveLength(0);
+    expect(await t.run((ctx) => ctx.db.query("bufferPosts").collect())).toHaveLength(0);
+  }
 });
 
 test("stop/resume fences old callbacks and clean paused work ends stopped rather than unrecoverable unknown", async () => {
@@ -505,10 +562,34 @@ test("late workflow terminal cannot overwrite a known terminal or accept a diffe
 });
 
 test("public start binds one owned thread and durable once-only workflow; duplicate start never reruns", async () => {
-  const { t, asA, claimArgs, messages } = await harness();
+  const { t, asA, claimArgs, messages, config } = await harness();
   flags.admitted = true;
+  flags.nativeReadiness = true;
   flags.scripted = true;
-  const { tenantId: _tenant, ...args } = claimArgs;
+  const [cockpit] = config.skills;
+  if (!cockpit) throw new Error("MISSING_NATIVE_COCKPIT_FIXTURE");
+  await t.run((ctx) => ctx.db.patch(cockpit.skillId, { evidence: undefined }));
+  expect(
+    (await asA.query(api.managedServices.status, { serviceId: config.serviceId }))?.readiness.ready,
+  ).toBe(true);
+  const conversation = await asA.query(api.serviceConversations.read, {
+    serviceId: config.serviceId,
+  });
+  if (!conversation) throw new Error("MISSING_CONFIRMED_CONVERSATION");
+  const continued = await asA.action(api.serviceConversations.confirmAndContinue, {
+    serviceId: config.serviceId,
+    expectedRevision: conversation.revision,
+    expectedControlRevision: conversation.controlRevision,
+    expectedConversationRevision: conversation.conversationRevision,
+    reviewHash: conversation.reviewHash,
+  });
+  expect(continued.launch.state).toBe("started");
+  const continuedRunId = continued.launch.runId;
+  if (!continuedRunId) throw new Error("MISSING_CONTINUED_RUN");
+  const nativeStarted = await t.run((ctx) => ctx.db.get(continuedRunId));
+  if (!nativeStarted) throw new Error("MISSING_NATIVE_CONTINUED_RUN");
+  const { tenantId: _tenant, ...claim } = claimArgs;
+  const args = { ...claim, requestKey: nativeStarted.requestKey };
   const started = await asA.action(api.managedServiceRuns.start, args);
   const again = await asA.action(api.managedServiceRuns.start, args);
   expect(again.runId).toBe(started.runId);
@@ -525,8 +606,12 @@ test("public start binds one owned thread and durable once-only workflow; duplic
   expect(await t.run((ctx) => ctx.db.query("plans").collect())).toHaveLength(1);
   const posts = await t.run((ctx) => ctx.db.query("bufferPosts").collect());
   expect(posts).toHaveLength(1);
-  expect(posts[0]).toMatchObject({ status: "draft", text: "Prepared draft for human review" });
-  expect(posts[0]).not.toHaveProperty("managedServiceRunId");
+  expect(posts[0]).toMatchObject({
+    status: "draft",
+    text: "Prepared draft for human review",
+    managedServiceRunId: started.runId,
+    platform: "linkedin",
+  });
 });
 
 test("attended run age bounds reject expired/future starts without blocking accounting or status", async () => {

@@ -230,6 +230,30 @@ const DISPATCH_POLL_MS = 3_000;
 // --self-check), so it can only reach a specialist's memo through a live `searchVault` result.
 const VAULT_NEEDLE = "evalgrd";
 const BLUEPRINT_NEEDLE = "evalblpr";
+/** The internal legacy fixture is stored context, not evidence of an authenticated human review. */
+function assertLegacyBlueprintExcluded(seeded, live, spine) {
+  assert.ok(
+    typeof seeded?.docId === "string" && seeded.docId.length > 0,
+    "legacy fixture must identify its document",
+  );
+  assert.equal(
+    live?.docId,
+    seeded.docId,
+    "legacy fixture must be the tenant's owned live document",
+  );
+  assert.ok(
+    typeof live?.text === "string" && live.text.includes(BLUEPRINT_NEEDLE),
+    "owned legacy fixture must actually contain the exclusion needle",
+  );
+  assert.ok(
+    typeof spine === "string" && spine.includes("<business_blueprint>"),
+    "the real business context projection must be readable before fixture turns",
+  );
+  assert.ok(
+    !spine.includes(BLUEPRINT_NEEDLE),
+    "unreviewed legacy fixture must not appear as assured business facts",
+  );
+}
 const INSUFFICIENT_EVIDENCE_PHRASE = "insufficient evidence";
 // 22.1b. A turn that NAMES the tool turns the probe into a compliance test — "did the model do the
 // thing the prompt told it to do" — which is exactly the vacuity fixture 33 exists to avoid. The
@@ -1017,7 +1041,7 @@ function validateFixture(fx, source) {
   }
   if (fx.turns.some((t) => t.includes(BLUEPRINT_NEEDLE))) {
     fail(
-      `a turn contains the Blueprint needle "${BLUEPRINT_NEEDLE}" — that makes the standing-spine proof vacuous`,
+      `a turn contains the Blueprint needle "${BLUEPRINT_NEEDLE}" — that makes the legacy-exclusion proof vacuous`,
     );
   }
   if (fx.turns.some((t) => t.toLowerCase().includes(INSUFFICIENT_EVIDENCE_PHRASE))) {
@@ -2543,22 +2567,64 @@ function selfCheck() {
     liveRevenueSource.includes("refs: fixtures.map"),
     "red diagnostics must retain the complete candidate-specific fixture refs",
   );
-  // 17.1-10: the live gate must prove the runner's THROWAWAY tenant is Blueprint-bearing before
-  // the first paid turn. Source order is load-bearing: seeding/asserting after the fixture loop
-  // would let a fully green run measure the old no-spine prompt.
+  // Current authority contract: a synthetic legacy fixture exists, but internal seeding cannot
+  // manufacture a human field review. Prove both presence and exclusion before fixture turns.
   // Source-shape guards compare logical lines, independent of Git checkout line endings.
   const runnerSource = readFileSync(fileURLToPath(import.meta.url), "utf8").replace(/\r\n/g, "\n");
-  const blueprintSeedAt = runnerSource.indexOf('must("smoke:seedGoldenEvalBlueprint"');
-  const blueprintAssertAt = runnerSource.indexOf('must("blueprint:spineForTenant"');
-  const paidLoopAt = runnerSource.indexOf("for (const fixture of fixtures)", blueprintSeedAt);
-  assert.ok(blueprintSeedAt > 0, "golden runner must seed a confirmed Blueprint");
+  const liveRunner = runnerSource.slice(runnerSource.lastIndexOf("function runLive("));
+  const blueprintSeedAt = liveRunner.indexOf('must("smoke:seedGoldenEvalBlueprint"');
+  const blueprintReadAt = liveRunner.indexOf('must("blueprint:liveForTenant"');
+  const blueprintAssertAt = liveRunner.indexOf('must("blueprint:spineForTenant"');
+  const legacyCheckAt = liveRunner.indexOf(
+    "assertLegacyBlueprintExcluded(seededBlueprint, legacyBlueprint, blueprintSpine)",
+  );
+  const paidLoopAt = liveRunner.indexOf("for (const fixture of fixtures)", blueprintSeedAt);
+  assert.ok(blueprintSeedAt > 0, "golden runner must seed its unreviewed legacy fixture");
   assert.ok(
-    blueprintAssertAt > blueprintSeedAt,
-    "golden runner must read the rendered spine after seeding",
+    blueprintReadAt > blueprintSeedAt &&
+      blueprintAssertAt > blueprintReadAt &&
+      legacyCheckAt > blueprintAssertAt,
+    "golden runner must read both the owned fixture and assured projection, then verify exclusion",
   );
   assert.ok(
-    paidLoopAt > blueprintAssertAt,
-    "Blueprint seed and non-null spine assertion must precede the first paid fixture",
+    paidLoopAt > legacyCheckAt,
+    "legacy fixture presence and assured-context exclusion must precede the first paid fixture",
+  );
+  const legacySeed = { docId: "owned-legacy-doc" };
+  const legacyLive = { docId: legacySeed.docId, text: `Synthetic ${BLUEPRINT_NEEDLE} business` };
+  const assuredSpine =
+    "<business_blueprint>\n- (nothing confirmed about this business yet)\n</business_blueprint>";
+  assert.doesNotThrow(() => assertLegacyBlueprintExcluded(legacySeed, legacyLive, assuredSpine));
+  assert.throws(
+    () => assertLegacyBlueprintExcluded(legacySeed, null, assuredSpine),
+    /owned live document/,
+  );
+  assert.throws(
+    () =>
+      assertLegacyBlueprintExcluded(
+        legacySeed,
+        { ...legacyLive, docId: "foreign-doc" },
+        assuredSpine,
+      ),
+    /owned live document/,
+  );
+  assert.throws(
+    () =>
+      assertLegacyBlueprintExcluded(
+        legacySeed,
+        { ...legacyLive, text: "No fixture marker" },
+        assuredSpine,
+      ),
+    /exclusion needle/,
+  );
+  assert.throws(
+    () => assertLegacyBlueprintExcluded(legacySeed, legacyLive, null),
+    /projection must be readable/,
+  );
+  assert.throws(
+    () =>
+      assertLegacyBlueprintExcluded(legacySeed, legacyLive, `${assuredSpine}\n${BLUEPRINT_NEEDLE}`),
+    /assured business facts/,
   );
 
   // 2. Synthetic bad fixtures (in-memory, never on disk) are rejected.
@@ -3598,8 +3664,8 @@ function selfCheck() {
   );
   assert.throws(
     () => validateFixture({ ...base, turns: [`tell me about ${BLUEPRINT_NEEDLE}`] }, "<synthetic>"),
-    /standing-spine proof vacuous/,
-    "a turn carrying the Blueprint needle would make the pre-model assertion vacuous",
+    /legacy-exclusion proof vacuous/,
+    "a turn carrying the Blueprint needle would invalidate the context-exclusion control",
   );
 
   // 6b. The three observables evaluate against the LANDED plan row.
@@ -5108,27 +5174,24 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
   );
   console.log(`[eval:golden] seeded vault corpus: ${vaultDocIds.length} doc(s), live embed`);
 
-  // 17.1-10: the original L6 premise was false — the runner minted an eval tenant but never gave
-  // it a confirmed Blueprint. Seed the narrow eval-only row from the just-created source ids, then
-  // prove the REAL rendered spine carries a token no fixture turn contains. Both calls happen
-  // before the first runCockpitAgent model turn; failure aborts at $0 rather than producing a
-  // misleading green no-spine gate.
+  // The legacy eval seed predates field provenance. It is still an owned synthetic artifact,
+  // but its confirmedAt flag is not an authenticated review. Keep both non-vacuous controls:
+  // prove the raw fixture exists, and prove the assured projection excludes its unreviewed facts.
+  // Reviewed-source projection is covered separately by native confirmation/withdrawal tests;
+  // this runner no longer claims that an internal seed proves a human-reviewed standing context.
   const seededBlueprint = parse(
     must("smoke:seedGoldenEvalBlueprint", {
       tenantId: tenant,
       sourceDocIds: vaultDocIds,
     }),
   );
+  const legacyBlueprint = parse(must("blueprint:liveForTenant", { tenantId: tenant }, RETRY_READ));
   const blueprintSpine = parse(must("blueprint:spineForTenant", { tenantId: tenant }, RETRY_READ));
-  assert.equal(typeof blueprintSpine, "string", "confirmed eval Blueprint must render a spine");
-  assert.ok(
-    blueprintSpine.includes(BLUEPRINT_NEEDLE),
-    `eval spine must carry the non-vacuity needle ${BLUEPRINT_NEEDLE}`,
-  );
+  assertLegacyBlueprintExcluded(seededBlueprint, legacyBlueprint, blueprintSpine);
   console.log(
-    `[eval:golden] seeded confirmed Blueprint: doc ${seededBlueprint.docId}, ` +
+    `[eval:golden] verified unreviewed legacy fixture: doc ${seededBlueprint.docId}, ` +
       `${seededBlueprint.sourceDocCount} source(s), spine ${blueprintSpine.length} chars, ` +
-      `needle ${BLUEPRINT_NEEDLE}`,
+      `legacy marker excluded from assured context`,
   );
 
   for (const fixture of fixtures) {

@@ -1,6 +1,19 @@
 {
   "managed-services.md": [
-    "packages/core/src/managedServices",
+    "packages/core/src/serviceKnowledge",
+    "packages/backend/convex/serviceConversations",
+    "packages/backend/__fixtures__/serviceKnowledge",
+    "apps/web/app/(app)/dashboard/skills-workflows/ServiceKnowledgeConversation",
+    "apps/web/app/(app)/dashboard/skills-workflows/serviceKnowledgeConversation",
+    "packages/backend/__fixtures__/reviewedBlueprint",
+    "packages/core/src/managedService",
+    "packages/core/src/serviceOutcomes",
+    "packages/core/src/socialServiceOutcome",
+    "packages/backend/convex/serviceOutcomes",
+    "apps/web/app/(app)/dashboard/skills-workflows/ServiceOutcomesPanel",
+    "apps/web/app/(app)/dashboard/skills-workflows/ServiceRecurrencePanel",
+    "apps/web/app/(app)/dashboard/skills-workflows/serviceRecurrencePanel",
+    "apps/web/e2e/managed-social-service.spec.ts",
     "packages/backend/convex/managedService",
     "packages/backend/convex/lib/managedServiceBudget",
     "apps/web/app/(app)/dashboard/skills-workflows/ManagedServicesPanel"

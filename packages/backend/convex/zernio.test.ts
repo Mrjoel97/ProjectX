@@ -277,6 +277,123 @@ describe("Zernio tenant-bound production connector", () => {
     expect(await h.user.query(api.zernio.latestReport, {})).toBeNull();
     expect((await h.user.query(api.zernio.status, {})).dailyReports).toBe(false);
   });
+  test("settings preserve legacy service permissions and history while cancelling old report workers", async () => {
+    const mock = provider();
+    vi.stubGlobal("fetch", mock);
+    const h = await setup();
+    await connect(h);
+    await h.user.mutation(api.zernio.selectAccounts, {
+      accountIds: [accountId],
+      dailyReports: true,
+    });
+    const initial = await h.t.query(internal.zernio.connection, { tenantId: h.tenantId });
+    if (!initial) throw Error("missing connection");
+    const pin = {
+      provider: "zernio" as const,
+      connectionId: initial.connectionId,
+      accountId,
+      connectionRevision: initial.revision,
+    };
+    const runId = await h.t.run(async (ctx) => {
+      // Exercise existing connections and observations without a grant-generation field.
+      await ctx.db.patch(initial._id, { grantRevision: undefined });
+      const now = Date.now();
+      const serviceId = await ctx.db.insert("managedServices", {
+        tenantId: h.tenantId,
+        serviceId: "social-marketing",
+        revision: 1,
+        controlRevision: 1,
+        controlState: "active",
+        goal: "Review supported engagement",
+        operationIds: ["social.report"],
+        accounts: [pin],
+        skills: [],
+        budgetLimitCents: 100,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return ctx.db.insert("managedServiceRuns", {
+        tenantId: h.tenantId,
+        serviceId,
+        configRevision: 1,
+        controlRevision: 1,
+        budgetLimitCents: 100,
+        requestKey: "settings-regression",
+        state: "completed",
+        createdAt: now,
+        updatedAt: now,
+      });
+    });
+    expect((await h.user.action(api.zernioActions.refreshReport, {})).state).toBe("updated");
+    const history = () =>
+      h.user.query(api.serviceOutcomes.historyPage, {
+        connectionId: initial.connectionId,
+        paginationOpts: { cursor: null, numItems: 20 },
+      });
+    const readiness = () =>
+      h.user.query(api.managedServices.readiness, {
+        serviceId: "social-marketing",
+        expectedRevision: 1,
+      });
+    const baseline = (await history()).page;
+    expect(baseline).toHaveLength(1);
+    const save = (dailyReports: boolean) =>
+      h.user.mutation(api.zernio.selectAccounts, {
+        accountIds: [accountId],
+        dailyReports,
+      });
+    for (const daily of [true, false, true]) {
+      const before = await h.t.query(internal.zernio.connection, { tenantId: h.tenantId });
+      if (!before) throw Error("missing connection");
+      await h.t.run((ctx) => ctx.db.patch(before._id, { nextRefreshAt: 0 }));
+      const oldWork = {
+        tenantId: h.tenantId,
+        connectionId: before.connectionId,
+        revision: before.revision,
+        lease: `lease-${before.revision}`,
+      };
+      expect(await h.t.mutation(internal.zernio.claimReport, oldWork)).not.toBeNull();
+      await save(daily);
+      const current = await h.t.query(internal.zernio.connection, { tenantId: h.tenantId });
+      expect(current?.revision).toBe(before.revision + 1);
+      expect(current?.grantRevision).toBe(pin.connectionRevision);
+      expect(current?.lease).toBeUndefined();
+      expect(await h.t.mutation(internal.zernio.finishReport, oldWork)).toBe(false);
+      const calls = mock.mock.calls.length;
+      expect(
+        (
+          await h.t.action(internal.zernioActions.refreshScheduled, {
+            tenantId: h.tenantId,
+            connectionId: before.connectionId,
+            revision: before.revision,
+          })
+        ).state,
+      ).toBe("not_due_or_connection_changed");
+      expect(mock.mock.calls).toHaveLength(calls);
+      expect((await h.user.query(api.managedServices.setupOptions, {})).accounts[0]).toMatchObject(
+        pin,
+      );
+      expect((await readiness()).accounts[0]).toMatchObject({ ...pin, connected: true });
+      expect((await history()).page).toEqual(baseline);
+      expect(
+        (await h.user.query(api.serviceOutcomes.runOutcome, { runId })).reporting.observations,
+      ).toHaveLength(1);
+    }
+    // A later retrieval at the new execution revision must deduplicate the original observation.
+    await h.t.run((ctx) => ctx.db.patch(initial._id, { nextRefreshAt: 0 }));
+    expect((await h.user.action(api.zernioActions.refreshReport, {})).state).toBe("updated");
+    expect((await history()).page).toEqual(baseline);
+    await h.user.mutation(api.zernio.selectAccounts, { accountIds: [], dailyReports: false });
+    expect((await readiness()).accounts[0]).toMatchObject({
+      connectionRevision: pin.connectionRevision + 1,
+      connected: false,
+    });
+    expect((await history()).page).toHaveLength(0);
+    expect((await h.user.query(api.serviceOutcomes.runOutcome, { runId })).reporting.state).toBe(
+      "unavailable",
+    );
+    expect(await h.user.query(api.zernio.latestReport, {})).toBeNull();
+  });
   test("a consumed connection ticket cannot resurrect access after disconnect", async () => {
     const h = await setup();
     const { url } = await h.user.mutation(api.zernio.beginConnect, { profileId: profile });

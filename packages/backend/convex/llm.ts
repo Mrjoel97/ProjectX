@@ -1418,13 +1418,14 @@ export function buildHistoryBlock(history: HistoryMessage[] | undefined): string
 function buildTurnPrompt(a: {
   spine: string | null;
   finance: string | null;
+  knowledge?: string | null;
   history: { role: "user" | "assistant"; content: string }[] | undefined;
   plan: PlanRow | null;
   tz: string | undefined;
   text: string;
 }): string {
-  const { spine, finance, history, plan, tz, text } = a;
-  const standing = [spine, finance].filter((p) => p !== null).join("\n");
+  const { spine, finance, knowledge, history, plan, tz, text } = a;
+  const standing = [spine, finance, knowledge].filter((p) => p != null).join("\n");
   return `${standing === "" ? "" : `${standing}\n\n`}${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, tz)}\n\nThe user says: ${text}`;
 }
 
@@ -6315,7 +6316,10 @@ export const runCockpitAgent = internalAction({
       | {
           ok: false;
           reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
-        } = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+        } = await ctx.runMutation(internal.guardrails.preCall, {
+      tenantId,
+      ...(managedServiceRunId ? { managedServiceRunId } : {}),
+    });
     if (!pre.ok) return { reply: PAUSED_REPLY, blocked: pre.reason };
 
     // 2. System = the cockpit-agent skill body (no hardcoded prompt — §5; fails closed unseeded).
@@ -6569,6 +6573,16 @@ export const runCockpitAgent = internalAction({
     } catch {
       finance = null;
     }
+    let knowledge: string | null = null;
+    try {
+      const confirmed = await ctx.runQuery(internal.serviceConversations.confirmedContext, {
+        tenantId,
+      });
+      if (confirmed.items.length)
+        knowledge = `<confirmed_service_information scope="each named service" kind="user-confirmed reference data">\n${JSON.stringify(confirmed).replaceAll("<", "\\u003c")}\n</confirmed_service_information>`;
+    } catch (error) {
+      if (managedServiceRunId) throw error;
+    }
     const { reply, costUsd } = await traced(
       {
         agentName: "cockpit-agent",
@@ -6583,7 +6597,15 @@ export const runCockpitAgent = internalAction({
           system: skill.body,
           managedServiceRunId,
           // History ABOVE the plan context; "The user says:" stays the FINAL line (the current turn).
-          prompt: buildTurnPrompt({ spine, finance, history, plan, tz: clientContext?.tz, text }),
+          prompt: buildTurnPrompt({
+            spine,
+            finance,
+            knowledge,
+            history,
+            plan,
+            tz: clientContext?.tz,
+            text,
+          }),
           primary: {
             model: forceTimeout ? timeoutModel() : resolveModel(primaryId),
             id: primaryId,
@@ -6664,9 +6686,20 @@ export const __cockpitTurnPrompt = internalAction({
     } catch {
       finance = null;
     }
+    let knowledge: string | null = null;
+    try {
+      const confirmed = await ctx.runQuery(internal.serviceConversations.confirmedContext, {
+        tenantId,
+      });
+      if (confirmed.items.length)
+        knowledge = `<confirmed_service_information scope="each named service" kind="user-confirmed reference data">\n${JSON.stringify(confirmed).replaceAll("<", "\\u003c")}\n</confirmed_service_information>`;
+    } catch {
+      // Existing business context and the user's turn remain usable if enrichment cannot load.
+    }
     return buildTurnPrompt({
       spine,
       finance,
+      knowledge,
       history: undefined,
       plan,
       tz: undefined,

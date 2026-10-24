@@ -8,6 +8,7 @@ import {
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
+import { confirmServiceKnowledgeFixture } from "../__fixtures__/serviceKnowledge";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import { contentHash } from "./lib/hash";
@@ -597,5 +598,263 @@ test("no runtime, scheduler, provider or credential import can be reached from s
   expect(source).not.toMatch(
     /from ["']\.\/(?:llm|dispatch|bufferActions|zernioActions)|ctx\.scheduler|ctx\.runAction|tenantAction\(/,
   );
-  expect(source).toContain("admittedOperationIds: []");
+  expect(source).toContain(
+    'const ATTENDED_SOCIAL_OPERATIONS = ["social.prepare", "social.report"] as const;',
+  );
+  expect(source).toContain("admittedOperationIds: builtInScope ? ATTENDED_SOCIAL_OPERATIONS : []");
+  expect(source).not.toMatch(/process\.env|import\.meta\.env/);
+});
+
+async function socialFixture() {
+  const f = await harness();
+  const body = "Synthetic qualified global Executive instructions";
+  const bodyHash = await contentHash(body);
+  const refs = await f.t.run(async (ctx) => {
+    const skillId = await ctx.db.insert("skills", {
+      name: "cockpit-agent",
+      version: 1,
+      body,
+      status: "active",
+      createdAt: Date.now(),
+    });
+    const bufferId = await ctx.db.insert("bufferConnections", {
+      tenantId: f.a,
+      connectionId: "buffer-owned",
+      revision: 1,
+      grantRevision: 1,
+      status: "connected",
+      keyVersion: "v1",
+      ciphertextB64: "SYNTHETIC_SECRET",
+      ivB64: "SYNTHETIC_IV",
+      expiresAt: Date.now() + 100_000,
+      organizationId: "org",
+      updatedAt: Date.now(),
+      channels: [
+        {
+          id: "aaaaaaaaaaaaaaaaaaaaaaaa",
+          name: "Owned Buffer",
+          service: "instagram",
+          available: true,
+        },
+      ],
+      selectedChannelIds: ["aaaaaaaaaaaaaaaaaaaaaaaa"],
+      dailyReports: false,
+      nextReportAt: 0,
+    });
+    const zernioId = await ctx.db.insert("zernioConnections", {
+      tenantId: f.a,
+      connectionId: "zernio-owned",
+      profileId: "bbbbbbbbbbbbbbbbbbbbbbbb",
+      revision: 1,
+      status: "connected",
+      keyVersion: "v1",
+      ciphertextB64: "SYNTHETIC_SECRET",
+      ivB64: "SYNTHETIC_IV",
+      channels: [
+        {
+          id: "cccccccccccccccccccccccc",
+          name: "Owned Instagram",
+          platform: "instagram",
+          available: true,
+        },
+      ],
+      selectedAccountIds: ["cccccccccccccccccccccccc"],
+      dailyReports: false,
+      nextReportAt: 0,
+      nextRefreshAt: 0,
+      updatedAt: Date.now(),
+    });
+    return { skillId, bufferId, zernioId };
+  });
+  const config = {
+    serviceId: "social-marketing",
+    expectedRevision: 0,
+    goal: "Prepare and report on selected social accounts",
+    operationIds: ["social.prepare" as const, "social.report" as const],
+    accounts: [
+      {
+        provider: "buffer" as const,
+        connectionId: "buffer-owned",
+        accountId: "aaaaaaaaaaaaaaaaaaaaaaaa",
+        connectionRevision: 1,
+      },
+      {
+        provider: "zernio" as const,
+        connectionId: "zernio-owned",
+        accountId: "cccccccccccccccccccccccc",
+        connectionRevision: 1,
+      },
+    ],
+    skills: [
+      { skillId: refs.skillId, name: "cockpit-agent", version: 1, bodyHash, tenantId: null },
+    ],
+    budgetLimitCents: 100,
+  };
+  const saved = await f.asA.mutation(api.managedServices.setup, config);
+  const foundationSetting = process.env.FOUNDATION_ONBOARDING_ENABLED;
+  process.env.FOUNDATION_ONBOARDING_ENABLED = "1";
+  try {
+    await confirmServiceKnowledgeFixture(f.t, f.a);
+  } finally {
+    if (foundationSetting === undefined) delete process.env.FOUNDATION_ONBOARDING_ENABLED;
+    else process.env.FOUNDATION_ONBOARDING_ENABLED = foundationSetting;
+  }
+  const readiness = () =>
+    f.asA.query(api.managedServices.readiness, {
+      serviceId: config.serviceId,
+      expectedRevision: 1,
+    });
+  return { ...f, ...refs, config, saved, readiness };
+}
+
+test("production readiness and setup options accept the existing active bootstrap body without inventing evaluation evidence", async () => {
+  const f = await socialFixture();
+  expect(await f.t.run((ctx) => ctx.db.get(f.skillId))).toMatchObject({
+    status: "active",
+    version: 1,
+  });
+  expect((await f.t.run((ctx) => ctx.db.get(f.skillId)))?.evidence).toBeUndefined();
+  expect((await f.asA.query(api.managedServices.setupOptions, {})).skills).toEqual(f.config.skills);
+  expect(await f.readiness()).toMatchObject({
+    ready: true,
+    reasons: [],
+    qualification: "builtin_attended_social",
+  });
+  const claimed = await f.t.mutation(internal.managedServiceRuns.claim, {
+    tenantId: f.a,
+    serviceId: f.config.serviceId,
+    expectedRevision: 1,
+    expectedControlRevision: 1,
+    requestKey: "native-qualified-social",
+  });
+  expect(claimed).toMatchObject({ state: "claimed", existing: false });
+  expect(await f.t.run((ctx) => ctx.db.query("managedServiceRuns").collect())).toHaveLength(1);
+  expect(await f.t.run((ctx) => ctx.db.query("spendEvents").collect())).toHaveLength(0);
+  expect(
+    await f.t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect()),
+  ).toHaveLength(0);
+  expect(JSON.stringify(await f.readiness())).not.toMatch(/SYNTHETIC_SECRET|SYNTHETIC_IV/);
+});
+
+test("an active tenant cockpit override, global candidate, changed version or body refuses attended admission", async () => {
+  for (const changed of ["overlay", "candidate", "version", "body"] as const) {
+    const f = await socialFixture();
+    await f.t.run(async (ctx) => {
+      if (changed === "candidate") await ctx.db.patch(f.skillId, { status: "candidate" });
+      if (changed === "version") await ctx.db.patch(f.skillId, { version: 2 });
+      if (changed === "body") await ctx.db.patch(f.skillId, { body: "Another unpinned body" });
+      if (changed === "overlay")
+        await ctx.db.insert("tenantSkills", {
+          tenantId: f.a,
+          name: "cockpit-agent",
+          version: 2,
+          body: "Owned override",
+          authoredBody: "",
+          author: "system",
+          status: "active",
+          rollbackEligible: true,
+          basedOnScope: "global",
+          basedOnName: "cockpit-agent",
+          basedOnVersion: 1,
+          basedOnGlobalSkillId: f.skillId,
+          createdAt: Date.now(),
+        });
+    });
+    expect(await f.readiness()).toMatchObject({ ready: false, qualification: "unavailable" });
+    expect((await f.readiness()).reasons).toContain("skill_unqualified");
+    await expect(
+      f.t.mutation(internal.managedServiceRuns.claim, {
+        tenantId: f.a,
+        serviceId: f.config.serviceId,
+        expectedRevision: 1,
+        expectedControlRevision: 1,
+        requestKey: "refused-skill",
+      }),
+    ).rejects.toThrow("SERVICE_EXECUTION_UNAVAILABLE");
+    expect(await f.t.run((ctx) => ctx.db.query("managedServiceRuns").collect())).toHaveLength(0);
+  }
+});
+
+test("native scope, permission generation, control and budget limits remain independent admission fences", async () => {
+  for (const changed of [
+    "buffer-permission",
+    "zernio-permission",
+    "selection",
+    "connection",
+    "unavailable",
+    "paused",
+    "zero-budget",
+    "excess-budget",
+  ] as const) {
+    const f = await socialFixture();
+    await f.t.run(async (ctx) => {
+      if (changed === "buffer-permission") await ctx.db.patch(f.bufferId, { grantRevision: 2 });
+      if (changed === "zernio-permission") await ctx.db.patch(f.zernioId, { revision: 2 });
+      if (changed === "selection") await ctx.db.patch(f.zernioId, { selectedAccountIds: [] });
+      if (changed === "connection") await ctx.db.patch(f.bufferId, { status: "reauth_required" });
+      if (changed === "unavailable")
+        await ctx.db.patch(f.zernioId, {
+          channels: [
+            {
+              id: "cccccccccccccccccccccccc",
+              name: "Owned",
+              platform: "instagram",
+              available: false,
+            },
+          ],
+        });
+      if (changed === "paused") await ctx.db.patch(f.saved.id, { controlState: "paused" });
+      if (changed === "zero-budget") await ctx.db.patch(f.saved.id, { budgetLimitCents: 0 });
+      if (changed === "excess-budget") await ctx.db.patch(f.saved.id, { budgetLimitCents: 1001 });
+    });
+    expect((await f.readiness()).ready).toBe(false);
+    expect((await f.readiness()).reasons).toContain(
+      changed === "paused"
+        ? "service_paused_or_stopped"
+        : changed.endsWith("budget")
+          ? "budget_limit_unavailable"
+          : "account_unavailable",
+    );
+    expect(await f.t.run((ctx) => ctx.db.query("spendEvents").collect())).toHaveLength(0);
+  }
+});
+
+test("service aliases, other operations and additional skill pins cannot inherit built-in admission", async () => {
+  for (const changed of ["identity", "business-review", "pack", "extra-skill"] as const) {
+    const f = await socialFixture();
+    await f.t.run(async (ctx) => {
+      if (changed === "identity")
+        await ctx.db.patch(f.saved.id, { serviceId: "other-social-service" });
+      if (changed === "business-review")
+        await ctx.db.patch(f.saved.id, { operationIds: ["business.review"] });
+      if (changed === "pack")
+        await ctx.db.patch(f.saved.id, { operationIds: ["workflow.pack.run"] });
+      if (changed === "extra-skill") {
+        const extra = await ctx.db.insert("skills", {
+          name: "unused-extra",
+          version: 1,
+          body: "Extra",
+          status: "active",
+          createdAt: Date.now(),
+        });
+        await ctx.db.patch(f.saved.id, {
+          skills: [
+            ...f.config.skills,
+            {
+              skillId: extra,
+              name: "unused-extra",
+              version: 1,
+              bodyHash: await contentHash("Extra"),
+              tenantId: null,
+            },
+          ],
+        });
+      }
+    });
+    const status = await f.asA.query(api.managedServices.status, {
+      serviceId: changed === "identity" ? "other-social-service" : "social-marketing",
+    });
+    expect(status?.readiness.ready).toBe(false);
+    expect(status?.readiness.reasons).toContain("operation_unqualified");
+  }
 });

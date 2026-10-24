@@ -26,14 +26,18 @@ import { goldenProviderCeilingCents, goldenTavilyBilling } from "@pikar/cost/gol
 import { scanText } from "@pikar/pii";
 import { clampRefundCents, type EstimateInput, estimateFolderCents } from "@pikar/vault";
 import { v } from "convex/values";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalQuery } from "./_generated/server";
 import { probeControl } from "./authoringProbe";
 import { dispatchWorkflowLive } from "./dispatchRun";
 import { contentHash } from "./lib/hash";
-import { assertManagedServicePaidAdmission } from "./lib/managedServiceBudget";
+import {
+  assertManagedServicePaidAdmission,
+  reconcileStandingServiceAccounting,
+  standingServiceBinding,
+} from "./lib/managedServiceBudget";
 import { internalMutation } from "./lib/tenantLifecycle";
 // The PLAIN-FUNCTION half of the ledger writer, not `ctx.runMutation`: the limiter movement and
 // its ledger row must commit or fail TOGETHER (FIN-01). A second transaction could leave the
@@ -878,9 +882,13 @@ export const reservePaidCall = internalMutation({
     )
       throw new Error("PAID_ADMISSION_INVALID");
     if ((await getGuardrailConfig(ctx)).killSwitch) throw new Error("PAID_KILL_SWITCH");
+    let standing = false;
     if (managedServiceRunId) {
       if (rail) throw new Error("SERVICE_PAID_RAIL_UNSUPPORTED");
       await assertManagedServicePaidAdmission(ctx, tenantId, managedServiceRunId, ceilingCents);
+      const run = await ctx.db.get(managedServiceRunId);
+      if (!run) throw new Error("SERVICE_RUN_UNAVAILABLE");
+      standing = (await standingServiceBinding(ctx, run, true)) !== null;
     }
     const [tenantRail, deploymentRail] =
       rail === "ingest"
@@ -894,12 +902,21 @@ export const reservePaidCall = internalMutation({
         .first()
     )
       throw new Error("PAID_CALL_ALREADY_RESERVED");
-    if (!(await rateLimiter.check(ctx, tenantRail, { key: tenantId, count: ceilingCents })).ok)
+    if (
+      !standing &&
+      !(await rateLimiter.check(ctx, tenantRail, { key: tenantId, count: ceilingCents })).ok
+    )
       throw new Error("PAID_DAILY_BUDGET_EXHAUSTED");
-    if (!(await rateLimiter.check(ctx, deploymentRail, { count: ceilingCents })).ok)
+    if (!standing && !(await rateLimiter.check(ctx, deploymentRail, { count: ceilingCents })).ok)
       throw new Error("PAID_DEPLOYMENT_BUDGET_EXHAUSTED");
-    await rateLimiter.limit(ctx, tenantRail, { key: tenantId, count: ceilingCents, reserve: true });
-    await rateLimiter.limit(ctx, deploymentRail, { count: ceilingCents, reserve: true });
+    if (!standing) {
+      await rateLimiter.limit(ctx, tenantRail, {
+        key: tenantId,
+        count: ceilingCents,
+        reserve: true,
+      });
+      await rateLimiter.limit(ctx, deploymentRail, { count: ceilingCents, reserve: true });
+    }
     return recordMovement(ctx, {
       tenantId,
       correlationId,
@@ -907,7 +924,7 @@ export const reservePaidCall = internalMutation({
       phase: "reserved",
       amountCents: ceilingCents,
       model,
-      kind: "paid_call",
+      kind: standing ? "paid_call_standing" : "paid_call",
       ...(managedServiceRunId ? { managedServiceRunId } : {}),
       createdAt: Date.now(),
     });
@@ -924,10 +941,16 @@ export const settlePaidCall = internalMutation({
     if (
       !held ||
       held.tenantId !== tenantId ||
-      held.kind !== "paid_call" ||
+      !["paid_call", "paid_call_standing"].includes(held.kind ?? "") ||
       held.phase !== "reserved"
     )
       throw new Error("PAID_RESERVATION_INVALID");
+    const standing = held.kind === "paid_call_standing";
+    if (standing) {
+      const run = held.managedServiceRunId ? await ctx.db.get(held.managedServiceRunId) : null;
+      if (!run || run.tenantId !== tenantId || !(await standingServiceBinding(ctx, run)))
+        throw new Error("PAID_RESERVATION_INVALID");
+    }
     const [tenantRail, deploymentRail] =
       held.rail === "ingest"
         ? (["ingestSpendCents", "deploymentIngestSpendCents"] as const)
@@ -941,25 +964,27 @@ export const settlePaidCall = internalMutation({
     );
     if (previous) {
       if (previous.evalActualUsd !== costUsd) throw new Error("PAID_SETTLEMENT_MISMATCH");
+      if (standing && held.managedServiceRunId)
+        await reconcileStandingServiceAccounting(ctx, tenantId, held.managedServiceRunId);
       return { settled: true, breached: actualCents > held.amountCents };
     }
     const difference = actualCents - held.amountCents;
-    if (difference > 0) {
+    if (difference > 0 && !standing) {
       await rateLimiter.limit(ctx, tenantRail, { key: tenantId, count: difference, reserve: true });
       await rateLimiter.limit(ctx, deploymentRail, { count: difference, reserve: true });
     }
     if (difference < 0) {
       const refund = -difference;
-      const tenantRefund = refundableCents(
-        await rateLimiter.getValue(ctx, tenantRail, { key: tenantId }),
-        refund,
-        held.createdAt,
-      );
-      const deploymentRefund = refundableCents(
-        await rateLimiter.getValue(ctx, deploymentRail),
-        refund,
-        held.createdAt,
-      );
+      const tenantRefund = standing
+        ? 0
+        : refundableCents(
+            await rateLimiter.getValue(ctx, tenantRail, { key: tenantId }),
+            refund,
+            held.createdAt,
+          );
+      const deploymentRefund = standing
+        ? 0
+        : refundableCents(await rateLimiter.getValue(ctx, deploymentRail), refund, held.createdAt);
       if (tenantRefund > 0)
         await rateLimiter.limit(ctx, tenantRail, {
           key: tenantId,
@@ -996,15 +1021,43 @@ export const settlePaidCall = internalMutation({
         createdAt: Date.now(),
         evalActualUsd: costUsd,
       });
+    if (standing && held.managedServiceRunId) {
+      // A provider exceeding its admitted ceiling cannot continue. Close the run before
+      // settlement so even an action/process failure cannot postpone the known envelope overrun.
+      if (difference > 0) {
+        const run = await ctx.db.get(held.managedServiceRunId);
+        if (run) {
+          if (run.state === "running" || run.state === "claimed")
+            await ctx.db.patch(run._id, {
+              state: "unknown",
+              terminalCode: "execution_uncertain",
+              updatedAt: Date.now(),
+            });
+          // A future timer may already be armed, even under a replacement approval made before
+          // this late bill became known. Closing the old bill must never resume that cadence.
+          await ctx.runMutation(internal.managedServiceRecurrence.suspendForService, {
+            tenantId,
+            serviceId: run.serviceId,
+            reason: "budget_required",
+          });
+        }
+      }
+      await reconcileStandingServiceAccounting(ctx, tenantId, held.managedServiceRunId);
+    }
     return { settled: true, breached: difference > 0 };
   },
 });
 
 export const preCall = internalMutation({
-  args: { tenantId: v.string(), rail: vRail, reserved: v.optional(v.boolean()) },
+  args: {
+    tenantId: v.string(),
+    rail: vRail,
+    reserved: v.optional(v.boolean()),
+    managedServiceRunId: v.optional(v.id("managedServiceRuns")),
+  },
   handler: async (
     ctx,
-    { tenantId, rail, reserved },
+    { tenantId, rail, reserved, managedServiceRunId },
   ): Promise<
     | { ok: true }
     | {
@@ -1016,6 +1069,12 @@ export const preCall = internalMutation({
     await ensureCoverage(ctx, tenantId, Date.now());
     const cfg = await getGuardrailConfig(ctx);
     if (cfg.killSwitch) return { ok: false, reason: "kill_switch" };
+    if (managedServiceRunId) {
+      if (rail || reserved) throw new Error("SERVICE_PAID_RAIL_UNSUPPORTED");
+      await assertManagedServicePaidAdmission(ctx, tenantId, managedServiceRunId, 1);
+      const run = await ctx.db.get(managedServiceRunId);
+      if (run && (await standingServiceBinding(ctx, run, true))) return { ok: true };
+    }
 
     // RESERVED FOLDER WORK CHECKS THE KILL SWITCH ONLY, and this is the whole "a folder can never
     // be refused halfway" guarantee. The money was already taken by `reserveFolder`, so checking

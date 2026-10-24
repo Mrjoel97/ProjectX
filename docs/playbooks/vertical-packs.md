@@ -1,3 +1,11 @@
+> Last verified: 2026-10-24 — The Buffer platform-requirement and current Pinterest-board checks remain inside already pinned core/backend Buffer files. Both generated evaluator identities are refreshed after those source changes; the six-lane forty-case corpus, its hash and all golden fixture bytes are unchanged. The vertical generator check and source-edit regressions pass. No vertical is activated or newly qualified by the refresh.
+
+> Last verified: 2026-10-24 — The evaluator dependency inventory includes managed recurrence execution and its reused calendar helper, service conversations, pure knowledge requirements and reused Foundation/profile code. Refresh both generated identities together at source freeze. The six-lane, forty-case corpus and forty-six golden cases remain unchanged. This source bookkeeping neither activates verticals nor claims semantic, hosted or paid qualification.
+
+The integrated tool-description correction refreshed both source identities together. The protocol/query guard and metadata-only calendar path controls remain narrow; the held-out corpus remains unchanged. Current-source CI remains the release check.
+
+> Last verified: 2026-10-23 — Regenerated the native vertical evaluator fingerprint after the Zernio permission-generation and history correction. The six-lane, forty-case corpus hash and fixture bodies are unchanged. Generator --check and the golden offline self-check pass; this is source identity maintenance, not a new qualification result or activation.
+
 > Last verified: 2026-10-23 — Both source identity inventories now include managed-service helpers imported by the shared runtime. Mechanical regeneration, including the tenant-first service budget index repair, preserves six lanes and40 cases; source changes retire old exact-source identity. The isolated identity regression checks each dependency. Vertical semantic qualification and live admission remain unchanged and unavailable.
 
 > Last verified: 2026-10-21 — The closed vertical evaluator inventory now includes smokeRun.mjs, imported by the native collector, so changes to shared CLI invocation and retry behavior retire its exact source identity. Its helper and focused tests are watched here and under agent-runtime. Regenerated native revision 01d6d6908bd0eecac14bc30b1f90a88edb0db8f14c4cc46fc8fa2f036a724425 after source freeze; the six lanes, forty cases and dc21 corpus hash remain unchanged. The new transport retry requires explicit opt-in, an exact same-function CLI TypeError: fetch failed envelope and one of 23 actual internalQuery targets, with at most two query invocations shared with empty-output handling. It adds no transport retry for native errors, unknown functions, actions, writes or paid calls; the separate legacy pack empty-output turn retry remains unchanged and unqualified. This dependency correction and offline tests provide no native collection, semantic qualification, authenticated acceptance, activation or deployment authority; unqualified verticals remain unavailable.
@@ -366,3 +374,11 @@ Actual complete six-lane semantic reviews, responsive UAT and release/rollback d
 offline SDK transport shims and authorization tests are implementation verification only.
 
 Last verified: 2026-10-15 — Native evaluator source identity now includes paid model admission, erased-identity admission and shared JWT lifetime. Regenerated the six-lane, 40-case pins after runtime changes. The case corpus is unchanged; prior evaluator evidence is retired. Offline pin checks pass, with no new live/provider evaluation claimed.
+
+### 2026-10-23 — Managed-service outcomes and inert construction identities
+
+The closed golden/vertical evaluator inventories now include the service brain/history/projection policy dependencies and named inert recurrence construction. Refresh generated fingerprints only after final formatting; corpus bytes and historical handoffs remain unchanged. This mechanical retirement prevents prior evidence silently qualifying new runtime/schema dependencies. It does not run an evaluator, spend money or supply qualification. ADR063 keeps recurrence activation deferred.
+
+### Last verified: 2026-10-23 — Shared context fingerprint
+
+The evaluator inventory explicitly includes native/core Blueprint source authority and service outcome reads. Golden legacy-seed preflight now proves both the native synthetic fixture's presence and its exclusion from assured standing context; no user review is fabricated. Corpora remain46golden/40vertical cases. Fingerprint regeneration retires old-source applicability only and supplies no vertical qualification, activation or paid execution.
