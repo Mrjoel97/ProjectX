@@ -218,9 +218,10 @@ export default function Terms() {
 
       <h2>11. Third-party services</h2>
       <p>
-        Pikar depends on services we do not control, including Google, Convex, Vercel, and Amazon
-        Web Services. Your use of a connected Google account is also governed by Google&rsquo;s own
-        terms. We are not responsible for those services&rsquo; acts, omissions, or availability.
+        Pikar uses the external services described in our <a href="/privacy">Privacy Policy</a>. The
+        services involved depend on the feature and configured provider route. Your use of a
+        connected Google account is also governed by Google&rsquo;s own terms. We are not
+        responsible for those services&rsquo; acts, omissions, or availability.
       </p>
 
       <p>
