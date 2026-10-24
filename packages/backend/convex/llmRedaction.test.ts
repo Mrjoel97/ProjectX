@@ -1714,9 +1714,12 @@ test("only media.ts and mediaComplete.ts write a TERMINAL mediaJobs status, and 
   expect([...succeeders]).toEqual(["mediaComplete.ts"]);
 });
 
-test("storage.getUrl stays in authenticated queries or the two approved funnel capability seams", () => {
+test("storage.getUrl stays in authenticated queries or exact reviewed funnel/social capability seams", () => {
   // A storage URL is a BEARER CAPABILITY. Reached from anything but a tenant-guarded read it is one
   // step from a log line or an unguarded return.
+  // Instagram requires image_url rather than uploaded bytes. Its one reviewed handoff is
+  // publishPost only, after a customer-approved claim and owned-upload checks; the focused
+  // assertions below pin the provider-only sink and exclude model/log/return surfaces.
   // THIS SCAN IS WHAT PLAN 20-17 MUST NOT BREAK: handing fal a `ctx.storage.getUrl()` result as the
   // STT `audio_url` would give a third party a bearer capability to a tenant's asset. If 20-17
   // needs the bytes at a provider, it uploads them - it does not hand over a URL.
@@ -1737,6 +1740,7 @@ test("storage.getUrl stays in authenticated queries or the two approved funnel c
     ["resolveAndIncrement", "internalMutation"],
   ]);
   const seenFunnelExceptions: string[] = [];
+  const seenSocialExceptions: string[] = [];
   let sites = 0;
   for (const [rel, code] of allConvexSources()) {
     for (const call of code.matchAll(/storage\.getUrl/g)) {
@@ -1749,6 +1753,11 @@ test("storage.getUrl stays in authenticated queries or the two approved funnel c
         seenFunnelExceptions.push(name);
         continue;
       }
+      if (rel === "socialContentActions.ts" && name === "publishPost") {
+        expect(kind).toBe("internalAction");
+        seenSocialExceptions.push(name);
+        continue;
+      }
       expect(
         ["tenantQuery", "ownerQuery"],
         `${rel}: storage.getUrl is not inside an authenticated query (found ${kind ?? "top level"})`,
@@ -1757,6 +1766,74 @@ test("storage.getUrl stays in authenticated queries or the two approved funnel c
   }
   expect(sites, "no storage.getUrl call sites found - the scan is vacuous").toBeGreaterThan(0);
   expect(seenFunnelExceptions.sort()).toEqual(["create", "resolveAndIncrement"]);
+  expect(seenSocialExceptions).toEqual(["publishPost"]);
+});
+
+test("Instagram's sole bearer URL handoff requires approved tenant-owned media and has only a provider sink", () => {
+  const source = stripCode(readSource("socialContentActions.ts"));
+  const start = source.indexOf("export const publishPost = internalAction(");
+  const end = source.indexOf("export const checkPost = tenantAction(", start);
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  const publish = source.slice(start, end);
+  const claim = publish.indexOf("internal.socialPublishing.claimPost");
+  const authorize = publish.indexOf("authorized(ctx, a.tenantId, post.provider)");
+  const selected = publish.indexOf("internal.socialPublishing.selectedConnection");
+  const owned = publish.indexOf("internal.uploads.requireOwned");
+  const capability = publish.indexOf("ctx.storage.getUrl(post.storageId!)");
+  expect(claim).toBeGreaterThanOrEqual(0);
+  expect(publish).toContain("if (!post) return;");
+  expect(authorize).toBeGreaterThan(claim);
+  expect(selected).toBeGreaterThan(authorize);
+  expect(owned).toBeGreaterThan(selected);
+  expect(capability).toBeGreaterThan(owned);
+  expect(publish).toMatch(
+    /internal\.uploads\.requireOwned,\s*\{\s*tenantId: a\.tenantId,\s*storageId: post\.storageId,/,
+  );
+  expect(publish.match(/storage\.getUrl/g)).toHaveLength(1);
+  const instagram = publish.slice(
+    publish.indexOf('else if (post.kind === "instagram")'),
+    publish.indexOf('else if (post.kind === "youtube")'),
+  );
+  expect(instagram).toContain("const url = await ctx.storage.getUrl(post.storageId!);");
+  expect(instagram).toMatch(/if \(!url\) throw new Error\("SOCIAL_MEDIA_REQUIRED"\)/);
+  const handoff = instagram.indexOf("image_url: url, caption: post.text");
+  expect(handoff).toBeGreaterThan(instagram.indexOf("await recheck();"));
+  expect(instagram.match(/\burl\b/g)).toHaveLength(3);
+  expect(publish).not.toMatch(/return\s+[^;\s}]/);
+  expect(publish).not.toMatch(/generateText|generateObject|audit\.log|telemetry|agentSteps/);
+  const diagnostic = publish.match(
+    /console\.warn\("SOCIAL_PUBLISH_FAILURE",\s*\{([\s\S]*?)\}\)/,
+  )?.[1];
+  expect(diagnostic).toBeTruthy();
+  expect(diagnostic).not.toMatch(/url|storage|blob|grant|text|title/);
+  expect(stripCode(readSource("socialTools.ts"))).not.toMatch(
+    /getUrl|mediaUrl|socialContentActions\.publishPost|socialPublishing\.approvePost/,
+  );
+});
+
+test("the social URL handoff's claim is tenant, human approval and live qualification fenced", () => {
+  const source = stripCode(readSource("socialPublishing.ts"));
+  const claim = source.slice(
+    source.indexOf("export const claimPost = internalMutation("),
+    source.indexOf("export const finishPost = internalMutation("),
+  );
+  expect(claim).toMatch(/assertTenantWritable\(ctx, a\.tenantId\)/);
+  expect(claim).toContain(
+    'if (!p || p.tenantId !== a.tenantId || p.status !== "approved") return null;',
+  );
+  expect(claim).toContain(
+    'process.env[`SOCIAL_${p.provider.toUpperCase()}_PUBLISH_ENABLED`] !== "true"',
+  );
+  expect(claim).toContain("p.selectionRevision");
+  const approve = source.slice(
+    source.indexOf("export const approvePost = tenantMutation("),
+    source.indexOf("export const claimPost = internalMutation("),
+  );
+  expect(approve).toContain("p.tenantId !== ctx.tenantId");
+  expect(approve).toContain("p.revision !== a.revision");
+  expect(approve).toContain("validateSocialDraft(p, asset.kind)");
+  expect(approve).toContain("internal.socialContentActions.publishPost");
 });
 
 // ── 20-15 (MEDIA-01 / D11): the render stage's structural guarantees ──────────────────────────

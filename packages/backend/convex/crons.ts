@@ -96,4 +96,12 @@ crons.interval("voice-transient-retention", { hours: 1 }, internal.voice.sweepTr
 // Claims due opt-in reports in small batches; Buffer refresh and metrics reads remain tenant-scoped.
 crons.interval("buffer-engagement-reports", { minutes: 15 }, internal.buffer.tickReports, {});
 crons.interval("zernio-engagement-reports", { minutes: 60 }, internal.zernio.tickReports, {});
+crons.interval("social-oauth-retention", { minutes: 15 }, internal.social.cleanup, {});
+// API metadata expires independently of OAuth token renewal and customer-authored media.
+crons.hourly(
+  "youtube-api-metadata-retention",
+  { minuteUTC: 45 },
+  internal.social.cleanupYouTubeMetadata,
+  {},
+);
 export default crons;

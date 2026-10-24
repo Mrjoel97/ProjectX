@@ -230,6 +230,15 @@ const CONVEX_MODULES = [
   "skills.ts",
   "smoke.ts",
   "smokeAssert.ts",
+  "social.ts",
+  "socialActions.ts",
+  "socialContentActions.ts",
+  "socialMedia.ts",
+  "socialPublishing.ts",
+  "socialTools.ts",
+  // Static GET-only TikTok URL ownership proof; no scheduler, customer media or provider call.
+  "socialVerification.ts",
+  "socialWebhooks.ts",
   "spendLedger.ts",
   "stripeAuth.ts",
   "stripeConnector.ts",
@@ -313,6 +322,11 @@ const SCHEDULER_CALL_SITES = [
   "researchControl.ts",
   "review.ts",
   "smoke.ts",
+  // Privacy cleanup only: 50-row cursor continuations clear stale YouTube metadata;
+  // the fixed hourly driver is explicitly gated, with no model/provider calls or user routine.
+  "social.ts",
+  // Explicit customer approval schedules one immutable native social post; no recurrence.
+  "socialPublishing.ts",
   "vault.ts",
   "vaultDrive.ts",
   "vaultFolders.ts",
@@ -400,10 +414,10 @@ describe("the scheduling primitives have a CLOSED, PINNED call-site set", () => 
     const registered = [...(crons?.text ?? "").matchAll(/crons\.\w+\(\s*\n?\s*"([^"]+)"/g)].map(
       (m) => m[1],
     );
-    // THE CLAIM: a CLOSED set of five fixed global jobs. Round 3 asserted only
+    // THE CLAIM: a CLOSED set of fourteen reviewed global jobs. Round 3 asserted only
     // `expect(crons).not.toMatch(/tenantId/)`, which is a literal-string grep — a per-tenant
     // fan-out passing `orgId`, `workspaceId` or an id array read green. Pinning the registered
-    // NAMES instead means a sixth job of any name, per-tenant or not, is a visible diff.
+    // NAMES instead means another job of any name, per-tenant or not, is a visible diff.
     expect(registered).toEqual([
       "expired-upload-receipts",
       "expired-auth-revocations",
@@ -419,6 +433,9 @@ describe("the scheduling primitives have a CLOSED, PINNED call-site set", () => 
       // Owner-authorized, selected-channel reporting; it never approves or repeats posts.
       "buffer-engagement-reports",
       "zernio-engagement-reports",
+      // Expired OAuth receipts and gated API metadata erasure only; neither starts customer work.
+      "social-oauth-retention",
+      "youtube-api-metadata-retention",
     ]);
   });
 });
