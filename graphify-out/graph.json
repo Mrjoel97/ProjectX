@@ -306166,6 +306166,61 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_schema",
       "target": "packages_backend_convex_schema_webassets_table"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/workflowPackBinding.ts",
+      "source_location": "L513",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_workflowpackbinding",
+      "target": "packages_backend_convex_guardrails"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/workflowPackBinding.ts",
+      "source_location": "L546",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_workflowpackbinding",
+      "target": "packages_backend_convex_spendledger_listevents"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/workflowPackBinding.ts",
+      "source_location": "L586",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_workflowpackbinding",
+      "target": "packages_backend_convex_plans_getbyid"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/workflowPackBinding.ts",
+      "source_location": "L595",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_workflowpackbinding",
+      "target": "packages_backend_convex_skills_inspectpackcandidates"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/(auth)/signin/page.tsx",
+      "source_location": "L15",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "apps_web_app_auth_signin_page",
+      "target": "packages_backend_convex_invites_authproviders"
     }
   ],
   "hyperedges": [],

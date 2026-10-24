@@ -1,11 +1,13 @@
 import {
   assessOnlinePresenceBrief,
+  mergeOnlinePresenceBrief,
   type OnlinePresenceAssessment,
   type OnlinePresenceMissing,
   type OnlinePresenceSource,
   type OnlinePresenceWarning,
 } from "@pikar/core/onlinePresence";
-import { materializeWebRecipe } from "@pikar/core/webRecipes";
+import { parseWebAssetRef } from "@pikar/core/webAssets";
+import { materializeWebRecipe, validateWebRecipeMedia } from "@pikar/core/webRecipes";
 import { sha256Bytes } from "@pikar/core/webRuntime";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -379,6 +381,7 @@ async function artifactFor(
 
 export type OnlinePresenceContext = {
   assetCandidates: Awaited<ReturnType<typeof listImageCandidates>>;
+  briefBuilt: boolean;
   revision: number;
   threadId: string;
   planId: Id<"plans">;
@@ -402,17 +405,22 @@ export const contextForTenant = internalQuery({
       session,
       args.sourceRefs ?? selectedRefs(session.brief),
     );
+    const assessment = assessOnlinePresenceBrief(session.brief, sources);
     return {
+      briefBuilt:
+        assessment.ok &&
+        session.builtBriefHash ===
+          hash({
+            brief: assessment.brief,
+            sourceSnapshots: assessment.sources.map(({ ref, revision }) => ({ ref, revision })),
+          }),
       revision: session.revision,
       threadId: session.threadId,
       planId: session.planId,
       sources: contextSources(sources, args.sourceRefs ?? selectedRefs(session.brief)),
       brief: session.brief ?? null,
       artifact: await artifactFor(ctx, session),
-      assessment:
-        session.brief === undefined
-          ? null
-          : statusAssessment(assessOnlinePresenceBrief(session.brief, sources)),
+      assessment: session.brief === undefined ? null : statusAssessment(assessment),
       latestUserMessage: session.humanMessages.at(-1)?.text ?? "",
       assetCandidates: await listImageCandidates(ctx, args.tenantId),
     };
@@ -425,6 +433,21 @@ export const saveBrief = internalMutation({
     planId: v.id("plans"),
     expectedRevision: v.number(),
     brief: v.any(),
+    clearFields: v.optional(
+      v.array(
+        v.union(
+          v.literal("offer"),
+          v.literal("services"),
+          v.literal("about"),
+          v.literal("ctaLabel"),
+          v.literal("ctaHref"),
+          v.literal("proof"),
+          v.literal("contactConsent"),
+          v.literal("design"),
+          v.literal("media"),
+        ),
+      ),
+    ),
   },
   handler: async (
     ctx,
@@ -433,8 +456,57 @@ export const saveBrief = internalMutation({
     await assertTenantWritable(ctx, args.tenantId);
     const session = await ownedSession(ctx, args.tenantId, args.planId);
     if (session.revision !== args.expectedRevision) throw new Error("STALE_REVISION");
-    const sources = await resolveSources(ctx, session, selectedRefs(args.brief));
-    const assessment = assessOnlinePresenceBrief(args.brief, sources);
+    const merged = mergeOnlinePresenceBrief(session.brief, args.brief, args.clearFields);
+    if (!merged.ok)
+      return {
+        ok: false,
+        revision: session.revision,
+        assessment: { ok: false, missing: merged.missing, warnings: [] },
+      };
+    const brief = merged.brief;
+    if (
+      merged.inheritedMedia &&
+      validateWebRecipeMedia(brief.media) &&
+      Array.isArray(brief.sourceRefs)
+    ) {
+      const images = [brief.media.logo, brief.media.hero, ...(brief.media.gallery ?? [])];
+      const refs: string[] = [];
+      for (const image of images) {
+        if (!image) continue;
+        const ref = parseWebAssetRef(image.storageRef);
+        const id = ref ? ctx.db.normalizeId("webAssets", ref.assetId) : null;
+        const asset = id ? await ctx.db.get(id) : null;
+        if (
+          !ref ||
+          !asset ||
+          asset.tenantId !== args.tenantId ||
+          asset.contentHash !== ref.contentHash
+        )
+          return {
+            ok: false,
+            revision: session.revision,
+            assessment: {
+              ok: false,
+              missing: [
+                {
+                  field: "media",
+                  reason: "unknown_source",
+                  question:
+                    "The retained image is unavailable; select an owned prepared image or explicitly clear media.",
+                },
+              ],
+              warnings: [],
+            },
+          };
+        refs.push(`vault:${asset.vaultDocumentId}`);
+      }
+      brief.sourceRefs = [
+        ...brief.sourceRefs,
+        ...new Set(refs.filter((ref) => !(brief.sourceRefs as unknown[]).includes(ref))),
+      ];
+    }
+    const sources = await resolveSources(ctx, session, selectedRefs(brief));
+    const assessment = assessOnlinePresenceBrief(brief, sources);
     if (assessment.ok && !(await assetSourcesCurrent(ctx, args.tenantId, assessment)))
       return {
         ok: false,
@@ -470,8 +542,7 @@ export const saveBrief = internalMutation({
         },
       };
     // Source/disclosure wording must occur in a real user message; a model cannot invent consent.
-    const consent =
-      args.brief && typeof args.brief === "object" ? args.brief.contactConsent : undefined;
+    const consent = brief.contactConsent;
     if (
       typeof consent === "string" &&
       !session.humanMessages.some((message) => message.text.includes(consent))
@@ -537,11 +608,11 @@ export const saveBrief = internalMutation({
     if (!assessment.ok) {
       if (
         !assessment.missing.some((entry) => entry.reason === "invalid") &&
-        JSON.stringify(args.brief).length <= 32000
+        JSON.stringify(brief).length <= 32000
       ) {
         const revision = session.revision + 1;
         await ctx.db.patch(session._id, {
-          brief: args.brief,
+          brief,
           sourceSnapshots: undefined,
           revision,
           status: assessment.missing.some((entry) => entry.reason === "commerce_unavailable")

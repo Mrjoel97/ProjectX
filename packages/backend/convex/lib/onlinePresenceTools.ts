@@ -1,3 +1,7 @@
+import {
+  ONLINE_PRESENCE_OPTIONAL_FIELDS,
+  type OnlinePresenceClearField,
+} from "@pikar/core/onlinePresence";
 import { jsonSchema, tool } from "ai";
 import type { GenericActionCtx } from "convex/server";
 import { internal } from "../_generated/api";
@@ -92,10 +96,22 @@ export function buildOnlinePresenceTools(context: {
     saveOnlinePresenceBrief: tool({
       description:
         "Save a private site brief using actual business evidence. Missing facts return questions. The server checks source ownership and revision; this never approves or publishes a website.",
-      inputSchema: jsonSchema<{ brief: Record<string, unknown>; expectedRevision: number }>({
+      inputSchema: jsonSchema<{
+        brief: Record<string, unknown>;
+        expectedRevision: number;
+        clearFields?: OnlinePresenceClearField[];
+      }>({
         type: "object",
         properties: {
           expectedRevision: { type: "integer", minimum: 0 },
+          clearFields: {
+            type: "array",
+            items: { type: "string", enum: [...ONLINE_PRESENCE_OPTIONAL_FIELDS] },
+            maxItems: ONLINE_PRESENCE_OPTIONAL_FIELDS.length,
+            uniqueItems: true,
+            description:
+              "Explicitly remove optional fields. Omitted fields are preserved. Clear ctaLabel and ctaHref together; never also supply cleared fields.",
+          },
           brief: {
             type: "object",
             properties: {
@@ -111,7 +127,7 @@ export function buildOnlinePresenceTools(context: {
                 type: "string",
                 maxLength: 128,
                 description:
-                  "Optional paired CTA label. Omit both CTA fields for the built-in contactConsent inquiry form.",
+                  "Optional paired CTA label. For the built-in form omit both; to remove an existing CTA clear both fields via clearFields.",
               },
               ctaHref: {
                 type: "string",
@@ -156,13 +172,14 @@ export function buildOnlinePresenceTools(context: {
         required: ["brief", "expectedRevision"],
         additionalProperties: false,
       }),
-      execute: ({ brief, expectedRevision }) =>
+      execute: ({ brief, expectedRevision, clearFields }) =>
         run(() =>
           ctx.runMutation(internal.onlinePresence.saveBrief, {
             tenantId,
             planId,
             brief,
             expectedRevision,
+            ...(clearFields === undefined ? {} : { clearFields }),
           }),
         ),
     }),

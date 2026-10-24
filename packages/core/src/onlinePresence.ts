@@ -16,6 +16,18 @@ export const ONLINE_PRESENCE_TOOLS = Object.freeze([
 ] as const);
 
 export type OnlinePresenceKind = "landing" | "website" | "shop";
+export const ONLINE_PRESENCE_OPTIONAL_FIELDS = [
+  "offer",
+  "services",
+  "about",
+  "ctaLabel",
+  "ctaHref",
+  "proof",
+  "contactConsent",
+  "design",
+  "media",
+] as const;
+export type OnlinePresenceClearField = (typeof ONLINE_PRESENCE_OPTIONAL_FIELDS)[number];
 export type OnlinePresenceBrief = {
   kind: OnlinePresenceKind;
   businessName: string;
@@ -96,6 +108,53 @@ export type OnlinePresenceAssessment = {
 
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
+
+/** Omission preserves optional draft content; clearing is explicit and never clears required facts.
+ * Nested media/design and lists are whole-field replacements, not implicit deep merges. */
+export function mergeOnlinePresenceBrief(
+  previous: unknown,
+  incoming: unknown,
+  clearFields: unknown = [],
+):
+  | { ok: true; brief: Record<string, unknown>; inheritedMedia: boolean }
+  | { ok: false; missing: readonly OnlinePresenceMissing[] } {
+  const invalid = (question: string) => ({
+    ok: false as const,
+    missing: [{ field: "clearFields", reason: "invalid" as const, question }],
+  });
+  if (!record(incoming)) return invalid("Provide a structured website brief.");
+  if (
+    !Array.isArray(clearFields) ||
+    clearFields.length > ONLINE_PRESENCE_OPTIONAL_FIELDS.length ||
+    new Set(clearFields).size !== clearFields.length ||
+    clearFields.some(
+      (field) => !(ONLINE_PRESENCE_OPTIONAL_FIELDS as readonly unknown[]).includes(field),
+    )
+  )
+    return invalid("Clear only distinct supported optional brief fields.");
+  if (clearFields.includes("ctaLabel") !== clearFields.includes("ctaHref"))
+    return invalid("Clear ctaLabel and ctaHref together.");
+  if (clearFields.some((field) => Object.hasOwn(incoming, field)))
+    return invalid("Do not supply and clear the same brief field.");
+  const retained = record(previous)
+    ? Object.fromEntries(
+        ONLINE_PRESENCE_OPTIONAL_FIELDS.filter((field) => Object.hasOwn(previous, field)).map(
+          (field) => [field, previous[field]],
+        ),
+      )
+    : {};
+  const brief = { ...retained, ...incoming };
+  for (const field of clearFields) delete brief[field];
+  return {
+    ok: true,
+    brief,
+    inheritedMedia:
+      !Object.hasOwn(incoming, "media") &&
+      !clearFields.includes("media") &&
+      brief.media !== undefined,
+  };
+}
+
 const text = (value: unknown, max: number): value is string =>
   typeof value === "string" && value.trim().length > 0 && value.length <= max;
 const list = (value: unknown, max: number, length: number): value is readonly string[] =>

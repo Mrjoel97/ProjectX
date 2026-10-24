@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import {
   assessOnlinePresenceBrief,
+  mergeOnlinePresenceBrief,
   ONLINE_PRESENCE_TOOLS,
   type OnlinePresenceSource,
   onlinePresenceServiceState,
@@ -27,6 +28,92 @@ const brief = {
 };
 const assess = (overrides: Record<string, unknown> = {}, sources = [source]) =>
   assessOnlinePresenceBrief({ ...brief, ...overrides }, sources);
+
+describe("online presence revision contract", () => {
+  const previous = {
+    ...brief,
+    services: ["Layout", "Print", "Unsupported third service"],
+    about: "Acme helps homeowners plan gardens.",
+    contactConsent: "I agree to be contacted.",
+    media: { hero: { storageRef: `webasset:asset:${"a".repeat(64)}`, alt: "Garden illustration" } },
+    design: { artDirection: "studio", primaryColor: "#246B58" },
+  };
+
+  test("service-only and headline-only revisions retain omitted optional fields and four-page inputs", () => {
+    const services = mergeOnlinePresenceBrief(previous, {
+      ...brief,
+      services: ["Layout", "Print"],
+    });
+    expect(services.ok).toBe(true);
+    if (!services.ok) throw new Error("Expected revision");
+    expect(services.brief).toMatchObject({
+      about: previous.about,
+      media: previous.media,
+      contactConsent: previous.contactConsent,
+      services: ["Layout", "Print"],
+    });
+    expect(services.inheritedMedia).toBe(true);
+    const headline = mergeOnlinePresenceBrief(services.brief, {
+      ...brief,
+      headline: "A better garden",
+    });
+    if (!headline.ok) throw new Error("Expected headline revision");
+    const checked = assessOnlinePresenceBrief(headline.brief, [source]);
+    if (!checked.ok) throw new Error("Expected complete preserved brief");
+    const document = materializeWebRecipe(checked.recipeId, {
+      ...checked.input,
+      pageMode: "multi-page",
+      projectSlug: "acme",
+    });
+    expect(document.pages.map((page) => page.slug)).toEqual([
+      "home",
+      "about",
+      "services",
+      "contact",
+    ]);
+    expect(document.pages[0]?.nodes).toContainEqual(
+      expect.objectContaining({ kind: "media", ...previous.media.hero }),
+    );
+    expect(previous.services).toHaveLength(3);
+  });
+
+  test("nested objects replace as a whole; only explicit clear removes an omitted optional field", () => {
+    const result = mergeOnlinePresenceBrief(
+      previous,
+      { ...brief, design: { artDirection: "technical" } },
+      ["about", "media"],
+    );
+    if (!result.ok) throw new Error("Expected explicit removal");
+    expect(result.brief).not.toHaveProperty("about");
+    expect(result.brief).not.toHaveProperty("media");
+    expect(result.brief.design).toEqual({ artDirection: "technical" });
+    expect(result.inheritedMedia).toBe(false);
+    expect(mergeOnlinePresenceBrief(previous, {}).ok).toBe(true);
+    const missingRequired = mergeOnlinePresenceBrief(previous, {});
+    if (missingRequired.ok)
+      expect(assessOnlinePresenceBrief(missingRequired.brief, [source]).ok).toBe(false);
+  });
+
+  test.each(
+    [["headline"], ["unknown"], ["media", "media"], ["ctaHref"], ["ctaLabel"], null, "media"].map(
+      (clearFields) => ({ clearFields }),
+    ),
+  )("rejects unsupported, duplicate or partial CTA clears: %j", ({ clearFields }) => {
+    expect(mergeOnlinePresenceBrief(previous, brief, clearFields).ok).toBe(false);
+  });
+  test("rejects set-and-clear conflicts and preserves an invalid CTA until explicitly cleared", () => {
+    expect(mergeOnlinePresenceBrief(previous, { ...brief, about: "Changed" }, ["about"]).ok).toBe(
+      false,
+    );
+    const invalid = { ...previous, ctaLabel: "Inquire", ctaHref: "mailto:inquiry@example.com" };
+    const kept = mergeOnlinePresenceBrief(invalid, brief);
+    if (!kept.ok) throw new Error("Expected preserved invalid draft");
+    expect(assessOnlinePresenceBrief(kept.brief, [source]).ok).toBe(false);
+    const cleared = mergeOnlinePresenceBrief(invalid, brief, ["ctaLabel", "ctaHref"]);
+    if (!cleared.ok) throw new Error("Expected explicit pair clear");
+    expect(assessOnlinePresenceBrief(cleared.brief, [source]).ok).toBe(true);
+  });
+});
 
 describe("attended online presence brief", () => {
   test("passes closed business-fitting art direction and a bounded color to both recipe families", () => {

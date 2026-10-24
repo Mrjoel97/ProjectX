@@ -125,7 +125,8 @@ illustration, visual QA or live site was delivered unless the corresponding oper
 
 Use `ctaLabel` and `ctaHref` together, with a real HTTPS destination supplied in the evidence.
 For a landing page, a supported local page destination is also possible. Do not invent a local
-destination that will not exist in the built project. Omit both fields if no destination is known.
+destination that will not exist in the built project. Omit both fields on a new brief if no
+destination is known. To remove an existing CTA, use `clearFields: ["ctaLabel", "ctaHref"]`.
 Include `contactConsent` only as explicit owner-supplied consent/disclosure wording. A model's
 boolean, an inferred legal policy, or generic default text is not owner consent. Without this
 wording the optional inquiry form stays absent.
@@ -134,12 +135,20 @@ For a requested built-in email inquiry form, set `contactConsent` to the owner's
 and omit both `ctaLabel` and `ctaHref`. The runtime creates the form and, for a website, its
 Contact page. A business email is not an external CTA: never convert it into a `mailto:` target,
 invent a contact URL, or ask for an external URL merely to enable this form. If an earlier brief
-mistakenly added that CTA, remove both CTA fields, preserve the supplied consent, and continue
+mistakenly added that CTA, omit both fields from `brief` and explicitly pass
+`clearFields: ["ctaLabel", "ctaHref"]`, preserve the supplied consent, and continue
 with the private build. Form submission does not prove that an email notification was sent.
 
 ## Build and hand over
 
 Pass the current `revision` from `readOnlinePresenceContext` as `expectedRevision` when saving.
+On revisions, omitted optional fields retain their saved values: changing a service or headline
+must not discard About, images, consent or design. Supplied lists and nested `media`/`design`
+objects replace that whole field, so include all parts you intend to keep. `sourceRefs` remains
+required and must identify current evidence; retained image refs are rechecked by the server.
+To deliberately remove optional content, use the tool's closed `clearFields` list and omit those
+same fields from `brief`. Clear both CTA fields together. Never clear content merely because it
+was not repeated in the latest request, or claim an image unavailable without an actual refusal.
 After `saveOnlinePresenceBrief` confirms that the brief is complete, use its returned `revision`
 as `expectedRevision` and call
 `buildOnlinePresenceProject`. This creates a private structured project through the existing site

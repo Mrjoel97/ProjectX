@@ -9,6 +9,7 @@ import {
   WEB_RECIPE_REQUIRED_VIEWPORTS,
   WEB_RECIPE_UPSTREAM_PROVENANCE,
 } from "@pikar/contracts/webRecipeSkill";
+import type { WebDocument } from "@pikar/contracts/webRuntime";
 import { ONLINE_PRESENCE_TOOLS } from "@pikar/core/onlinePresence";
 import {
   canonicalWebRecipeDefinition,
@@ -310,7 +311,7 @@ test("a model cannot invent consent wording or a booking destination", async () 
   }
 });
 
-test("a same-thread consent-only brief replaces and clears an earlier unsupported mailto CTA", async () => {
+test("a same-thread consent-only brief explicitly clears an earlier unsupported mailto CTA", async () => {
   const consent = "I consent to Acme contacting me about my inquiry.";
   const { t, tenantId, planId, session, brief, threadId } = await setup(
     `Acme designs gardens. Use an email inquiry form. ${consent}`,
@@ -331,11 +332,19 @@ test("a same-thread consent-only brief replaces and clears an earlier unsupporte
     .withIdentity({ subject: `${tenantId}|session` })
     .query(api.onlinePresence.sessionForThread, { threadId });
   expect(before?.brief.ctaHref).toBe("mailto:inquiry@example.com");
-  const saved = await t.mutation(internal.onlinePresence.saveBrief, {
+  const stillRefused = await t.mutation(internal.onlinePresence.saveBrief, {
     tenantId,
     planId,
     expectedRevision: refused.revision,
     brief: { ...brief, contactConsent: consent },
+  });
+  expect(stillRefused.ok).toBe(false);
+  const saved = await t.mutation(internal.onlinePresence.saveBrief, {
+    tenantId,
+    planId,
+    expectedRevision: stillRefused.revision,
+    brief: { ...brief, contactConsent: consent },
+    clearFields: ["ctaLabel", "ctaHref"],
   });
   expect(saved.ok).toBe(true);
   const after = await t
@@ -345,6 +354,46 @@ test("a same-thread consent-only brief replaces and clears an earlier unsupporte
   expect(after?.brief).not.toHaveProperty("ctaLabel");
   expect(after?.brief).not.toHaveProperty("ctaHref");
   expect(after?.status).toBe("ready");
+});
+
+test("clear operations reject duplicates, partial pairs, conflicts, unknown fields and stale revisions", async () => {
+  const { t, tenantId, planId, session, brief } = await setup();
+  for (const clearFields of [["media", "media"], ["ctaHref"], ["ctaLabel"], ["about"]] as const) {
+    const saved = await t.mutation(internal.onlinePresence.saveBrief, {
+      tenantId,
+      planId,
+      expectedRevision: session.revision,
+      brief: { ...brief, about: "Acme designs gardens." },
+      clearFields: [...clearFields],
+    });
+    expect(saved.ok).toBe(false);
+    expect(saved.revision).toBe(session.revision);
+  }
+  await expect(
+    t.mutation(internal.onlinePresence.saveBrief, {
+      tenantId,
+      planId,
+      expectedRevision: session.revision,
+      brief,
+      clearFields: ["headline"] as never,
+    }),
+  ).rejects.toThrow();
+  const saved = await t.mutation(internal.onlinePresence.saveBrief, {
+    tenantId,
+    planId,
+    expectedRevision: session.revision,
+    brief,
+  });
+  expect(saved.ok).toBe(true);
+  await expect(
+    t.mutation(internal.onlinePresence.saveBrief, {
+      tenantId,
+      planId,
+      expectedRevision: session.revision,
+      brief,
+      clearFields: ["media"],
+    }),
+  ).rejects.toThrow("STALE_REVISION");
 });
 
 test("brand color must be explicit in selected business evidence and survives actual materialization", async () => {
@@ -636,8 +685,9 @@ test("routing lookup is tenant-bound and source excerpts have a fixed content bu
 });
 
 test("the real specialist loop prepares owned imagery, saves a brief, and builds real versioned pages through its frozen tools", async () => {
+  const consent = "I consent to Acme contacting me about my inquiry.";
   const { t, tenantId, planId, threadId, session, brief } = await setup(
-    "Acme designs gardens. Our established brand color is #246B58. Services include planting plans. Acme guides projects from the first layout to the planting plan.",
+    `Acme designs gardens. Our established brand color is #246B58. Services include planting plans and garden layouts. Acme guides projects from the first layout to the planting plan. ${consent}`,
   );
   const image = new Uint8Array(
     readFileSync(
@@ -731,6 +781,7 @@ test("the real specialist loop prepares owned imagery, saves a brief, and builds
     sourceRefs: [...brief.sourceRefs, imageSource.sourceRef],
     services: ["Planting plans"],
     about: "Acme guides projects from the first layout to the planting plan.",
+    contactConsent: consent,
     design: { artDirection: "studio", primaryColor: "#246b58" },
     media: {
       hero: {
@@ -807,12 +858,72 @@ test("the real specialist loop prepares owned imagery, saves a brief, and builds
     });
   expect(userReview?.sourceRefs).toEqual(versions[0]?.sourceRefs);
   expect(userReview?.sourceWarnings).toEqual(versions[0]?.sourceWarnings);
+  let latestRevision = stored.revision;
+  for (const change of [
+    { services: ["Planting plans", "Garden layouts"] },
+    { headline: "Gardens with room to grow" },
+  ]) {
+    const saved = await t.mutation(internal.onlinePresence.saveBrief, {
+      tenantId,
+      planId,
+      expectedRevision: latestRevision,
+      brief: { ...brief, ...change },
+    });
+    expect(saved.ok).toBe(true);
+    const unbuilt = await t.query(internal.onlinePresence.contextForTenant, { tenantId, planId });
+    expect(unbuilt.briefBuilt).toBe(false);
+    expect(unbuilt.artifact?.version).toBe(latestRevision === stored.revision ? 1 : 2);
+    expect(unbuilt.brief).toMatchObject({
+      media: designedBrief.media,
+      about: designedBrief.about,
+      contactConsent: consent,
+    });
+    const built = await t.mutation(internal.onlinePresence.buildProject, {
+      tenantId,
+      planId,
+      expectedRevision: saved.revision,
+    });
+    expect(built.ok).toBe(true);
+    latestRevision = built.revision;
+    const current = await t.query(internal.onlinePresence.contextForTenant, { tenantId, planId });
+    expect(current.briefBuilt).toBe(true);
+    const projectId = stored.artifact?.projectId;
+    const builtVersion = built.artifact?.version;
+    if (!projectId || builtVersion === undefined)
+      throw new Error("Expected an exact built receipt");
+    const version = await t.run((ctx) =>
+      ctx.db
+        .query("webProjectVersions")
+        .withIndex("by_tenant_project_version", (q) =>
+          q.eq("tenantId", tenantId).eq("projectId", projectId).eq("version", builtVersion),
+        )
+        .unique(),
+    );
+    const document = version?.document as WebDocument | undefined;
+    expect(document?.pages.map((page) => page.slug)).toEqual([
+      "home",
+      "about",
+      "services",
+      "contact",
+    ]);
+    expect(version?.assetSnapshots?.map((snapshot) => snapshot.assetRef)).toEqual([assetRef]);
+    expect(document?.pages.find((page) => page.slug === "services")?.nodes).toContainEqual(
+      expect.objectContaining({
+        kind: "section",
+        id: "services",
+        children: [
+          { kind: "text", text: "Planting plans" },
+          { kind: "text", text: "Garden layouts" },
+        ],
+      }),
+    );
+  }
   const newSource = await vault(t, tenantId);
   const changed = await t.mutation(internal.onlinePresence.saveBrief, {
     tenantId,
     planId,
-    expectedRevision: stored.revision,
-    brief: { ...brief, sourceRefs: [`vault:${newSource}`] },
+    expectedRevision: latestRevision,
+    brief: { ...brief, sourceRefs: [...brief.sourceRefs, `vault:${newSource}`] },
   });
   expect(changed.assessment.warnings).toContainEqual({
     code: "private_source",
@@ -832,4 +943,19 @@ test("the real specialist loop prepares owned imagery, saves a brief, and builds
   ).toBe(false);
   const project = await t.run((ctx) => ctx.db.get(stored.artifact?.projectId as Id<"webProjects">));
   expect(project?.publishedVersion).toBeUndefined();
+  await t.run((ctx) => ctx.db.patch(asset.vaultDocumentId, { tenantId: "other-tenant" }));
+  const unavailable = await t.mutation(internal.onlinePresence.saveBrief, {
+    tenantId,
+    planId,
+    expectedRevision: changed.revision,
+    brief: { ...brief, headline: "Keep the existing illustration" },
+  });
+  expect(unavailable.ok).toBe(false);
+  const refusedBuild = await t.mutation(internal.onlinePresence.buildProject, {
+    tenantId,
+    planId,
+    expectedRevision: unavailable.revision,
+  });
+  expect(refusedBuild.ok).toBe(false);
+  expect(await t.run((ctx) => ctx.db.query("webProjectVersions").collect())).toHaveLength(3);
 });

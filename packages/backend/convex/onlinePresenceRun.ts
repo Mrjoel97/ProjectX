@@ -55,13 +55,21 @@ export const run = internalAction({
     });
     const outcome = result.truncated
       ? "partial"
-      : after.artifact
+      : after.artifact && after.briefBuilt
         ? "awaiting_review"
         : after.assessment?.ok
           ? "ready_to_build"
           : after.assessment?.missing.some((entry) => entry.reason === "commerce_unavailable")
             ? "blocked"
             : "needs_information";
-    return { ok: true, reply: result.reply, costUsd: result.costUsd, outcome };
+    const reply =
+      after.assessment?.ok && !after.briefBuilt
+        ? `Your changes are saved, but the revised website has not been built yet.${
+            after.artifact
+              ? ` The existing website is still version ${after.artifact.version}; it does not include these saved changes.`
+              : ""
+          }`
+        : result.reply;
+    return { ok: true, reply, costUsd: result.costUsd, outcome };
   },
 });
