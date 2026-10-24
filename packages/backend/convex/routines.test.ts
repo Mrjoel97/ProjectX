@@ -187,6 +187,7 @@ const CONVEX_MODULES = [
   "llm.ts",
   "managedServiceExecution.ts",
   "managedServiceRecurrence.ts",
+  "managedServiceRecurrenceExecution.ts",
   "managedServiceRuns.ts",
   "managedServiceTools.ts",
   "managedServices.ts",
@@ -234,6 +235,7 @@ const CONVEX_MODULES = [
   "review.ts",
   "savedPrompts.ts",
   "schema.ts",
+  "serviceConversations.ts",
   "serviceOutcomes.ts",
   "skilloptExport.ts",
   "skills.ts",
@@ -311,6 +313,8 @@ const SCHEDULER_CALL_SITES = [
   "evaluations.ts",
   "foundation.ts",
   "llm.ts",
+  // ADR-067: exact opt-in built-in social preparation dispatcher; no generic routine cron.
+  "managedServiceRecurrence.ts",
   "media.ts",
   "mediaComplete.ts",
   "notifications.ts",
@@ -481,10 +485,29 @@ const DEVELOPMENT_ADAPTER_LINES = new Set([
   "reservationKey: row.occurrenceKey,",
   `const correlationId = \`standing:\${row.occurrenceKey}:\${row.receiptIds.length}\`;`,
   'approvalId: v.id("managedServiceStandingApprovals"),',
+  'type SuspensionReason = NonNullable<Doc<"managedServiceStandingApprovals">["suspensionReason"]>;',
+  'const approvalView = (row: Doc<"managedServiceStandingApprovals">) => ({',
+  'row: Doc<"managedServiceStandingApprovals">,',
+  'approval: Doc<"managedServiceStandingApprovals">,',
+  '.query("managedServiceStandingApprovals")',
+  'const approvalId = await ctx.db.insert("managedServiceStandingApprovals", {',
+  "standingApprovalId: approval._id,",
+  `requestKey: \`standing_\${occurrence.occurrenceKey}\`,`,
+]);
+const STANDING_BUDGET_LINES = new Set([
+  "if (!run.standingOccurrenceId && !run.standingApprovalId) return null;",
+  "if (!run.standingOccurrenceId || !run.standingApprovalId)",
+  "const approval = await ctx.db.get(run.standingApprovalId);",
+  `reservation.correlationId !== \`standing:\${occurrence.occurrenceKey}\` ||`,
 ]);
 const DEVELOPMENT_SCHEMA_TABLES = ["managedServiceStandingApprovals", "managedServiceOccurrences"];
 const developmentSchemaLine = (lines: string[], n: number, token: string) => {
   if (!["standingApproval", "occurrenceKey"].includes(token)) return false;
+  if (
+    token === "standingApproval" &&
+    lines[n]?.trim() === 'standingApprovalId: v.optional(v.id("managedServiceStandingApprovals")),'
+  )
+    return true;
   if (/^\s*\/\/ │\s+managedServiceRuns, managedServiceStandingApprovals,\s+│$/.test(lines[n] ?? ""))
     return true;
   let table: string | undefined;
@@ -518,6 +541,7 @@ const tokenHits = (corpus: Array<{ file: string; lines: string[] }>) => [
           .filter(
             ({ text, n }) =>
               !(file === "managedServiceRecurrence.ts" && DEVELOPMENT_ADAPTER_LINES.has(text)) &&
+              !(file === "lib/managedServiceBudget.ts" && STANDING_BUDGET_LINES.has(text)) &&
               !(file === "schema.ts" && developmentSchemaLine(lines, n, token)),
           )
           .map(({ at }) => at),
@@ -609,26 +633,59 @@ describe("the ten-token convenience scan", () => {
 
 const disabledAdapterErrors = (text: string) => {
   const errors = [];
-  if (!/^export const MANAGED_SERVICE_RECURRENCE_ENABLED = false;$/m.test(text))
-    errors.push("enabled");
+  if (!/^export const MANAGED_SERVICE_RECURRENCE_ENABLED = (?:false|true);$/m.test(text))
+    errors.push("uncontrolled_admission");
   if (/process\.env|import\.meta\.env/.test(text)) errors.push("environment_override");
-  if (/ctx\.scheduler|cronJobs\s*\(|\bcrons\.|ctx\.runAction\s*\(|\bfetch\s*\(/.test(text))
+  if (/cronJobs\s*\(|\bcrons\.|ctx\.runAction\s*\(|\bfetch\s*\(/.test(text))
     errors.push("runtime_effect");
-  const native = text.slice(text.indexOf("export const claim = internalMutation("));
-  if (
-    !native ||
-    /admitted\s*:\s*v\./.test(native) ||
-    !/handler:\s*\(ctx,\s*args\)\s*=>\s*claimStandingOccurrence\(\s*ctx,\s*args,\s*\{\s*admitted:\s*MANAGED_SERVICE_RECURRENCE_ENABLED,?\s*\},?\s*\)/.test(
-      native,
+  const schedulerTargets = [
+    ...text.matchAll(/ctx\.scheduler\.(runAt|runAfter|cancel)\s*\(([\s\S]*?)\);/g),
+  ]
+    .map((match) =>
+      match[1] === "cancel"
+        ? `cancel:${match[2]?.trim()}`
+        : `${match[1]}:${/internal\.([A-Za-z]+)\.([A-Za-z]+)/
+            .exec(match[2] ?? "")
+            ?.slice(1)
+            .join(".")}`,
     )
+    .sort();
+  if (
+    JSON.stringify(schedulerTargets) !==
+    JSON.stringify([
+      "cancel:row.scheduledFunctionId",
+      "runAfter:managedServiceRecurrenceExecution.start",
+      "runAt:managedServiceRecurrence.dispatch",
+      "runAt:managedServiceRecurrence.expire",
+    ])
+  )
+    errors.push("runtime_effect");
+  if (
+    /admitted\s*:\s*v\.|admitted\s*:\s*true/.test(text) ||
+    [...text.matchAll(/admitted:\s*MANAGED_SERVICE_RECURRENCE_ENABLED/g)].length !== 2 ||
+    !/claimStandingOccurrence\(ctx, args, \{ admitted: false \}\)/.test(text)
   )
     errors.push("native_bypass");
+  const endpoints = [
+    ...text.matchAll(
+      /export const (\w+) = (?:internalMutation|internalQuery|internalAction|tenantMutation|tenantQuery|tenantAction)\(/g,
+    ),
+  ]
+    .map((match) => match[1])
+    .sort();
   if (
-    [
-      ...text.matchAll(
-        /export const \w+ = (?:internalMutation|internalQuery|internalAction|tenantMutation|tenantQuery|tenantAction)\(/g,
-      ),
-    ].length !== 1
+    JSON.stringify(endpoints) !==
+    JSON.stringify([
+      "claim",
+      "configure",
+      "dispatch",
+      "expire",
+      "status",
+      "suspend",
+      "suspendFailedTick",
+      "suspendForService",
+      "tick",
+    ])
   )
     errors.push("extra_endpoint");
   return errors;
@@ -645,7 +702,7 @@ const adapterConsumers = (corpus: Array<{ file: string; text: string }>) =>
     )
     .map(({ file }) => file);
 
-describe("ADR-063 allows construction, never recurrence activation", () => {
+describe("ADR-067 permits only the reviewed built-in social recurrence adapter", () => {
   test("only the exact development ADR is exempt, and scheduling dependencies remain forbidden", () => {
     const prefix = join(tmpdir(), "pikar-defer-guard-");
     const root = mkdtempSync(prefix);
@@ -656,6 +713,10 @@ describe("ADR-063 allows construction, never recurrence activation", () => {
       writeFileSync(
         join(decisions, "063-inert-recurrence-construction.md"),
         "Development only; decision remains defer.",
+      );
+      writeFileSync(
+        join(decisions, "067-managed-social-recurrence.md"),
+        "Only the named opt-in adapter; generic routines remain deferred.",
       );
       writeFileSync(join(root, "package.json"), "{}");
       expect(deferAbsenceChecks({ repoRoot: root }).errors).toEqual([]);
@@ -676,20 +737,30 @@ describe("ADR-063 allows construction, never recurrence activation", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
-  test("native admission is hard false, has no bypass, effects or runtime consumer", () => {
+  test("native admission is code-owned, endpoints/targets/consumers are closed, and no cron is added", () => {
     const adapter = code.find(({ file }) => file === "managedServiceRecurrence.ts");
     expect(adapter).toBeDefined();
     const text = adapter?.text ?? "";
     expect(disabledAdapterErrors(text)).toEqual([]);
-    expect(adapterConsumers(code)).toEqual([]);
+    expect(adapterConsumers(code).sort()).toEqual([
+      "guardrails.ts",
+      "lib/managedServiceBudget.ts",
+      "managedServices.ts",
+      "serviceOutcomes.ts",
+    ]);
+    expect(
+      (code.find(({ file }) => file === "guardrails.ts")?.text ?? "").match(
+        /internal\.managedServiceRecurrence\.[A-Za-z]+/g,
+      ),
+    ).toEqual(["internal.managedServiceRecurrence.suspendForService"]);
     expect(
       disabledAdapterErrors(
         text.replace(
-          "MANAGED_SERVICE_RECURRENCE_ENABLED = false",
-          "MANAGED_SERVICE_RECURRENCE_ENABLED = true",
+          /MANAGED_SERVICE_RECURRENCE_ENABLED = (?:true|false)/,
+          "MANAGED_SERVICE_RECURRENCE_ENABLED = Boolean(process.env.ENABLE_RECURRING)",
         ),
       ),
-    ).toContain("enabled");
+    ).toContain("uncontrolled_admission");
     expect(
       disabledAdapterErrors(`${text}\nctx.scheduler.runAfter(1, internal.x.y, {});`),
     ).toContain("runtime_effect");
@@ -698,6 +769,18 @@ describe("ADR-063 allows construction, never recurrence activation", () => {
         text.replace("tenantId: v.string(),", "tenantId: v.string(), admitted: v.boolean(),"),
       ),
     ).toContain("native_bypass");
+    expect(
+      disabledAdapterErrors(
+        text.replace("admitted: MANAGED_SERVICE_RECURRENCE_ENABLED", "admitted: true"),
+      ),
+    ).toContain("native_bypass");
+    const worker =
+      code.find(({ file }) => file === "managedServiceRecurrenceExecution.ts")?.text ?? "";
+    expect(worker).toContain("internal.managedServiceRuns.bindAndStart");
+    expect(worker).toContain("internal.plans.insertPlan");
+    expect(worker).not.toMatch(
+      /api\.plans\.byThread|runCockpitAgent|fetch\s*\(|process\.env|runAction\s*\(/,
+    );
     expect(
       adapterConsumers([
         {
@@ -709,12 +792,13 @@ describe("ADR-063 allows construction, never recurrence activation", () => {
   });
 });
 
-describe("no recurrence UI ROUTE", () => {
+describe("only ADR-067's named managed-social setup panel", () => {
   // A name filter, and honestly labelled as one: apps/web is owned by sibling plans in this
   // phase and churns, so pinning its file list here would fight them. The arming plane is
   // convex — a React route cannot schedule anything — so the closed sets above are where the
-  // proof lives; this is the cheap signal that nobody shipped a "Routines" tab.
-  test("no route segment or component is named for routines or scheduling", () => {
+  // proof lives. ADR-067 permits one setup component within Skills and Workflows, not a
+  // generic Routines route or another independently admitted scheduling surface.
+  test("the only recurrence-named component is the built-in service setup panel", () => {
     const webSources = sourcesUnder("apps/web/app");
     // POSITIVE CONTROL: the walk really reached the dashboard routes.
     expect(webSources.length).toBeGreaterThan(20);
@@ -724,7 +808,9 @@ describe("no recurrence UI ROUTE", () => {
     ]) {
       expect(webSources, `${known} should be in the scan`).toContain(known);
     }
-    expect(webSources.filter((f) => /routine|cron|recurr|schedul/i.test(f))).toEqual([]);
+    expect(webSources.filter((f) => /routine|cron|recurr|schedul/i.test(f))).toEqual([
+      "(app)/dashboard/skills-workflows/ServiceRecurrencePanel.tsx",
+    ]);
   });
 });
 

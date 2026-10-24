@@ -7,6 +7,7 @@ import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { type ReactNode, Suspense, useCallback, useEffect, useState } from "react";
 import { BrainIcon, ClockIcon, DotsIcon, StarIcon, TrashIcon } from "../../../(auth)/icons";
+import { ServiceKnowledgeConversation } from "../skills-workflows/ServiceKnowledgeConversation";
 import { ChatPane } from "./ChatPane";
 import { CardList } from "./cards";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -738,6 +739,9 @@ export default function WorkspacePage() {
                 <TrashIcon size={15} /> Clear workspace
               </button>
             </header>
+            <div style={{ maxHeight: "45%", overflowY: "auto", flexShrink: 0 }}>
+              <ServiceKnowledgeConversation inbox />
+            </div>
             {view === "canvas" ? (
               <CanvasPane threadId={threadId} planId={selectedPlanId} />
             ) : (

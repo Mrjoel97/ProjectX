@@ -607,7 +607,7 @@ export const currentTierRow = (
 // 1s query budget on `status` once a vault grew. blueprint.ts:212 forbids cloning that shape;
 // this is the site it was pointing at.
 export async function currentProfileDoc(
-  ctx: QueryCtx | MutationCtx,
+  ctx: Pick<QueryCtx, "db">,
   tenantId: string,
 ): Promise<Doc<"vaultDocuments"> | null> {
   const profiles = await Promise.all(

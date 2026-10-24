@@ -32,6 +32,20 @@ const report = (likes: number | undefined = 0): ZernioReport => ({
   ],
 });
 describe("service observation provenance", () => {
+  test("new provider permalink evidence changes identity without fabricating metric movement", () => {
+    const legacy = report(0),
+      observed = report(0);
+    head(head(observed.accounts).posts).nativePostUrl = "https://www.instagram.com/p/ActualCode/";
+    expect(serviceReportIdentity(observed)).not.toBe(serviceReportIdentity(legacy));
+    expect(
+      head(serviceReportMovement(legacy, observed, now, 86400000)).metrics.find(
+        (metric) => metric.metric === "likes",
+      )?.delta,
+    ).toBe(0);
+    head(head(observed.accounts).posts).nativePostUrl =
+      "https://not-instagram.example/p/ActualCode/";
+    expect(() => serviceReportIdentity(observed)).toThrow("INVALID_SERVICE_OBSERVATION");
+  });
   test("retrieval does not renew upstream observations or invent a timezone", () => {
     for (const sourceUpdatedAt of [null, "2026-10-23T11:00:00", "invalid", "2026-10-24T11:00:00Z"])
       expect(

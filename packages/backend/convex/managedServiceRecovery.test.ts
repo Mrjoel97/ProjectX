@@ -223,3 +223,58 @@ test("foreign tenants and stale owner controls cannot close an uncertain attempt
   await expect(f.recover(2)).rejects.toThrow("SERVICE_STALE_REVISION");
   expect(await f.t.run((ctx) => ctx.db.get(f.runId))).toMatchObject({ state: "running" });
 });
+
+test("a fully billed overrun closes only after definitive workflow termination and preserves its bill", async () => {
+  const f = await fixture();
+  const reservationId = await f.heldReceipt();
+  await f.t.mutation(internal.guardrails.settlePaidCall, {
+    tenantId: f.tenantId,
+    reservationId,
+    costUsd: 0.2,
+  });
+  await f.t.run((ctx) => ctx.db.patch(f.runId, { state: "unknown" }));
+  const bill = await f.t.run((ctx) => ctx.db.query("spendEvents").collect());
+  expect(await f.t.run((ctx) => managedServiceSpend(ctx, f.tenantId, f.runId))).toMatchObject({
+    breached: true,
+    outstandingNanos: 0,
+    reservationCount: 1,
+    settledCount: 1,
+    actualNanos: 200_000_000,
+  });
+  for (const live of [true, null]) {
+    workflow.live = live;
+    expect(await f.recover()).toMatchObject({ resolved: false });
+    expect(await f.t.run((ctx) => ctx.db.get(f.runId))).toMatchObject({ state: "unknown" });
+  }
+  workflow.live = false;
+  expect(await f.recover()).toMatchObject({
+    resolved: true,
+    state: "stopped",
+    reason: "interruption_closed",
+  });
+  expect(await f.recover()).toMatchObject({ resolved: true, reason: "already_terminal" });
+  expect(await f.t.run((ctx) => ctx.db.query("spendEvents").collect())).toEqual(bill);
+  expect(await f.t.run((ctx) => ctx.db.get(f.runId))).toMatchObject({
+    state: "stopped",
+    terminalCode: "reconciled_interruption",
+  });
+  await expect(
+    f.t.mutation(internal.guardrails.reservePaidCall, {
+      tenantId: f.tenantId,
+      managedServiceRunId: f.runId,
+      callId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      model: "or/openai/gpt-4o-mini",
+      ceilingCents: 1,
+    }),
+  ).rejects.toThrow("SERVICE_RUN_UNAVAILABLE");
+  // Closing old work supplies no readiness for a fresh request and never restarts it.
+  await expect(
+    f.t.mutation(internal.managedServiceRuns.claim, {
+      tenantId: f.tenantId,
+      serviceId: "social-marketing",
+      expectedRevision: 1,
+      expectedControlRevision: 1,
+      requestKey: "fresh-after-known-breach",
+    }),
+  ).rejects.toThrow("SERVICE_EXECUTION_UNAVAILABLE");
+});

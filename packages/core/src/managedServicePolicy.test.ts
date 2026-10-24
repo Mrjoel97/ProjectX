@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   classifyStandingOccurrence,
+  nextStandingServiceOccurrence,
   reconcileStandingRunBudget,
   reserveStandingRunBudget,
   STANDING_SERVICE_GRACE_MS,
@@ -12,6 +13,7 @@ import {
   standingOccurrenceKey,
   standingRetryDecision,
   standingServiceMaterialChanges,
+  standingServiceOccurrenceMatches,
   validateStandingServiceTerms,
 } from "./managedServicePolicy";
 
@@ -63,6 +65,63 @@ const claim = () => ({
 });
 
 describe("standing read/prepare policy", () => {
+  test("calendar scheduling retains local wall time across folds without scheduling the second fold", () => {
+    const first = nextStandingServiceOccurrence(terms, Date.parse("2026-11-01T05:00:00Z"));
+    expect(first).toMatchObject({
+      dueAtMs: Date.parse("2026-11-01T05:30:00Z"),
+      localDate: "2026-11-01",
+      requestedLocalTime: "01:30",
+      disambiguation: "ambiguous_first",
+    });
+    expect(nextStandingServiceOccurrence(terms, first.dueAtMs)).toMatchObject({
+      dueAtMs: Date.parse("2026-11-02T06:30:00Z"),
+      localDate: "2026-11-02",
+    });
+    expect(standingServiceOccurrenceMatches(terms, first)).toBe(true);
+    expect(
+      standingServiceOccurrenceMatches(terms, { ...first, dueAtMs: first.dueAtMs + 3600_000 }),
+    ).toBe(false);
+  });
+
+  test("spring gaps and half-hour DST transitions reuse the existing ICU policy", () => {
+    const spring = { ...terms, schedule: { ...terms.schedule, hour: 2, minute: 30 } };
+    expect(nextStandingServiceOccurrence(spring, Date.parse("2026-03-08T06:00:00Z"))).toMatchObject(
+      {
+        dueAtMs: Date.parse("2026-03-08T07:00:00Z"),
+        requestedLocalTime: "02:30",
+        disambiguation: "gap_shifted",
+      },
+    );
+    const halfHour = {
+      ...terms,
+      schedule: { ...terms.schedule, timeZone: "Australia/Lord_Howe", hour: 2, minute: 15 },
+    };
+    expect(
+      nextStandingServiceOccurrence(halfHour, Date.parse("2026-10-03T15:00:00Z")),
+    ).toMatchObject({
+      dueAtMs: Date.parse("2026-10-03T15:30:00Z"),
+      requestedLocalTime: "02:15",
+      disambiguation: "gap_shifted",
+    });
+  });
+
+  test("weekly schedules and invalid clocks have an exact bounded next occurrence", () => {
+    const weekly: StandingServiceTerms = {
+      ...terms,
+      schedule: { cadence: "weekly", weekday: 3, hour: 9, minute: 0, timeZone: "UTC" },
+    };
+    expect(nextStandingServiceOccurrence(weekly, Date.parse("2026-10-20T13:00:00Z"))).toMatchObject(
+      {
+        dueAtMs: Date.parse("2026-10-21T09:00:00Z"),
+        localDate: "2026-10-21",
+      },
+    );
+    for (const clock of [Number.NaN, Number.POSITIVE_INFINITY, -1, 0.5])
+      expect(() => nextStandingServiceOccurrence(weekly, clock)).toThrow(
+        "STANDING_SERVICE_POLICY_INVALID",
+      );
+  });
+
   test("the five material groups preserve list boundaries, exact pins and immaterial ordering", () => {
     expect(
       standingServiceMaterialChanges(terms, {

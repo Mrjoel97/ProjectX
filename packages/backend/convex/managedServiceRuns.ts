@@ -10,9 +10,14 @@ import { cockpitAgent, ensureThreadAndPlan } from "./cockpit";
 import { dispatchWorkflowLive } from "./dispatchRun";
 import { workflow } from "./index";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
-import { managedServiceSpend } from "./lib/managedServiceBudget";
+import {
+  managedServiceSpend,
+  reconcileStandingServiceAccounting,
+  standingServiceBinding,
+} from "./lib/managedServiceBudget";
 import { internalMutation } from "./lib/tenantLifecycle";
 import { managedServiceConfig, managedServiceReadiness } from "./managedServices";
+import { serviceKnowledgeFor } from "./serviceConversations";
 
 const runArgs = { tenantId: v.string(), runId: v.id("managedServiceRuns") };
 const unavailable = (): never => {
@@ -52,6 +57,16 @@ async function currentService(ctx: QueryCtx, run: Doc<"managedServiceRuns">) {
     return unavailable();
   if (!supported(service) || !(await managedServiceReadiness(ctx, service)).ready)
     return unavailable();
+  if (service.operationIds.includes("social.prepare")) {
+    const knowledge = await serviceKnowledgeFor(ctx, service);
+    if (
+      !knowledge.assessment.ready ||
+      !run.knowledgeHash ||
+      run.knowledgeHash !== knowledge.sourceHash
+    )
+      throw new Error("SERVICE_KNOWLEDGE_CHANGED");
+  }
+  await standingServiceBinding(ctx, run, true);
   return service;
 }
 
@@ -162,6 +177,10 @@ export const claim = internalMutation({
       !(await managedServiceReadiness(ctx, service)).ready
     )
       return unavailable();
+    const knowledge = service.operationIds.includes("social.prepare")
+      ? await serviceKnowledgeFor(ctx, service)
+      : null;
+    if (knowledge && !knowledge.assessment.ready) return unavailable();
     const now = Date.now();
     const id = await ctx.db.insert("managedServiceRuns", {
       tenantId: args.tenantId,
@@ -169,6 +188,7 @@ export const claim = internalMutation({
       configRevision: service.revision,
       controlRevision: service.controlRevision,
       budgetLimitCents: service.budgetLimitCents,
+      ...(knowledge ? { knowledgeHash: knowledge.sourceHash } : {}),
       ...(service.goalId ? { goalId: service.goalId } : {}),
       requestKey: args.requestKey,
       state: "claimed",
@@ -243,6 +263,7 @@ export const setupFailed = internalMutation({
       terminalCode: "setup_incomplete",
       updatedAt: Date.now(),
     });
+    await reconcileStandingServiceAccounting(ctx, run.tenantId, run._id, true);
   },
 });
 
@@ -362,6 +383,7 @@ export const finish = internalMutation({
           : args.outcome,
       updatedAt: Date.now(),
     });
+    await reconcileStandingServiceAccounting(ctx, run.tenantId, run._id, !uncertain);
   },
 });
 
@@ -382,6 +404,7 @@ export const onComplete = internalMutation({
       terminalCode: result.kind === "canceled" ? "cancelled" : "execution_uncertain",
       updatedAt: Date.now(),
     });
+    await reconcileStandingServiceAccounting(ctx, run.tenantId, run._id, false);
   },
 });
 
@@ -454,12 +477,10 @@ export const reconcile = tenantMutation({
     }
     try {
       const spend = await managedServiceSpend(ctx, ctx.tenantId, run._id);
-      if (
-        spend.breached ||
-        spend.outstandingNanos !== 0 ||
-        spend.reservationCount !== spend.settledCount
-      )
+      if (spend.outstandingNanos !== 0 || spend.reservationCount !== spend.settledCount)
         return { resolved: false, state: run.state, reason: "unsettled_cost" as const };
+      // A known overrun is an immutable bill, not unknown usage. A definitively finished
+      // workflow may close stopped once all calls settle; its breach receipts remain intact.
     } catch {
       return { resolved: false, state: run.state, reason: "unsettled_cost" as const };
     }
@@ -468,6 +489,7 @@ export const reconcile = tenantMutation({
       terminalCode: "reconciled_interruption",
       updatedAt: Date.now(),
     });
+    await reconcileStandingServiceAccounting(ctx, run.tenantId, run._id, true);
     await appendAudit(ctx, {
       tenantId: ctx.tenantId,
       correlationId: `managed-service-recovery:${run._id}`,

@@ -1,4 +1,8 @@
-import type { BufferDraft } from "./buffer";
+import {
+  type BufferDraft,
+  type BufferPublicationReceipt,
+  nativeSocialPostReference,
+} from "./buffer";
 import { serviceSourceFreshness } from "./serviceOutcomes";
 import type { ZernioAccountReport, ZernioReport } from "./zernio";
 import { ZERNIO_METRICS, zernioMetrics } from "./zernioPilot";
@@ -24,9 +28,8 @@ export type SocialDraftFact = Pick<BufferDraft, "channelId"> & {
   bufferPostId?: string;
 };
 
-/** Only a trusted, persisted provider receipt may supply this link. No current Buffer API
- * producer supplies native IDs: never construct it from labels, matching ID strings, or the
- * Zernio `external` flag. It is evidence input, not permission to publish or run another cycle. */
+/** Only trusted persisted Buffer receipts joined to scoped provider analytics may supply this link.
+ * Labels, similar ID strings and the Zernio external flag never establish publisher attribution. */
 export type SocialNativePostLink = {
   tenantId: string;
   runId: string;
@@ -92,6 +95,90 @@ const ref = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z0-9_-
 const time = (v: unknown): v is number =>
   typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
 
+/** The adapter supplies current owned Buffer scope; this pure join requires exact provider URLs.
+ * Instagram shortcodes never become numeric media IDs: the ID comes from actual analytics. */
+export function socialNativeLinkFromReceipt(
+  input: Pick<
+    SocialOutcomeInput,
+    | "tenantId"
+    | "runId"
+    | "draft"
+    | "report"
+    | "selectedConnectionId"
+    | "selectedAccountIds"
+    | "now"
+  > & {
+    receipt?: BufferPublicationReceipt;
+  },
+): SocialNativePostLink | undefined {
+  const { receipt, draft, report } = input;
+  if (
+    !receipt ||
+    !report ||
+    draft.status !== "sent" ||
+    draft.tenantId !== input.tenantId ||
+    draft.managedServiceRunId !== input.runId ||
+    report.tenantId !== input.tenantId ||
+    report.connectionId !== input.selectedConnectionId ||
+    receipt.source !== "buffer-status-v1" ||
+    receipt.bufferPostId !== draft.bufferPostId ||
+    receipt.channelId !== draft.channelId ||
+    receipt.platform !== draft.platform ||
+    receipt.draftRevision !== draft.revision ||
+    receipt.approvedAt !== draft.approvedAt ||
+    !time(receipt.sentAt) ||
+    !time(receipt.observedAt) ||
+    !time(receipt.approvedAt) ||
+    receipt.approvedAt > receipt.sentAt ||
+    receipt.sentAt > receipt.observedAt ||
+    receipt.observedAt > input.now
+  )
+    return undefined;
+  const native = nativeSocialPostReference(receipt.platform, receipt.nativePostUrl);
+  if (
+    !native ||
+    native.url !== receipt.nativePostUrl ||
+    (receipt.nativePostId !== null && receipt.nativePostId !== native.postId)
+  )
+    return undefined;
+  const matches = report.report.accounts.flatMap((account) =>
+    input.selectedAccountIds.includes(account.accountId) && account.platform === receipt.platform
+      ? account.posts.flatMap((post) => {
+          const observed = post.nativePostUrl
+            ? nativeSocialPostReference(account.platform, post.nativePostUrl)
+            : null;
+          return observed?.url === native.url &&
+            ref(post.postId) &&
+            (native.postId === null || native.postId === post.postId)
+            ? [{ accountId: account.accountId, postId: post.postId }]
+            : [];
+        })
+      : [],
+  );
+  const match = matches.length === 1 ? matches[0] : undefined;
+  if (!match) return undefined;
+  if (
+    report.report.accounts
+      .find((account) => account.accountId === match.accountId)
+      ?.posts.filter((post) => post.postId === match.postId).length !== 1
+  )
+    return undefined;
+  return {
+    tenantId: input.tenantId,
+    runId: input.runId,
+    draftRef: draft.draftRef,
+    draftRevision: draft.revision,
+    bufferConnectionId: draft.connectionId,
+    bufferChannelId: draft.channelId,
+    bufferPostId: receipt.bufferPostId,
+    zernioConnectionId: report.connectionId,
+    zernioAccountId: match.accountId,
+    platform: receipt.platform,
+    nativePostId: match.postId,
+    receiptRef: draft.draftRef,
+  };
+}
+
 function validateReport(snapshot: SocialReportSnapshot) {
   const report = snapshot.report;
   if (
@@ -142,13 +229,13 @@ function validateReport(snapshot: SocialReportSnapshot) {
     for (const post of account.posts) {
       if (
         !ref(post.postId) ||
-        posts.has(post.postId) ||
+        posts.has(`${post.source}:${post.postId}`) ||
         !["external", "zernio"].includes(post.source) ||
         (post.updatedAt !== null &&
           (typeof post.updatedAt !== "string" || post.updatedAt.length > 100))
       )
         invalid();
-      posts.add(post.postId);
+      posts.add(`${post.source}:${post.postId}`);
       zernioMetrics(post.metrics);
     }
   }
@@ -261,7 +348,8 @@ export function projectSocialServiceOutcome(input: SocialOutcomeInput) {
           account.accountId === link?.zernioAccountId && account.platform === link.platform,
       )
     : undefined;
-  const post = account?.posts.find((post) => post.postId === link?.nativePostId);
+  const matchingPosts = account?.posts.filter((post) => post.postId === link?.nativePostId) ?? [];
+  const post = matchingPosts.length === 1 ? matchingPosts[0] : undefined;
   if (attributed && !post) reasons.add("post_not_observed");
   const metrics = post ? zernioMetrics(post.metrics) : null;
   if (post && Object.keys(metrics ?? {}).length === 0) reasons.add("metrics_unavailable");

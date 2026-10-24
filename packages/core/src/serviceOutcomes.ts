@@ -1,3 +1,4 @@
+import { nativeSocialPostReference } from "./buffer";
 import type { ZernioReport } from "./zernio";
 import { ZERNIO_METRICS } from "./zernioPilot";
 
@@ -80,7 +81,19 @@ export function serviceReportIdentity(report: ZernioReport): string {
                 return [[name, value]];
               }),
             );
-            return { postId: post.postId, source: post.source, updatedAt: post.updatedAt, metrics };
+            const native =
+              post.nativePostUrl === undefined
+                ? null
+                : nativeSocialPostReference(account.platform, post.nativePostUrl);
+            if (post.nativePostUrl !== undefined && native?.url !== post.nativePostUrl)
+              throw new Error("INVALID_SERVICE_OBSERVATION");
+            return {
+              postId: post.postId,
+              source: post.source,
+              updatedAt: post.updatedAt,
+              metrics,
+              ...(native ? { nativePostUrl: native.url } : {}),
+            };
           })
           .sort((a, b) => a.source.localeCompare(b.source) || a.postId.localeCompare(b.postId)),
       };

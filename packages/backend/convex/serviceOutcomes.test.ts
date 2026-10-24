@@ -128,6 +128,93 @@ test("trusted completion captures history, retrieval-only deduplicates, genuine 
     goal: { goalId: h.goalId, status: "active" },
   });
 });
+
+test("stored provider permalink receipts link only current owned publishing and analytics scope", async () => {
+  const h = await setup(),
+    now = Date.now(),
+    channelId = "d".repeat(24);
+  const nativePostUrl = "https://www.instagram.com/p/ActualCode/";
+  const bufferConnection = await h.t.run(async (ctx) => {
+    const service = await ctx.db.get(h.serviceId);
+    if (!service) throw new Error("service fixture missing");
+    await ctx.db.patch(h.serviceId, {
+      accounts: [
+        ...service.accounts,
+        {
+          provider: "buffer",
+          connectionId: "buffer-conn",
+          accountId: channelId,
+          connectionRevision: 1,
+        },
+      ],
+    });
+    const connectionId = await ctx.db.insert("bufferConnections", {
+      tenantId: "a",
+      connectionId: "buffer-conn",
+      revision: 1,
+      status: "connected",
+      keyVersion: "v1",
+      organizationId: "e".repeat(24),
+      expiresAt: now + 3600000,
+      updatedAt: now,
+      channels: [
+        {
+          id: channelId,
+          name: "Owned account",
+          service: "instagram",
+          nativeAccountId: "native-owner",
+          available: true,
+        },
+      ],
+      selectedChannelIds: [channelId],
+      dailyReports: false,
+      nextReportAt: 0,
+    });
+    await ctx.db.insert("bufferPosts", {
+      tenantId: "a",
+      managedServiceRunId: h.runId,
+      platform: "instagram",
+      connectionId: "buffer-conn",
+      organizationId: "e".repeat(24),
+      campaign: "Synthetic native linkage",
+      channelId,
+      text: "Synthetic approved content",
+      mode: "addToQueue",
+      revision: 2,
+      status: "sent",
+      bufferPostId: "f".repeat(24),
+      approvedAt: now - 3000,
+      createdAt: now - 4000,
+      updatedAt: now,
+      publicationReceipt: {
+        source: "buffer-status-v1",
+        bufferPostId: "f".repeat(24),
+        channelId,
+        platform: "instagram",
+        nativeAccountId: "native-owner",
+        nativePostId: null,
+        nativePostUrl,
+        draftRevision: 2,
+        approvedAt: now - 3000,
+        sentAt: now - 2000,
+        observedAt: now - 1000,
+      },
+    });
+    return connectionId;
+  });
+  const value = report(0, now),
+    nativePost = value.accounts[0]?.posts[0];
+  if (!nativePost) throw new Error("post fixture missing");
+  nativePost.nativePostUrl = nativePostUrl;
+  expect(await complete(h, value)).toBe(true);
+  const linked = await h.a.query(api.serviceOutcomes.runOutcome, { runId: h.runId });
+  expect(linked.social[0]?.publisherAttribution).toBe("buffer_receipt_linked");
+  expect(linked.social[0]?.evidence?.metrics.likes).toBe(0);
+  await h.t.run((ctx) => ctx.db.patch(bufferConnection, { selectedChannelIds: [] }));
+  const withdrawn = await h.a.query(api.serviceOutcomes.runOutcome, { runId: h.runId });
+  expect(withdrawn.social[0]?.publisherAttribution).toBe("unverified");
+  expect(withdrawn.social[0]?.evidence).toBeNull();
+});
 test("stale completion and duplicate native accounts cannot invent accepted history", async () => {
   const h = await setup();
   expect(await complete(h, report(1), 2)).toBe(false);

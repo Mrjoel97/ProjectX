@@ -1,12 +1,15 @@
 import {
   BUFFER_ID,
   BUFFER_REPORTS_AVAILABLE,
+  type BufferDraft,
+  type BufferPublicationReceipt,
   bufferCreateArguments,
+  nativeSocialPostReference,
   validateBufferDraft,
 } from "@pikar/core/buffer";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { assertTenantWritable, internalMutation } from "./lib/tenantLifecycle";
@@ -22,8 +25,49 @@ const channel = v.object({
   name: v.string(),
   service: v.string(),
   available: v.boolean(),
+  nativeAccountId: v.optional(v.string()),
   boards: v.optional(v.array(v.object({ id: v.string(), name: v.string() }))),
 });
+const publicationReceiptValue = v.object({
+  source: v.literal("buffer-status-v1"),
+  bufferPostId: v.string(),
+  channelId: v.string(),
+  platform: v.union(v.literal("instagram"), v.literal("tiktok")),
+  nativeAccountId: v.string(),
+  nativePostId: v.union(v.string(), v.null()),
+  nativePostUrl: v.string(),
+  sentAt: v.number(),
+  observedAt: v.number(),
+  draftRevision: v.number(),
+  approvedAt: v.number(),
+});
+function assertPublicationReceipt(
+  post: Doc<"bufferPosts">,
+  status: string,
+  receipt: BufferPublicationReceipt | undefined,
+) {
+  if (!receipt) return;
+  const native = nativeSocialPostReference(receipt.platform, receipt.nativePostUrl);
+  if (
+    status !== "sent" ||
+    (receipt.bufferPostId !== post.bufferPostId && post.status !== "submitting") ||
+    receipt.channelId !== post.channelId ||
+    receipt.platform !== post.platform ||
+    receipt.draftRevision !== post.revision ||
+    receipt.approvedAt !== post.approvedAt ||
+    !Number.isSafeInteger(receipt.approvedAt) ||
+    receipt.approvedAt < 0 ||
+    !Number.isSafeInteger(receipt.observedAt) ||
+    !Number.isSafeInteger(receipt.sentAt) ||
+    receipt.sentAt < receipt.approvedAt ||
+    receipt.sentAt > receipt.observedAt ||
+    !/^[A-Za-z0-9_-]{1,128}$/.test(receipt.nativeAccountId) ||
+    !native ||
+    native.url !== receipt.nativePostUrl ||
+    native.postId !== receipt.nativePostId
+  )
+    throw new Error("BUFFER_INVALID_PUBLICATION_RECEIPT");
+}
 const draftArgs = {
   campaign: v.string(),
   channelId: v.string(),
@@ -305,7 +349,13 @@ export const storeChannels = internalMutation({
       JSON.stringify(
         channels
           .filter((c) => selected.includes(c.id))
-          .map((c) => [c.id, c.service, c.available, c.boards?.map((b) => b.id).sort() ?? []])
+          .map((c) => [
+            c.id,
+            c.service,
+            c.available,
+            c.nativeAccountId ?? null,
+            c.boards?.map((b) => b.id).sort() ?? [],
+          ])
           .sort((x, y) => String(x[0]).localeCompare(String(y[0]))),
       );
     const permissionChanged =
@@ -386,23 +436,10 @@ export const disconnect = tenantMutation({
   },
 });
 
-async function stage(
+async function draftContext(
   ctx: Parameters<typeof assertTenantWritable>[0],
   tenantId: string,
-  a: {
-    campaign: string;
-    channelId: string;
-    text: string;
-    mode: "addToQueue" | "customScheduled";
-    dueAt?: number;
-    imageUrl?: string;
-    videoUrl?: string;
-    mediaTitle?: string;
-    categoryId?: string;
-    boardId?: string;
-    isAiGenerated?: boolean;
-  },
-  managedServiceRunId?: Id<"managedServiceRuns">,
+  a: BufferDraft & { campaign: string },
 ) {
   validateBufferDraft(a, Date.now());
   if (!a.campaign.trim() || a.campaign.length > 120) throw new Error("BUFFER_INVALID_CAMPAIGN");
@@ -422,12 +459,21 @@ async function stage(
   bufferCreateArguments(a, target.service);
   if (target.service === "pinterest" && !target.boards?.some((board) => board.id === a.boardId))
     throw new Error("BUFFER_PINTEREST_BOARD_REQUIRED");
+  return { row, target, organizationId: row.organizationId };
+}
+async function stage(
+  ctx: Parameters<typeof assertTenantWritable>[0],
+  tenantId: string,
+  a: BufferDraft & { campaign: string },
+  managedServiceRunId?: Id<"managedServiceRuns">,
+) {
+  const { row, target, organizationId } = await draftContext(ctx, tenantId, a);
   return ctx.db.insert("bufferPosts", {
     ...a,
     ...(managedServiceRunId ? { managedServiceRunId } : {}),
     tenantId,
     connectionId: row.connectionId,
-    organizationId: row.organizationId,
+    organizationId,
     platform: target.service,
     revision: 1,
     status: "draft",
@@ -438,6 +484,72 @@ async function stage(
 export const stagePost = tenantMutation({
   args: draftArgs,
   handler: (ctx, a) => stage(ctx, ctx.tenantId, a),
+});
+/** Editing never approves or replays a provider write. A stale review cannot approve new content. */
+export const editPost = tenantMutation({
+  args: { postId: v.id("bufferPosts"), revision: v.number(), ...draftArgs },
+  handler: async (ctx, { postId, revision, ...draft }) => {
+    const post = await ctx.db.get(postId);
+    if (
+      !Number.isSafeInteger(revision) ||
+      revision < 1 ||
+      revision >= Number.MAX_SAFE_INTEGER ||
+      !post ||
+      post.tenantId !== ctx.tenantId ||
+      post.status !== "draft" ||
+      post.revision !== revision
+    )
+      throw new Error("BUFFER_DRAFT_CHANGED");
+    const { row, target } = await draftContext(ctx, ctx.tenantId, draft);
+    if (row.connectionId !== post.connectionId || row.organizationId !== post.organizationId)
+      throw new Error("BUFFER_CONNECTION_CHANGED");
+    const nextRevision = revision + 1;
+    await ctx.db.patch(post._id, {
+      ...draft,
+      revision: nextRevision,
+      platform: target.service,
+      // Omitted fields mean remove the previous media/schedule, not silently retain it.
+      dueAt: draft.dueAt,
+      imageUrl: draft.imageUrl,
+      videoUrl: draft.videoUrl,
+      mediaTitle: draft.mediaTitle,
+      categoryId: draft.categoryId,
+      boardId: draft.boardId,
+      isAiGenerated: draft.isAiGenerated,
+      approvedAt: undefined,
+      bufferPostId: undefined,
+      failure: undefined,
+      updatedAt: Date.now(),
+    });
+    return { postId: post._id, revision: nextRevision };
+  },
+});
+/** Explicit replacement of a known never-accepted submission, never replay of an uncertain write. */
+export const restageFailedPost = tenantMutation({
+  args: { postId: v.id("bufferPosts"), revision: v.number(), ...draftArgs },
+  handler: async (ctx, { postId, revision, ...draft }) => {
+    const post = await ctx.db.get(postId);
+    if (
+      !Number.isSafeInteger(revision) ||
+      revision < 1 ||
+      revision >= Number.MAX_SAFE_INTEGER ||
+      !post ||
+      post.tenantId !== ctx.tenantId ||
+      post.revision !== revision ||
+      post.status !== "failed" ||
+      post.bufferPostId ||
+      post.replacementPostId ||
+      !["connection_changed", "schedule_expired", "provider_rejected"].includes(post.failure ?? "")
+    )
+      throw new Error("BUFFER_REPLACEMENT_NOT_ALLOWED");
+    const replacement = await stage(ctx, ctx.tenantId, draft, post.managedServiceRunId);
+    await ctx.db.patch(post._id, {
+      revision: revision + 1,
+      replacementPostId: replacement,
+      updatedAt: Date.now(),
+    });
+    return { postId: replacement, revision: 1 };
+  },
 });
 export const stageAgentPost = internalMutation({
   args: {
@@ -514,12 +626,23 @@ export const approvePost = tenantMutation({
 });
 
 export const discardPost = tenantMutation({
-  args: { postId: v.id("bufferPosts") },
+  args: { postId: v.id("bufferPosts"), revision: v.optional(v.number()) },
   handler: async (ctx, a) => {
     const post = await ctx.db.get(a.postId);
-    if (!post || post.tenantId !== ctx.tenantId || post.status !== "draft")
+    if (
+      !post ||
+      post.tenantId !== ctx.tenantId ||
+      post.status !== "draft" ||
+      (a.revision !== undefined &&
+        (!Number.isSafeInteger(a.revision) || a.revision !== post.revision)) ||
+      post.revision >= Number.MAX_SAFE_INTEGER
+    )
       throw new Error("BUFFER_DRAFT_CHANGED");
-    await ctx.db.patch(post._id, { status: "discarded", updatedAt: Date.now() });
+    await ctx.db.patch(post._id, {
+      status: "discarded",
+      revision: post.revision + 1,
+      updatedAt: Date.now(),
+    });
   },
 });
 
@@ -575,14 +698,22 @@ export const finishPost = internalMutation({
     ),
     bufferPostId: v.optional(v.string()),
     failure: v.optional(v.string()),
+    publicationReceipt: v.optional(publicationReceiptValue),
   },
   handler: async (ctx, a) => {
     const post = await ctx.db.get(a.postId);
     if (!post || post.tenantId !== a.tenantId || post.status !== "submitting") return;
+    if (
+      a.publicationReceipt?.bufferPostId !== undefined &&
+      a.publicationReceipt.bufferPostId !== a.bufferPostId
+    )
+      throw new Error("BUFFER_INVALID_PUBLICATION_RECEIPT");
+    assertPublicationReceipt(post, a.status, a.publicationReceipt);
     await ctx.db.patch(post._id, {
       status: a.status,
       bufferPostId: a.bufferPostId,
       failure: a.failure,
+      ...(a.publicationReceipt ? { publicationReceipt: a.publicationReceipt } : {}),
       updatedAt: Date.now(),
     });
   },
@@ -601,13 +732,18 @@ export const pendingPosts = internalQuery({
         (post) =>
           post.connectionId === a.connectionId &&
           !!post.bufferPostId &&
-          ["scheduled", "buffer_review"].includes(post.status),
+          (["scheduled", "buffer_review"].includes(post.status) ||
+            (post.status === "sent" && !post.publicationReceipt)),
       )
       .slice(0, 20)
       .map((post) => ({
         postId: post._id,
         bufferPostId: post.bufferPostId!,
         channelId: post.channelId,
+        platform: post.platform ?? null,
+        revision: post.revision,
+        approvedAt: post.approvedAt ?? null,
+        text: post.text,
       }));
   },
 });
@@ -627,6 +763,7 @@ export const savePostStatuses = internalMutation({
           v.literal("failed"),
           v.literal("buffer_review"),
         ),
+        publicationReceipt: v.optional(publicationReceiptValue),
       }),
     ),
   },
@@ -642,11 +779,19 @@ export const savePostStatuses = internalMutation({
         post.channelId !== update.channelId
       )
         throw new Error("BUFFER_POST_NOT_OWNED");
-      if (!["scheduled", "buffer_review"].includes(post.status)) continue;
+      if (
+        !["scheduled", "buffer_review"].includes(post.status) &&
+        !(post.status === "sent" && !post.publicationReceipt && update.status === "sent")
+      )
+        continue;
+      assertPublicationReceipt(post, update.status, update.publicationReceipt);
       await ctx.db.patch(post._id, {
         status: update.status,
         updatedAt: Date.now(),
         ...(update.status === "failed" ? { failure: "buffer_publishing_error" } : {}),
+        ...(!post.publicationReceipt && update.publicationReceipt
+          ? { publicationReceipt: update.publicationReceipt }
+          : {}),
       });
     }
   },

@@ -24,6 +24,7 @@ export const zernioReportValue = v.object({
       posts: v.array(
         v.object({
           postId: v.string(),
+          nativePostUrl: v.optional(v.string()),
           source: v.union(v.literal("external"), v.literal("zernio")),
           updatedAt: v.union(v.string(), v.null()),
           metrics: v.object({

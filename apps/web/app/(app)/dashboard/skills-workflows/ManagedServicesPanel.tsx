@@ -5,7 +5,9 @@ import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { type CSSProperties, useRef, useState } from "react";
+import { ServiceKnowledgeConversation } from "./ServiceKnowledgeConversation";
 import { ServiceGoalLink, ServiceOutcomesPanel } from "./ServiceOutcomesPanel";
+import { ServiceRecurrencePanel } from "./ServiceRecurrencePanel";
 
 type Service = NonNullable<FunctionReturnType<typeof api.managedServices.status>>;
 type Options = FunctionReturnType<typeof api.managedServices.setupOptions>;
@@ -59,6 +61,8 @@ const reasons: Record<string, string> = {
   unsupported_service_operation: unavailable,
   budget_limit_unavailable: "Review the maximum spend per run in setup before starting.",
   source_unavailable: "Complete your business profile before running this activity.",
+  business_information_required:
+    "Pikar needs a few business details. Continue the conversation below.",
   service_paused_or_stopped: "This service is paused or stopped.",
 };
 const accountKey = (a: { provider: string; accountId: string }) => `${a.provider}:${a.accountId}`;
@@ -530,6 +534,16 @@ function ServiceCard({
           </Link>
         )}
       </div>
+      {supportsEditor && (
+        <ServiceKnowledgeConversation
+          serviceId={serviceId}
+          disabled={Boolean(pending) || busy || service.controlState !== "active"}
+          budgetLimitCents={service.budgetLimitCents}
+        />
+      )}
+      {supportsEditor && (
+        <ServiceRecurrencePanel service={service} disabled={Boolean(pending) || busy} />
+      )}
       {latest && <ServiceOutcomesPanel key={latest.runId} runId={latest.runId} />}
       {blockedByRun && (
         <p style={muted}>

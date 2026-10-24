@@ -8,6 +8,7 @@ import {
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
+import { confirmServiceKnowledgeFixture } from "../__fixtures__/serviceKnowledge";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import { contentHash } from "./lib/hash";
@@ -690,6 +691,14 @@ async function socialFixture() {
     budgetLimitCents: 100,
   };
   const saved = await f.asA.mutation(api.managedServices.setup, config);
+  const foundationSetting = process.env.FOUNDATION_ONBOARDING_ENABLED;
+  process.env.FOUNDATION_ONBOARDING_ENABLED = "1";
+  try {
+    await confirmServiceKnowledgeFixture(f.t, f.a);
+  } finally {
+    if (foundationSetting === undefined) delete process.env.FOUNDATION_ONBOARDING_ENABLED;
+    else process.env.FOUNDATION_ONBOARDING_ENABLED = foundationSetting;
+  }
   const readiness = () =>
     f.asA.query(api.managedServices.readiness, {
       serviceId: config.serviceId,

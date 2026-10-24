@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: "Platform -> Private Beta"
-current_phase: 48
-current_plan: "49–52 — Attended engine, interruption recovery, goal/outcome/history UI and brain reads implemented locally; inert recurrence policy/persistence constructed under ADR063. Release, recurrence activation and full live social acceptance remain open."
+current_phase: 52
+current_plan: "50–52 — Recurring social operations and conversational business enrichment integrated locally under ADR067/068. Final exact-source CI, authenticated hosted acceptance and production release remain open."
 status: in_progress
-stopped_at: "2026-10-23 — Parallel engine implementation integrated; current-source CI recorded on delivery PR. No paid evaluation, activation or production deployment."
-last_updated: "2026-10-23"
+stopped_at: "2026-10-24 — Integrated recurring social and conversational setup. Focused native/UI checks, strict backend/web types and 22 offline gates pass; exact-source hosted CI/release pending. Production unchanged."
+last_updated: "2026-10-24"
 progress:
   total_phases: 79
   completed_phases: 54
@@ -18,6 +18,8 @@ progress:
 # Project State
 
 ## Current execution order
+
+October 24 continuation: the owner requested completing recurrence and the live social pilot before production merge, then approved social-first conversational post-onboarding enrichment. The ADR067 dispatcher, opt-in schedule UI, whole-run accounting, draft editing/rejection/recovery, authoritative permalink linkage and ADR068 confirmed business conversation are implemented in the working release candidate. See [current execution and remaining hosted acceptance](phases/50-recurring-read-and-prepare-services/50-EXECUTION-2026-10-24.md) and [conversational business operations](design/conversational-business-operations.md). Actual existing Auckland/Lord Howe DST receipts were collected; they do not certify the new runtime. No production merge or live-pilot completion is claimed. The historical qualification pointers below retain their original scope.
 
 The owner approved the managed-service programme on 2026-10-19: **48 readiness → 49 shared boundary → 50 recurring read/prepare → 51 brain outcomes → 52 complete social pilot**. Release/live admission retain that order. Following the owner's 2026-10-22 instruction to correct the delivery hindrance and get the engine built, independent reversible offline implementation may run in parallel; unfinished capabilities remain unavailable. See the programme's execution correction. This changes development sequencing, not qualification results, spending consent or release readiness.
 

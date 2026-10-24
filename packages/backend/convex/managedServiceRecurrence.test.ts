@@ -1,20 +1,31 @@
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { confirmServiceKnowledgeFixture } from "../__fixtures__/serviceKnowledge";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import { rateLimiter } from "./guardrails";
 import { contentHash } from "./lib/hash";
-import { claimStandingOccurrence, settleStandingOccurrence } from "./managedServiceRecurrence";
+import {
+  claimStandingOccurrence,
+  configureStandingService,
+  settleStandingOccurrence,
+  suspendStandingService,
+  tickStandingService,
+} from "./managedServiceRecurrence";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const now = Date.parse("2026-11-01T05:30:00Z");
 beforeEach(() => {
+  vi.stubEnv("FOUNDATION_ONBOARDING_ENABLED", "1");
   vi.useFakeTimers();
   vi.setSystemTime(now);
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
 
 async function fixture() {
   const t = convexTest(schema, modules);
@@ -106,6 +117,7 @@ async function fixture() {
     });
     return { tenantId, serviceId, approvalId, connectionId, skillId };
   });
+  await confirmServiceKnowledgeFixture(t, ids.tenantId);
   const args = {
     tenantId: ids.tenantId,
     approvalId: ids.approvalId,
@@ -135,6 +147,435 @@ test("the native endpoint remains inert even with persisted future-capability fi
   expect(
     await f.t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect()),
   ).toHaveLength(0);
+});
+
+async function configured(f: Awaited<ReturnType<typeof fixture>>, expiresAtMs = now + 86400_000) {
+  const previous = await f.t.run((ctx) =>
+    ctx.db
+      .query("managedServiceStandingApprovals")
+      .withIndex("by_service_revision", (q) =>
+        q.eq("tenantId", f.tenantId).eq("serviceId", f.serviceId),
+      )
+      .order("desc")
+      .first(),
+  );
+  return f.t.run((ctx) =>
+    configureStandingService(
+      ctx,
+      {
+        tenantId: f.tenantId,
+        serviceId: "social-marketing",
+        expectedRevision: 1,
+        expectedControlRevision: 1,
+        expectedApprovalRevision: previous?.revision ?? 0,
+        schedule: {
+          cadence: "daily",
+          weekday: null,
+          hour: 1,
+          minute: 31,
+          timeZone: "America/New_York",
+        },
+        expiresAtMs,
+      },
+      { admitted: true },
+    ),
+  );
+}
+
+test("explicit approval snapshots exact scope, arms once, and remains tenant-scoped", async () => {
+  const f = await fixture();
+  const approval = await configured(f);
+  expect(approval).toMatchObject({
+    revision: 2,
+    enabled: true,
+    configRevision: 1,
+    controlRevision: 1,
+    budgetLimitCents: 40,
+    nextDueAtMs: now + 60_000,
+  });
+  const persisted = await f.t.run((ctx) => ctx.db.get(approval.approvalId));
+  expect(persisted?.terms.recipientRefs).toEqual([]);
+  expect(persisted?.terms.operationIds).toEqual(["social.prepare"]);
+  const scheduled = await f.t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+  expect(scheduled.filter((row) => row.state.kind === "pending")).toHaveLength(1);
+  expect(await f.ledger()).toHaveLength(0);
+  await expect(
+    f.t.run((ctx) =>
+      configureStandingService(
+        ctx,
+        {
+          tenantId: "foreign",
+          serviceId: "social-marketing",
+          expectedRevision: 1,
+          expectedControlRevision: 1,
+          schedule: approval.schedule,
+          expiresAtMs: now + 86400_000,
+        },
+        { admitted: true },
+      ),
+    ),
+  ).rejects.toThrow("STANDING_SERVICE_UNAVAILABLE");
+});
+
+test("atomic due tick claims one full envelope, one linked native run and the next local day", async () => {
+  const f = await fixture();
+  const approval = await configured(f, now + 3 * 86400_000);
+  vi.setSystemTime(now + 60_000);
+  const args = {
+    tenantId: f.tenantId,
+    approvalId: approval.approvalId,
+    expectedApprovalRevision: approval.revision,
+    expectedControlRevision: 1,
+    expectedDueAtMs: now + 60_000,
+  };
+  const [a, b] = await Promise.all([
+    f.t.run((ctx) => tickStandingService(ctx, args, { admitted: true })),
+    f.t.run((ctx) => tickStandingService(ctx, args, { admitted: true })),
+  ]);
+  expect([a.decision, b.decision].sort()).toEqual(["claimable", "stale_callback"]);
+  const runs = await f.t.run((ctx) => ctx.db.query("managedServiceRuns").collect());
+  const occurrences = await f.rows();
+  expect(runs).toHaveLength(1);
+  expect(runs[0]).toMatchObject({
+    state: "claimed",
+    knowledgeHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    standingOccurrenceId: occurrences[0]?._id,
+    standingApprovalId: approval.approvalId,
+  });
+  expect(occurrences).toHaveLength(1);
+  expect(occurrences[0]?.runId).toBe(runs[0]?._id);
+  expect((await f.ledger()).filter((row) => row.phase === "reserved")).toHaveLength(1);
+  const next = await f.t.run((ctx) => ctx.db.get(approval.approvalId));
+  // Fall-back's second 01:31 never gets another run. The following local day is25 elapsed hours.
+  expect(next?.nextDueAtMs).toBe(Date.parse("2026-11-02T06:31:00Z"));
+});
+
+test("withdrawn confirmed knowledge stops a due callback before run creation or whole-budget reservation", async () => {
+  const f = await fixture();
+  const approval = await configured(f);
+  await f.t.run(async (ctx) => {
+    const interview = await ctx.db
+      .query("foundationInterviews")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", f.tenantId))
+      .unique();
+    if (!interview) throw new Error("fixture knowledge missing");
+    await ctx.db.patch(interview._id, { answers: [] });
+  });
+  vi.setSystemTime(now + 60_000);
+  expect(
+    await f.t.run((ctx) =>
+      tickStandingService(
+        ctx,
+        {
+          tenantId: f.tenantId,
+          approvalId: approval.approvalId,
+          expectedApprovalRevision: approval.revision,
+          expectedControlRevision: 1,
+          expectedDueAtMs: now + 60_000,
+        },
+        { admitted: true },
+      ),
+    ),
+  ).toEqual({ decision: "approval_stale", runId: null });
+  expect(await f.t.run((ctx) => ctx.db.get(approval.approvalId))).toMatchObject({ enabled: false });
+  expect(await f.t.run((ctx) => ctx.db.query("managedServiceRuns").collect())).toHaveLength(0);
+  expect(await f.rows()).toHaveLength(0);
+  expect(await f.ledger()).toHaveLength(0);
+});
+
+test("late callbacks persist a missed occurrence and skip forward without a catch-up burst", async () => {
+  const f = await fixture();
+  const approval = await configured(f, now + 7 * 86400_000);
+  vi.setSystemTime(now + 2 * 86400_000);
+  expect(
+    await f.t.run((ctx) =>
+      tickStandingService(
+        ctx,
+        {
+          tenantId: f.tenantId,
+          approvalId: approval.approvalId,
+          expectedApprovalRevision: approval.revision,
+          expectedControlRevision: 1,
+          expectedDueAtMs: now + 60_000,
+        },
+        { admitted: true },
+      ),
+    ),
+  ).toMatchObject({ decision: "skipped_missed", runId: null });
+  expect(await f.ledger()).toHaveLength(0);
+  expect(await f.rows()).toMatchObject([{ state: "skipped_missed" }]);
+  expect((await f.t.run((ctx) => ctx.db.get(approval.approvalId)))?.nextDueAtMs).toBeGreaterThan(
+    Date.now(),
+  );
+});
+
+test("suspension cancels the pending callback; reconnect cannot revive the old approval", async () => {
+  const f = await fixture();
+  const approval = await configured(f);
+  await f.t.run((ctx) =>
+    suspendStandingService(ctx, {
+      tenantId: f.tenantId,
+      serviceId: f.serviceId,
+      reason: "authorization_required",
+    }),
+  );
+  await f.t.run((ctx) => ctx.db.patch(f.connectionId, { status: "connected" }));
+  vi.setSystemTime(now + 60_000);
+  expect(
+    await f.t.run((ctx) =>
+      tickStandingService(
+        ctx,
+        {
+          tenantId: f.tenantId,
+          approvalId: approval.approvalId,
+          expectedApprovalRevision: approval.revision,
+          expectedControlRevision: 1,
+          expectedDueAtMs: now + 60_000,
+        },
+        { admitted: true },
+      ),
+    ),
+  ).toMatchObject({ decision: "stale_callback" });
+  expect(await f.rows()).toHaveLength(0);
+  expect(await f.ledger()).toHaveLength(0);
+  const next = await configured(f, now + 3 * 86400_000);
+  expect(next.revision).toBe(approval.revision + 1);
+  expect(next.approvalId).not.toBe(approval.approvalId);
+});
+
+test("final occurrence remains authorized until actual expiry; no due work is armed beyond it", async () => {
+  const f = await fixture();
+  const approval = await configured(f, now + 2 * 60_000);
+  vi.setSystemTime(now + 60_000);
+  expect(
+    await f.t.run((ctx) =>
+      tickStandingService(
+        ctx,
+        {
+          tenantId: f.tenantId,
+          approvalId: approval.approvalId,
+          expectedApprovalRevision: approval.revision,
+          expectedControlRevision: 1,
+          expectedDueAtMs: now + 60_000,
+        },
+        { admitted: true },
+      ),
+    ),
+  ).toMatchObject({ decision: "claimable" });
+  expect(await f.t.run((ctx) => ctx.db.get(approval.approvalId))).toMatchObject({ enabled: true });
+  expect((await f.t.run((ctx) => ctx.db.get(approval.approvalId)))?.nextDueAtMs).toBeUndefined();
+  vi.setSystemTime(now + 2 * 60_000);
+  await f.t.mutation(internal.managedServiceRecurrence.expire, {
+    tenantId: f.tenantId,
+    approvalId: approval.approvalId,
+    expectedApprovalRevision: approval.revision,
+  });
+  expect(await f.t.run((ctx) => ctx.db.get(approval.approvalId))).toMatchObject({
+    enabled: false,
+    suspensionReason: "expired",
+  });
+});
+
+test("release qualification and maximum approval expiry refuse before arming", async () => {
+  const f = await fixture();
+  await expect(
+    f.t.run((ctx) =>
+      configureStandingService(
+        ctx,
+        {
+          tenantId: f.tenantId,
+          serviceId: "social-marketing",
+          expectedRevision: 1,
+          expectedControlRevision: 1,
+          schedule: {
+            cadence: "daily",
+            weekday: null,
+            hour: 1,
+            minute: 31,
+            timeZone: "America/New_York",
+          },
+          expiresAtMs: now + 86400_000,
+        },
+        { admitted: false },
+      ),
+    ),
+  ).rejects.toThrow("STANDING_SERVICE_QUALIFICATION_REQUIRED");
+  await expect(configured(f, now + 31 * 86400_000)).rejects.toThrow(
+    "STANDING_SERVICE_EXPIRY_INVALID",
+  );
+  expect(
+    await f.t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect()),
+  ).toHaveLength(0);
+});
+
+test("stale configuration cannot replace a newer approval or cancel its timer", async () => {
+  const f = await fixture();
+  const approval = await configured(f);
+  await expect(
+    f.t.run((ctx) =>
+      configureStandingService(
+        ctx,
+        {
+          tenantId: f.tenantId,
+          serviceId: "social-marketing",
+          expectedRevision: 1,
+          expectedControlRevision: 1,
+          expectedApprovalRevision: approval.revision - 1,
+          schedule: approval.schedule,
+          expiresAtMs: now + 86400_000,
+        },
+        { admitted: true },
+      ),
+    ),
+  ).rejects.toThrow("STANDING_SERVICE_APPROVAL_CHANGED");
+  expect(await f.t.run((ctx) => ctx.db.get(approval.approvalId))).toMatchObject({
+    enabled: true,
+    revision: approval.revision,
+  });
+  const pending = await f.t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+  expect(pending.filter((row) => row.state.kind === "pending")).toHaveLength(1);
+  expect(await f.ledger()).toHaveLength(0);
+});
+
+test("binding a new business goal disables the old approval and its scheduled callback", async () => {
+  const f = await fixture();
+  const approval = await configured(f);
+  const goalId = await f.t.run((ctx) =>
+    ctx.db.insert("goals", {
+      tenantId: f.tenantId,
+      segmentId: "leads",
+      text: "More qualified enquiries",
+      status: "active",
+      createdAt: now,
+      statusChangedAt: now,
+    }),
+  );
+  await f.t
+    .withIdentity({ subject: `${f.tenantId}|fixture` })
+    .mutation(api.serviceOutcomes.bindGoal, {
+      serviceId: f.serviceId,
+      goalId,
+      expectedRevision: 1,
+      expectedControlRevision: 1,
+    });
+  expect(await f.t.run((ctx) => ctx.db.get(approval.approvalId))).toMatchObject({
+    enabled: false,
+    suspensionReason: "approval_stale",
+    revision: approval.revision,
+    configRevision: 1,
+    controlRevision: 1,
+  });
+  vi.setSystemTime(now + 60_000);
+  expect(
+    await f.t.run((ctx) =>
+      tickStandingService(
+        ctx,
+        {
+          tenantId: f.tenantId,
+          approvalId: approval.approvalId,
+          expectedApprovalRevision: approval.revision,
+          expectedControlRevision: 1,
+          expectedDueAtMs: now + 60_000,
+        },
+        { admitted: true },
+      ),
+    ),
+  ).toEqual({ decision: "stale_callback", runId: null });
+  expect(await f.rows()).toHaveLength(0);
+  expect(await f.ledger()).toHaveLength(0);
+  const pending = await f.t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+  expect(pending.filter((row) => row.state.kind === "pending")).toHaveLength(0);
+});
+
+test("unknown run or occurrence blocks fresh approval until recovery closes, then requires explicit configure", async () => {
+  const f = await fixture();
+  const approval = await configured(f);
+  await f.t.run((ctx) =>
+    suspendStandingService(ctx, {
+      tenantId: f.tenantId,
+      serviceId: f.serviceId,
+      reason: "reconciliation_required",
+    }),
+  );
+  const runId = await f.t.run((ctx) =>
+    ctx.db.insert("managedServiceRuns", {
+      tenantId: f.tenantId,
+      serviceId: f.serviceId,
+      configRevision: 1,
+      controlRevision: 1,
+      budgetLimitCents: 40,
+      requestKey: "unknown-admission-fixture",
+      state: "unknown",
+      createdAt: now,
+      updatedAt: now,
+    }),
+  );
+  const pendingCount = () =>
+    f.t.run(
+      async (ctx) =>
+        (await ctx.db.system.query("_scheduled_functions").collect()).filter(
+          (row) => row.state.kind === "pending",
+        ).length,
+    );
+  await expect(configured(f)).rejects.toThrow("STANDING_SERVICE_RECONCILIATION_REQUIRED");
+  expect(await pendingCount()).toBe(0);
+  // Supply a definitively stopped attended-run fixture; native recovery semantics are covered
+  // separately by managedServiceRecovery.test.ts. This test owns schedule admission only.
+  await f.t.run((ctx) => ctx.db.patch(runId, { state: "stopped" }));
+  const { occurrenceId } = await f.claim();
+  if (!occurrenceId) throw new Error("fixture claim failed");
+  const reconcile = (effectsKnown: boolean) =>
+    f.t.run((ctx) =>
+      settleStandingOccurrence(ctx, {
+        tenantId: f.tenantId,
+        occurrenceId,
+        knownSpentCents: 0,
+        unknownHoldCents: 0,
+        outcome: "execution_uncertain",
+        effectsKnown,
+      }),
+    );
+  expect(await reconcile(false)).toMatchObject({ state: "unknown" });
+  await expect(configured(f)).rejects.toThrow("STANDING_SERVICE_RECONCILIATION_REQUIRED");
+  expect(await pendingCount()).toBe(0);
+  expect(await reconcile(true)).toMatchObject({ state: "terminal" });
+  expect(await pendingCount()).toBe(0);
+  expect(await f.t.run((ctx) => ctx.db.get(approval.approvalId))).toMatchObject({
+    enabled: false,
+    revision: approval.revision,
+  });
+  const fresh = await configured(f);
+  expect(fresh.revision).toBe(approval.revision + 1);
+  expect(fresh.approvalId).not.toBe(approval.approvalId);
+  expect(fresh.enabled).toBe(true);
+  expect(await pendingCount()).toBe(1);
+});
+
+test("withdrawing release admission suspends a previously armed callback before any spend", async () => {
+  const f = await fixture();
+  const approval = await configured(f);
+  vi.setSystemTime(now + 60_000);
+  expect(
+    await f.t.run((ctx) =>
+      tickStandingService(
+        ctx,
+        {
+          tenantId: f.tenantId,
+          approvalId: approval.approvalId,
+          expectedApprovalRevision: approval.revision,
+          expectedControlRevision: 1,
+          expectedDueAtMs: now + 60_000,
+        },
+        { admitted: false },
+      ),
+    ),
+  ).toEqual({ decision: "admission_deferred", runId: null });
+  expect(await f.t.run((ctx) => ctx.db.get(approval.approvalId))).toMatchObject({
+    enabled: false,
+    suspensionReason: "qualification_required",
+  });
+  expect(await f.rows()).toHaveLength(0);
+  expect(await f.ledger()).toHaveLength(0);
 });
 
 test("concurrent claims and both DST fold instants persist one occurrence and one whole-run hold", async () => {

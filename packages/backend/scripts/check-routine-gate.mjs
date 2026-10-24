@@ -547,7 +547,9 @@ export function deferAbsenceChecks({ repoRoot = repoRootDefault } = {}) {
   const adrDir = resolve(repoRoot, "docs/decisions");
   if (existsSync(adrDir)) {
     const stray = readdirSync(adrDir).filter(
-      (f) => /routine|recurrence|schedul/i.test(f) && f !== "063-inert-recurrence-construction.md",
+      (f) =>
+        /routine|recurrence|schedul/i.test(f) &&
+        !["063-inert-recurrence-construction.md", "067-managed-social-recurrence.md"].includes(f),
     );
     for (const f of stray) {
       errors.push(`decision is \`defer\` but docs/decisions/${f} exists — no ADR may be minted`);

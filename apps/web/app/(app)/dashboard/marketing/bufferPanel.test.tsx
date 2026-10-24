@@ -80,6 +80,132 @@ test("rendering and reviewing never approve a post; explicit approval sends the 
     revision: 3,
   });
 });
+
+test("editing keeps the visible revision, saves a new draft and never schedules it", async () => {
+  mocks.queries["buffer:posts"] = [
+    {
+      _id: "post1",
+      revision: 3,
+      campaign: "Launch",
+      channelId,
+      text: "Original copy",
+      mode: "addToQueue",
+      status: "draft",
+    },
+  ];
+  await act(async () => root.render(<BufferMarketing />));
+  await act(async () => button("Review approval").click());
+  await act(async () => button("Edit draft").click());
+  const form = host.querySelector<HTMLFormElement>('form[aria-label="Edit social draft"]');
+  if (!form) throw new Error("Editor missing");
+  const text = form.querySelector<HTMLTextAreaElement>('textarea[name="text"]');
+  if (!text) throw new Error("Draft text missing");
+  text.value = "Revised copy";
+  await act(async () =>
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+  );
+  expect(mocks.calls["buffer:editPost"]).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      postId: "post1",
+      revision: 3,
+      text: "Revised copy",
+      channelId,
+    }),
+  );
+  expect(mocks.calls["buffer:approvePost"]).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("Review it again before approving");
+  expect(host.textContent).not.toContain("Approve this exact post");
+});
+
+test("a changed query revision requires another review rather than inheriting an earlier approval dialog", async () => {
+  const draft = {
+    _id: "post1",
+    revision: 3,
+    campaign: "Launch",
+    channelId,
+    text: "Original copy",
+    mode: "addToQueue",
+    status: "draft",
+  };
+  mocks.queries["buffer:posts"] = [draft];
+  await act(async () => root.render(<BufferMarketing />));
+  await act(async () => button("Review approval").click());
+  mocks.queries["buffer:posts"] = [{ ...draft, revision: 4, text: "Changed elsewhere" }];
+  await act(async () => root.render(<BufferMarketing />));
+  expect(
+    [...host.querySelectorAll("button")].some(
+      (node) => node.textContent === "Approve and schedule",
+    ),
+  ).toBe(false);
+  expect(mocks.calls["buffer:approvePost"]).not.toHaveBeenCalled();
+  await act(async () => button("Review approval").click());
+  await act(async () => button("Approve and schedule").click());
+  expect(mocks.calls["buffer:approvePost"]).toHaveBeenCalledExactlyOnceWith({
+    postId: "post1",
+    revision: 4,
+  });
+});
+
+test("rejecting a draft sends its visible revision and never approves it", async () => {
+  mocks.queries["buffer:posts"] = [
+    {
+      _id: "post1",
+      revision: 7,
+      campaign: "Launch",
+      channelId,
+      text: "Reject this copy",
+      mode: "addToQueue",
+      status: "draft",
+    },
+  ];
+  await act(async () => root.render(<BufferMarketing />));
+  await act(async () => button("Discard draft").click());
+  expect(mocks.calls["buffer:discardPost"]).toHaveBeenCalledExactlyOnceWith({
+    postId: "post1",
+    revision: 7,
+  });
+  expect(mocks.calls["buffer:approvePost"]).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("It will not be scheduled");
+});
+
+test("only a known pre-submission failure offers an explicit unapproved replacement", async () => {
+  mocks.queries["buffer:posts"] = [
+    {
+      _id: "post1",
+      revision: 2,
+      campaign: "Launch",
+      channelId,
+      text: "Expired schedule",
+      mode: "addToQueue",
+      status: "failed",
+      failure: "schedule_expired",
+    },
+  ];
+  await act(async () => root.render(<BufferMarketing />));
+  await act(async () => button("Create replacement draft").click());
+  const form = host.querySelector<HTMLFormElement>('form[aria-label="Edit social draft"]');
+  if (!form) throw new Error("Replacement editor missing");
+  await act(async () =>
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+  );
+  expect(mocks.calls["buffer:restageFailedPost"]).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ postId: "post1", revision: 2 }),
+  );
+  expect(mocks.calls["buffer:approvePost"]).not.toHaveBeenCalled();
+  mocks.queries["buffer:posts"] = [
+    {
+      _id: "post2",
+      revision: 1,
+      campaign: "Uncertain",
+      channelId,
+      text: "Unknown outcome",
+      mode: "addToQueue",
+      status: "unknown",
+    },
+  ];
+  await act(async () => root.render(<BufferMarketing />));
+  expect(host.textContent).not.toContain("Create replacement draft");
+});
 test("uncertain submissions have no retry button and real zero metrics remain visible", async () => {
   mocks.queries["buffer:posts"] = [
     {

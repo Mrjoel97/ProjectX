@@ -92,6 +92,15 @@ test("routing and shared CLI edits retire both evaluator identities without chan
     "packages/backend/convex/blueprint.ts",
     "packages/core/src/blueprint.ts",
     "packages/backend/convex/managedServiceRecurrence.ts",
+    "packages/backend/convex/serviceConversations.ts",
+    "packages/backend/convex/foundation.ts",
+    "packages/backend/convex/lib/foundationValidators.ts",
+    "packages/backend/convex/onboarding.ts",
+    "packages/core/src/foundation.ts",
+    "packages/core/src/businessProfile.ts",
+    "packages/core/src/serviceKnowledge.ts",
+    "packages/backend/convex/managedServiceRecurrenceExecution.ts",
+    "packages/core/src/routineSchedule.ts",
   ];
   for (const relativePath of dependencies) {
     assert.ok(EVALUATOR_FILES.includes(relativePath));

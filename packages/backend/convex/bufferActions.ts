@@ -6,6 +6,7 @@ import {
   bufferCreateArguments,
   bufferRecord,
   normalizeBufferChannels,
+  normalizeBufferPublicationReceipt,
 } from "@pikar/core/buffer";
 import { openCredential, sealCredential } from "@pikar/revenue";
 import { v } from "convex/values";
@@ -305,7 +306,7 @@ export const loadChannels = tenantAction({
     if (!organization) throw new Error("BUFFER_ORGANIZATION_NOT_ALLOWED");
     const data = await bufferGraphql(
       grant.accessToken,
-      "query PikarChannels($org:OrganizationId!){channels(input:{organizationId:$org}){id name service isDisconnected isLocked metadata{... on PinterestMetadata{boards{serviceId name}}}}}",
+      "query PikarChannels($org:OrganizationId!){channels(input:{organizationId:$org}){id name service serviceId isDisconnected isLocked metadata{... on PinterestMetadata{boards{serviceId name}}}}}",
       { org: organization.id },
     );
     const channels = normalizeBufferChannels(data.channels);
@@ -367,7 +368,7 @@ export const publishPost = internalAction({
       attempted = true;
       const result = await bufferGraphql(
         grant.accessToken,
-        "mutation PikarCreatePost($input:CreatePostInput!){createPost(input:$input){__typename ... on PostActionSuccess{post{id status}}}}",
+        "mutation PikarCreatePost($input:CreatePostInput!){createPost(input:$input){__typename ... on PostActionSuccess{post{id channelId channelService status externalLink sentAt schedulingType text channel{id service serviceId}}}}}",
         { input: args },
       );
       const created = bufferRecord(result.createPost);
@@ -378,7 +379,27 @@ export const publishPost = internalAction({
         throw new Error("BUFFER_UNCONFIRMED_POST");
       const status = postStatus(saved.status);
       if (!status) throw new Error("BUFFER_UNCONFIRMED_POST");
-      await ctx.runMutation(internal.buffer.finishPost, { ...a, status, bufferPostId: saved.id });
+      const publicationReceipt = post.platform
+        ? normalizeBufferPublicationReceipt(
+            saved,
+            {
+              bufferPostId: saved.id,
+              channelId: post.channelId,
+              platform: post.platform,
+              nativeAccountId: target.nativeAccountId,
+              draftRevision: post.revision,
+              approvedAt: post.approvedAt ?? NaN,
+              text: post.text,
+            },
+            Date.now(),
+          )
+        : null;
+      await ctx.runMutation(internal.buffer.finishPost, {
+        ...a,
+        status,
+        bufferPostId: saved.id,
+        ...(publicationReceipt ? { publicationReceipt } : {}),
+      });
     } catch (error) {
       const knownRejection =
         error instanceof BufferFailure &&
@@ -416,7 +437,10 @@ async function syncFor(
   if (!posts.length) return { checked: 0 };
   const definitions = posts.map((_, index) => `$id${index}: PostId!`).join(", ");
   const fields = posts
-    .map((_, index) => `p${index}: post(input: { id: $id${index} }) { id channelId status }`)
+    .map(
+      (_, index) =>
+        `p${index}: post(input: { id: $id${index} }) { id channelId channelService status externalLink sentAt schedulingType text channel{id service serviceId} }`,
+    )
     .join(" ");
   const data = await bufferGraphql(
     grant.accessToken,
@@ -428,7 +452,33 @@ async function syncFor(
     const value = bufferRecord(data[`p${index}`]);
     const status = postStatus(value.status);
     if (value.id !== post.bufferPostId || value.channelId !== post.channelId || !status) return [];
-    return [{ ...post, status }];
+    const target = row.channels.find(
+      (channel) => channel.id === post.channelId && channel.available,
+    );
+    const publicationReceipt = post.platform
+      ? normalizeBufferPublicationReceipt(
+          value,
+          {
+            bufferPostId: post.bufferPostId,
+            channelId: post.channelId,
+            platform: post.platform,
+            nativeAccountId: target?.nativeAccountId,
+            draftRevision: post.revision,
+            approvedAt: post.approvedAt ?? NaN,
+            text: post.text,
+          },
+          Date.now(),
+        )
+      : null;
+    return [
+      {
+        postId: post.postId,
+        bufferPostId: post.bufferPostId,
+        channelId: post.channelId,
+        status,
+        ...(publicationReceipt ? { publicationReceipt } : {}),
+      },
+    ];
   });
   await ctx.runMutation(internal.buffer.savePostStatuses, {
     tenantId,

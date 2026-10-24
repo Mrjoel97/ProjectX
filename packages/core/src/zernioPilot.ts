@@ -1,3 +1,5 @@
+import { nativeSocialPostReference } from "./buffer";
+
 /** Read-only, two-account qualification. No publishing or credential storage. */
 export const ZERNIO_PILOT_ORIGIN = "https://zernio.com";
 export const ZERNIO_ID = /^[a-f0-9]{24}$/;
@@ -79,6 +81,7 @@ export function zernioPilotPage(
     source: "external" | "zernio";
     metrics: ZernioMetrics;
     updatedAt: string | null;
+    nativePostUrl?: string;
     matchedBufferPost: boolean;
   }[] = [];
   for (const item of raw.posts) {
@@ -103,6 +106,10 @@ export function zernioPilotPage(
         row.analytics ?? (candidates.length === 1 ? post.analytics : null),
       );
       const at = values.lastUpdated;
+      const native = nativeSocialPostReference(
+        platform,
+        row.platformPostUrl ?? (candidates.length === 1 ? post.platformPostUrl : undefined),
+      );
       if (
         at !== undefined &&
         at !== null &&
@@ -114,6 +121,9 @@ export function zernioPilotPage(
         source: post.isExternal ? "external" : "zernio",
         metrics: zernioMetrics(values),
         updatedAt: typeof at === "string" ? at : null,
+        ...(native && (!native.postId || native.postId === row.platformPostId)
+          ? { nativePostUrl: native.url }
+          : {}),
         matchedBufferPost: false,
       });
       matched = true;

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { projectSocialServiceOutcome, type SocialOutcomeInput } from "./socialServiceOutcome";
+import type { BufferPublicationReceipt } from "./buffer";
+import {
+  projectSocialServiceOutcome,
+  type SocialOutcomeInput,
+  socialNativeLinkFromReceipt,
+} from "./socialServiceOutcome";
 
 const now = Date.parse("2026-10-23T12:00:00Z");
 function input(): SocialOutcomeInput {
@@ -79,6 +84,93 @@ function post(value: SocialOutcomeInput) {
   if (!result) throw new Error("fixture post");
   return result;
 }
+
+function receipt(): BufferPublicationReceipt {
+  return {
+    source: "buffer-status-v1",
+    bufferPostId: "buffer-post",
+    channelId: "buffer-channel",
+    platform: "instagram",
+    nativeAccountId: "native-owner",
+    nativePostId: null,
+    nativePostUrl: "https://www.instagram.com/p/ActualCode/",
+    draftRevision: 2,
+    approvedAt: now - 2000,
+    sentAt: now - 1500,
+    observedAt: now - 1000,
+  };
+}
+test("provider permalink binds Instagram analytics without turning its shortcode into a media ID", () => {
+  const value = input();
+  post(value).nativePostUrl = receipt().nativePostUrl;
+  const linked = socialNativeLinkFromReceipt({ ...value, receipt: receipt() });
+  expect(linked).toMatchObject({
+    nativePostId: "native-post",
+    zernioAccountId: "zernio-account",
+    draftRevision: 2,
+  });
+  expect(projectSocialServiceOutcome({ ...value, nativeLink: linked }).publisherAttribution).toBe(
+    "buffer_receipt_linked",
+  );
+});
+test("changed review, wrong URL, withdrawn scope and ambiguous analytics never establish a publisher link", () => {
+  for (const mutate of [
+    (value: SocialOutcomeInput) => {
+      value.draft.revision++;
+    },
+    (value: SocialOutcomeInput) => {
+      post(value).nativePostUrl = "https://www.instagram.com/p/OtherCode/";
+    },
+    (value: SocialOutcomeInput) => {
+      value.selectedAccountIds = [];
+    },
+    (value: SocialOutcomeInput) => {
+      value.selectedConnectionId = "other-connection";
+    },
+    (value: SocialOutcomeInput) => {
+      account(value).posts.push({ ...post(value), postId: "duplicate-native" });
+    },
+  ]) {
+    const value = input();
+    post(value).nativePostUrl = receipt().nativePostUrl;
+    mutate(value);
+    expect(socialNativeLinkFromReceipt({ ...value, receipt: receipt() })).toBeUndefined();
+  }
+});
+test("TikTok permalink identity must match the actual analytics post ID", () => {
+  const value = input();
+  value.draft.platform = "tiktok";
+  account(value).platform = "tiktok";
+  const nativePostUrl = "https://www.tiktok.com/@business/video/1234567890123456789";
+  post(value).nativePostUrl = nativePostUrl;
+  post(value).postId = "1234567890123456789";
+  const observed: BufferPublicationReceipt = {
+    ...receipt(),
+    platform: "tiktok",
+    nativePostUrl,
+    nativePostId: "1234567890123456789",
+  };
+  expect(socialNativeLinkFromReceipt({ ...value, receipt: observed })?.nativePostId).toBe(
+    "1234567890123456789",
+  );
+  post(value).postId = "different-native-id";
+  expect(socialNativeLinkFromReceipt({ ...value, receipt: observed })).toBeUndefined();
+});
+
+test("the same native ID under distinct provider sources cannot substitute another row's metrics", () => {
+  const value = input();
+  post(value).nativePostUrl = receipt().nativePostUrl;
+  account(value).posts.unshift({
+    ...post(value),
+    source: "zernio",
+    nativePostUrl: undefined,
+    metrics: { likes: 999 },
+  });
+  expect(socialNativeLinkFromReceipt({ ...value, receipt: receipt() })).toBeUndefined();
+  const result = projectSocialServiceOutcome(value);
+  expect(result.evidence).toBeNull();
+  expect(result.reporting.reasons).toContain("post_not_observed");
+});
 
 test("a native receipt binds exact approved revision, run, account and post without claiming business growth", () => {
   const result = projectSocialServiceOutcome(input());

@@ -74,8 +74,10 @@ function sourceOutsideInertCadence(source: string): string {
   const next = rest.search(/\n {2}[A-Za-z][A-Za-z0-9]*: defineTable\(/);
   const end = next < 0 ? source.length : start + marker.length + next;
   return (
-    source.slice(0, start) + source.slice(start, end).replace(INERT_CADENCE, "") + source.slice(end)
-  );
+    source.slice(0, start) +
+    source.slice(start, end).replace(INERT_CADENCE, "") +
+    source.slice(end)
+  ).replace('standingApprovalId: v.optional(v.id("managedServiceStandingApprovals")),', "");
 }
 
 // ── The absence that ROUT-02 depends on ────────────────────────────────────────────────────
@@ -164,7 +166,7 @@ describe("recurrence storage is absent outside the named inert ADR-063 developme
     }
   });
 
-  test("ADR-063's inert tables have exactly the reviewed fields and tenant-leading indexes", () => {
+  test("ADR-067's opt-in built-in adapter tables have exactly the reviewed fields and tenant-leading indexes", () => {
     const approvals = tableBlock("managedServiceStandingApprovals");
     expect(fieldNames(approvals)).toEqual(
       [
@@ -174,19 +176,25 @@ describe("recurrence storage is absent outside the named inert ADR-063 developme
         "budgetLimitCents",
         "cadence",
         "configRevision",
+        "controlRevision",
         "connectionId",
         "connectionRevision",
         "createdAt",
         "expiresAtMs",
+        "enabled",
         "goalHash",
         "hour",
         "minute",
         "name",
+        "nextDueAtMs",
+        "nextLocalDate",
+        "nextRequestedLocalTime",
         "operationIds",
         "provider",
         "recipientRefs",
         "revision",
         "schedule",
+        "scheduledFunctionId",
         "serviceId",
         "skillId",
         "skillPins",
@@ -212,6 +220,7 @@ describe("recurrence storage is absent outside the named inert ADR-063 developme
         "receiptIds",
         "requestedLocalTime",
         "reservationId",
+        "runId",
         "serviceId",
         "state",
         "tenantId",
@@ -241,6 +250,17 @@ describe("recurrence storage is absent outside the named inert ADR-063 developme
     expect(
       indexesOf("managedServiceOccurrences").find((i) => i.name === "by_occurrence")?.fields,
     ).toEqual(["tenantId", "serviceId", "occurrenceKey"]);
+    expect(
+      indexesOf("managedServiceStandingApprovals").find((i) => i.name === "by_service_enabled")
+        ?.fields,
+    ).toEqual(["tenantId", "serviceId", "enabled"]);
+    expect(
+      fieldNames(
+        sourceOutsideInertCadence(
+          `${SOURCE}\n other: defineTable({ standingApprovalId: v.string() })`,
+        ),
+      ),
+    ).toContain("standingApprovalId");
   });
 
   test("the L359 promise is still written down, so removing it is a visible diff", () => {

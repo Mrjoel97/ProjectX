@@ -17,11 +17,14 @@ import {
 import { grantsFor, NO_GRANTS } from "@pikar/core/toolGrants";
 import { EVAL_MAX_BUDGET_CENTS } from "@pikar/cost/evalBudget";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { appendAudit } from "./audit";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { reconcileStandingServiceAccounting } from "./lib/managedServiceBudget";
+import { serviceKnowledgeFor } from "./serviceConversations";
 
 const LIMIT = 50;
 // ADR-066: existing built-in attended social operations only. This supplies no publishing,
@@ -211,6 +214,7 @@ export async function managedServiceReadiness(ctx: QueryCtx, row: Doc<"managedSe
     accounts,
     skills,
   });
+  const businessKnowledge = await serviceKnowledgeFor(ctx, row);
   const reasons = [
     ...readiness.reasons,
     ...(!socialOperations ? ["unsupported_service_operation" as const] : []),
@@ -220,6 +224,7 @@ export async function managedServiceReadiness(ctx: QueryCtx, row: Doc<"managedSe
       ? ["budget_limit_unavailable" as const]
       : []),
     ...(missingSources.length ? ["source_unavailable" as const] : []),
+    ...(!businessKnowledge.assessment.ready ? ["business_information_required" as const] : []),
     ...(row.controlState !== "active" ? ["service_paused_or_stopped" as const] : []),
   ];
   const ready = reasons.length === 0;
@@ -229,6 +234,11 @@ export async function managedServiceReadiness(ctx: QueryCtx, row: Doc<"managedSe
     accounts,
     skills,
     sources: { businessProfileReady },
+    businessKnowledge: {
+      ready: businessKnowledge.assessment.ready,
+      gaps: businessKnowledge.assessment.gaps,
+      nextQuestion: businessKnowledge.assessment.nextQuestion,
+    },
     missingSources,
     qualification: ready ? ("builtin_attended_social" as const) : ("unavailable" as const),
   };
@@ -303,7 +313,14 @@ export const setup = tenantMutation({
       controlRevision: (existing?.controlRevision ?? 0) + 1,
       updatedAt: now,
     };
-    if (existing) await ctx.db.patch(existing._id, changes);
+    if (existing) {
+      await ctx.db.patch(existing._id, changes);
+      await ctx.runMutation(internal.managedServiceRecurrence.suspendForService, {
+        tenantId: ctx.tenantId,
+        serviceId: existing._id,
+        reason: "approval_stale",
+      });
+    }
     const id = existing
       ? existing._id
       : await ctx.db.insert("managedServices", {
@@ -426,6 +443,11 @@ export const setControl = tenantMutation({
     const controlRevision = row.controlRevision + 1;
     await ctx.db.patch(row._id, { controlState, controlRevision, updatedAt: Date.now() });
     if (args.action !== "resume") {
+      await ctx.runMutation(internal.managedServiceRecurrence.suspendForService, {
+        tenantId: ctx.tenantId,
+        serviceId: row._id,
+        reason: "paused",
+      });
       const unbound = await ctx.db
         .query("managedServiceRuns")
         .withIndex("by_service_state", (q) =>
@@ -438,12 +460,14 @@ export const setControl = tenantMutation({
         !unbound[0].workflowId &&
         !unbound[0].threadId &&
         !unbound[0].planId
-      )
+      ) {
         await ctx.db.patch(unbound[0]._id, {
           state: "stopped",
           terminalCode: "control_changed",
           updatedAt: Date.now(),
         });
+        await reconcileStandingServiceAccounting(ctx, ctx.tenantId, unbound[0]._id, true);
+      }
     }
     await appendAudit(ctx, {
       tenantId: ctx.tenantId,

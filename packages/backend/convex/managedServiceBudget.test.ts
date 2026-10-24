@@ -1,9 +1,12 @@
 import { convexTest } from "convex-test";
-import { expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { confirmServiceKnowledgeFixture } from "../__fixtures__/serviceKnowledge";
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { internal } from "./_generated/api";
 import { managedServiceSpend } from "./lib/managedServiceBudget";
 import schema from "./schema";
+import { serviceKnowledgeFor } from "./serviceConversations";
 
 // Budget behavior under a future qualified capability, not a qualification witness or runtime flag.
 vi.mock("./managedServices", async (original) => ({
@@ -14,15 +17,22 @@ const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const limiterModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
 );
+beforeEach(() => vi.stubEnv("FOUNDATION_ONBOARDING_ENABLED", "1"));
+afterEach(() => vi.unstubAllEnvs());
 
 async function fixture(cap = 10) {
   const t = convexTest(schema, modules);
   t.registerComponent("rateLimiter", rateLimiterSchema, limiterModules);
-  const tenantId = "service-budget-fixture";
-  const ids = await t.run(async (ctx) => {
-    const serviceId = await ctx.db.insert("managedServices", {
+  t.registerComponent(
+    "auditCounts",
+    aggregateSchema,
+    import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts"),
+  );
+  const tenantId = await t.run((ctx) => ctx.db.insert("users", {}));
+  const serviceId = await t.run(async (ctx) =>
+    ctx.db.insert("managedServices", {
       tenantId,
-      serviceId: "social",
+      serviceId: "social-marketing",
       revision: 1,
       controlRevision: 1,
       controlState: "active",
@@ -33,7 +43,14 @@ async function fixture(cap = 10) {
       budgetLimitCents: cap,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-    });
+    }),
+  );
+  await confirmServiceKnowledgeFixture(t, tenantId);
+  const ids = await t.run(async (ctx) => {
+    const service = await ctx.db.get(serviceId);
+    if (!service) throw new Error("MISSING_SERVICE_FIXTURE");
+    const knowledge = await serviceKnowledgeFor(ctx, service);
+    if (!knowledge.assessment.ready) throw new Error("UNREADY_KNOWLEDGE_FIXTURE");
     const planId = await ctx.db.insert("plans", {
       tenantId,
       threadId: "synthetic-thread",
@@ -46,6 +63,7 @@ async function fixture(cap = 10) {
       configRevision: 1,
       controlRevision: 1,
       budgetLimitCents: cap,
+      knowledgeHash: knowledge.sourceHash,
       requestKey: "synthetic-request",
       state: "running",
       turnId: "synthetic-turn",
@@ -116,6 +134,32 @@ test("unknown provider holds prevent another call; settlement survives stop and 
     actualNanos: 1_000_000,
   });
   await expect(f.reserve(1)).rejects.toThrow("SERVICE_RUN_FENCED");
+});
+
+test("withdrawn confirmed knowledge fences new paid work while accepted provider cost still settles", async () => {
+  const f = await fixture();
+  const reservationId = await f.reserve(4);
+  await f.t.run(async (ctx) => {
+    const interview = await ctx.db
+      .query("foundationInterviews")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", f.tenantId))
+      .unique();
+    if (!interview) throw new Error("MISSING_FOUNDATION_FIXTURE");
+    await ctx.db.patch(interview._id, { answers: [] });
+  });
+  await expect(f.reserve(1)).rejects.toThrow("SERVICE_KNOWLEDGE_CHANGED");
+  await f.t.mutation(internal.guardrails.settlePaidCall, {
+    tenantId: f.tenantId,
+    reservationId,
+    costUsd: 0.001,
+  });
+  expect(await f.usage()).toMatchObject({
+    reservationCount: 1,
+    settledCount: 1,
+    outstandingNanos: 0,
+    actualNanos: 1_000_000,
+  });
+  await expect(f.reserve(1)).rejects.toThrow("SERVICE_KNOWLEDGE_CHANGED");
 });
 
 test("concurrent provider admissions serialize on the run ledger", async () => {

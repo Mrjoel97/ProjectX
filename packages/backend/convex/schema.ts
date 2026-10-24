@@ -204,6 +204,7 @@ const zernioReportSchema = v.object({
       posts: v.array(
         v.object({
           postId: v.string(),
+          nativePostUrl: v.optional(v.string()),
           source: v.union(v.literal("external"), v.literal("zernio")),
           updatedAt: v.union(v.string(), v.null()),
           metrics: v.object({
@@ -239,7 +240,7 @@ export default defineSchema({
     .index("by_state_hash", ["stateHash"])
     .index("by_expiry", ["expiresAt"]),
   // Inert tenant setup only. No cadence, credentials, execution history or spend copy.
-  // Development-only inert recurrence adapter; no arming/dispatch entry point exists.
+  // Standing read/prepare consent and durable occurrences; publication remains separately approved.
   managedServiceStandingApprovals: defineTable({
     tenantId: v.string(),
     serviceId: v.id("managedServices"),
@@ -248,7 +249,23 @@ export default defineSchema({
     expiresAtMs: v.number(),
     createdAt: v.number(),
     suspendedAtMs: v.optional(v.number()),
-    suspensionReason: v.optional(v.literal("authorization_required")),
+    enabled: v.optional(v.boolean()),
+    controlRevision: v.optional(v.number()),
+    nextDueAtMs: v.optional(v.number()),
+    nextLocalDate: v.optional(v.string()),
+    nextRequestedLocalTime: v.optional(v.string()),
+    scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
+    suspensionReason: v.optional(
+      v.union(
+        v.literal("authorization_required"),
+        v.literal("paused"),
+        v.literal("approval_stale"),
+        v.literal("qualification_required"),
+        v.literal("budget_required"),
+        v.literal("reconciliation_required"),
+        v.literal("expired"),
+      ),
+    ),
     terms: v.object({
       goalHash: v.string(),
       operationIds: v.array(
@@ -288,12 +305,14 @@ export default defineSchema({
     }),
   })
     .index("by_tenant", ["tenantId"])
+    .index("by_service_enabled", ["tenantId", "serviceId", "enabled"])
     .index("by_service_revision", ["tenantId", "serviceId", "revision"]),
   managedServiceOccurrences: defineTable({
     tenantId: v.string(),
     serviceId: v.id("managedServices"),
     approvalId: v.id("managedServiceStandingApprovals"),
     approvalRevision: v.number(),
+    runId: v.optional(v.id("managedServiceRuns")),
     occurrenceKey: v.string(),
     localDate: v.string(),
     requestedLocalTime: v.string(),
@@ -332,6 +351,9 @@ export default defineSchema({
   managedServiceRuns: defineTable({
     tenantId: v.string(),
     serviceId: v.id("managedServices"),
+    standingOccurrenceId: v.optional(v.id("managedServiceOccurrences")),
+    standingApprovalId: v.optional(v.id("managedServiceStandingApprovals")),
+    knowledgeHash: v.optional(v.string()),
     goalId: v.optional(v.id("goals")),
     usefulness: v.optional(v.union(v.literal("accepted"), v.literal("rejected"))),
     usefulnessAt: v.optional(v.number()),
@@ -372,6 +394,52 @@ export default defineSchema({
   managedServices: defineTable({
     tenantId: v.string(),
     serviceId: v.string(),
+    knowledgeConversation: v.optional(
+      v.object({
+        revision: v.number(),
+        configRevision: v.number(),
+        controlRevision: v.number(),
+        state: v.union(
+          v.literal("collecting"),
+          v.literal("deferred"),
+          v.literal("review"),
+          v.literal("ready"),
+        ),
+        draftAnswers: v.array(
+          v.object({
+            key: v.union(
+              v.literal("offering"),
+              v.literal("targetCustomer"),
+              v.literal("brandVoice"),
+              v.literal("publishingBoundaries"),
+            ),
+            value: v.string(),
+          }),
+        ),
+        confirmedAnswers: v.array(
+          v.object({
+            key: v.union(
+              v.literal("offering"),
+              v.literal("targetCustomer"),
+              v.literal("brandVoice"),
+              v.literal("publishingBoundaries"),
+            ),
+            eventId: v.string(),
+            sourceHash: v.string(),
+            confirmationRef: v.id("audit"),
+            confirmedAt: v.number(),
+            supersedes: v.array(v.string()),
+          }),
+        ),
+        reviewHash: v.optional(v.string()),
+        confirmedFromRevision: v.optional(v.number()),
+        confirmedSourceHash: v.optional(v.string()),
+        requestKey: v.string(),
+        launchState: v.optional(v.union(v.literal("resume_required"), v.literal("started"))),
+        launchRunId: v.optional(v.id("managedServiceRuns")),
+        updatedAt: v.number(),
+      }),
+    ),
     goalId: v.optional(v.id("goals")),
     revision: v.number(),
     controlState: v.union(v.literal("active"), v.literal("paused"), v.literal("stopped")),
@@ -489,6 +557,7 @@ export default defineSchema({
         id: v.string(),
         name: v.string(),
         service: v.string(),
+        nativeAccountId: v.optional(v.string()),
         available: v.boolean(),
         boards: v.optional(v.array(v.object({ id: v.string(), name: v.string() }))),
       }),
@@ -531,6 +600,22 @@ export default defineSchema({
       v.literal("discarded"),
     ),
     bufferPostId: v.optional(v.string()),
+    replacementPostId: v.optional(v.id("bufferPosts")),
+    publicationReceipt: v.optional(
+      v.object({
+        source: v.literal("buffer-status-v1"),
+        bufferPostId: v.string(),
+        channelId: v.string(),
+        platform: v.union(v.literal("instagram"), v.literal("tiktok")),
+        nativeAccountId: v.string(),
+        nativePostId: v.union(v.string(), v.null()),
+        nativePostUrl: v.string(),
+        sentAt: v.number(),
+        observedAt: v.number(),
+        draftRevision: v.number(),
+        approvedAt: v.number(),
+      }),
+    ),
     failure: v.optional(v.string()),
     approvedAt: v.optional(v.number()),
   })

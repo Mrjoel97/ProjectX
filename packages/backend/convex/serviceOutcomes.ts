@@ -4,7 +4,10 @@ import {
   serviceReportMovement,
   serviceSourceFreshness,
 } from "@pikar/core/serviceOutcomes";
-import { projectSocialServiceOutcome } from "@pikar/core/socialServiceOutcome";
+import {
+  projectSocialServiceOutcome,
+  socialNativeLinkFromReceipt,
+} from "@pikar/core/socialServiceOutcome";
 import { ZERNIO_DAY_MS, type ZernioReport } from "@pikar/core/zernio";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
@@ -82,6 +85,11 @@ export const bindGoal = tenantMutation({
       revision,
       controlRevision,
       updatedAt: Date.now(),
+    });
+    await ctx.runMutation(internal.managedServiceRecurrence.suspendForService, {
+      tenantId: ctx.tenantId,
+      serviceId: service._id,
+      reason: "approval_stale",
     });
     await ctx.runMutation(internal.audit.log, {
       tenantId: ctx.tenantId,
@@ -275,41 +283,73 @@ async function readRunOutcome(
           ? serviceReportMovement(previousReport, currentReport, Date.now(), ZERNIO_DAY_MS)
           : null,
     },
-    social: drafts.slice(0, 10).map((draft) =>
-      projectSocialServiceOutcome({
+    social: drafts.slice(0, 10).map((draft) => {
+      const platform =
+        draft.platform ??
+        (bufferConnection?.connectionId === draft.connectionId
+          ? (bufferConnection.channels.find((c) => c.id === draft.channelId)?.service ?? "unknown")
+          : "unknown");
+      const fact = {
+        draftRef: draft._id,
+        tenantId: draft.tenantId,
+        connectionId: draft.connectionId,
+        managedServiceRunId: draft.managedServiceRunId,
+        channelId: draft.channelId,
+        revision: draft.revision,
+        platform,
+        status: draft.status,
+        approvedAt: draft.approvedAt,
+        bufferPostId: draft.bufferPostId,
+      };
+      const report =
+        available && connection && currentReport
+          ? { tenantId: ctx.tenantId, connectionId: connection.connectionId, report: currentReport }
+          : null;
+      const currentBufferPin =
+        !!service &&
+        configMatches &&
+        service.accounts.some(
+          (pin) =>
+            pin.provider === "buffer" &&
+            pin.accountId === draft.channelId &&
+            pin.connectionId === draft.connectionId &&
+            bufferConnection?.status === "connected" &&
+            bufferConnection.connectionId === pin.connectionId &&
+            (bufferConnection.grantRevision ?? bufferConnection.revision) ===
+              pin.connectionRevision &&
+            bufferConnection.organizationId === draft.organizationId &&
+            bufferConnection.selectedChannelIds.includes(draft.channelId) &&
+            bufferConnection.channels.some(
+              (channel) =>
+                channel.id === draft.channelId &&
+                channel.available &&
+                channel.service === platform &&
+                channel.nativeAccountId === draft.publicationReceipt?.nativeAccountId,
+            ),
+        );
+      return projectSocialServiceOutcome({
         tenantId: ctx.tenantId,
         runId: run._id,
-        draft: {
-          draftRef: draft._id,
-          tenantId: draft.tenantId,
-          connectionId: draft.connectionId,
-          managedServiceRunId: draft.managedServiceRunId,
-          channelId: draft.channelId,
-          revision: draft.revision,
-          platform:
-            draft.platform ??
-            (bufferConnection?.connectionId === draft.connectionId
-              ? (bufferConnection.channels.find((c) => c.id === draft.channelId)?.service ??
-                "unknown")
-              : "unknown"),
-          status: draft.status,
-          approvedAt: draft.approvedAt,
-          bufferPostId: draft.bufferPostId,
-        },
-        report:
-          available && connection && currentReport
-            ? {
-                tenantId: ctx.tenantId,
-                connectionId: connection.connectionId,
-                report: currentReport,
-              }
-            : null,
+        draft: fact,
+        report,
+        nativeLink: currentBufferPin
+          ? socialNativeLinkFromReceipt({
+              tenantId: ctx.tenantId,
+              runId: run._id,
+              draft: fact,
+              report,
+              receipt: draft.publicationReceipt,
+              selectedConnectionId: available && connection ? connection.connectionId : null,
+              selectedAccountIds: pins.map((pin) => pin.accountId),
+              now: Date.now(),
+            })
+          : undefined,
         selectedConnectionId: available && connection ? connection.connectionId : null,
         selectedAccountIds: pins.map((p) => p.accountId),
         now: Date.now(),
         maxReportAgeMs: ZERNIO_DAY_MS,
-      }),
-    ),
+      });
+    }),
     socialTruncated: drafts.length > 10,
     // These stores retain cost and latency authority; no copied numeric result lives here.
     accounting: { ledgerRunId: run._id, activityTurnId: run.turnId ?? null },

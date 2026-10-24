@@ -5,11 +5,13 @@ import {
   type ServiceSkillPin,
 } from "./managedServices";
 
-// Offline policy only: this module neither schedules work nor supplies recurrence admission.
-// A future adapter must earn admission, atomically claim an occurrence and persist each receipt.
+import { nextOccurrence } from "./routineSchedule";
+
+// Pure policy only: native admission, scheduling and accounting stay in the adapter.
 export const STANDING_SERVICE_GRACE_MS = 5 * 60_000;
 export const STANDING_SERVICE_MAX_RETRIES = 1;
 export const STANDING_SERVICE_MAX_BUDGET_CENTS = 1000;
+export const STANDING_SERVICE_MAX_APPROVAL_MS = 30 * 86_400_000;
 export type StandingServiceSchedule = Readonly<{
   cadence: "daily" | "weekly";
   weekday: number | null;
@@ -112,6 +114,44 @@ export function validateStandingServiceTerms(terms: StandingServiceTerms): void 
   } catch {
     invalid();
   }
+}
+
+/** Reuse the established ICU/DST resolver; local dates, never elapsed 24-hour additions. */
+export function nextStandingServiceOccurrence(terms: StandingServiceTerms, afterUtcMs: number) {
+  validateStandingServiceTerms(terms);
+  if (!integer(afterUtcMs) || afterUtcMs >= 8_640_000_000_000_000) invalid();
+  const schedule = terms.schedule;
+  const next = nextOccurrence(afterUtcMs, {
+    timeZone: schedule.timeZone,
+    hour: schedule.hour,
+    minute: schedule.minute,
+    cadence:
+      schedule.cadence === "daily"
+        ? { frequency: "daily" }
+        : { frequency: "weekly", weekday: schedule.weekday as number },
+  });
+  return {
+    dueAtMs: next.utcMs,
+    localDate: next.localDate,
+    requestedLocalTime: next.localTime,
+    timeZone: schedule.timeZone,
+    disambiguation: next.disambiguation,
+  };
+}
+
+/** A callback cannot substitute another absolute instant for the approved local occurrence. */
+export function standingServiceOccurrenceMatches(
+  terms: StandingServiceTerms,
+  occurrence: Pick<StandingOccurrence, "dueAtMs" | "localDate" | "requestedLocalTime" | "timeZone">,
+): boolean {
+  if (!integer(occurrence.dueAtMs) || occurrence.dueAtMs < 1) return false;
+  const next = nextStandingServiceOccurrence(terms, occurrence.dueAtMs - 1);
+  return (
+    next.dueAtMs === occurrence.dueAtMs &&
+    next.localDate === occurrence.localDate &&
+    next.requestedLocalTime === occurrence.requestedLocalTime &&
+    next.timeZone === occurrence.timeZone
+  );
 }
 
 /** The five ADR-046 groups, compared structurally; display labels and last-run metadata are absent. */

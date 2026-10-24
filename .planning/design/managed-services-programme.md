@@ -1,5 +1,7 @@
 # Managed business services programme
 
+October 24 amendment: ADR067 admits the named opt-in recurring social release candidate, with actual hosted cycles still required before production promotion. The owner also approved [conversational business operations](conversational-business-operations.md) under ADR068 within Phases51/52: contextual questions, exact user confirmation, shared Foundation statements and continuation through the same native service executor. These amendments do not complete historical qualification or hosted acceptance.
+
 Owner-approved: 2026-10-19. Planning baseline: b4deef8bba42347e31df638b828443eb11407138.
 Status reconciled from existing evidence 2026-10-22: approved PR82 staging release and validated handoff e7ee now bind released source 821b/825ef. Phase 23 stays 6/9 and Phase 48 qualification remains partial. Independent Phase 49 policy/setup implementation has begun locally under the execution correction below; Phases 49–52 release/live admission remain blocked by preceding verification. No new paid checkpoint or consent, evaluation result or owner action exists.
 

@@ -682,10 +682,12 @@ describe("the `defer` absence checks, observed FIRING", () => {
     const adrs = readdirSync(join(repoRoot, "docs/decisions"));
     expect(adrs.length).toBeGreaterThan(20);
     expect(adrs).toContain("013-the-render-worker.md");
-    // ADR-063 permits only disabled construction/testing; the active decision remains defer.
+    // ADR-063 permits inert construction; ADR-067 admits only the built-in social service.
+    // The generic routine decision remains defer.
     // Every other matching filename is still refused by the checks and synthetic controls above.
     expect(adrs.filter((f) => /routine|recurrence|schedul/i.test(f))).toEqual([
       "063-inert-recurrence-construction.md",
+      "067-managed-social-recurrence.md",
     ]);
   });
 });
@@ -1008,8 +1010,15 @@ describe("nothing imports the recurrence spike", () => {
     expect(scanned.some((f) => f.includes(join("apps", "web", "app")))).toBe(true);
   });
 
-  test("no non-test source file anywhere names the spike", () => {
+  test("only ADR-067's named pure managed-service policy consumer imports the ICU spike", () => {
     const importers = scanned.filter((f) => readFileSync(f, "utf8").includes("routineSchedule"));
-    expect(importers.map((f) => f.slice(repoRoot.length + 1))).toEqual([]);
+    expect(
+      importers.map((f) =>
+        f
+          .slice(repoRoot.length + 1)
+          .split(sep)
+          .join("/"),
+      ),
+    ).toEqual(["packages/core/src/managedServicePolicy.ts"]);
   });
 });

@@ -33,6 +33,10 @@ vi.mock("convex/react", () => ({
         return state.service;
       case "managedServiceRuns:list":
         return { items: state.runs, truncated: false };
+      case "managedServiceRecurrence:status":
+        return { qualified: true, approval: null };
+      case "serviceConversations:read":
+        return null;
       case "serviceOutcomes:runOutcome":
         return null;
       case "goals:listGoals":

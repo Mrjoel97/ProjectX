@@ -12,7 +12,7 @@ function fixture(userId: string | null = "tenant-a") {
     controlRevision: 4,
     goal: "Prepare my selected social channels",
     controlState: "active",
-    readiness: { ready: true, reasons: [] },
+    readiness: { ready: true, reasons: [] as string[] },
   };
   const keys = new Set<string>();
   const brainState = { runId: "prior-run" };
@@ -31,6 +31,15 @@ function fixture(userId: string | null = "tenant-a") {
           usefulness: "unreviewed",
         },
       };
+    if (getFunctionName(reference as never) === "serviceConversations:read")
+      return {
+        serviceId: "social-marketing",
+        revision: 3,
+        controlRevision: 4,
+        conversationRevision: 1,
+        needsRebind: false,
+        nextQuestion: { key: "brandVoice", question: "How should your business sound?" },
+      };
     throw new Error("unexpected_query");
   });
   const runAction = vi.fn(async (reference: unknown, args: { requestKey: string }) => {
@@ -45,9 +54,10 @@ function fixture(userId: string | null = "tenant-a") {
     },
     runQuery,
     runAction,
+    runMutation: vi.fn(async () => ({ conversationRevision: 2, state: "collecting" })),
   } as unknown as ActionCtx;
   const tools = buildManagedServiceTools(ctx, "tenant-a", "trusted-root-request");
-  const execute = async (name: keyof typeof tools) => {
+  const execute = async (name: Exclude<keyof typeof tools, "saveSocialServiceAnswer">) => {
     const definition = tools[name];
     if (!definition?.execute) throw new Error("tool_absent");
     return definition.execute({}, { toolCallId: name, messages: [], context: {} });
@@ -73,7 +83,12 @@ describe("attended Executive service access", () => {
     });
     expect(h.runAction).not.toHaveBeenCalled();
     expect(h.runQuery.mock.calls.map(([reference]) => getFunctionName(reference as never))).toEqual(
-      ["managedServices:status", "managedServiceRuns:list", "serviceOutcomes:serviceBrainView"],
+      [
+        "managedServices:status",
+        "managedServiceRuns:list",
+        "serviceOutcomes:serviceBrainView",
+        "serviceConversations:read",
+      ],
     );
     expect(
       h.runQuery.mock.calls
@@ -111,6 +126,37 @@ describe("attended Executive service access", () => {
       "requestKey",
       "serviceId",
     ]);
+  });
+  test("missing business information returns a contextual question without starting paid work", async () => {
+    const h = fixture();
+    h.config.readiness.ready = false;
+    h.config.readiness.reasons.push("business_information_required");
+    expect(await h.execute("startSocialService")).toMatchObject({
+      state: "needs_information",
+      conversation: { nextQuestion: { key: "brandVoice" } },
+    });
+    expect(h.runAction).not.toHaveBeenCalled();
+  });
+  test("an agent may save a reviewable answer but cannot confirm facts or launch from that tool", async () => {
+    const h = fixture();
+    const definition = h.tools.saveSocialServiceAnswer;
+    if (!definition.execute) throw new Error("tool_absent");
+    expect(
+      await definition.execute(
+        { key: "brandVoice", value: "Clear and helpful." },
+        { toolCallId: "answer", messages: [], context: {} },
+      ),
+    ).toMatchObject({ state: "draft_saved" });
+    expect(h.ctx.runMutation).toHaveBeenCalledWith(expect.anything(), {
+      serviceId: "social-marketing",
+      expectedRevision: 3,
+      expectedControlRevision: 4,
+      expectedConversationRevision: 1,
+      key: "brandVoice",
+      value: "Clear and helpful.",
+    });
+    expect(h.runAction).not.toHaveBeenCalled();
+    expect(h.tools).not.toHaveProperty("confirmSocialServiceAnswer");
   });
   test("unauthenticated or mismatched internal contexts cannot use an operator fallback", async () => {
     for (const userId of [null, "tenant-b"]) {
