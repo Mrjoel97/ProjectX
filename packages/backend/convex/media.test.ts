@@ -8086,7 +8086,7 @@ describe("native Seedance application workflow", () => {
     expect((await t.run((ctx) => ctx.db.get(planId)))?.captionStatus).toBeUndefined();
     expect((await rows(t)).some((job) => job.kind === "stt")).toBe(false);
   });
-  test("keeps native asset switches and fifteen-second brief edits closed", async () => {
+  test("keeps native asset switches closed and permits fifteen-second briefs", async () => {
     const t = harness();
     const { planId } = await nativePlan(t);
     expect(
@@ -8105,7 +8105,7 @@ describe("native Seedance application workflow", () => {
     ).toEqual({ ok: false, reason: "native_deck_invalid" });
     expect(
       await asA(t).mutation(api.media.editBrief, { planId, patch: { durationSeconds: 15 } }),
-    ).toEqual({ ok: false, reason: "illegal_duration" });
+    ).toEqual({ ok: true });
   });
   test("persists new native decks while leaving legacy revisions separate", async () => {
     const t = harness();

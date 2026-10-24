@@ -1714,12 +1714,15 @@ test("only media.ts and mediaComplete.ts write a TERMINAL mediaJobs status, and 
   expect([...succeeders]).toEqual(["mediaComplete.ts"]);
 });
 
-test("storage.getUrl stays in authenticated queries or exact reviewed funnel/social capability seams", () => {
+test("storage.getUrl stays in authenticated queries or exact reviewed funnel/social/product-reference capability seams", () => {
   // A storage URL is a BEARER CAPABILITY. Reached from anything but a tenant-guarded read it is one
   // step from a log line or an unguarded return.
   // Instagram requires image_url rather than uploaded bytes. Its one reviewed handoff is
   // publishPost only, after a customer-approved claim and owned-upload checks; the focused
   // assertions below pin the provider-only sink and exclude model/log/return surfaces.
+  // Native product-reference generation has one further reviewed internal seam: immutable owned
+  // product images selected by the human and bound to the exact film review. Its only consumer
+  // rechecks actual bytes before the provider input; it is not a general internal URL reader.
   // THIS SCAN IS WHAT PLAN 20-17 MUST NOT BREAK: handing fal a `ctx.storage.getUrl()` result as the
   // STT `audio_url` would give a third party a bearer capability to a tenant's asset. If 20-17
   // needs the bytes at a provider, it uploads them - it does not hand over a URL.
@@ -1741,6 +1744,7 @@ test("storage.getUrl stays in authenticated queries or exact reviewed funnel/soc
   ]);
   const seenFunnelExceptions: string[] = [];
   const seenSocialExceptions: string[] = [];
+  const seenProductReferenceExceptions: string[] = [];
   let sites = 0;
   for (const [rel, code] of allConvexSources()) {
     for (const call of code.matchAll(/storage\.getUrl/g)) {
@@ -1758,6 +1762,11 @@ test("storage.getUrl stays in authenticated queries or exact reviewed funnel/soc
         seenSocialExceptions.push(name);
         continue;
       }
+      if (rel === "media.ts" && name === "productReferencesForSubmit") {
+        expect(kind).toBe("internalQuery");
+        seenProductReferenceExceptions.push(name);
+        continue;
+      }
       expect(
         ["tenantQuery", "ownerQuery"],
         `${rel}: storage.getUrl is not inside an authenticated query (found ${kind ?? "top level"})`,
@@ -1767,6 +1776,58 @@ test("storage.getUrl stays in authenticated queries or exact reviewed funnel/soc
   expect(sites, "no storage.getUrl call sites found - the scan is vacuous").toBeGreaterThan(0);
   expect(seenFunnelExceptions.sort()).toEqual(["create", "resolveAndIncrement"]);
   expect(seenSocialExceptions).toEqual(["publishPost"]);
+  expect(seenProductReferenceExceptions).toEqual(["productReferencesForSubmit"]);
+});
+
+test("native product reference URLs require the exact owned reviewed images and only reach the paid provider input", () => {
+  const source = stripCode(readSource("media.ts"));
+  const start = source.indexOf("export const productReferencesForSubmit = internalQuery(");
+  const end = source.indexOf("export async function nativeProductReferenceHash", start);
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  const query = source.slice(start, end);
+  expect(query).toContain('args: { jobId: v.id("mediaJobs") }');
+  expect(query).toContain("plan.tenantId !== job.tenantId");
+  expect(query).toContain('plan.mediaAudioMode !== "native"');
+  expect(query).toContain("job.nativeReviewHash !== (await nativeReelReviewHash(plan))");
+  const checked = query.indexOf("await checkedProductReferences(ctx, plan)");
+  const capability = query.indexOf("await ctx.storage.getUrl(reference.storageId)");
+  expect(checked).toBeGreaterThanOrEqual(0);
+  expect(capability).toBeGreaterThan(checked);
+  expect(query.match(/storage\.getUrl/g)).toHaveLength(1);
+  expect(query).not.toMatch(
+    /console\.|audit\.log|telemetry|generateText|generateObject|agentSteps/,
+  );
+
+  const ownership = source.slice(
+    source.indexOf("async function productReferenceFromDocument"),
+    source.indexOf("export const setProductReferences"),
+  );
+  expect(ownership).toContain("doc.tenantId !== tenantId");
+  expect(ownership).toContain("ctx.db.system.get(doc.storageId)");
+  expect(ownership).toContain("PRODUCT_IMAGE_TYPES.has(mimeType)");
+  expect(ownership).toContain("metadata.size > MAX_PRODUCT_IMAGE_BYTES");
+  for (const field of ["storageId", "contentHash", "mimeType", "size"])
+    expect(ownership).toContain(`current.${field} !== reference.${field}`);
+
+  const submitStart = source.indexOf("export const submitBatch = internalAction(");
+  const submitEnd = source.indexOf("export const ", submitStart + 20);
+  const submit = source.slice(submitStart, submitEnd);
+  const resolve = submit.indexOf("internal.media.productReferencesForSubmit");
+  const bytes = submit.indexOf("ctx.storage.get(reference.storageId)");
+  const hash = submit.indexOf("contentHash(bytes)");
+  const signature = submit.indexOf("referenceImageHasExpectedType(bytes, reference.mimeType)");
+  const attached = submit.indexOf("imageReferences.push({ url: reference.url })");
+  const provider = submit.indexOf("await submitLine(spec, text, { imageReferences })");
+  expect(resolve).toBeGreaterThanOrEqual(0);
+  expect(bytes).toBeGreaterThan(resolve);
+  expect(hash).toBeGreaterThan(bytes);
+  expect(signature).toBeGreaterThan(hash);
+  expect(attached).toBeGreaterThan(signature);
+  expect(provider).toBeGreaterThan(attached);
+  expect(submit).not.toMatch(
+    /console\.|audit\.log|telemetry|generateText|generateObject|agentSteps/,
+  );
 });
 
 test("Instagram's sole bearer URL handoff requires approved tenant-owned media and has only a provider sink", () => {

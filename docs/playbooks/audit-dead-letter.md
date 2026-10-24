@@ -1378,3 +1378,4 @@ Local registry and artifact/campaign tests do not prove hosted late-provider cle
 
 
 > Last verified: 2026-10-24 — The tenant storage inventory includes plans.mediaProductReferences[].storageId so owned product references participate in existing export and erasure handling. Reference content stays outside audit payloads.
+> Last verified: 2026-10-24 — The bearer-URL inventory now admits exactly media.productReferencesForSubmit as an internalQuery capability seam for human-selected native product images. Focused source assertions require the job/plan tenant match, exact approved review, owned immutable image metadata and hashes, followed by actual byte/hash/signature checks before the provider input. The exception does not admit other internal readers, logs, agent/model surfaces, or arbitrary URLs. Runtime ownership and reference checks remain unchanged; the four product-reference regressions passed in CI before this inventory correction.
