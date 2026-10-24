@@ -472,7 +472,8 @@
     "packages/backend/convex/fixtureSeam.test.ts",
     "packages/backend/convex/ops.ts",
     ".github/workflows/deploy-production.yml",
-    "scripts/check-release-auth.mjs"
+    "scripts/check-release-auth.mjs",
+    "scripts/check-release-social"
   ],
   "workflow-packs.md": [
     "apps/web/app/(app)/dashboard/skills-workflows/",
@@ -581,5 +582,13 @@
     "packages/revenue/src/money",
     "packages/revenue/src/finance",
     "packages/backend/convex/revenueFinance"
+  ],
+  "social-connections.md": [
+    "packages/core/src/social",
+    "packages/backend/convex/social",
+    "apps/web/app/(app)/connect-social/",
+    "apps/web/app/(app)/dashboard/marketing/SocialPanel.tsx",
+    "packages/backend/convex/youtubeMetadata.test.ts",
+    "packages/backend/convex/socialDisconnect.test.ts"
   ]
 }

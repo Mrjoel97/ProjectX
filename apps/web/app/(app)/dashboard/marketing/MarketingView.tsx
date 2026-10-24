@@ -12,6 +12,7 @@ import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { Component, type CSSProperties, type ReactNode, useState } from "react";
 import { BufferMarketing } from "./BufferPanel";
+import { SocialConnections } from "./SocialPanel";
 import { ZernioMarketing } from "./ZernioPanel";
 
 const card: CSSProperties = {
@@ -70,7 +71,9 @@ export function ChannelsView({
         connections.
       </p>
       <div style={grid}>
-        {MARKETING_CHANNEL_CATALOG.map((channel) => {
+        {MARKETING_CHANNEL_CATALOG.filter(
+          (channel) => channel.id === "gmail" || channel.id === "linkedin",
+        ).map((channel) => {
           const state = marketingChannelState(channel.id, { connected, configured });
           return (
             <article key={channel.id} style={card}>
@@ -434,10 +437,13 @@ export function MarketingView() {
           Review channel availability, create tracked file links and record consent-aware leads.
         </p>
         <p>
-          Use Buffer for approved social posts and Zernio for Instagram and TikTok reports. Direct
-          social-network connections remain separate.
+          Connect your social accounts directly to Pikar AI. Buffer publishing and Zernio reporting
+          remain available.
         </p>
       </header>
+      <SectionBoundary name="Direct social accounts">
+        <SocialConnections />
+      </SectionBoundary>
       <SectionBoundary name="Buffer social marketing">
         <BufferMarketing />
       </SectionBoundary>

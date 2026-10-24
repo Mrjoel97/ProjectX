@@ -4,6 +4,7 @@
 // in the direction that matters (a new required key nobody classified reads as "ready"). So the
 // first test DERIVES the set of names source actually consumes and fails when one is unclassified.
 // That is the same shape as Phase 22.1's table-classification drift test, for the same reason.
+import { SOCIAL_PROVIDERS } from "@pikar/core/social";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -19,12 +20,47 @@ const sources = import.meta.glob("./**/*.ts", {
   eager: true,
 }) as Record<string, string>;
 
+// The direct-social lane computes names from a closed provider inventory. Recognize
+// its actual expressions, and reject new shapes rather than silently skipping them.
+function socialIndirectNames(code: string): Set<string> {
+  const names = new Set<string>();
+  const prefixes = SOCIAL_PROVIDERS.map((provider) => provider.toUpperCase());
+  for (const [, rawExpression] of code.matchAll(/process\.env\s*\[([^\]]+)\]/g)) {
+    const expression = rawExpression!.trim();
+    const oauth = /^`\$\{prefix\}_OAUTH_CLIENT_(ID|SECRET)`$/.exec(expression);
+    if (oauth) {
+      if (
+        !/const\s+prefix\s*=\s*provider\s*===\s*"youtube"\s*\?\s*"YOUTUBE"\s*:\s*provider\.toUpperCase\(\)/.test(
+          code,
+        )
+      )
+        throw new Error("Unrecognized direct-social OAuth prefix mapping");
+      for (const prefix of prefixes) names.add(`${prefix}_OAUTH_CLIENT_${oauth[1]}`);
+    } else if (
+      /^`SOCIAL_\$\{(?:provider|p\.provider|post!\.provider)\.toUpperCase\(\)\}_PUBLISH_ENABLED`$/.test(
+        expression,
+      )
+    ) {
+      for (const prefix of prefixes) names.add(`SOCIAL_${prefix}_PUBLISH_ENABLED`);
+    } else if (/^provider\.toUpperCase\(\)\s*\+\s*"_OAUTH_CLIENT_SECRET"$/.test(expression)) {
+      // YouTube uses its separate literal WebSub secret in the preceding branch.
+      for (const prefix of prefixes.filter((name) => name !== "YOUTUBE"))
+        names.add(`${prefix}_OAUTH_CLIENT_SECRET`);
+    } else {
+      const literalName = /^"([A-Z_][A-Z_0-9]*)"$/.exec(expression);
+      if (!literalName) throw new Error("Unrecognized direct-social environment indirection");
+      names.add(literalName[1]!);
+    }
+  }
+  return names;
+}
 describe("the manifest covers every name source actually reads", () => {
   const consumed = new Set<string>();
   /** Names reached through a LITERAL `process.env.X`. */
   const literal = new Set<string>();
   /** Names reached through `requireEnvMedia("X")` — a `process.env[name]` indirection. */
   const indirect = new Set<string>();
+  const socialIndirect = new Set<string>();
   for (const [path, content] of Object.entries(sources)) {
     if (path.endsWith(".test.ts") || path.includes("/_generated/")) continue;
     // Strip comments, because this module's OWN doc comment writes `process.env.X` as an example
@@ -57,6 +93,12 @@ describe("the manifest covers every name source actually reads", () => {
       indirect.add(name as string);
       consumed.add(name as string);
     }
+    if (path.startsWith("./social")) {
+      for (const name of socialIndirectNames(code)) {
+        socialIndirect.add(name);
+        consumed.add(name);
+      }
+    }
   }
 
   test("the scan found the real consumers, so the comparison below cannot be vacuous", () => {
@@ -80,6 +122,63 @@ describe("the manifest covers every name source actually reads", () => {
     expect(indirect.size).toBeGreaterThanOrEqual(5);
   });
 
+  test("computed social OAuth and publishing names are discovered without literal reads", () => {
+    const expected = SOCIAL_PROVIDERS.flatMap((provider) => {
+      const prefix = provider.toUpperCase();
+      return [
+        `${prefix}_OAUTH_CLIENT_ID`,
+        `${prefix}_OAUTH_CLIENT_SECRET`,
+        `SOCIAL_${prefix}_PUBLISH_ENABLED`,
+      ];
+    });
+    expect([...socialIndirect].sort()).toEqual(expected.sort());
+    for (const name of [
+      "X_OAUTH_CLIENT_ID",
+      "META_OAUTH_CLIENT_SECRET",
+      "YOUTUBE_OAUTH_CLIENT_ID",
+      "SOCIAL_TIKTOK_PUBLISH_ENABLED",
+    ]) {
+      expect(socialIndirect).toContain(name);
+      expect(literal, `${name}: computed-name scan must remain load-bearing`).not.toContain(name);
+    }
+    const socialNames = new Set([
+      ...socialIndirect,
+      ...[...literal].filter((name) => /^(?:META_|TIKTOK_|YOUTUBE_|SOCIAL_)/.test(name)),
+    ]);
+    for (const name of socialNames)
+      expect(ENV_MANIFEST.find((entry) => entry.name === name)?.tier, name).toBe("feature");
+  });
+
+  test("social computed-read guard rejects unknown shapes and prefix mappings", () => {
+    expect(() => socialIndirectNames("process.env[unclassifiedName]")).toThrow(
+      "Unrecognized direct-social environment indirection",
+    );
+    expect(() => socialIndirectNames("process.env[\n unclassifiedName\n]")).toThrow(
+      "Unrecognized direct-social environment indirection",
+    );
+    expect(() =>
+      socialIndirectNames('const prefix = "OTHER"; process.env[`${prefix}_OAUTH_CLIENT_ID`]'),
+    ).toThrow("Unrecognized direct-social OAuth prefix mapping");
+    expect([...socialIndirectNames('process.env["SOCIAL_FUTURE_FLAG"]')]).toEqual([
+      "SOCIAL_FUTURE_FLAG",
+    ]);
+    expect(
+      [
+        ...socialIndirectNames("process.env[`SOCIAL_${p.provider.toUpperCase()}_PUBLISH_ENABLED`]"),
+      ].sort(),
+    ).toEqual(
+      SOCIAL_PROVIDERS.map((provider) => `SOCIAL_${provider.toUpperCase()}_PUBLISH_ENABLED`).sort(),
+    );
+    expect(
+      [
+        ...socialIndirectNames(
+          "process.env[`SOCIAL_${post!.provider.toUpperCase()}_PUBLISH_ENABLED`]",
+        ),
+      ].sort(),
+    ).toEqual(
+      SOCIAL_PROVIDERS.map((provider) => `SOCIAL_${provider.toUpperCase()}_PUBLISH_ENABLED`).sort(),
+    );
+  });
   test("every consumed name is classified — an unclassified addition fails here", () => {
     const classified = new Set(ENV_MANIFEST.map((e) => e.name));
     expect([...consumed].filter((n) => !classified.has(n)).sort()).toEqual([]);

@@ -120,3 +120,15 @@ without replaying paid evaluation. Graphify remains unavailable; canonical graph
 zero changes/75tables. Final exact-head CI and source identity are recorded on PR83. Phase53
 remains partial, with hosted rollout, full-film owner creative review, actual product/voice
 reference wiring and provider recovery evidence outstanding.
+
+
+## Integration with newer main source
+
+The isolated branch incorporates main through `b3fe552d`, preserving social connection,
+publishing, privacy and reviewer-readiness work alongside the native media changes. The merged
+schema has 79 unique tables; both social storage and native caption sources remain classified.
+The focused tenant-data suite passes 14/14. CI retains both social release checks and media
+operator regressions and installs prerequisites for all three actual FFmpeg fixtures. Current
+golden and vertical identities are regenerated from the combined source without changing
+case inputs or replaying provider calls. Exact-head hosted CI remains required and its result
+is recorded on PR83. Main itself is not modified by this isolated integration.

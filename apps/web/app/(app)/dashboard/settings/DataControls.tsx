@@ -45,7 +45,12 @@ type ProviderDeletionResult = {
     | "quickbooks"
     | "stripe"
     | "paypal"
-    | "buffer";
+    | "buffer"
+    | "zernio"
+    | "x"
+    | "meta"
+    | "tiktok"
+    | "youtube";
   localRowDeleted: boolean;
   revokedAtProvider: boolean;
   failure: boolean;
@@ -229,9 +234,11 @@ export function DataControls() {
           </p>
           <p style={body}>
             Connected accounts are disconnected before anything is erased. A Google grant is revoked
-            at Google. A Microsoft grant is removed here only — Microsoft offers no per-application
-            revocation an application can call for its own grant, so the consent entry stands on
-            your Microsoft account until you remove it at{" "}
+            at Google. Revoking Google or YouTube access revokes all access this Google project has
+            for your Google account, including other integrations using the project; those
+            connections may also need to be reconnected. A Microsoft grant is removed here only —
+            Microsoft offers no per-application revocation an application can call for its own
+            grant, so the consent entry stands on your Microsoft account until you remove it at{" "}
             <a href={MS_CONSENT_PERSONAL} rel="noopener noreferrer" target="_blank">
               account.microsoft.com
             </a>{" "}
@@ -315,7 +322,24 @@ export function DataControls() {
           <ul style={{ ...body, margin: 0, paddingLeft: "1.1rem" }}>
             {providers.map((entry) => (
               <li key={entry.provider}>
-                {entry.provider === "google" ? "Google" : "Microsoft"}:{" "}
+                {
+                  {
+                    google: "Google",
+                    microsoft: "Microsoft",
+                    billing: "Billing",
+                    hubspot: "HubSpot",
+                    quickbooks: "QuickBooks",
+                    stripe: "Stripe",
+                    paypal: "PayPal",
+                    buffer: "Buffer",
+                    zernio: "Zernio",
+                    x: "X",
+                    meta: "Meta",
+                    tiktok: "TikTok",
+                    youtube: "YouTube",
+                  }[entry.provider]
+                }
+                :{" "}
                 {!entry.localRowDeleted
                   ? "was not connected."
                   : entry.failure
@@ -338,7 +362,7 @@ export function DataControls() {
                       </a>
                       .
                     </>
-                  ) : (
+                  ) : entry.provider === "google" || entry.provider === "youtube" ? (
                     <>
                       {" "}
                       Remove the consent entry yourself at{" "}
@@ -346,6 +370,12 @@ export function DataControls() {
                         myaccount.google.com/permissions
                       </a>
                       .
+                    </>
+                  ) : (
+                    <>
+                      {" "}
+                      Remove Pikar AI in the platform's connected-app settings to end upstream
+                      access.
                     </>
                   ))}
               </li>

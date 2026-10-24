@@ -13,6 +13,12 @@ import {
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { tenantQuery } from "./lib/functions";
+import {
+  youtubeConnectionMetadataBound,
+  youtubeMetadataFresh,
+  youtubePostMetadataBound,
+  youtubePostMetadataCleared,
+} from "./social";
 
 export const TENANT_EXPORT_PAGE_SIZE = 256;
 /**
@@ -118,9 +124,62 @@ export const exportTenantData = tenantQuery({
       tableDone = page.isDone;
     }
 
+    // Export is another read surface: do not bypass provider metadata deadlines while
+    // a bounded cleanup job is pending. Customer-authored post fields stay exportable.
+    if (table === "socialPosts") {
+      const youtube = await ctx.db
+        .query("socialConnections")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId).eq("provider", "youtube"))
+        .unique();
+      rows = rows.map((row) =>
+        row.provider === "youtube" &&
+        (youtube?.status !== "connected" ||
+          !youtubeMetadataFresh(youtubeConnectionMetadataBound(youtube)) ||
+          !youtubeMetadataFresh(
+            youtubePostMetadataBound(
+              {
+                _creationTime: typeof row._creationTime === "number" ? row._creationTime : 0,
+                connectionId: typeof row.connectionId === "string" ? row.connectionId : "",
+                providerMetadataCheckedAt:
+                  typeof row.providerMetadataCheckedAt === "number"
+                    ? row.providerMetadataCheckedAt
+                    : undefined,
+              },
+              youtube,
+            ),
+          ))
+          ? { ...row, ...youtubePostMetadataCleared() }
+          : row,
+      );
+    }
     const category = TENANT_TABLE_CLASSIFICATION[table];
     const shapedRows =
-      category === "tenant_credential" ? rows.map(summarizeTenantCredential) : rows;
+      category === "tenant_credential"
+        ? rows.map((row) =>
+            table === "socialConnections"
+              ? {
+                  ...summarizeTenantCredential(row),
+                  provider: row.provider,
+                  ...(row.provider === "youtube" &&
+                  !youtubeMetadataFresh(
+                    youtubeConnectionMetadataBound({
+                      _creationTime: typeof row._creationTime === "number" ? row._creationTime : 0,
+                      providerMetadataCheckedAt:
+                        typeof row.providerMetadataCheckedAt === "number"
+                          ? row.providerMetadataCheckedAt
+                          : undefined,
+                    }),
+                  )
+                    ? { accountName: null, assets: [], selectedAssetIds: [] }
+                    : {
+                        accountName: row.accountName,
+                        assets: row.assets ?? [],
+                        selectedAssetIds: row.selectedAssetIds ?? [],
+                      }),
+                }
+              : summarizeTenantCredential(row),
+          )
+        : rows;
     const totalRows = rowsExported + shapedRows.length;
     const tableRowsAfter = tableRows + shapedRows.length;
     // Only a table with rows STILL UNREAD is truncated. One that ends exactly on its budget is

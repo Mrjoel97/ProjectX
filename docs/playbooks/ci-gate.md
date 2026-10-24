@@ -1,3 +1,5 @@
+> Combined-source checkpoint: 2026-10-24 — The merged candidate must run the full existing repository gate, including all three actual FFmpeg fixtures, native-media/task-budget checks and direct-social release checks. The dated runs below cover their original sources; none is a passing exact-head result for this merge. Do not skip guards, reuse prior-source passing evidence or claim deployment from this integration.
+
 > Last verified: 2026-10-24 — Standard Seedance migration has focused45provider/62cost/161storyboard/137workspace/294backend-media passes; native-audio operator checks now cover one audio-bearing standard request and missing-audio refusal. Full final-head CI remains required. A paid native clip is separate provider evidence, not proof of full production native-audio integration.
 
 > Last verified: 2026-10-24 — CI includes the free Seedance operator regressions alongside existing image/reel controls. They verify fixed requests/catalogue pricing, shared-budget refusal, append-before-submit, single-use execution, profile checks and narrow billing reconciliation using mocked providers. Paid quality, latency and branded-product consistency require separate actual-output evidence.
@@ -9,6 +11,10 @@
 > Last verified: 2026-10-22 — The root now explicitly declares the already installed `@types/node` 26.1.1. Without it, a local install resolved undici's Node reference through ExcelJS's private Node 14 hoist while Vitest resolved Node 26, producing incompatible Buffer declarations in existing provenance tests. The standard contracts typecheck passes and its resolved Node files now belong only to 26.1.1. No type assertion, skipped check or package version bump was used; the lockfile change is only the root declaration. Strict test-fixture narrowing also repairs the prior PR83 web typecheck failure.
 
 > Last verified: 2026-10-22 — CI also runs the offline image and reel qualification operator regressions. Mocked responses verify append-before-submit receipts, shared spending records, unknown-outcome stops and refusal of repeated purchases; no provider key, paid request or deployment is used by CI. The authenticated artifact browser suite remains an explicit local-fixture run, outside the default hosted gate.
+
+> Full-suite integration checkpoint 2026-10-24: The first repository-wide run passed strict typecheck/lint and 4,742 backend cases, then caught closed-inventory omissions. Exact module, scheduler, cron, HTTP route and schema inventories now name the reviewed social additions; unknown additions still fail. The environment manifest classifies every direct-social literal/computed setting as optional and rejects unknown computed shapes. Narrow privacy-index and Instagram media-URL exceptions are paired with consumer/approval/tenant/output-boundary assertions. The seven affected suites pass 249 targeted cases. No gate was removed, provider approval asserted or live mutation performed; full corrected-candidate CI remains required.
+
+> 2026-10-24: Existing CI now runs the eight offline initial-social-release preflight regressions. The protected production check uses a positively verified names-only environment inventory and four allowlisted flag reads; missing flags count as off only after a successful inventory, and true/malformed values or transport errors block release. Full final-candidate CI remains required; local native TypeScript timed out rather than passing. No model calls or extra resources were used.
 
 > Last verified: 2026-10-21 — CI explicitly runs smokeRun.test.mjs alongside paid-attempt and evaluator-identity regressions. The offline tests cover the exact opt-in read-only transport retry, its shared two-invocation ceiling, native-error refusal and exclusion of paid actions and writes. These tests make no deployment or provider calls and supply no live qualification.
 
@@ -330,7 +336,7 @@ Couplings that are not visible in the graph:
 5. `pnpm lint` → `biome ci .` — formatter, `organizeImports` and linter, no writes.
 6. Install Ubuntu media test prerequisites (`ffmpeg`, `fonts-dejavu-core`) and verify the detected
    Bash, font and both binaries. `pnpm test` → `turbo run test` → `vitest run` per package, including
-   both real synthetic FFmpeg fixtures. No provider request or external media is used.
+   all three real synthetic FFmpeg fixtures, including native-audio assembly. No provider request or external media is used.
 7. `pnpm build` → `turbo run build` → `next build`.
 
 ## Invariants — what must never break

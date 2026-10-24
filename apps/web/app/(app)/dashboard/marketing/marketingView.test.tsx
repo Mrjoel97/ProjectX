@@ -19,6 +19,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock("convex/react", () => ({
   useQuery: (api: unknown) => {
     const name = getFunctionName(api as never);
+    if (name === "social:status")
+      return ["x", "meta", "tiktok", "youtube"].map((provider) => ({
+        provider,
+        configured: false,
+        connected: false,
+        status: "disconnected",
+      }));
     if (name === "buffer:status")
       return {
         configured: true,
@@ -138,13 +145,12 @@ describe("Marketing surface", () => {
     expect(host.querySelectorAll("input[readonly]")).toHaveLength(0);
     expect(host.innerHTML).not.toContain("synthetic-secret");
   });
-  it("renders all channels and explicit social gates without fake connections", () => {
+  it("renders Gmail and the remaining LinkedIn gate without duplicating native social cards", () => {
     const html = renderToStaticMarkup(<ChannelsView connected={false} configured={true} />);
-    for (const name of ["Gmail", "Meta/Instagram", "LinkedIn", "TikTok", "X", "YouTube"])
-      expect(html).toContain(name);
-    expect(html.match(/legal entity is not formed/g)).toHaveLength(5);
+    for (const name of ["Gmail", "LinkedIn"]) expect(html).toContain(name);
+    expect(html.match(/legal entity is not formed/g)).toHaveLength(1);
     expect(html.match(/provider suitability and permissions review has not started/g)).toHaveLength(
-      5,
+      1,
     );
     expect(html).toContain("/connect-gmail");
     expect(html).toContain("intent=marketing");

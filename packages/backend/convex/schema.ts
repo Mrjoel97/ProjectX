@@ -35,7 +35,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 75 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 79 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -59,6 +59,8 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │ ── Connections (OAuth tokens) ──────────────────────────── ~L1425          │
 // │   notifications, gmailTokens, microsoftCalendarTokens                      │
 // │   bufferOAuthStates, bufferConnections, bufferPosts, bufferReports          │
+// │   socialOAuthStates, socialConnections                                  │
+// │   socialPosts, socialWebhookReceipts                                    │
 // │   zernioConnections, zernioReports                                        │
 // │                                                                            │
 // │ ── Vault (Document Store) ──────────────────────────────── ~L956           │
@@ -193,6 +195,116 @@ const shotElement = v.object({
 });
 
 export default defineSchema({
+  socialWebhookReceipts: defineTable({
+    provider: v.union(v.literal("x"), v.literal("meta"), v.literal("tiktok"), v.literal("youtube")),
+    digest: v.string(),
+    receivedAt: v.number(),
+  }).index("by_provider", ["provider"]),
+  socialOAuthStates: defineTable({
+    tenantId: v.string(),
+    provider: v.union(v.literal("x"), v.literal("meta"), v.literal("tiktok"), v.literal("youtube")),
+    connectionId: v.string(),
+    stateHash: v.string(),
+    phase: v.union(v.literal("request"), v.literal("exchanging"), v.literal("complete")),
+    ciphertextB64: v.string(),
+    ivB64: v.string(),
+    keyVersion: v.union(v.literal("v1"), v.literal("v2")),
+    expiresAt: v.number(),
+    tokenExpiresAt: v.optional(v.number()),
+    accountIdHash: v.optional(v.string()),
+    accountName: v.optional(v.string()),
+    scopes: v.optional(v.array(v.string())),
+  })
+    .index("by_tenant", ["tenantId", "provider"])
+    .index("by_state_hash", ["stateHash"])
+    .index("by_expiry", ["expiresAt"]),
+  socialPosts: defineTable({
+    providerMetadataCheckedAt: v.optional(v.number()),
+    customerChoicesConfirmed: v.optional(v.boolean()),
+    mediaTicketHash: v.optional(v.string()),
+    mediaTicketExpiresAt: v.optional(v.number()),
+    tenantId: v.string(),
+    provider: v.union(v.literal("x"), v.literal("meta"), v.literal("tiktok"), v.literal("youtube")),
+    connectionId: v.string(),
+    assetId: v.string(),
+    assetName: v.string(),
+    kind: v.union(
+      v.literal("facebook_page"),
+      v.literal("instagram"),
+      v.literal("youtube"),
+      v.literal("tiktok"),
+    ),
+    selectionRevision: v.number(),
+    text: v.string(),
+    title: v.optional(v.string()),
+    storageId: v.optional(v.id("_storage")),
+    privacy: v.optional(v.string()),
+    madeForKids: v.optional(v.boolean()),
+    aiGenerated: v.optional(v.boolean()),
+    ownBrand: v.optional(v.boolean()),
+    paidPartnership: v.optional(v.boolean()),
+    allowComments: v.optional(v.boolean()),
+    allowDuet: v.optional(v.boolean()),
+    allowStitch: v.optional(v.boolean()),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("approved"),
+      v.literal("submitting"),
+      v.literal("sent"),
+      v.literal("processing"),
+      v.literal("unknown"),
+      v.literal("failed"),
+      v.literal("discarded"),
+    ),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    approvedAt: v.optional(v.number()),
+    providerPostId: v.optional(v.string()),
+    failure: v.optional(v.string()),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_provider", ["provider"])
+    .index("by_connection", ["tenantId", "provider", "connectionId"]),
+  socialConnections: defineTable({
+    providerMetadataCheckedAt: v.optional(v.number()),
+    providerConsentCheckedAt: v.optional(v.number()),
+    assets: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          name: v.string(),
+          kind: v.union(
+            v.literal("facebook_page"),
+            v.literal("instagram"),
+            v.literal("youtube"),
+            v.literal("tiktok"),
+          ),
+        }),
+      ),
+    ),
+    selectedAssetIds: v.optional(v.array(v.string())),
+    assetsCheckedAt: v.optional(v.number()),
+    selectionRevision: v.optional(v.number()),
+    tenantId: v.string(),
+    provider: v.union(v.literal("x"), v.literal("meta"), v.literal("tiktok"), v.literal("youtube")),
+    connectionId: v.string(),
+    accountIdHash: v.string(),
+    accountName: v.string(),
+    scopes: v.array(v.string()),
+    ciphertextB64: v.optional(v.string()),
+    ivB64: v.optional(v.string()),
+    keyVersion: v.union(v.literal("v1"), v.literal("v2")),
+    expiresAt: v.number(),
+    revision: v.number(),
+    updatedAt: v.number(),
+    status: v.union(v.literal("connected"), v.literal("reconnect_required")),
+    refreshLease: v.optional(v.string()),
+    refreshStartedAt: v.optional(v.number()),
+  })
+    .index("by_tenant", ["tenantId", "provider"])
+    .index("by_provider", ["provider"]),
+
   bufferOAuthStates: defineTable({
     tenantId: v.string(),
     stateHash: v.string(),

@@ -3,6 +3,7 @@ import { reconcileEvent } from "@pikar/billing/reconcile";
 import { invoiceTaxabilityReason } from "@pikar/billing/tax";
 import { GOOGLE_SCOPES, type MicrosoftCallbackError, notificationMessage } from "@pikar/core";
 import { FUNNEL_SOURCE_MAX_LENGTH, normalizeFunnelSource } from "@pikar/core/marketing";
+import { SOCIAL_PROVIDERS } from "@pikar/core/social";
 import type { ConnectorEnvironment, Provider } from "@pikar/revenue";
 import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
@@ -13,6 +14,9 @@ import { type ConnectResult, callbackRedirectPath, DEFAULT_REDIRECT_PATH } from 
 import { isTrustedFunnelStorageUrl } from "./funnels";
 import { verifyState } from "./gmailAuth";
 import { MICROSOFT_TOKEN_ENDPOINT, verifyMicrosoftState } from "./microsoftAuth";
+import { receive as socialMedia } from "./socialMedia";
+import { receive as socialVerification } from "./socialVerification";
+import { receive as socialWebhook } from "./socialWebhooks";
 
 import { uploadHttp } from "./uploads";
 import { connectHttp as zernioConnectHttp } from "./zernioActions";
@@ -22,6 +26,49 @@ http.route({ path: "/uploads", method: "POST", handler: uploadHttp });
 http.route({ path: "/uploads", method: "OPTIONS", handler: uploadHttp });
 http.route({ path: "/zernio/connect", method: "POST", handler: zernioConnectHttp });
 http.route({ path: "/zernio/connect", method: "OPTIONS", handler: zernioConnectHttp });
+
+http.route({ path: "/social/media/video", method: "GET", handler: socialMedia });
+http.route({ pathPrefix: "/social/media/", method: "GET", handler: socialVerification });
+for (const provider of SOCIAL_PROVIDERS) {
+  http.route({ path: "/social/" + provider + "/webhook", method: "GET", handler: socialWebhook });
+  http.route({ path: "/social/" + provider + "/webhook", method: "POST", handler: socialWebhook });
+  http.route({
+    path: "/social/" + provider + "/callback",
+    method: "GET",
+    handler: httpAction(async (ctx, req) => {
+      const headers = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
+      if (req.method !== "GET") return new Response(null, { status: 405, headers });
+      let destination: URL;
+      try {
+        const site = new URL(process.env.SITE_URL ?? "");
+        if (site.protocol !== "https:" || site.username || site.password) throw new Error();
+        destination = new URL("/connect-social", site);
+      } catch {
+        return new Response(null, { status: 503, headers });
+      }
+      destination.searchParams.set("provider", provider);
+      try {
+        const url = new URL(req.url);
+        if (["state", "code", "error"].some((key) => url.searchParams.getAll(key).length > 1))
+          throw new Error();
+        const result = await ctx.runAction(internal.socialActions.callback, {
+          provider,
+          state: url.searchParams.get("state") ?? "",
+          code: url.searchParams.get("code") ?? undefined,
+          denied: url.searchParams.has("error"),
+        });
+        if (result.receipt) destination.searchParams.set("complete", result.receipt);
+        else destination.searchParams.set("result", "cancelled");
+      } catch {
+        destination.searchParams.set("result", "failed");
+      }
+      return new Response(null, {
+        status: 303,
+        headers: { ...headers, Location: destination.toString() },
+      });
+    }),
+  });
+}
 
 // Wire Convex Auth sign-in/callback httpAction routes.
 auth.addHttpRoutes(http);

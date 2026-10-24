@@ -111247,6 +111247,46 @@
       "norm_label": "zernioReports (table)"
     },
     {
+      "label": "socialWebhookReceipts (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L196",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_socialwebhookreceipts_table",
+      "community": 460,
+      "norm_label": "socialWebhookReceipts (table)"
+    },
+    {
+      "label": "socialOAuthStates (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L201",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_socialoauthstates_table",
+      "community": 460,
+      "norm_label": "socialOAuthStates (table)"
+    },
+    {
+      "label": "socialPosts (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L219",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_socialposts_table",
+      "community": 460,
+      "norm_label": "socialPosts (table)"
+    },
+    {
+      "label": "socialConnections (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L223",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_socialconnections_table",
+      "community": 460,
+      "norm_label": "socialConnections (table)"
+    },
+    {
       "label": "vaultPresentations (table)",
       "file_type": "code",
       "source_file": "packages/backend/convex/schema.ts",
@@ -306066,6 +306106,46 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_proactivereview",
       "target": "packages_backend_convex_tenantprofile_fortenant"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L196",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_socialwebhookreceipts_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L201",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_socialoauthstates_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L219",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_socialposts_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L223",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_socialconnections_table"
     },
     {
       "relation": "contains",

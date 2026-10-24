@@ -163,6 +163,7 @@ import {
 import { presentationToPptx } from "./lib/presentationPptx";
 import { internalAction } from "./lib/tenantLifecycle";
 import { buildWebResearchTool, sourcesFromToolOutput } from "./lib/webResearchTools";
+import { buildSocialTools } from "./socialTools";
 
 export { markdownToPdf } from "./lib/markdownPdf";
 export {
@@ -2803,7 +2804,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
       ? buildInvoiceReminderTool(ctx, tenantId, planId, evalRevenueFixtureId)
       : ({} as ReturnType<typeof buildInvoiceReminderTool>)),
     ...(grants.dispatch && toolCtx.threadId && toolCtx.rootRequestId && !toolCtx.evalContext
-      ? buildBufferTools(ctx, tenantId)
+      ? { ...buildBufferTools(ctx, tenantId), ...buildSocialTools(ctx, tenantId) }
       : ({} as ReturnType<typeof buildBufferTools>)),
     setSubject: tool({
       description: "Set the email subject line.",

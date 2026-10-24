@@ -55,7 +55,9 @@ describe("tenant table classification registry", () => {
     // + Buffer connections, transient OAuth, campaign posts and reports = 71.
     // + Zernio connection credentials and cached reports = 73.
     // + presentation preview sidecars and media campaign manifests = 75.
-    expect(schemaTables).toHaveLength(75);
+    // + native social credentials, OAuth states, posts and global webhook health = 79.
+    // Re-derived from the merged schema (79 unique tables), preserving both feature lanes.
+    expect(schemaTables).toHaveLength(79);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -76,6 +78,8 @@ describe("tenant table classification registry", () => {
       "connectorOAuthStates",
       "gmailTokens",
       "microsoftCalendarTokens",
+      "socialConnections",
+      "socialOAuthStates",
       "zernioConnections",
     ]);
   });
@@ -190,6 +194,7 @@ describe("tenant table classification registry", () => {
       "pendingTimeouts",
       "providerGates",
       "skills",
+      "socialWebhookReceipts",
     ]);
 
     // POSITIVE CONTROL: the filter really reads the map, so the three assertions above cannot be
