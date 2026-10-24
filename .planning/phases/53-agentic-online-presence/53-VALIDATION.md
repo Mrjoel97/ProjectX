@@ -148,3 +148,37 @@ these pins do not carry the historical v2 verdict forward. No new paid window or
 qualification is created by this checkpoint.53-02/53-06 stay partial and53-03 commerce
 remains open; artifact/revision/review/publication/inquiry/offline/rollback and tenant
 acceptance are not complete.
+
+## Native lifecycle and final closed-window evidence — 2026-10-24
+
+Current dedicated-stage runtime is`bea65ebf0f3e3efb016e77ee56bf9eefba5b12b6`. Its optional
+brief revision repair passed37 core,18 native backend and3 runner checks, with strict
+core/contracts/backend checks. Recipe26-source identity remains
+`020145277a86e1023eadb14b02d95f730a45bad959912e5547d8f087e38d69ff`; the Sites/form source's
+v3 service qualification remains matching:20 deterministic cases per recipe,24 actual
+desktop/mobile protocol outcomes, independent audit and issuer readback. Only business-site
+and campaign-landing v3 were activated by the trusted operator; catalogue v2 remains
+candidate. Golden is now
+`2026-09-11.budgeted-evaluator.52c1e932e8caba12eb66374c4bed243e54af06406c1f596eeca966a40ac458e7`
+and vertical is`d76ac942bfcc40f60f374f9a253be0b20080506b483f5e7e1306e7abd65e3c7c`.
+These observations supersede the earlier pending checkpoint without altering old receipts.
+
+Codex exercised the authenticated owner UI for the authorized synthetic staging fixture.
+Actual native/public observations establish v3's four pages, image and mobile layout;
+browser blocking of an unchecked-consent inquiry; and one accepted/stored consented
+inquiry. Headline-only v4 preserved all four pages, asset, services and consent, with
+test-operator approval/publication. Codex's historical v3 approval/restore returned the
+old public headline; taking the site offline then produced public not found. The user
+signed in; these actions are not human production approval. Final13:04:21.843Z
+owned readback confirms draft4/approved3/publishedVersion null. Public observations and
+readback are complementary evidence, not an assertion that database inspection fetched
+public bytes. See the [final lifecycle receipt](../../../docs/releases/2026-10-24-presence-revision-followup.json).
+
+Final provider access is off for both paths, with zero unknown holds/held cents and no
+breach. Window ledger upper increment:$0.00436575; cumulative stage upper spend:
+$0.05901071. Historical failed shop verdicts remain unchanged; no further shop paid run
+or passing shop qualification exists. No email delivery, hostile HTTP consent test,
+ordinary-account tenant denial, full Foundation acceptance, erasure, custom-domain or
+merchant-checkout acceptance is inferred. Model-written placeholder review links remain
+a presentation limitation.53-02/53-06 remain partial,53-03 commerce and OPRES requirements
+remain open, and progress counters/production/Phase48 scopes are unchanged.

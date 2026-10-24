@@ -1,0 +1,268 @@
+{
+  "recordedAt": "2026-10-24T13:09:12.715Z",
+  "scope": "Observed dedicated-staging four-page website revision, exact-version review/publication, inquiry, restoration and offline lifecycle for one fictional owner-owned fixture",
+  "deployment": "third-gecko-977",
+  "frontendOrigin": "https://pikar-presence-stg.vercel.app",
+  "backendHttpOrigin": "https://third-gecko-977.convex.site",
+  "actualDriver": "CUA documented Playwright API",
+  "nativeOperator": "Codex exercising the authorized fictional staging workflow through the authenticated owner UI; no separate human approval click is claimed",
+  "releaseSources": {
+    "backend": {
+      "sourceCommit": "bea65ebf0f3e3efb016e77ee56bf9eefba5b12b6",
+      "applied": true,
+      "readyAt": "2026-10-24T12:39:10Z",
+      "readyDuration": "1.11m"
+    },
+    "frontend": {
+      "sourceCommit": "8b9064cd9bef38ecaf80eec24bd542582b79e39e",
+      "deploymentId": "dpl_4tBtnJ9SZXn99PT3XSgJCw4eX73u",
+      "readyAndPromoted": true,
+      "reusedUnchangedFrontend": true,
+      "newFrontendBuildClaimed": false
+    },
+    "verificationBasis": "Reviewed operator deployment receipt and exact-source local checks; not automatic remote Git-source detection",
+    "recipeImplementationHash": "020145277a86e1023eadb14b02d95f730a45bad959912e5547d8f087e38d69ff",
+    "nativeRecipeProofSource": "8b9064cd9bef38ecaf80eec24bd542582b79e39e",
+    "qualifiedServiceRecipeVersions": {
+      "web-recipe-business-site": 3,
+      "web-recipe-campaign-landing": 3
+    },
+    "recipeQualificationReference": "2026-10-24-sites-staging.json"
+  },
+  "repair": {
+    "optionalFieldPreservation": "Nine omitted optional brief fields retain saved values; explicit lists and nested media/design replace their whole field",
+    "explicitRemoval": "Closed clearFields rejects unknown/duplicate/set-clear conflicts; CTA label and destination clear together",
+    "inheritedImageAuthority": "Retained source refs derive only from owned hash-matching prepared assets, followed by current source, consent and revision checks",
+    "completionTruthfulness": "Saved unbuilt changes are distinguished from an older built receipt without an automatic build or another model loop",
+    "unchangedBoundaries": [
+      "Required business facts and sourceRefs",
+      "HTTPS CTA validation",
+      "Tenant ownership and expectedRevision checks",
+      "Exact immutable-version approval/publication",
+      "Commerce-unavailable gate"
+    ],
+    "localVerification": {
+      "focusedTests": {
+        "core": 37,
+        "nativeBackend": 18,
+        "runner": 3,
+        "total": 58
+      },
+      "strictTypechecks": {
+        "core": "PASS",
+        "contracts": "PASS",
+        "backend": "PASS"
+      },
+      "independentSourceReview": "PASS",
+      "noPaidProviderCallsInLocalChecks": true
+    }
+  },
+  "nativeLifecycle": {
+    "privateReview": {
+      "versions": [
+        3,
+        4
+      ],
+      "pages": [
+        "home",
+        "about",
+        "services",
+        "contact"
+      ],
+      "observationsPerVersion": 8,
+      "modes": [
+        "desktop",
+        "phone"
+      ],
+      "ownedHeroObserved": true
+    },
+    "version3": {
+      "contentHash": "46d48cc59c28dd7bdcb98047a217da1edb8d66d3e2236ed909702a397e6e5fb0",
+      "pageCount": 4,
+      "ownedAssetCount": 1,
+      "authenticatedOwnerUiExactVersionApprovalObserved": true,
+      "publicationObserved": true,
+      "publicRoutesObserved": [
+        "home",
+        "about",
+        "services",
+        "contact"
+      ]
+    },
+    "consentedInquiry": {
+      "uncheckedNativeRequiredAndValueMissingObserved": true,
+      "checkedSubmissionAcceptedObserved": true,
+      "storedAcceptedSubmissions": 1,
+      "version": 3,
+      "form": "contact",
+      "emailNotificationDeliveryEstablished": false,
+      "validityObservationBasis": "Root actual native browser inspection; hashed public witness and final stored outcome are retained separately"
+    },
+    "publicPhoneHomepage": {
+      "viewportWidth": 390,
+      "documentWidth": 375,
+      "horizontalOverflowObserved": false,
+      "ownedImageLoaded": true
+    },
+    "version4": {
+      "contentHash": "4f2c377699e351281071f311805be802e9cde82f2c84e15b1832646318c4e556",
+      "pageCount": 4,
+      "ownedAssetCount": 1,
+      "changedDocumentPaths": [
+        "document.pages.0.nodes.0.heading",
+        "document.pages.0.title"
+      ],
+      "headlineAndDerivedHomeTitleOnly": true,
+      "assetSnapshotsExactlyPreserved": true,
+      "sourceRefsExactlyPreserved": true,
+      "sourceWarningsExactlyPreserved": true,
+      "aboutServicesContactExactlyPreserved": true,
+      "contactFormAndConsentExactlyPreserved": true,
+      "independentBackendReviewConfirmed": true,
+      "independentBackendReviewAlsoConfirmedUnchangedAboutServicesContactHtmlBytes": true,
+      "previousVersionRemainedPublicBeforeApproval": true,
+      "authenticatedOwnerUiExactVersionApprovalObserved": true,
+      "publicationObserved": true
+    },
+    "restoration": {
+      "historicalVersionReviewedAndApproved": 3,
+      "restoredFromVersion": 4,
+      "restoredToVersion": 3,
+      "originalPublicHeadlineObserved": true
+    },
+    "offline": {
+      "requestedThroughNativeUi": true,
+      "publicNotFoundObserved": true,
+      "httpStatusAsserted": false,
+      "finalPublishedVersion": null,
+      "finalDraftVersion": 4,
+      "finalApprovedVersion": 3,
+      "ownedReadbackObservedAt": "2026-10-24T13:04:21.843Z"
+    },
+    "immutablePublicationAudits": [
+      {
+        "eventType": "web.project.publish",
+        "at": "2026-10-24T12:54:05.420Z",
+        "version": 3,
+        "resultingVersion": 3,
+        "status": "published"
+      },
+      {
+        "eventType": "web.project.update",
+        "at": "2026-10-24T13:01:33.391Z",
+        "version": 4,
+        "previousVersion": 3,
+        "resultingVersion": 4,
+        "status": "published"
+      },
+      {
+        "eventType": "web.project.rollback",
+        "at": "2026-10-24T13:03:34.370Z",
+        "version": 3,
+        "previousVersion": 4,
+        "resultingVersion": 3,
+        "status": "published"
+      },
+      {
+        "eventType": "web.project.unpublish",
+        "at": "2026-10-24T13:03:45.977Z",
+        "previousVersion": 3,
+        "status": "unpublished"
+      }
+    ],
+    "independentAuditVersionHashesMatched": true
+  },
+  "spendingAndClosure": {
+    "authorizedAggregateMaximumUsd": 5,
+    "openedAt": "2026-10-24T12:49:34.884Z",
+    "closedAt": "2026-10-24T13:00:15.029Z",
+    "closureReason": "root-stop",
+    "closureFailure": null,
+    "restorationErrors": [],
+    "bothProviderPathsConfirmedOff": true,
+    "killSwitchAfter": true,
+    "mediaKillSwitchAfter": true,
+    "ledgerReadbackObservedAt": "2026-10-24T13:04:21.843Z",
+    "ledgerRows": 320,
+    "cumulativeDedicatedStageLedgerUsdUpperBound": 0.05901071000000002,
+    "currentNativeWindowAdditionalUsdUpperBound": 0.004365750000000002,
+    "unknownHolds": 0,
+    "heldCents": 0,
+    "legacyRoundedRows": 0,
+    "breached": false,
+    "cumulativeScope": "Dedicated-stage bounded ledger dated on or after 2026-10-23, including prior failed evaluation attempts; not a provider account balance or an exact-thread-only attribution",
+    "finalReadbackMatchesClosedWindow": true,
+    "priorReceiptUnchanged": true,
+    "noAutomaticRetryOrReplacement": true,
+    "evidenceWrittenByWindow": false
+  },
+  "historicalEvidencePreserved": {
+    "references": [
+      "2026-10-24-native-lifecycle.json",
+      "2026-10-24-sites-staging.json",
+      "2026-10-23-shop-preparation-diagnosis.json"
+    ],
+    "firstUnsupportedMailtoAttemptRemainsFailed": true,
+    "priorRevisionImageAndAboutLossRemainRecorded": true,
+    "bothPaidShopPreparationRunsRemainFailed": true,
+    "historicalReceiptsRewritten": false,
+    "priorRecipeProofRemainsBoundToItsOriginalSource": true
+  },
+  "remainingLimits": [
+    "The native chat prose still invented a placeholder review URL even though the code-owned Sites review widget pointed to the actual version; perfect agent handoff copy is not established.",
+    "The first generated private draft included an unsupported extra service; explicit owner review removed it. Source references and this lifecycle do not certify all generated business claims.",
+    "This observes one fictional owner-owned staging fixture; native cross-tenant browser acceptance and the newer complete six-document Foundation authoring/publication workflow are not established.",
+    "The accepted inquiry proves native required-consent handling and a stored accepted submission, not email notification delivery.",
+    "Private review covered four pages in desktop/phone modes; public phone layout/image observations cover the homepage, not every public route or browser.",
+    "Merchant checkout, payments, live inventory/order operations, shipping, refunds and digital fulfillment remain unavailable and are not qualified or activated here.",
+    "The prior shop-preparation paid failures are preserved; this website lifecycle does not qualify that candidate or establish universal autonomous quality.",
+    "This sanitized record copies no raw email, user/tenant/thread/plan/project/document/storage/asset IDs, consent wording, customer copy, DOM snapshots or model outputs. Evidence paths and hashes identify locally retained private witnesses.",
+    "Creating this record performs no provider call, state mutation, deployment, activation or paid retry; this is not a production release."
+  ],
+  "privateEvidence": [
+    {
+      "path": ".tmp/presence-native-window-20261024-revisions.private.receipt.json",
+      "sha256": "2ff2c32be4e1ddee068af08628da7b6cbf933e2203fce9bab9c344eab2177007"
+    },
+    {
+      "path": ".tmp/presence-native-20261024-revisions/deployment-reviewed.private.json",
+      "sha256": "650d2e7218066db6faea3c7e555e1512d62833673fbe560dfe670e119a6a95e1"
+    },
+    {
+      "path": ".tmp/presence-native-20261024-revisions/source-runtime-review.private.json",
+      "sha256": "78bb872213eb247de9eeba11828b4deaa29bd1caa494761c9b7b72b6081884c1"
+    },
+    {
+      "path": ".tmp/presence-native-20261024-revisions/lifecycle-witness.private.json",
+      "sha256": "71817147e6e6f97a832544fc96fb668481a7c658c93b6225f1e590f45960e7f2"
+    },
+    {
+      "path": ".tmp/presence-native-20261024-revisions/v3-page-review.private.json",
+      "sha256": "e20c8b7f20d18e76bf3ef8269415ac1fa63870c572c10d6850bf516175a06d61"
+    },
+    {
+      "path": ".tmp/presence-native-20261024-revisions/v4-page-review.private.json",
+      "sha256": "3ec574a59dec4872f06b64b62a6626e6675645538d0b30a1a4149cf2c6526134"
+    },
+    {
+      "path": ".tmp/presence-native-20261024-revisions/public-lifecycle.private.json",
+      "sha256": "f15fe5c33d5d556c271d52e85ff9905210c428e627497b4775b376cf3336c1b2"
+    },
+    {
+      "path": ".tmp/presence-native-20261024-revisions/final-owned-lifecycle-readback.private.json",
+      "sha256": "12a150d0c7a7e06fa74e6e9f403b0005a4db6f8e4fff14199499823b55568ec9"
+    },
+    {
+      "path": ".tmp/presence-native-20261024-revisions/v3-public-home-desktop.jpg",
+      "sha256": "a274c9eb8c182a4955b82af9a81c6c2131c9622a9b0db4d4decfd9e03ae119a8"
+    },
+    {
+      "path": ".tmp/presence-native-20261024-revisions/v3-public-home-phone.jpg",
+      "sha256": "a4d763ffccf246c58c295057268884d4c891cc19fabaf205e4c1ee1b4f95e556"
+    },
+    {
+      "path": ".tmp/presence-native-20261024-revisions/public-site-offline.jpg",
+      "sha256": "095cb5b1aefa129b8a2f34ccd0f1960328ccf329a1a6d1054c6089078c3a76d5"
+    }
+  ]
+}

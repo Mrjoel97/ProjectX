@@ -2,8 +2,48 @@
 
 Created at the owner's explicit request on 2026-10-22 EAT. This is a new environment
 for `codex/online-presence-discovery-20261021`, separate from production and the Phase48
-staging workstream. Infrastructure is deployed; authenticated model/workflow qualification
-is still open. Current evidence: [53-02 summary](../.planning/phases/53-agentic-online-presence/53-02-SUMMARY.md).
+staging workstream. Infrastructure is deployed and a bounded native website lifecycle
+has been observed; broader acceptance remains open. Current evidence:
+[53-02 summary](../.planning/phases/53-agentic-online-presence/53-02-SUMMARY.md).
+
+## Latest native lifecycle and closed window — 2026-10-24
+
+Runtime `bea65ebf0f3e3efb016e77ee56bf9eefba5b12b6` is deployed to this dedicated stage.
+The Sites navigation/form guidance release first earned 24 actual desktop/mobile
+protocol outcomes for business-site/campaign-landing v3, with20 free deterministic
+cases each, independent audit and issuer readback. Only these two service recipes were
+activated by the trusted internal operator. Catalogue v2 remains candidate with ordering
+unavailable; historical qualification and failed paid receipts are preserved.
+
+The later nine-field revision merge repair preserves omitted optional content while
+retaining source/asset/consent validation and explicit clearing. Its58 focused checks
+and core/contracts/backend strict checks passed. The26-source recipe hash remains
+`020145277a86e1023eadb14b02d95f730a45bad959912e5547d8f087e38d69ff`, so the v3 native
+recipe evidence remains applicable. Broader current pins are golden
+`2026-09-11.budgeted-evaluator.52c1e932e8caba12eb66374c4bed243e54af06406c1f596eeca966a40ac458e7`
+and vertical`d76ac942bfcc40f60f374f9a253be0b20080506b483f5e7e1306e7abd65e3c7c`.
+
+Codex exercised the authenticated owner UI to approve/publish the synthetic v3 website,
+then verified Home/About/Services/Contact, the owned image and mobile layout. The unchecked-consent inquiry was blocked in the browser; one
+consented inquiry was accepted and stored. A headline-only v4 retained all four pages,
+asset, services and consent, and was approved/published by the test operator. Codex used
+the same UI to approve/restore historical v3, verify its old public headline and take the
+site offline; the public route showed not found. The user signed in; these authorized
+staging actions are not human production approval. Final13:04:21.843Z readback confirms
+draftVersion4, approvedVersion3 and publishedVersion null.
+
+The final window is closed with both model/media kill switches true, zero unknown holds
+or held cents and no breach. Window ledger increment upper bound:$0.00436575; cumulative
+dedicated-stage actual-charge upper bound:$0.05901071. This is not stronger exact-thread
+spend attribution. See the [revision/lifecycle receipt](releases/2026-10-24-presence-revision-followup.json).
+The older dated sections below are historical checkpoints, not the current pending state.
+
+53-02/53-06 remain partial. These observations do not establish ordinary-account tenant
+denial, full Foundation acceptance, erasure, custom domains, email notification delivery
+or working merchant checkout. The unchecked-consent UI observation alone is not a hostile
+HTTP test. Model-written placeholder review links remain a presentation limitation.
+There is no further paid shop attempt planned and no passing shop evaluation or activation.
+Production, Phase48, historical receipts and programme counters remain unchanged.
 
 ## Resources
 

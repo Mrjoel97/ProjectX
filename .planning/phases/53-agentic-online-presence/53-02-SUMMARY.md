@@ -2,7 +2,7 @@
 phase: 53-agentic-online-presence
 plan: "02"
 status: partial
-updated: 2026-10-23
+updated: 2026-10-24
 requirements-completed: []
 ---
 
@@ -107,3 +107,35 @@ Native browser control recovered and signed-in onboarding was observed. The fres
 redirect is fixed and13 real Shell tests pass, but the user's owner login, actual recipe review protocol,
 authenticated A/B workflow/lifecycle acceptance and exact-source browser qualification
 remain pending. No full hosted acceptance or merchant checkout is claimed;53-02 stays partial.
+
+## Native service qualification and website lifecycle — 2026-10-24
+
+The Sites/form release `8b9064cd9bef38ecaf80eec24bd542582b79e39e` passed dedicated-stage
+backend apply and frontend cloud strict build/promotion. Business-site/campaign-landing
+v3 each passed20 free deterministic cases and together completed24 actual desktop/mobile
+protocol outcomes, with independent audit and issuer readback. The trusted internal
+operator activated only those two current service recipes. Catalogue v2 stays candidate;
+its historical body/evidence is unchanged. See the [Sites release receipt](../../../docs/releases/2026-10-24-sites-staging.json).
+
+The later deployed runtime `bea65ebf0f3e3efb016e77ee56bf9eefba5b12b6` repairs optional-field
+revision retention. Its26-source recipe identity remains
+`020145277a86e1023eadb14b02d95f730a45bad959912e5547d8f087e38d69ff`; v3 recipe evidence
+therefore remains applicable. No new recipe version or qualification was fabricated.
+
+Codex exercised the authenticated owner UI to approve/publish the synthetic four-page v3
+website and verify all public pages, image and mobile layout. Browser consent enforcement blocked an unchecked inquiry;
+one consented inquiry was accepted and stored. Headline-only v4 preserved all four pages,
+asset, services and consent, then received test-operator approval/publication. Codex used
+the same UI to approve/restore historical v3, verify its old public headline and take the
+site offline. The user signed in; these authorized staging actions are not human
+production approval. Final13:04:21.843Z readback confirms draft4/approved3/publishedVersion null;
+the public route showed not found. See the [final lifecycle receipt](../../../docs/releases/2026-10-24-presence-revision-followup.json).
+
+Both provider paths are off, unknown holds/held cents are zero and no breach occurred.
+The final window ledger upper increment is$0.00436575; cumulative dedicated-stage upper
+spend is$0.05901071. Historical failed shop verdicts remain unchanged. Stored inquiry
+acceptance does not establish email delivery; ordinary-account tenant denial, complete
+Foundation acceptance, erasure, custom domains and merchant checkout remain unestablished.
+Model-written placeholder review links remain a presentation limitation.53-02/53-06 stay
+partial and OPRES requirements remain open; earlier dated pending states are preserved
+as history, with production/Phase48 scopes and progress counters unchanged.

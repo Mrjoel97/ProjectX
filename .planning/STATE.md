@@ -17,6 +17,29 @@ progress:
 
 # Project State
 
+## Native website lifecycle continuation — 2026-10-24
+
+Dedicated staging runtime `bea65ebf0f3e3efb016e77ee56bf9eefba5b12b6` now has an
+observed owner website lifecycle. Service recipes business-site/campaign-landing v3
+earned current-source native qualification and were activated through the trusted
+operator; catalogue v2 remains a candidate with ordering unavailable. The native v3
+website served all four pages, its owned illustration and mobile layout. An unchecked
+consent form was blocked; a consented inquiry was accepted and stored. A headline-only
+v4 revision preserved all four pages, the asset, services and consent, then received
+test-operator approval/publication. Codex exercised the authenticated owner UI to restore
+historical v3, verify its old public headline and take the site offline. The user signed
+in; these authorized synthetic staging actions are not human production approval.
+Final readback at13:04:21.843Z confirms
+draft4/approved3/publishedVersion null and the public route showed not found.
+
+Both provider paths are off, with zero unknown holds/held cents and no breach. The final
+window added an upper bound of$0.00436575; cumulative dedicated-stage ledger upper spend
+is$0.05901071. Historical failed shop verdicts and earlier receipts remain unchanged.
+53-02/53-06 remain partial: ordinary-account tenant denial, complete Foundation acceptance,
+erasure and merchant checkout are not established. Stored inquiry acceptance does not
+prove email delivery. Phase48, production scope, requirements and progress counters are
+unchanged. See the [current staging continuation](../docs/online-presence-staging.md).
+
 ## Online-presence quality continuation — 2026-10-23
 
 53-06 delivers improved page composition, sixteen reviewed developer skills, private shop

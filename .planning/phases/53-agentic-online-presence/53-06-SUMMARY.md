@@ -2,15 +2,16 @@
 phase: 53-agentic-online-presence
 plan: "06"
 status: partial
-updated: 2026-10-23
+updated: 2026-10-24
 requirements-completed: []
 ---
 
 # 53-06 — Improved page composition and bounded private shop preparation
 
 Three parallel agents improved the isolated source using Taste and UI UX guidance.
-The implementation is delivered to dedicated staging; both paid attempts remain
-unqualified and native qualification is pending, so this plan stays partial.
+The implementation is delivered to dedicated staging. The bounded native website
+lifecycle is now observed; both shop paid attempts remain unqualified and broader
+acceptance is open, so this plan stays partial. Dated checkpoints below preserve history.
 
 ## Result and limits
 
@@ -247,3 +248,43 @@ source. Complete reviewed deployment and fresh exact-source qualification before
 explicitly admitted native test window. No new window, complete website lifecycle,
 publication or merchant commerce is claimed.53-06/53-02/53-03 and OPRES acceptance remain
 partial/open; the separate readiness programme and progress counters are unchanged.
+
+## Observed revision, publication, restore and offline continuation — 2026-10-24
+
+The Sites/form release earned current v3 service qualification:20 deterministic cases
+per recipe and24 actual desktop/mobile protocol outcomes across business-site and
+campaign-landing. Independent audit/issuer readback preceded trusted operator activation
+of only those two recipes. Catalogue v2 remains candidate, with ordering unavailable.
+This supersedes the pending current-source qualification checkpoint above without
+rewriting its historical v2 evidence.
+
+Deployed revision repair `bea65ebf0f3e3efb016e77ee56bf9eefba5b12b6` preserves nine omitted
+optional fields, supports explicit closed clearing and distinguishes a saved unbuilt
+brief from a current artifact. Full source/asset/consent guards remain. Core37, backend18
+and runner3 focused checks passed, plus core/contracts/backend strict checks. Recipe
+identity remains`020145277a86e1023eadb14b02d95f730a45bad959912e5547d8f087e38d69ff`.
+The refreshed golden revision is
+`2026-09-11.budgeted-evaluator.52c1e932e8caba12eb66374c4bed243e54af06406c1f596eeca966a40ac458e7`;
+vertical identity is`d76ac942bfcc40f60f374f9a253be0b20080506b483f5e7e1306e7abd65e3c7c`.
+Existing v3 native recipe evidence remains applicable; broader pin refresh is not new
+model-quality evidence.
+
+Codex exercised the authenticated owner UI to approve/publish the synthetic v3 website,
+then verified Home/About/Services/Contact, image and mobile layout.
+Unchecked-consent inquiry submission was blocked in the browser; one consented inquiry
+was accepted and stored. A headline-only v4 retained all four pages, asset, services and
+consent, then was approved/published by the test operator. Codex used the same UI to
+approve/restore historical v3, verify its old public headline and take the site offline;
+its public route showed not found. The user signed in; these authorized staging actions
+are not human production approval. Final readback at13:04:21.843Z confirms draft4/approved3/publishedVersion
+null. See the [final lifecycle receipt](../../../docs/releases/2026-10-24-presence-revision-followup.json).
+
+Both provider paths are off, with zero unknown holds/held cents and no breach. The final
+window adds a ledger upper bound of$0.00436575; cumulative dedicated-stage upper spend
+is$0.05901071. Both original failed shop attempts remain failures; no further shop paid
+attempt or passing shop evidence/activation is claimed. Inquiry storage does not prove
+email delivery; the browser consent check alone is not hostile HTTP acceptance. Ordinary
+account tenant denial, complete Foundation acceptance, erasure, custom domains and
+merchant checkout remain open. Model-written placeholder review links remain a
+presentation limitation.53-06/53-02 stay partial; OPRES requirements, progress counters,
+production and the separate readiness programme are unchanged.
