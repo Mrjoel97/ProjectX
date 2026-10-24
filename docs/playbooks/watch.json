@@ -584,6 +584,7 @@
     "packages/backend/convex/revenueFinance"
   ],
   "social-connections.md": [
+    "apps/web/app/social/",
     "packages/core/src/social",
     "packages/backend/convex/social",
     "apps/web/app/(app)/connect-social/",

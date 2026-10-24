@@ -20,6 +20,9 @@ const isPublic = createRouteMatcher([
   "/api/media/render",
   // OAuth nonce/receipt validation owns this one server relay; no session cookie is forwarded.
   "/social/youtube/callback",
+  "/social/tiktok/callback",
+  // The video ticket is validated by the fixed backend; no app cookie is forwarded.
+  "/social/media/video",
 ]);
 
 export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
