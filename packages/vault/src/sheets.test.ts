@@ -183,7 +183,7 @@ describe("sheetsToXlsx", () => {
     expect(() => sheetsToXlsx([])).toThrow(/xlsx_write_failed: no sheets/);
     const once = sheetsToXlsx([{ name: "Sales", rows: SALES }]);
     const twice = sheetsToXlsx([{ name: "Sales", rows: SALES }]);
-    expect(Buffer.from(once).equals(Buffer.from(twice))).toBe(true); // epoch-pinned Props
+    expect(Buffer.from(once).equals(new Uint8Array(twice))).toBe(true); // epoch-pinned Props
     expect(once.byteLength).toBeGreaterThan(0);
   });
 });

@@ -35,7 +35,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 77 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 79 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -64,7 +64,8 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │   zernioConnections, zernioReports                                        │
 // │                                                                            │
 // │ ── Vault (Document Store) ──────────────────────────────── ~L956           │
-// │   vaultSources, vaultDocuments, vaultFolders, vaultSheets, uploadReceipts                  │
+// │   vaultSources, vaultDocuments, vaultFolders, vaultSheets,                 │
+// │   vaultPresentations, uploadReceipts                                      │
 // │                                                                            │
 // │ ── Knowledge Graph ─────────────────────────────────────── ~L1772          │
 // │   graphNodes, graphEdges                                                   │
@@ -81,7 +82,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │   spendEvents, spendCoverage, financeInputs                                │
 // │                                                                            │
 // │ ── Media ───────────────────────────────────────────────── ~L2030          │
-// │   mediaJobs                                                                │
+// │   mediaJobs, mediaCampaigns                                                │
 // │                                                                            │
 // │ ── CRM ─────────────────────────────────────────────────── ~L2104          │
 // │   contacts, followUps, suppressions                                        │
@@ -1454,6 +1455,14 @@ export default defineSchema({
      *  before standalone images existed. `imagePrompt` is content-plane text: shown to the human,
      *  submitted only after their Generate click, and never copied to audit/telemetry rows. */
     mediaMode: v.optional(v.union(v.literal("reel"), v.literal("image"))),
+    /** Absent historical reels retain separately generated narration and music. */
+    mediaAudioMode: v.optional(v.union(v.literal("native"), v.literal("separate"))),
+    /** Same-render WAV extracted by the native assembly worker for the reserved captions pass. */
+    nativeCaptionAudioStorageId: v.optional(v.id("_storage")),
+    nativeCaptionAudioHash: v.optional(v.string()),
+    nativeCaptionBatchId: v.optional(v.string()),
+    nativeCaptionRenderStorageId: v.optional(v.id("_storage")),
+    mediaCampaignId: v.optional(v.id("mediaCampaigns")),
     imagePrompt: v.optional(v.string()),
     /** koda's fixed 9-field art-direction block, parsed, plus the optional music bed. */
     artDirection: v.optional(
@@ -1729,7 +1738,16 @@ export default defineSchema({
     // decides whether a fan-out is finished (no sibling left at `collecting` ⇒ the parent becomes
     // approvable). Leads with `tenantId`, so `isolation.test.ts`'s non-tenant-leading index
     // registry needs no new exception.
-    .index("by_parent", ["tenantId", "parentPlanId"]),
+    .index("by_parent", ["tenantId", "parentPlanId"])
+    // Campaign private plans share the real thread for exact review but never its ordinary roots.
+    // Exclude them in the index BEFORE bounded scans/counts/pagination.
+    .index("by_thread_campaign", ["tenantId", "threadId", "mediaCampaignId"])
+    .index("by_tenant_status_campaign_createdAt", [
+      "tenantId",
+      "status",
+      "mediaCampaignId",
+      "createdAt",
+    ]),
 
   // ── Phase-3.7 inbox-briefing plane (CKPT-04) ───────────────────────────────
   // New tables only → no migration (prior-phase discipline).
@@ -1831,7 +1849,9 @@ export default defineSchema({
     // beside `titles`, not a second table.
     // Phase 40 (DOC-01) added `sheet` — a real .xlsx workbook. Widening this union is what lets
     // the Output card's badge say SPREADSHEET instead of mislabelling a workbook DOCUMENT.
-    form: v.optional(v.union(v.literal("short"), v.literal("long"), v.literal("sheet"))),
+    form: v.optional(
+      v.union(v.literal("short"), v.literal("long"), v.literal("sheet"), v.literal("presentation")),
+    ),
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"])
@@ -2152,6 +2172,7 @@ export default defineSchema({
       // `agentSteps:record` throw an ArgumentValidationError inside an AI-SDK callback the
       // SDK SILENTLY swallows, so prod loses the step while the whole suite stays green.
       v.literal("createVariants"),
+      v.literal("createMediaCampaign"),
       // Phase-19 (ACTN-05): the CRM staging tool. Same swallow trap as every literal above — a
       // missing literal makes `agentSteps:record` throw an ArgumentValidationError inside an
       // AI-SDK callback, which the SDK SILENTLY swallows, so prod loses the step while the whole
@@ -2651,6 +2672,7 @@ export default defineSchema({
   })
     .index("by_tenant", ["tenantId"]) // browse
     .index("by_tenant_contentHash", ["tenantId", "contentHash"]) // dedup
+    .index("by_tenant_sourceThread", ["tenantId", "sourceThreadId"])
     // Phase-17.1 (BLPR-01) Stage-1 drift: the tenant's `ready` docs and NOTHING else. Without it
     // the read is a `by_tenant` scan over every status — on the table whose own comment above warns
     // a `.collect()` walks into the 16 MiB / 32k-doc read cap.
@@ -2701,6 +2723,61 @@ export default defineSchema({
   // The text projection stays the artifact of record: this table is a VIEW for the preview, so a
   // missing row means "no grid", never "no document". Replaced wholesale per doc (Retry re-runs the
   // rail), deleted with its document.
+  vaultPresentations: defineTable({
+    tenantId: v.string(),
+    docId: v.id("vaultDocuments"),
+    spec: v.string(),
+  })
+    .index("by_doc", ["tenantId", "docId"])
+    .index("by_tenant", ["tenantId"]),
+
+  mediaCampaigns: defineTable({
+    tenantId: v.string(),
+    creationKey: v.optional(v.string()),
+    threadId: v.string(),
+    title: v.string(),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("running"),
+      v.literal("complete"),
+      v.literal("partial"),
+      v.literal("failed"),
+      v.literal("cancelled"),
+      v.literal("needs_reconciliation"),
+    ),
+    maxCostCents: v.number(),
+    reservedCents: v.number(),
+    concurrency: v.number(),
+    items: v.array(
+      v.object({
+        planId: v.id("plans"),
+        kind: v.union(v.literal("image"), v.literal("video")),
+        label: v.string(),
+        estimateCents: v.number(),
+        status: v.union(
+          v.literal("proposal"),
+          v.literal("ready"),
+          v.literal("reserved"),
+          v.literal("running"),
+          v.literal("succeeded"),
+          v.literal("failed"),
+          v.literal("cancelled"),
+          v.literal("needs_reconciliation"),
+        ),
+        batchId: v.optional(v.string()),
+        startedAt: v.optional(v.number()),
+        failureReason: v.optional(v.string()),
+      }),
+    ),
+    cancelledAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant_thread", ["tenantId", "threadId"])
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_status", ["tenantId", "status"])
+    .index("by_tenant_creationKey", ["tenantId", "creationKey"]),
+
   vaultSheets: defineTable({
     tenantId: v.string(),
     docId: v.id("vaultDocuments"),
@@ -3182,7 +3259,12 @@ export default defineSchema({
     // Exactly what was SUBMITTED — never a provider default. fal's Wan 2.5 defaults to 1080p, so a
     // spec that omits its resolution is an estimate 3x below the invoice.
     spec: v.union(
-      v.object({ kind: v.literal("video"), resolution: v.string(), seconds: v.number() }),
+      v.object({
+        kind: v.literal("video"),
+        resolution: v.string(),
+        seconds: v.number(),
+        generateAudio: v.optional(v.boolean()),
+      }),
       v.object({ kind: v.literal("image"), width: v.number(), height: v.number() }),
       v.object({
         kind: v.literal("tts"),
@@ -3201,6 +3283,7 @@ export default defineSchema({
       }),
     ),
     promptHash: v.string(),
+    nativeAudioHash: v.optional(v.string()),
     status: v.union(
       v.literal("queued"),
       v.literal("submitted"),

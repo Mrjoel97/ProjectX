@@ -581,6 +581,8 @@ export const persistDeck = internalMutation({
     await ctx.db.patch(a.planId, {
       kind: "media",
       script: a.script,
+      // Revisions of historical decks preserve their separate-audio contract.
+      mediaAudioMode: plan.mediaAudioMode ?? (plan.shots === undefined ? "native" : undefined),
       ...(a.artDirection === null ? {} : { artDirection: a.artDirection }),
       clipSeconds: a.clipSeconds,
       // Passed through UNCONDITIONALLY, undefined included. This is a direct `db.patch`, not
@@ -1068,6 +1070,8 @@ export const resetPlan = internalMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
     const prior = await ctx.db.get(planId);
+    if (prior?.nativeCaptionAudioStorageId)
+      await ctx.storage.delete(prior.nativeCaptionAudioStorageId);
     await ctx.db.patch(planId, {
       status: "collecting",
       recipients: [],
@@ -1147,6 +1151,11 @@ export const resetPlan = internalMutation({
       // the staged event above, one rung worse for the render: a surviving `renderStorageId` would
       // show the PREVIOUS thread's reel under a brand-new proposal — a lie the user can watch.
       mediaMode: undefined,
+      mediaAudioMode: undefined,
+      nativeCaptionAudioStorageId: undefined,
+      nativeCaptionAudioHash: undefined,
+      nativeCaptionBatchId: undefined,
+      nativeCaptionRenderStorageId: undefined,
       imagePrompt: undefined,
       artDirection: undefined,
       script: undefined,

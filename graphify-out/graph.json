@@ -111285,6 +111285,26 @@
       "id": "packages_backend_convex_schema_socialconnections_table",
       "community": 460,
       "norm_label": "socialConnections (table)"
+    },
+    {
+      "label": "vaultPresentations (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L2605",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_vaultpresentations_table",
+      "community": 460,
+      "norm_label": "vaultPresentations (table)"
+    },
+    {
+      "label": "mediaCampaigns (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L2612",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_mediacampaigns_table",
+      "community": 460,
+      "norm_label": "mediaCampaigns (table)"
     }
   ],
   "links": [
@@ -306126,6 +306146,48 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_schema",
       "target": "packages_backend_convex_schema_socialconnections_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L2605",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_vaultpresentations_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L2612",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_mediacampaigns_table"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/llm.ts",
+      "source_location": "L2047",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_llm",
+      "target": "packages_backend_convex_guardrails_remainingdailycents"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/llm.ts",
+      "source_location": "L4552",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_llm",
+      "target": "packages_backend_convex_vault_upsertsheets"
     }
   ],
   "hyperedges": [],

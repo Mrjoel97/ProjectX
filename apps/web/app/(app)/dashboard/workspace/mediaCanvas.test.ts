@@ -244,7 +244,7 @@ describe("the refusal names the lever, in the deck's own vocabulary", () => {
     // whole visible symptom standing behind a green backend.
     expect(refusalText({ reason: "illegal_duration" }, base)).toContain(GENERATED_LENGTH_RANGE);
     expect(refusalText({ reason: "illegal_duration" }, base)).not.toMatch(/4, 8 or 12/);
-    expect(GENERATED_LENGTH_RANGE).toBe("1 to 15");
+    expect(GENERATED_LENGTH_RANGE).toBe("4 to 15");
     expect(refusalText({ reason: "illegal_duration" }, { ...base, noun: "block" })).toBe(
       "Every block must be 5 or 10 seconds.",
     );
@@ -378,6 +378,7 @@ describe("33-06: the estimate is ONE headline, and it is jobEstimate's own numbe
     expect(pricedAsLine(30, 4, 4)).toBe("A 30-second reel of 4 scenes, priced per scene");
     expect(pricedAsLine(30, 4, 4)).not.toMatch(/per block/);
     expect(pricedAsLine(null, 4, 8)).toMatch(/8 s per block/);
+    expect(pricedAsLine(null, 4, 8)).toContain("Seedance 2.0 on OpenRouter");
   });
 });
 
@@ -471,6 +472,41 @@ const sceneOf = (view: ReturnType<typeof trackerView>, i: number) => {
   if (!found) throw new Error(`no scene row ${i}`);
   return found;
 };
+
+test("native picture and sound share one generation without waiting for a TTS job", () => {
+  const view = trackerView(
+    [scene({ clip: { status: "succeeded" }, voice: null })],
+    "rendering",
+    "pending",
+    undefined,
+    "native",
+  );
+  expect(view.stages.map((s) => s.key)).toEqual(["generate", "assemble", "captions"]);
+  expect(stageOf(view, "generate")).toMatchObject({ label: "Picture & sound", state: "done" });
+  expect(sceneOf(view, 0).voice.state).toBe("done");
+  expect(stageOf(view, "captions").state).toBe("pending");
+  const failed = trackerView(
+    [scene({ clip: { status: "failed" } })],
+    "pending",
+    undefined,
+    undefined,
+    "native",
+  );
+  expect(stageOf(failed, "generate").state).toBe("failed");
+  expect(sceneOf(failed, 0).voice.state).toBe("failed");
+  const ambient = trackerView(
+    [scene({ narration: "", clip: { status: "succeeded" } })],
+    "rendered",
+    undefined,
+    undefined,
+    "native",
+  );
+  expect(sceneOf(ambient, 0).voice.state).toBe("done");
+  expect(stageOf(ambient, "captions")).toMatchObject({
+    state: "skipped",
+    detail: "No spoken lines to caption.",
+  });
+});
 
 describe("the tracker is the four-stage spine, folded from the two job faces", () => {
   test("a fresh deck is pending everywhere — never 'active' before a cent moves", () => {
@@ -894,7 +930,7 @@ describe("the stale badge fires on the two stamps and nothing else", () => {
     // Unreachable from a preset control, which is the point — it is the fail-closed backstop, and
     // it names the closed set rather than the code.
     expect(briefRefusalText("illegal_duration")).toBe(
-      "A reel is 15, 30 or 60 seconds long — nothing between.",
+      "A reel is 15, 30, 45 or 60 seconds long — nothing between.",
     );
     expect(briefRefusalText("no_brief")).toMatch(/no brief on this plan/);
     // An unrecognised reason must still say that NOTHING happened, never a bare "failed".
@@ -1108,6 +1144,18 @@ const scenesWithFailure = (): FailureScene[] => [
 
 const sceneCard = (over: Partial<FailureScene> = {}, est: JobEstimate | undefined = anEstimate()) =>
   failureCards({}, [fscene({ blockIndex: 1, ...over })], est).find((c) => c.where === "scene");
+
+test("native failures offer a priced scene retry without stock or still downgrades", () => {
+  const broken = fscene({ clip: face({ status: "failed" }), voice: null });
+  const card = failureCards({ mediaAudioMode: "native" }, [broken], anEstimate()).find(
+    (c) => c.where === "scene",
+  );
+  expect(card?.fixes.map((f) => f.arm)).toEqual(["regenerate"]);
+  expect(card?.fixes[0]?.note).toContain("picture and sound");
+  const priced = estimateView(anEstimate(), { noun: "scene", maxChars: 60, audioMode: "native" });
+  expect(priced.lines[0]?.note).toContain("actual provider usage can vary");
+  expect(priced.lines[0]?.note).not.toContain("animated still");
+});
 
 describe("a failure is a plain-language card with honest economics", () => {
   test("A FAILED SCENE NAMES WHAT BROKE, WHAT IT ALREADY COST, AND WHAT THE FIX ADDS", () => {

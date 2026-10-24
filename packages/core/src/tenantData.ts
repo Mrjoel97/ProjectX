@@ -77,6 +77,7 @@ export const TENANT_TABLE_CLASSIFICATION = {
   // Phase 40 (DOC-01): a workbook's capped grid, one row per spreadsheet document. Cell text, so
   // it is tenant data in the fullest sense — it exports and deletes with its document.
   vaultSheets: "tenant_owned",
+  vaultPresentations: "tenant_owned",
   graphNodes: "tenant_owned",
   graphEdges: "tenant_owned",
   voiceSessions: "tenant_owned",
@@ -91,6 +92,7 @@ export const TENANT_TABLE_CLASSIFICATION = {
   spendEvents: "tenant_owned",
   spendCoverage: "tenant_owned",
   mediaJobs: "tenant_owned",
+  mediaCampaigns: "tenant_owned",
   contacts: "tenant_owned",
   funnels: "tenant_owned", // Link/source/counters belong in export and erasure, never immutable audit.
   followUps: "tenant_owned",
@@ -318,7 +320,13 @@ export function deletableTables(): readonly DeletableTenantTable[] {
 export const STORAGE_ID_FIELDS = {
   uploadReceipts: ["storageId"],
   socialPosts: ["storageId"],
-  plans: ["renderStorageId", "sidecarStorageId", "attachments[].storageId"],
+  plans: [
+    "renderStorageId",
+    "sidecarStorageId",
+    "nativeCaptionAudioStorageId",
+    "nativeCaptionRenderStorageId",
+    "attachments[].storageId",
+  ],
   attachments: ["storageId"],
   intakeArtifacts: ["storageId"],
   vaultDocuments: ["storageId", "transcriptionStorageId"],

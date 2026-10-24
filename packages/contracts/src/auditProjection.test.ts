@@ -30,6 +30,27 @@ const row = (over: Partial<Row> = {}): Row => ({
 });
 
 describe("audit viewer projection — the payload boundary", () => {
+  test("task budget consent exposes only campaign references, cents, counts and the window", () => {
+    const refs = {
+      campaignId: "campaign_1",
+      selectedCount: 3,
+      approvedExtraCents: 500,
+      maximumCents: 1500,
+      dailyWindowStartMs: 1_754_460_000_000,
+    };
+    const p = projectAuditRow(
+      row({
+        eventType: "media.campaign_task_budget_approved",
+        payload: { ...refs, prompt: "Private product instructions", voiceReference: "private.wav" },
+      }),
+    );
+    expect(p.known).toBe(true);
+    expect(p.actor).toBe("you");
+    expect(p.refs).toEqual(refs);
+    expect(JSON.stringify(p)).not.toContain("Private product");
+    expect(JSON.stringify(p)).not.toContain("private.wav");
+  });
+
   test("dictation drafts expose only the character count, never transcript or PII details", () => {
     const p = projectAuditRow(
       row({

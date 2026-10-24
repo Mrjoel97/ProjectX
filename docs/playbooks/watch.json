@@ -75,7 +75,9 @@
     "packages/backend/convex/importGuard.test.ts",
     "apps/web/app/(app)/ops/",
     "packages/backend/convex/authRevocations",
-    "packages/core/src/authLifetime.ts"
+    "packages/core/src/authLifetime.ts",
+    "packages/backend/convex/mediaCampaign",
+    "packages/backend/convex/vaultPresentations"
   ],
   "growth-diagnostic.md": [
     "packages/core/src/researchEvidence",
@@ -207,6 +209,9 @@
     "apps/web/public/fonts/"
   ],
   "cockpit.md": [
+    "apps/web/lib/workspaceArtifactFixtures.test.ts",
+    "packages/core/src/workspaceArtifacts",
+    "packages/backend/convex/workspaceArtifacts",
     "scripts/check-phase23-probe-controls",
     "scripts/check-phase23-mutation-proofs.mjs",
     "apps/web/app/(app)/dashboard/workspace/",
@@ -284,7 +289,11 @@
     "packages/backend/convex/requests.ts",
     "packages/backend/convex/lib/webResearchTools.ts",
     "packages/backend/convex/lib/markdownPdf.ts",
-    "packages/backend/convex/retrievalBounds.test.ts"
+    "packages/backend/convex/retrievalBounds.test.ts",
+    "packages/core/src/presentation",
+    "packages/backend/convex/lib/presentationPptx",
+    "packages/backend/convex/productionArtifacts.test.ts",
+    "apps/web/e2e/workspace-artifacts"
   ],
   "audit-dead-letter.md": [
     "packages/backend/convex/ragErasure",
@@ -358,6 +367,8 @@
     "apps/web/app/lib/normalizeAudio.ts"
   ],
   "vault.md": [
+    "apps/web/app/(app)/dashboard/artifacts/",
+    "apps/web/scripts/sync-pdf-assets.mjs",
     "packages/vault/",
     "packages/backend/convex/vault.ts",
     "packages/backend/convex/vaultExtract.ts",
@@ -384,9 +395,16 @@
     "apps/web/e2e/vault.spec.ts",
     "packages/backend/scripts/run-smoke-vault.mjs",
     "packages/backend/convex/vaultRag.test.ts",
-    "apps/web/app/lib/uploadTranscriptionAudio.ts"
+    "apps/web/app/lib/uploadTranscriptionAudio.ts",
+    "packages/core/src/workbookReport",
+    "packages/core/src/presentation",
+    "packages/backend/convex/vaultPresentations"
   ],
   "media.md": [
+    "packages/core/src/mediaBudget",
+    "packages/core/src/nativeMedia",
+    "packages/core/src/mediaProviderContract",
+    "packages/core/src/productionQuality",
     "packages/backend/convex/reliabilitySweep.ts",
     "packages/backend/convex/reliabilitySweep.test.ts",
     "packages/cost/src/media.ts",
@@ -394,7 +412,7 @@
     "packages/core/src/assembly.ts",
     "packages/core/src/render.ts",
     "packages/core/src/captions.ts",
-    "packages/core/src/stockSelection.ts",
+    "packages/core/src/stockSelection",
     "packages/backend/convex/media.ts",
     "packages/backend/convex/media.test.ts",
     "packages/backend/convex/mediaComplete.ts",
@@ -406,7 +424,13 @@
     "apps/web/scripts/music/",
     "packages/backend/scripts/run-storyboard-bakeoff.mjs",
     "packages/backend/scripts/storyboard-briefs.json",
-    "packages/backend/convex/lib/mediaRead.ts"
+    "packages/backend/convex/lib/mediaRead.ts",
+    "packages/core/src/mediaCampaign",
+    "packages/backend/convex/mediaCampaign",
+    "apps/web/app/(app)/dashboard/workspace/MediaCampaign",
+    "packages/backend/scripts/run-image-quality-qualification",
+    "packages/backend/scripts/run-reel-quality-qualification",
+    "packages/backend/scripts/run-seedance-quality-qualification"
   ],
   "contacts-crm.md": [
     "packages/core/src/marketingLead",
@@ -432,7 +456,9 @@
     "packages/cost/src/cost.ts",
     "packages/core/src/fallback.ts",
     "packages/core/src/fallback.test.ts",
-    "packages/backend/convex/scaleConstants.test.ts"
+    "packages/backend/convex/scaleConstants.test.ts",
+    "packages/backend/convex/mediaCampaign",
+    "packages/core/src/mediaCampaign"
   ],
   "proposals.md": [
     "packages/core/src/proposal.ts",
@@ -563,6 +589,7 @@
     "apps/web/app/(app)/connect-social/",
     "apps/web/app/(app)/dashboard/marketing/SocialPanel.tsx",
     "packages/backend/convex/youtubeMetadata.test.ts",
-    "packages/backend/convex/socialDisconnect.test.ts"
+    "packages/backend/convex/socialDisconnect.test.ts",
+    "apps/web/app/social/youtube/callback/"
   ]
 }

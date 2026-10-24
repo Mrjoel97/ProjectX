@@ -234,6 +234,8 @@ a TENANT’s Stripe account read-only. Opposite direction, opposite trust bounda
 
 - [x] **DOC-01**: Documents render in their true form wherever the browser can — the PDF a turn produced is framed inline in the workspace card for the thread the user is viewing, and an uploaded workbook shows as a capped grid of real rows and named sheets with its ceilings stated in words — the agent can deliver a real `.xlsx` on both the email and vault planes from a registry-owned spreadsheet drafter, and Office fidelity is a recorded decision (ADR-036: `pdf | html | xlsx` out, PDF twin at creation, text projection plus original download in, never DOCX/PPTX) rather than an accident *(open: the `cockpit-agent` v3 body that teaches the third format is seeded as candidate v28 and NOT activated — its gate run is 45/46, blocked by `33-research-insufficient-evidence`, which is stochastic research-lane behaviour proven unrelated to this change; the shipped code path works against the older body)*
 
+> 2026-10-21 scope note: DOC-01 above records Phase 40 acceptance at its historical scope. ADR-062 supersedes only its no-PPTX/basic-XLSX output restriction for the new Phase 53 lane; uploaded Office projections, original ownership and prior acceptance remain unchanged. ARTF-01/02 stay open.
+
 ### Optional Vertical Packs
 
 - [ ] **VERT-01**: Legal, HR, Product, Design, Engineering and Data packs are discoverable only when tenant tier, business profile and connected capabilities make them relevant; selection changes guidance and templates, never tool authority
@@ -272,6 +274,15 @@ Implementation and live qualification are separate. Existing SKILL-01/PACK accep
 - [ ] **MSVC-12**: One supported social service can be configured with explicit goals, selected accounts/channels, intended media, confirmed brand sources, preparation cadence, budget and separate preparation/publication/report readiness.
 - [ ] **MSVC-13**: The Executive prepares local social drafts and exact human-approved revisions reach Buffer scheduling once; editing, rejection, disconnect, unknown writes and provider-owned queued posts have truthful recovery behavior.
 - [ ] **MSVC-14**: Multiple browser-closed social-service cycles produce supported Zernio evidence and next-action proposals while preserving lifetime/sampling/freshness/attribution limits and demonstrating budget, auth and pause behavior.
+
+## Media and document production — owner-approved 2026-10-21
+
+Parallel offline implementation is authorized in the isolated media/documents worktree. Requirements remain OPEN/partial until actual artifact, hosted and quality acceptance is complete; the managed-service programme order is unchanged.
+
+- [ ] **ARTF-01**: Explicit spreadsheet requests create genuine editable XLSX reports with correct numeric/date/boolean/text cells, preserved identifiers/source metadata, bounded deterministic calculations, useful formatting and supported native charts. Actual downloaded bytes reopen correctly and every populated sheet/print region passes visual review. (open: typed/style/chart writer and legacy-table conversion implemented locally; model-authored Markdown totals remain unverified inputs; authenticated download and Office visual review pending.)
+- [ ] **ARTF-02**: Explicit presentation requests create actual editable PPTX decks with consistent native layouts, editable text/tables/charts, source notes, owned original downloads and an honest preview. (open: bounded writer/schema and same-spec HTML preview implemented locally; actual PowerPoint opening/editing, no-repair/render checks, exact registry qualification and hosted acceptance pending; HTML is not a pixel-identical Office conversion.)
+- [ ] **ARTF-03**: Image, video and mixed campaigns propose stable items and aggregate maximum cost for human generation approval, reuse bounded existing jobs, preserve completed siblings through failure/cancel/retry and expose useful owned collection downloads/credits. (open: offline campaign admission, two-item queue, selective disclosed retry, reconciliation/cancel states and individual downloads/JSON manifest implemented; hosted recovery/provider settlement and a single asset collection archive remain pending. Generation approval never authorizes publication.)
+- [ ] **ARTF-04**: Placement-appropriate image sets and finished B-roll videos meet measured output-profile, narration/caption/audio, source/licence and brand/pacing expectations, with representative owner-reviewed visual benchmarks and truthful provider/cost metadata. (open: current output quality is unqualified; supplied Taste Skill is frontend-design guidance, not a video provider. Source review, measured outputs and separately approved paid comparisons/owner acceptance remain pending.)
 
 ## v2 Requirements
 
@@ -449,6 +460,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MSVC-12 | Phase 52 | Pending |
 | MSVC-13 | Phase 52 | Pending |
 | MSVC-14 | Phase 52 | Pending |
+| ARTF-01 | Phase 53 | Pending — partial offline XLSX implementation; actual Office/hosted acceptance open |
+| ARTF-02 | Phase 53 | Pending — partial offline PPTX implementation; actual Office/registry/hosted acceptance open |
+| ARTF-03 | Phase 53 | Pending — partial offline campaigns; hosted recovery, provider settlement and collection archive open |
+| ARTF-04 | Phase 53 | Pending — media quality and actual paid/visual benchmark acceptance open |
 
 
 **Marketing coverage (minted 2026-08-07, pulled pre-beta per ADR-015):**
@@ -479,3 +494,5 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 
 **Managed-service coverage (2026-10-19):**14 requirements mapped to Phases48–52; MSVC-01 inventory only is complete. Implementation and live qualification remain open.
+
+**Artifact-production coverage (2026-10-21):** 4 requirements (ARTF-01..04), all mapped to Phase 53 and all open. Parallel offline implementation does not close ACTN-04/MEDIA-01 or change earlier accepted requirements.

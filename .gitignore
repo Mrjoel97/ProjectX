@@ -128,3 +128,6 @@ Skills/*.pdf
 # where a `live` row could cite it. Verified against `git ls-files`: ZERO tracked files match.
 packages/backend/scripts/.selfcheck-artifacts/
 packages/backend/scripts/.test-artifacts/
+
+# Rebuilt from the exact installed pdfjs-dist package before web development/builds.
+apps/web/public/pdfjs/

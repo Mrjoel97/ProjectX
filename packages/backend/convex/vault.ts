@@ -422,6 +422,11 @@ export const deleteVaultDoc = tenantMutation({
       .withIndex("by_doc", (q) => q.eq("tenantId", ctx.tenantId).eq("docId", vaultDocId))
       .unique();
     if (grid) await ctx.db.delete(grid._id);
+    const slides = await ctx.db
+      .query("vaultPresentations")
+      .withIndex("by_doc", (q) => q.eq("tenantId", ctx.tenantId).eq("docId", vaultDocId))
+      .unique();
+    if (slides) await ctx.db.delete(slides._id);
     // THE STORED BYTES, and this is the SAME defect tenant erasure had. This cascade already
     // removed the RAG chunks, the graph edges and nodes, and the sheet grid — everything except
     // the file itself. So deleting ONE document from the vault orphaned its blob exactly the way
@@ -644,14 +649,20 @@ export const upsertSheets = internalMutation({
     docId: v.id("vaultDocuments"),
     sheets: SHEETS_ARG,
     sheetCount: v.number(),
+    expectedStorageId: v.optional(v.id("_storage")),
   },
-  handler: async (ctx, { tenantId, docId, sheets, sheetCount }): Promise<null> => {
+  handler: async (
+    ctx,
+    { tenantId, docId, sheets, sheetCount, expectedStorageId },
+  ): Promise<null> => {
     // The document must still EXIST. The grid is written after a full SheetJS parse, seconds after
     // the text landed, and Delete is armed on the card that whole time — without this guard a
     // delete inside that window leaves a grid row keyed to a dead id that nothing can reach or
     // clean up. `ingestExtractedText` guards the same window the same way.
     const doc = await ctx.db.get(docId);
     if (!doc || doc.tenantId !== tenantId) return null;
+    if (expectedStorageId && doc.storageId !== expectedStorageId)
+      throw new Error("stale_sheet_preview");
     const existing = await ctx.db
       .query("vaultSheets")
       .withIndex("by_doc", (q) => q.eq("tenantId", tenantId).eq("docId", docId))
@@ -1465,7 +1476,12 @@ export const promoteToReference = tenantMutation({
  * The forms a created artifact can take. `sheet` (Phase 40, DOC-01) is a real .xlsx workbook.
  * Written once and shared by both writers below — the two used to carry the union separately.
  */
-const CREATED_FORM = v.union(v.literal("short"), v.literal("long"), v.literal("sheet"));
+const CREATED_FORM = v.union(
+  v.literal("short"),
+  v.literal("long"),
+  v.literal("sheet"),
+  v.literal("presentation"),
+);
 
 /**
  * Attach a deterministic PDF to the SAME persisted research row.
@@ -1566,11 +1582,11 @@ export const attachResearchPdf = internalMutation({
  * which means "the bytes are what mimeType says".
  */
 const storedMimeFor = (
-  form: "short" | "long" | "sheet",
+  form: "short" | "long" | "sheet" | "presentation",
   storageId: Id<"_storage"> | undefined,
 ): string | undefined => {
   if (!storageId) return undefined;
-  return formatSpec(form === "sheet" ? "xlsx" : "pdf").mimeType;
+  return formatSpec(form === "presentation" ? "pptx" : form === "sheet" ? "xlsx" : "pdf").mimeType;
 };
 
 export const insertCreatedDoc = internalMutation({
@@ -1668,6 +1684,20 @@ export const patchCreatedDoc = internalMutation({
     if (!doc || doc.tenantId !== a.tenantId || doc.origin !== "agent") return { ok: false };
 
     const oldStorageId = doc.storageId;
+    {
+      const preview = await ctx.db
+        .query("vaultPresentations")
+        .withIndex("by_doc", (q) => q.eq("tenantId", a.tenantId).eq("docId", docId))
+        .unique();
+      if (preview) await ctx.db.delete(preview._id);
+    }
+    {
+      const grid = await ctx.db
+        .query("vaultSheets")
+        .withIndex("by_doc", (q) => q.eq("tenantId", a.tenantId).eq("docId", docId))
+        .unique();
+      if (grid) await ctx.db.delete(grid._id);
+    }
     await ctx.db.patch(docId, {
       title: a.title,
       kind: a.form === "short" ? "created_content" : "created_document",

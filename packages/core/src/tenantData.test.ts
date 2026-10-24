@@ -53,8 +53,11 @@ describe("tenant table classification registry", () => {
     // + researchControls (2026-09-12 request controls): tenant-owned bounded attempt state = 62.
     // + three foundation tables and expiring auth revocations = 67 with owned upload receipts.
     // + Buffer connections, transient OAuth, campaign posts and reports = 71.
-    // + Zernio connection credentials and cached reports, native social credentials/OAuth and app webhook health = 76.
-    expect(schemaTables).toHaveLength(77);
+    // + Zernio connection credentials and cached reports = 73.
+    // + presentation preview sidecars and media campaign manifests = 75.
+    // + native social credentials, OAuth states, posts and global webhook health = 79.
+    // Re-derived from the merged schema (79 unique tables), preserving both feature lanes.
+    expect(schemaTables).toHaveLength(79);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -238,9 +241,18 @@ describe("storageIdsIn — every byte reachable from one row", () => {
       storageIdsIn("plans", {
         renderStorageId: "kg_reel",
         sidecarStorageId: "kg_sidecar",
+        nativeCaptionAudioStorageId: "kg_native_audio",
+        nativeCaptionRenderStorageId: "kg_native_render",
         attachments: [{ storageId: "kg_pdf_a" }, { storageId: "kg_pdf_b" }],
       }),
-    ).toEqual(["kg_reel", "kg_sidecar", "kg_pdf_a", "kg_pdf_b"]);
+    ).toEqual([
+      "kg_reel",
+      "kg_sidecar",
+      "kg_native_audio",
+      "kg_native_render",
+      "kg_pdf_a",
+      "kg_pdf_b",
+    ]);
   });
 
   // FAIL-SAFE, and it is the difference between a bad row and a user who cannot delete their

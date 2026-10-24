@@ -373,12 +373,10 @@ describe("folder-ingest rail: reserve, refund, and never starving the cockpit", 
     expect(await remaining(t)).toBeGreaterThanOrEqual(0); // never over-consumed
   });
 
-  // 6. THE $25 DECISION IS NOT VACUOUS (the constants.test.ts idiom). The owner chose a window
-  // ABOVE both existing ones because a folder upload is a bursty one-off, not a daily habit. If
-  // someone "harmonises" the three numbers, the decision is gone and this says so.
-  test("the ingest window is deliberately the largest of the three per-tenant rails", () => {
+  // The owner increased media to $100/day without changing the separate $25 ingest allowance.
+  test("ingest keeps its own allowance between the unchanged LLM and increased media rails", () => {
     expect(INGEST_DAILY_BUDGET_CENTS).toBeGreaterThan(DAILY_BUDGET_CENTS);
-    expect(INGEST_DAILY_BUDGET_CENTS).toBeGreaterThan(MEDIA_DAILY_BUDGET_CENTS);
+    expect(MEDIA_DAILY_BUDGET_CENTS).toBeGreaterThan(INGEST_DAILY_BUDGET_CENTS);
   });
 });
 

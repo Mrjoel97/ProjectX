@@ -2015,24 +2015,32 @@ test("caption audio reaches OpenAI as multipart bytes, never as a signed storage
   expect(submitFn).not.toMatch(/audio_?[Uu]rl|data:audio/);
 });
 
-test("storage.delete has exactly ONE site in the media subsystem — the retention loop", () => {
-  // D12(b) is delete-on-SUCCESS and keep-on-FAILURE, and the failure half is the one that is easy
-  // to get backwards and impossible to notice. A second deletion site is how a delete-on-failure
-  // bug gets introduced later, so the site count is pinned rather than the behaviour described.
-  // Scoped to the MEDIA subsystem: `llm.ts` deletes its own transient blobs and is not this
-  // policy's business. What must stay single-sited is the deletion of TENANT MEDIA.
+test("media storage deletion stays in the reviewed retention and native PCM reset sites", () => {
+  // D12(b) keeps failed-render evidence. Pin every tenant-media deletion site so a new
+  // submit/landing cleanup cannot silently erase that evidence or the held current film.
+  // Other subsystems, including llm.ts transient blobs, follow their own policies.
   const sites: Array<[string, number]> = [];
   for (const [rel, code] of allConvexSources()) {
     if (!rel.startsWith("render/") && !rel.startsWith("media")) continue;
     const n = [...code.matchAll(/storage\.delete\b/g)].length;
     if (n > 0) sites.push([rel, n]);
   }
-  // TWO as of 20-17, both still inside the one module. The second is the caption terminal deleting
-  // the UNCAPTIONED cut after repointing `renderStorageId` at the captioned one — that is a delete
-  // of tenant media, so it is pinned here rather than exempted. What the count still forbids is a
-  // deletion site appearing in the submit or landing planes, which is where a delete-on-failure bug
-  // would hide.
-  expect(sites).toEqual([["render/renderReel.ts", 2]]);
+  // The renderer retains its two cleanup sites. Native audio adds exactly one in media.ts:
+  // reset only the superseded extracted PCM, preserving the final film and its sidecar.
+  expect(sites).toEqual([
+    ["media.ts", 1],
+    ["render/renderReel.ts", 2],
+  ]);
+  const media = stripCode(readSource("media.ts"));
+  const resetAt = media.indexOf("async function clearRender(");
+  expect(resetAt, "native PCM reset helper was not found").toBeGreaterThan(-1);
+  const reset = media.slice(resetAt, media.indexOf("\nexport function deckOf", resetAt));
+  expect(reset).toMatch(/const prior = await ctx\.db\.get\(planId\)/);
+  expect(reset).toMatch(
+    /if \(prior\?\.nativeCaptionAudioStorageId\)\s*await ctx\.storage\.delete\(prior\.nativeCaptionAudioStorageId\)/,
+  );
+  expect([...reset.matchAll(/storage\.delete\b/g)]).toHaveLength(1);
+  expect(reset).not.toMatch(/(?:^|\n)\s*(?:renderStorageId|sidecarStorageId)\s*:/);
 
   // …and it is inside the SUCCESS arm. The failure arm returns before reaching it, which is what
   // makes "the intermediates are the only debugging evidence a failed render leaves" true.
