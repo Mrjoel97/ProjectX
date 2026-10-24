@@ -197,8 +197,10 @@ describe("candidate production review policy", () => {
       );
       return chooseMediaBatch(specs, 3.5);
     });
+    // Current standard Seedance policy includes one second of reservation headroom per clip.
+    // Historical purchased Grok receipts retain their original charges separately.
     expect(reservations.map((item) => (item.ok ? item.value.estCents : item.error))).toEqual([
-      41, 77,
+      97, 188,
     ]);
   });
 });
