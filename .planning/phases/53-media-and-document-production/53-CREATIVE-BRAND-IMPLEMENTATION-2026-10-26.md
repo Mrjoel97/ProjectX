@@ -1,5 +1,15 @@
 # Creative quality implementation checkpoint
 
+## Completion update — 2026-10-26
+
+Added animated typography and optional perspective-projected decorative orbit-ring graphics,
+with actual FFmpeg motion/audio tests and a free finished preview of the existing bottle footage.
+Fixed the ten initial CI failures without weakening tenant or registry checks. Kimi direct-call
+comparison cost USD0.0322004; the follow-up SDK probe used unsupported named-function selection
+and has no confirmed billing receipt, so paid work stopped and the current director stays selected.
+See ADR-070 and the dated comparison report. Final CI and release evidence are recorded separately;
+the earlier checkpoint below describes the first implementation, not the final finishing ceiling.
+
 Branch: `codex/creative-brand-quality-20261026`, based on current main after PR83.
 
 ## Implemented
