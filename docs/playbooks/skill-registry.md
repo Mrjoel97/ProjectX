@@ -1,3 +1,5 @@
+> Last verified: 2026-10-26 — Director v12 describes the implemented animated title profile and optional decorative orbit-ring, and explicitly holds faithful product3D requests until approved model/material assets, renderer support and preview evidence exist. Generated orbits are not labeled mesh renders. Registry mirror checks pass; no paid model comparison or activation is claimed.
+
 > Last verified: 2026-10-24 — Current golden source revision is regenerated after integrating main c765168d callback/policy work. The 46 input cases and historical receipts are unchanged; no registry seeding, activation or paid evaluation is performed.
 
 > Combined-source checkpoint: 2026-10-24 — Preserve canonical media-director v9/native-film guidance and the direct-social tool boundaries. Older director versions and source fingerprints below are historical checkpoints. Regenerate the exact merged evaluator identities with unchanged corpus bytes and historical receipts; this merge creates no paid qualification, registry seed, activation or release approval.

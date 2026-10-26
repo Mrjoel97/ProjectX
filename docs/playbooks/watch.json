@@ -434,7 +434,9 @@
     "packages/backend/scripts/run-reel-quality-qualification",
     "packages/backend/scripts/run-seedance-quality-qualification",
     "packages/core/src/mediaFinishing",
-    "packages/backend/scripts/prepare-director-comparison.mjs"
+    "packages/core/src/orbitRing",
+    "packages/backend/scripts/prepare-director-comparison.mjs",
+    "packages/backend/scripts/evaluate-director-comparison"
   ],
   "contacts-crm.md": [
     "packages/core/src/marketingLead",

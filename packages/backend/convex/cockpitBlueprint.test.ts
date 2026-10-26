@@ -253,7 +253,7 @@ describe("cockpit business-blueprint turn prompt (BLPR-02, VALIDATION item 24)",
       /finance\s*=\s*await ctx\.runQuery\(internal\.cash\.financeSpineFor,\s*\{\s*tenantId\s*\}\)/;
     expect(production).toMatch(financeRead);
     expect(shim).toMatch(financeRead);
-    expect(production).toMatch(/prompt:\s*buildTurnPrompt\(\{\s*spine,\s*finance,/);
-    expect(shim).toMatch(/return buildTurnPrompt\(\{\s*spine,\s*finance,/);
+    expect(production).toMatch(/prompt:\s*buildTurnPrompt\(\{\s*spine,\s*brandSpine,\s*finance,/);
+    expect(shim).toMatch(/return buildTurnPrompt\(\{\s*brandSpine,\s*spine,\s*finance,/);
   });
 });

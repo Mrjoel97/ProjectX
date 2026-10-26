@@ -861,6 +861,7 @@ const sceneShots = (scenes: readonly Scene[]) =>
     ...(s.overlayStartMs === undefined ? {} : { overlayStartMs: s.overlayStartMs }),
     ...(s.overlayEndMs === undefined ? {} : { overlayEndMs: s.overlayEndMs }),
     ...(s.transitionOut === undefined ? {} : { transitionOut: s.transitionOut }),
+    ...(s.motionGraphic === undefined ? {} : { motionGraphic: s.motionGraphic }),
     ...(s.asset === undefined ? {} : { asset: s.asset }),
     prompt: s.prompt,
     narration: s.narration,

@@ -82,6 +82,7 @@ export type Block = {
   overlayStartMs?: number;
   overlayEndMs?: number;
   transitionOut?: "cut" | "fade";
+  motionGraphic?: "orbit-ring";
   prompt: string; // the per-block generation prompt (koda /generate)
 };
 
@@ -603,6 +604,7 @@ export type Scene = {
   overlayStartMs?: number;
   overlayEndMs?: number;
   transitionOut?: "cut" | "fade";
+  motionGraphic?: "orbit-ring";
   prompt: string;
   /** Document-level citation (the Phase-14 locked idiom): ONE vault doc per scene, no chunk refs.
    *  Declared by the specialist as a `Source:` line in the scene's SCENE PROMPTS block. */
@@ -661,6 +663,7 @@ export const hasAssetSource = (s: {
   overlayStartMs?: number;
   overlayEndMs?: number;
   transitionOut?: "cut" | "fade";
+  motionGraphic?: "orbit-ring";
   asset?: unknown;
   prompt?: string;
 }): boolean => {
@@ -1000,6 +1003,7 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
   const iOverlayStart = col("overlay start ms");
   const iOverlayEnd = col("overlay end ms");
   const iTransition = col("transition out");
+  const iMotion = col("motion graphic");
   const iAsset = col("asset", "source", "file");
   // `Seconds` is REQUIRED now, where the block contract treated it as an optional cross-check. A
   // scene deck without per-row durations is the uniform contract wearing new column names.
@@ -1042,7 +1046,9 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
     const startCue = cueCell(iOverlayStart);
     const endCue = cueCell(iOverlayEnd);
     const transitionCue = cueCell(iTransition);
-    const hasFinishing = startCue !== "" || endCue !== "" || transitionCue !== "";
+    const motionCue = cueCell(iMotion);
+    const hasFinishing =
+      startCue !== "" || endCue !== "" || transitionCue !== "" || motionCue !== "";
     const finishing = hasFinishing
       ? parseMediaFinishing(
           {
@@ -1050,6 +1056,7 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
             ...(startCue === "" ? {} : { overlayStartMs: Number(startCue) }),
             ...(endCue === "" ? {} : { overlayEndMs: Number(endCue) }),
             ...(transitionCue === "" ? {} : { transitionOut: transitionCue as "cut" | "fade" }),
+            ...(motionCue === "" ? {} : { motionGraphic: motionCue as "orbit-ring" }),
           },
           seconds * 1000,
         )

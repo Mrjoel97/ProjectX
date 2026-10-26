@@ -895,8 +895,12 @@ describe("a tenant pack candidate can be RUN before it is activated (29-05)", ()
 
     // Positive control: the IDENTICAL call with tenant B as the runner is accepted, so the refusal
     // above is about the tenant and not about the row being unusable.
+    const ownPlanId = await t.mutation(internal.plans.insertPlan, {
+      tenantId: TENANT_B,
+      threadId: THREAD,
+    });
     const own = await t.action(internal.workflowPackBinding.__runWorkflowPackWithScript, {
-      ...runArgs(planId, "business-pulse"),
+      ...runArgs(ownPlanId, "business-pulse"),
       tenantId: TENANT_B,
       runId: "run-tenant-own",
       tenantSkillIds: { "pack-business-pulse": foreignId },
@@ -918,7 +922,12 @@ describe("a tenant pack candidate can be RUN before it is activated (29-05)", ()
   // tenant id in this product is a Convex user id (`requireTenant` returns the JWT subject before
   // '|'), which cannot begin with `packeval-`, so no product path can reach the exception.
   test("a foreign pin IS accepted into a pack-eval SANDBOX tenant — the eval plane is earnable", async () => {
-    const { t, planId } = await setup();
+    const { t } = await setup();
+    // Skill candidates may be imported into the sandbox, but its plan remains sandbox-owned.
+    const planId = await t.mutation(internal.plans.insertPlan, {
+      tenantId: "packeval-deadbeef-c0",
+      threadId: THREAD,
+    });
     const candidateId = await t.run((ctx) =>
       ctx.db.insert("tenantSkills", {
         tenantId: TENANT,

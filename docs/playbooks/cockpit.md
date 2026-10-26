@@ -1,3 +1,7 @@
+> Last verified: 2026-10-26 — Scene review displays animated title timing, fade selection and the optional decorative3D ring before generation. These fields and the approved brand revision are bound into native review hashes.
+
+> Last verified: 2026-10-26 — Free Kimi resolver/SDK tests exercise supported required-tool selection and two-step fixture continuation. Signed reasoning details survive; unsigned details are filtered by the installed provider and do not establish live reasoning compatibility. Existing director routing remains unchanged after the failed live probe; no paid retry.
+
 > Last verified: 2026-10-26 — Active approved brand context is separate from blueprint and finance grounding. Image plans and batch items pin the approved brand revision and explicit high quality for new proposals; historical unspecified quality remains low. The image canvas displays quality and estimated reservation. Native finishing fields survive plan persistence. Local verification is separate from beta deployment.
 
 > Last verified: 2026-10-24 — The workspace campaign regression uses the real rate limiter to exercise current budget projections while preserving private-child exclusion and exact legacy collection scope. All eight focused inventory tests pass; no workspace runtime or approval authority changed.

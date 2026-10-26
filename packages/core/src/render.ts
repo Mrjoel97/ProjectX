@@ -1,4 +1,5 @@
 import { type MediaFinishing, parseMediaFinishing } from "./mediaFinishing";
+import { orbitRingAss } from "./orbitRing";
 /**
  * The render stage's PURE half (MEDIA-01, D11). Pure TS, Convex-free AND SDK-free (CLAUDE.md §1).
  *
@@ -715,7 +716,9 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
     if (finishing === null) return null;
     if (
       b.nativeAudio !== true &&
-      (finishing.overlay !== undefined || finishing.transitionOut !== undefined)
+      (finishing.overlay !== undefined ||
+        finishing.transitionOut !== undefined ||
+        finishing.motionGraphic !== undefined)
     )
       return null;
     scenes.push({ kind: kind as AssemblyVisual, seconds, ...finishing });
@@ -1002,6 +1005,11 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
   }
 
   for (const [i, scene] of body.scenes.entries()) {
+    if (scene.motionGraphic === "orbit-ring")
+      files.push({
+        path: `in/motion${String(i + 1).padStart(2, "0")}.ass`,
+        content: new TextEncoder().encode(orbitRingAss(scene.seconds)),
+      });
     if (scene.overlay !== undefined)
       files.push({
         path: `in/overlay${String(i + 1).padStart(2, "0")}.txt`,
@@ -1028,7 +1036,7 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
       "assemble_final.sh",
       ...body.scenes.flatMap((s) => ["--scene", `${s.kind}:${s.seconds}`]),
       ...body.scenes.flatMap((s, i) =>
-        s.overlay !== undefined || s.transitionOut !== undefined
+        s.overlay !== undefined || s.transitionOut !== undefined || s.motionGraphic !== undefined
           ? [
               "--finish",
               [
@@ -1037,6 +1045,7 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
                 s.overlay === undefined ? 0 : 1,
                 s.overlayStartMs ?? 0,
                 s.overlayEndMs ?? s.seconds * 1000,
+                s.motionGraphic === "orbit-ring" ? 1 : 0,
               ].join(":"),
             ]
           : [],
@@ -1073,7 +1082,8 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
       return jsonStop(checked.ok ? "missing_output" : checked.code);
     }
     const expectedFinishing = body.scenes.filter(
-      (s) => s.overlay !== undefined || s.transitionOut !== undefined,
+      (s) =>
+        s.overlay !== undefined || s.transitionOut !== undefined || s.motionGraphic !== undefined,
     ).length;
     if (expectedFinishing > 0 && checked.report.finishingCueCount !== expectedFinishing)
       return jsonStop("missing_output");

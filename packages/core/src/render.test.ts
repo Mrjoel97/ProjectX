@@ -440,6 +440,7 @@ describe("native soundtrack assembly", () => {
         overlayStartMs: 500,
         overlayEndMs: 2500,
         transitionOut: "fade",
+        motionGraphic: "orbit-ring",
       },
       { kind: "video", seconds: 15 },
     ];
@@ -453,14 +454,16 @@ describe("native soundtrack assembly", () => {
       ...opts,
       sidecar: JSON.stringify({
         ...JSON.parse(SIDECAR_OK),
-        finishing_version: 1,
+        finishing_version: 2,
         finishing_cue_count: 1,
       }),
     });
     expect(
       await (await handleRenderRequest(post(nativeBody({ scenes })), current.deps)).json(),
     ).toMatchObject({ ok: true });
-    expect(current.rec.commands[0]?.args).toContain("0:fade:1:500:2500");
+    expect(current.rec.commands[0]?.args).toContain("0:fade:1:500:2500:1");
+    const motionFile = current.rec.writes.find((f) => f.path === "in/motion01.ass");
+    expect(new TextDecoder().decode(motionFile?.content)).toContain("[Events]");
     const textFile = current.rec.writes.find((f) => f.path === "in/overlay01.txt");
     expect(new TextDecoder().decode(textFile?.content)).toBe("FORMA: 100%");
     expect(current.rec.commands[0]?.args).not.toContain("FORMA: 100%");

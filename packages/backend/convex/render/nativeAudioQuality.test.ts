@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { parseAssemblySidecar } from "@pikar/core/assembly";
 import { concatWavTakes, isNativeCaptionWav } from "@pikar/core/captions";
+import { orbitRingAss } from "@pikar/core/orbitRing";
 import { expect, test } from "vitest";
 
 const bash = process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "/bin/bash";
@@ -96,16 +97,17 @@ test.skipIf(!available)(
       if (!font) throw new Error("Missing fixture font");
       copyFileSync(font, join(work, "in/font.ttf"));
       writeFileSync(join(work, "in/overlay01.txt"), "FORMA: 100% clarity");
+      writeFileSync(join(work, "in/motion01.ass"), orbitRingAss(2));
       const assemble = () =>
         run(bash, [
           "--noprofile",
           "--norc",
           "-c",
-          'export PATH="$PWD/fixture-bin:$PATH"; export ASSEMBLE_FONT="in/font.ttf"; bash assemble.sh --scene video:2 --scene video:2 --target-seconds 4 --native-audio --finish 0:fade:1:500:1500',
+          'export PATH="$PWD/fixture-bin:$PATH"; export ASSEMBLE_FONT="in/font.ttf"; bash assemble.sh --scene video:2 --scene video:2 --target-seconds 4 --native-audio --finish 0:fade:1:500:1500:1',
         ]);
       await assemble();
       // Inspect decoded pixels at the real overlay window and transition boundary.
-      const pixelsAt = async (time: number) => {
+      const pixelsAt = async (time: number, crop = "600:160:60:160") => {
         await ffmpeg([
           "-ss",
           String(time),
@@ -114,7 +116,7 @@ test.skipIf(!available)(
           "-frames:v",
           "1",
           "-vf",
-          "crop=600:160:60:160,format=gray",
+          `crop=${crop},format=gray`,
           "-f",
           "rawvideo",
           "frame.raw",
@@ -123,19 +125,38 @@ test.skipIf(!available)(
       };
       const before = await pixelsAt(0.2);
       const title = await pixelsAt(0.8);
+      const risingTitle = await pixelsAt(0.65);
+      const heldTitle = await pixelsAt(1.1);
       const after = await pixelsAt(1.7);
       const boundary = await pixelsAt(2);
       const bright = (b: Buffer) => [...b].filter((v) => v > 200).length;
       const mean = (b: Buffer) => [...b].reduce((a, v) => a + v, 0) / b.length;
       expect(bright(before)).toBe(0);
       expect(bright(title)).toBeGreaterThan(200);
+      const brightY = (b: Buffer) => {
+        let sum = 0,
+          count = 0;
+        for (let i = 0; i < b.length; i++)
+          if ((b[i] ?? 0) > 200) {
+            sum += Math.floor(i / 600);
+            count++;
+          }
+        expect(count).toBeGreaterThan(200);
+        return sum / count;
+      };
+      expect(brightY(risingTitle) - brightY(heldTitle)).toBeGreaterThan(2);
       expect(bright(after)).toBe(0);
       expect(mean(boundary)).toBeLessThan(mean(after) / 2);
+      const ringA = await pixelsAt(0.8, "500:230:110:860");
+      const ringB = await pixelsAt(1.3, "500:230:110:860");
+      expect(
+        [...ringA].filter((value, index) => Math.abs(value - (ringB[index] ?? 0)) > 3).length,
+      ).toBeGreaterThan(100);
       const originalFinal = readFileSync(join(work, "out/final.mp4"));
       const sidecar = JSON.parse(readFileSync(join(work, "out/final.mp4.assembly.json"), "utf8"));
       expect(parseAssemblySidecar(JSON.stringify(sidecar)).ok).toBe(true);
       expect(sidecar.native_audio).toBe(true);
-      expect(sidecar.finishing_version).toBe(1);
+      expect(sidecar.finishing_version).toBe(2);
       expect(sidecar.finishing_cue_count).toBe(1);
       expect(sidecar.sfx_vol).toBe(1);
       expect(sidecar.music).toBe("none");

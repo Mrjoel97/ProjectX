@@ -1082,7 +1082,8 @@ export const renderReel = internalAction({
       : undefined;
     const reparsed = parseAssemblySidecar(raw);
     const expectedFinishing = scenes.filter(
-      (s) => s.overlay !== undefined || s.transitionOut !== undefined,
+      (s) =>
+        s.overlay !== undefined || s.transitionOut !== undefined || s.motionGraphic !== undefined,
     ).length;
     if (
       !reparsed.ok ||

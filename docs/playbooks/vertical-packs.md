@@ -1,3 +1,5 @@
+> Last verified: 2026-10-26 — Refreshed source fingerprints for final motion finishing and CI integration fixes; the40-case corpus is unchanged and no vertical evaluation was purchased.
+
 > Last verified: 2026-10-26 — Refreshed evaluator source fingerprints after approved-brand grounding and deterministic media finishing. The40-case,6-lane corpus content is unchanged; no paid evaluation, score promotion or vertical workflow activation occurred.
 
 > Last verified: 2026-10-24 — Regenerate the current vertical source fingerprint after integrating main c765168d. The 40 cases across six lanes remain byte-equivalent and no historical qualification is relabeled or replayed.

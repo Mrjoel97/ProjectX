@@ -4,12 +4,16 @@ export type MediaFinishing = {
   overlayStartMs?: number;
   overlayEndMs?: number;
   transitionOut?: "cut" | "fade";
+  motionGraphic?: "orbit-ring";
 };
 export function parseMediaFinishing(
   raw: MediaFinishing,
   durationMs: number,
 ): MediaFinishing | null {
-  const { overlay, overlayStartMs, overlayEndMs, transitionOut } = raw;
+  const { overlay, overlayStartMs, overlayEndMs, transitionOut, motionGraphic } = raw;
+  if (motionGraphic !== undefined && motionGraphic !== "orbit-ring") return null;
+  if (motionGraphic !== undefined && (!Number.isInteger(durationMs) || durationMs > 15000))
+    return null;
   if (transitionOut !== undefined && transitionOut !== "cut" && transitionOut !== "fade")
     return null;
   if (
@@ -40,5 +44,6 @@ export function parseMediaFinishing(
   return {
     ...(overlay === undefined ? {} : { overlay, overlayStartMs: start, overlayEndMs: end }),
     ...(transitionOut === undefined ? {} : { transitionOut }),
+    ...(motionGraphic === undefined ? {} : { motionGraphic }),
   };
 }

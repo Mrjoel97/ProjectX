@@ -1582,6 +1582,10 @@ type Block = {
   asset: { source: "vault"; docId: string } | null;
   description: string;
   overlay: string | null;
+  overlayStartMs?: number;
+  overlayEndMs?: number;
+  transitionOut?: "cut" | "fade";
+  motionGraphic?: "orbit-ring";
   prompt: string;
   narration: string;
   narrationChars: number;
@@ -1838,7 +1842,20 @@ function SceneTile({
         {block.description}
       </p>
       {block.overlay && (
-        <p style={{ ...dimText, ...traceText, margin: "0.3rem 0 0" }}>Overlay: {block.overlay}</p>
+        <p style={{ ...dimText, ...traceText, margin: "0.3rem 0 0" }}>
+          Animated title: {block.overlay}
+          {block.overlayStartMs !== undefined && block.overlayEndMs !== undefined
+            ? ` · ${(block.overlayStartMs / 1000).toFixed(1)}–${(block.overlayEndMs / 1000).toFixed(1)}s within this scene`
+            : ""}
+        </p>
+      )}
+      {block.transitionOut === "fade" && (
+        <p style={{ ...dimText, margin: "0.3rem 0 0" }}>Transition: fade through background</p>
+      )}
+      {block.motionGraphic === "orbit-ring" && (
+        <p style={{ ...dimText, margin: "0.3rem 0 0" }}>
+          3D accent: orbiting ring around the hero area (decorative, not a product model)
+        </p>
       )}
 
       {/* THE CITATION (33-08) — where this scene's figure came from, and whose word it is.

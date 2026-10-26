@@ -124,7 +124,7 @@ export function parseAssemblySidecar(raw: string): Result<AssemblyReport, Assemb
   const o = parsed as Record<string, unknown>;
   if (
     o.finishing_cue_count !== undefined &&
-    (o.finishing_version !== 1 ||
+    (o.finishing_version !== 2 ||
       typeof o.finishing_cue_count !== "number" ||
       !Number.isInteger(o.finishing_cue_count) ||
       o.finishing_cue_count < 0 ||

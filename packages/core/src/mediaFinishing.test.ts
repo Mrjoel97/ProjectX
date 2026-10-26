@@ -30,9 +30,9 @@ it("parses reviewed timing/transition columns and refuses unsupported effects", 
   const deck = [
     "SCENE DECK",
     "Target duration: 15",
-    "| # | Visual | Seconds | Description | Narration | Text overlay | Overlay start ms | Overlay end ms | Transition out |",
-    "|---|---|---|---|---|---|---|---|---|",
-    "| 1 | generated_video | 15 | Bottle rises | Meet Forma. | FORMA | 500 | 2500 | fade |",
+    "| # | Visual | Seconds | Description | Narration | Text overlay | Overlay start ms | Overlay end ms | Transition out | Motion graphic |",
+    "|---|---|---|---|---|---|---|---|---|---|",
+    "| 1 | generated_video | 15 | Bottle rises | Meet Forma. | FORMA | 500 | 2500 | fade | orbit-ring |",
   ].join("\n");
   const parsed = parseSceneDeck(deck);
   expect(parsed.ok).toBe(true);
@@ -42,7 +42,9 @@ it("parses reviewed timing/transition columns and refuses unsupported effects", 
       overlayStartMs: 500,
       overlayEndMs: 2500,
       transitionOut: "fade",
+      motionGraphic: "orbit-ring",
     });
   expect(parseSceneDeck(deck.replace("| fade |", "| morph |")).ok).toBe(false);
   expect(parseSceneDeck(deck.replace("| 2500 |", "| 15500 |")).ok).toBe(false);
+  expect(parseSceneDeck(deck.replace("| orbit-ring |", "| arbitrary-model |")).ok).toBe(false);
 });

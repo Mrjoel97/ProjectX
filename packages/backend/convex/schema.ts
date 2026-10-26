@@ -179,6 +179,7 @@ const shotElement = v.object({
   overlayStartMs: v.optional(v.number()),
   overlayEndMs: v.optional(v.number()),
   transitionOut: v.optional(v.union(v.literal("cut"), v.literal("fade"))),
+  motionGraphic: v.optional(v.literal("orbit-ring")),
   prompt: v.string(),
   narration: v.string(), // the block's SPOKEN line. Content-plane. Never audited.
   /** 20.2, `uploaded_video` only: the tenant's own footage, as a vault doc REF — never a

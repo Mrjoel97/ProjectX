@@ -45,6 +45,7 @@ import { contentHash } from "./lib/hash";
 import {
   buildSubmitBody,
   MAX_STOCK_ASSET_BYTES,
+  nativeReelReviewHash,
   pickStockAudio,
   pickStockPhoto,
   pickStockVideo,
@@ -59,6 +60,47 @@ import { maybeStartCaptions } from "./mediaComplete";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+
+test("native review binds brand revision and decorative geometry while preserving finishing cues", async () => {
+  const plan = {
+    _id: "reviewed-plan",
+    mediaAudioMode: "native",
+    targetDurationSeconds: 15,
+    brandKitRef: { docId: "brand-doc", revision: 1, contentHash: "brand-one" },
+    shots: [
+      {
+        index: 0,
+        visual: "generated_video",
+        seconds: 15,
+        windowStartMs: 0,
+        description: "Owned bottle hero",
+        prompt: "Owned bottle hero",
+        narration: "",
+        overlay: "FORMA",
+        overlayStartMs: 500,
+        overlayEndMs: 3000,
+        transitionOut: "fade",
+        motionGraphic: "orbit-ring",
+      },
+    ],
+  } as unknown as Doc<"plans">;
+  const hash = await nativeReelReviewHash(plan);
+  expect(
+    await nativeReelReviewHash({ ...plan, brandKitRef: { ...plan.brandKitRef!, revision: 2 } }),
+  ).not.toBe(hash);
+  expect(
+    await nativeReelReviewHash({
+      ...plan,
+      shots: plan.shots?.map((shot) => ({ ...shot, motionGraphic: undefined })),
+    }),
+  ).not.toBe(hash);
+  expect(sceneDeckOf(plan)?.scenes[0]).toMatchObject({
+    overlayStartMs: 500,
+    overlayEndMs: 3000,
+    transitionOut: "fade",
+    motionGraphic: "orbit-ring",
+  });
+});
 const rateLimiterModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
 );

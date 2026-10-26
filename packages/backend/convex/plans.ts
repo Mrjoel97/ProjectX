@@ -503,6 +503,7 @@ const parsedShot = v.object({
   overlayStartMs: v.optional(v.number()),
   overlayEndMs: v.optional(v.number()),
   transitionOut: v.optional(v.union(v.literal("cut"), v.literal("fade"))),
+  motionGraphic: v.optional(v.literal("orbit-ring")),
   prompt: v.string(),
   narration: v.string(),
   asset: v.optional(v.object({ source: v.literal("vault"), docId: v.string() })),

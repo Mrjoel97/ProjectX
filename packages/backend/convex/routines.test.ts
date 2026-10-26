@@ -114,6 +114,7 @@ const CONVEX_MODULES = [
   "billingRollup.ts",
   "billingWebhook.ts",
   "blueprint.ts",
+  "brandKits.ts",
   "briefings.ts",
   "buffer.ts",
   "bufferActions.ts",
