@@ -543,6 +543,17 @@ export function cardColorsOf(palette: readonly string[] | undefined): {
   return { bg, ink: luminance(bg) > 0.179 ? "0x000000" : "0xFFFFFF" };
 }
 
+/** Native graphics reuse the reviewed palette wire field; no text cards share this mode.
+ * The second valid color is the accent. Missing accents remain neutral, never Pikar cyan. */
+export function nativeGraphicColorsOf(palette: readonly string[] | undefined): {
+  bg: string;
+  ink: string;
+} {
+  const base = cardColorsOf(palette);
+  const colors = (palette ?? []).map(hexIn).filter((color): color is string => color !== null);
+  return { bg: base.bg, ink: colors[1] ?? base.ink };
+}
+
 // ── The RUNNER: the route handler's whole body, with the SDK injected ──────────────────────────
 //
 // The Next.js route file is a ~20-line adapter over this function (CLAUDE.md §1: domain logic in
@@ -1008,7 +1019,7 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
     if (scene.motionGraphic === "orbit-ring")
       files.push({
         path: `in/motion${String(i + 1).padStart(2, "0")}.ass`,
-        content: new TextEncoder().encode(orbitRingAss(scene.seconds)),
+        content: new TextEncoder().encode(orbitRingAss(scene.seconds, body.card?.ink)),
       });
     if (scene.overlay !== undefined)
       files.push({

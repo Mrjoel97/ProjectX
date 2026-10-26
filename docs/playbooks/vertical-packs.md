@@ -1,3 +1,5 @@
+> Last verified: 2026-10-26 — Final renderer palette and nullable-review fixes refresh source fingerprints only; all40vertical and46golden cases remain unchanged. No qualification scores or paidreceipts are rewritten.
+
 > Last verified: 2026-10-26 — Refreshed source fingerprints for final motion finishing and CI integration fixes; the40-case corpus is unchanged and no vertical evaluation was purchased.
 
 > Last verified: 2026-10-26 — Refreshed evaluator source fingerprints after approved-brand grounding and deterministic media finishing. The40-case,6-lane corpus content is unchanged; no paid evaluation, score promotion or vertical workflow activation occurred.

@@ -459,11 +459,17 @@ describe("native soundtrack assembly", () => {
       }),
     });
     expect(
-      await (await handleRenderRequest(post(nativeBody({ scenes })), current.deps)).json(),
+      await (
+        await handleRenderRequest(
+          post(nativeBody({ scenes, card: { bg: "0x080808", ink: "0xD7B77A" } })),
+          current.deps,
+        )
+      ).json(),
     ).toMatchObject({ ok: true });
     expect(current.rec.commands[0]?.args).toContain("0:fade:1:500:2500:1");
     const motionFile = current.rec.writes.find((f) => f.path === "in/motion01.ass");
     expect(new TextDecoder().decode(motionFile?.content)).toContain("[Events]");
+    expect(new TextDecoder().decode(motionFile?.content)).toContain("\\1c&H7AB7D7&");
     const textFile = current.rec.writes.find((f) => f.path === "in/overlay01.txt");
     expect(new TextDecoder().decode(textFile?.content)).toBe("FORMA: 100%");
     expect(current.rec.commands[0]?.args).not.toContain("FORMA: 100%");

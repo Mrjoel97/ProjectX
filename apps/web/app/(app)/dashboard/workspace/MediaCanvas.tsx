@@ -1582,10 +1582,10 @@ type Block = {
   asset: { source: "vault"; docId: string } | null;
   description: string;
   overlay: string | null;
-  overlayStartMs?: number;
-  overlayEndMs?: number;
-  transitionOut?: "cut" | "fade";
-  motionGraphic?: "orbit-ring";
+  overlayStartMs?: number | null;
+  overlayEndMs?: number | null;
+  transitionOut?: "cut" | "fade" | null;
+  motionGraphic?: "orbit-ring" | null;
   prompt: string;
   narration: string;
   narrationChars: number;
@@ -1844,7 +1844,7 @@ function SceneTile({
       {block.overlay && (
         <p style={{ ...dimText, ...traceText, margin: "0.3rem 0 0" }}>
           Animated title: {block.overlay}
-          {block.overlayStartMs !== undefined && block.overlayEndMs !== undefined
+          {typeof block.overlayStartMs === "number" && typeof block.overlayEndMs === "number"
             ? ` · ${(block.overlayStartMs / 1000).toFixed(1)}–${(block.overlayEndMs / 1000).toFixed(1)}s within this scene`
             : ""}
         </p>

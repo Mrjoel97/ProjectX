@@ -32,6 +32,7 @@ import {
   isTransientRenderCode,
   MUSIC_BLOCK_INDEX,
   MUSIC_INPUT_NAME,
+  nativeGraphicColorsOf,
   renderInputName,
 } from "@pikar/core/render";
 import type { MusicMood } from "@pikar/core/storyboard";
@@ -395,8 +396,17 @@ export const batchToRender = internalQuery({
     // Sent only when the deck actually yields a colour. Absent means the black-and-white card, so
     // a palette written in words ("warm amber") degrades to exactly the reel we shipped before
     // rather than refusing a render over a styling detail.
-    const cards_ = cards.length === 0 ? undefined : cardColorsOf(plan.artDirection?.palette);
-    const card = cards_ === undefined || cards_.bg === CARD_DEFAULT_BG ? undefined : cards_;
+    const hasNativeGraphic = native && scenes.some((scene) => scene.motionGraphic === "orbit-ring");
+    const cards_ = hasNativeGraphic
+      ? nativeGraphicColorsOf(plan.artDirection?.palette)
+      : cards.length === 0
+        ? undefined
+        : cardColorsOf(plan.artDirection?.palette);
+    const card = hasNativeGraphic
+      ? cards_
+      : cards_ === undefined || cards_.bg === CARD_DEFAULT_BG
+        ? undefined
+        : cards_;
 
     return {
       ok: true,

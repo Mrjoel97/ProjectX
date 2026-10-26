@@ -1,9 +1,11 @@
 /** Closed, decorative 3D geometry. This never reconstructs or changes a customer's product.
  * A perspective camera projects an orbiting annulus; depth sorting and directional shading
  * are calculated before libass draws the faces. No executable/model-authored asset is accepted. */
-export function orbitRingAss(seconds: number): string {
+export function orbitRingAss(seconds: number, color = "0xFFFFFF"): string {
   if (!Number.isInteger(seconds) || seconds < 1 || seconds > 15)
     throw new Error("INVALID_RING_DURATION");
+  if (!/^0x[0-9A-Fa-f]{6}$/.test(color)) throw new Error("INVALID_RING_COLOR");
+  const rgb = [2, 4, 6].map((offset) => Number.parseInt(color.slice(offset, offset + 2), 16));
   const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: 720\nPlayResY: 1280\nScaledBorderAndShadow: yes\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Ring,Arial,24,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n`;
   const time = (frame: number) => {
     const cs = Math.round((frame * 100) / 24);
@@ -43,7 +45,7 @@ export function orbitRingAss(seconds: number): string {
       return {
         points,
         depth: points.reduce((sum, p) => sum + p.z, 0),
-        color: `${channel(221)}${channel(211)}${channel(135)}`,
+        color: `${channel(rgb[2] ?? 255)}${channel(rgb[1] ?? 255)}${channel(rgb[0] ?? 255)}`,
       };
     }).sort((a, b) => a.depth - b.depth);
     const opacity = Math.min(1, t / 0.35, (seconds - t) / 0.35);
