@@ -5808,3 +5808,19 @@ floating rear bottle), and generated detail varies bottle identity. Replacing th
 reviewed still is an explicit free editorial QC fallback, not successful video-provider acceptance
 or a production generation-profile promotion. See the phase 53 reel recovery record for receipts,
 baseline limitations, input identities and candidate verification.
+
+### 2026-10-26 — explicit image quality and creative director contract
+
+New image plans may persist `MEDIA_DEFAULT_IMAGE_QUALITY = high`; missing historical quality still means low. The provider contract sends the reviewed quality without a cheaper fallback. Explicit GPT Image 2 portrait profiles reserve low $0.006, medium $0.07, high $0.20; medium/high require 1024x1536 and at most4096 UTF-8 prompt bytes. These are policy reservations, not invoice guarantees. Evidence is the three-sample 2026-10-22 image report recorded in `media.fixtures.json`. Sunburst has no qualified route or price and is not enabled. Persist quality through plan review, batch admission and job submission; do not reinterpret old missing values as high.
+
+Media Director v11 grounds approved brand revisions, designs story/camera endpoints and matched motion, and calls for actual playback review. Optional overlay timing and cut/fade columns describe only executable renderer capabilities. No controllable product mesh, animated logo asset or guaranteed generated lettering is promised. Native Seedance audio remains intact.
+
+`node packages/backend/scripts/prepare-director-comparison.mjs` prints a free preparation manifest, not an evaluation result. It fixes the director-body hash, paired briefs, structural gates, blind creative rubric and90-second production timeout. Kimi K3.1 Pro remains a candidate; executing the production comparison requires separately bounded approval and records actual model/fallback/cost. No model-default change or paid call occurs in preparation.
+
+Image review hardening: explicit quality plans now require the displayed review hash and maximum cents at Generate. The digest binds prompt, model/dimensions/quality, approved brand reference and price policy. Historical missing-quality callers retain their existing entry point. Submission carries and checks each image job's immutable prompt hash; a changed plan prompt fails before a provider call. Both estimate and admission reject oversized high/medium prompts. The cockpit links customers without approved branding to the Profile Brand kit panel and never treats a draft or chat acknowledgement as activation.
+
+### 2026-10-26 — deterministic native finishing
+
+Native scene shots may carry overlayStartMs/overlayEndMs (scene-relative integers, at least 500 ms readable window inside the scene) and transitionOut cut/fade. Text is limited to 80 characters/12 words, with at most 25 characters per word and is written as a literal UTF-8 file with drawtext expansion disabled. Default text covers its scene; safe upper placement keeps it clear of bottom captions. A fade is a 200 ms fade-through-background on either side of the boundary, never an overlapping dissolve: no clip retiming or speech overlap. Legacy separate-audio renders retain their existing path. Native generation is told to leave lettering to the compositor. Brand/logo image animation and controlled product 3D are not implemented by this lane.
+
+The renderer validates cues before starting a sandbox and requires finishing version 1/count proof before uploading a finished result. Native approval hashes bind the finishing version and brand-kit revision. Free FFmpeg fixtures inspect actual title-window pixels and transition pixels, decode the whole output, verify soundtrack frequency at the original scene offsets, and reject missing native audio. This verifies execution, not creative quality; release still needs normal-speed and slow-motion review of actual generated footage for identity, transitions, readable titles and sound continuity.

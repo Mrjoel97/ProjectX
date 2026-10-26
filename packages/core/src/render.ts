@@ -1,3 +1,4 @@
+import { type MediaFinishing, parseMediaFinishing } from "./mediaFinishing";
 /**
  * The render stage's PURE half (MEDIA-01, D11). Pure TS, Convex-free AND SDK-free (CLAUDE.md §1).
  *
@@ -605,7 +606,7 @@ type RenderRequestBody =
       /** The DECLARED reel length. The scenes must sum to it, here and in the script. */
       targetSeconds: number;
       /** The reel, in order. Order IS the index — the same rule the deck parser follows. */
-      scenes: Array<{ kind: AssemblyVisual; seconds: number }>;
+      scenes: Array<{ kind: AssemblyVisual; seconds: number } & MediaFinishing>;
       /** Explicit new-job mode; absent preserves the historical separate narration mix. */
       nativeAudio?: true;
       inputs: Array<{ name: string; jobId: string }>;
@@ -702,7 +703,7 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
   if (!Array.isArray(b.scenes) || b.scenes.length === 0) return null;
   if (!Array.isArray(b.inputs) || b.inputs.length === 0) return null;
 
-  const scenes: Array<{ kind: AssemblyVisual; seconds: number }> = [];
+  const scenes: Array<{ kind: AssemblyVisual; seconds: number } & MediaFinishing> = [];
   let summed = 0;
   for (const entry of b.scenes) {
     if (entry === null || typeof entry !== "object") return null;
@@ -710,7 +711,14 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
     if (!isStr(kind) || !SCENE_KIND_SET.has(kind)) return null;
     if (typeof seconds !== "number" || !Number.isInteger(seconds) || seconds < 1) return null;
     summed += seconds;
-    scenes.push({ kind: kind as AssemblyVisual, seconds });
+    const finishing = parseMediaFinishing(entry as MediaFinishing, seconds * 1000);
+    if (finishing === null) return null;
+    if (
+      b.nativeAudio !== true &&
+      (finishing.overlay !== undefined || finishing.transitionOut !== undefined)
+    )
+      return null;
+    scenes.push({ kind: kind as AssemblyVisual, seconds, ...finishing });
   }
   // The script asserts this too, and refuses before doing any work. Asserting it HERE as well is
   // the cheaper of the two failures by a whole sandbox: a deck that does not add up to what it
@@ -993,6 +1001,13 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
     files.push({ path: `in/${card.name}`, content: new TextEncoder().encode(card.text) });
   }
 
+  for (const [i, scene] of body.scenes.entries()) {
+    if (scene.overlay !== undefined)
+      files.push({
+        path: `in/overlay${String(i + 1).padStart(2, "0")}.txt`,
+        content: new TextEncoder().encode(scene.overlay),
+      });
+  }
   const startedAt = Date.now();
   const sandbox = await deps.createSandbox(
     buildSandboxOptions({ snapshotId: deps.snapshotId, timeoutMs: RENDER_SANDBOX_TIMEOUT_MS }),
@@ -1012,6 +1027,20 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
     const run = await sandbox.runCommand("sh", [
       "assemble_final.sh",
       ...body.scenes.flatMap((s) => ["--scene", `${s.kind}:${s.seconds}`]),
+      ...body.scenes.flatMap((s, i) =>
+        s.overlay !== undefined || s.transitionOut !== undefined
+          ? [
+              "--finish",
+              [
+                i,
+                s.transitionOut ?? "cut",
+                s.overlay === undefined ? 0 : 1,
+                s.overlayStartMs ?? 0,
+                s.overlayEndMs ?? s.seconds * 1000,
+              ].join(":"),
+            ]
+          : [],
+      ),
       "--target-seconds",
       String(body.targetSeconds),
       ...(body.nativeAudio ? ["--native-audio"] : []),
@@ -1043,6 +1072,11 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
     if (!checked.ok || !mp4 || !sidecarBytes) {
       return jsonStop(checked.ok ? "missing_output" : checked.code);
     }
+    const expectedFinishing = body.scenes.filter(
+      (s) => s.overlay !== undefined || s.transitionOut !== undefined,
+    ).length;
+    if (expectedFinishing > 0 && checked.report.finishingCueCount !== expectedFinishing)
+      return jsonStop("missing_output");
     const nativeAudio = body.nativeAudio
       ? await sandbox.readFileToBuffer({ path: "out/final.mp4.native.wav" })
       : null;

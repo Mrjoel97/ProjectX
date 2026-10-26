@@ -1,5 +1,8 @@
 /** Pure provider wire contract. Structurally matches the existing priced submit subset;
  * no cost-package import (that dependency runs from cost to core), defaults or requests. */
+export type ImageQuality = "low" | "medium" | "high";
+/** New quality profiles use a bounded prompt; historical low requests retain their wire shape. */
+export const IMAGE_QUALITY_PROMPT_MAX_BYTES = 4096;
 export type SubmittableSpec =
   | {
       kind: "video";
@@ -9,7 +12,7 @@ export type SubmittableSpec =
       /** Explicit opt-in for standard Seedance native audio; absent preserves silent jobs. */
       generateAudio?: boolean;
     }
-  | { kind: "image"; model: string; width: number; height: number }
+  | { kind: "image"; model: string; width: number; height: number; quality?: ImageQuality }
   | { kind: "tts"; model: string; characters: number; voice: string; sampleRateHertz: number };
 export const TTS_VERBATIM_SYSTEM =
   "You are a text-to-speech engine, not an assistant. Read the user message aloud VERBATIM, " +
@@ -118,6 +121,14 @@ export function buildSubmitBody(
         aspect_ratio: "9:16",
       };
     case "image":
+      if (spec.quality !== undefined && !["low", "medium", "high"].includes(spec.quality))
+        throw new Error("unsupported_image_quality");
+      if (spec.quality === "medium" || spec.quality === "high") {
+        if (spec.model !== "openai/gpt-image-2" || spec.width !== 1024 || spec.height !== 1536)
+          throw new Error("unsupported_image_quality_profile");
+        if (new TextEncoder().encode(text).byteLength > IMAGE_QUALITY_PROMPT_MAX_BYTES)
+          throw new Error("image_quality_prompt_too_large");
+      }
       // NO `.replace(/^openai\//, "")` here, and that asymmetry with the `tts` arm below is the
       // point: `tts` posts to OpenAI's OWN API, which does not know a route prefix, while this arm
       // posts to OpenRouter, which does. Stripping here would send `gpt-image-2` to a gateway that
@@ -134,7 +145,7 @@ export function buildSubmitBody(
         prompt: text,
         n: 1,
         size: `${spec.width}x${spec.height}`,
-        quality: "low",
+        quality: spec.quality ?? "low",
         output_format: "png",
       };
     case "tts":

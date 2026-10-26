@@ -1080,7 +1080,11 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
     setBusy(true);
     setNote(null);
     try {
-      const result = await generateImage({ planId });
+      const result = await generateImage({
+        planId,
+        expectedReviewHash: estimate?.reviewHash,
+        maxCostCents: estimate?.totalCents,
+      });
       if (!result.ok) {
         setNote(
           result.reason === "already_started"
@@ -1158,6 +1162,8 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
           <>
             <p style={{ ...dimText, marginTop: "0.45rem" }}>
               1 image · {estimate.width}×{estimate.height} · {estimate.model}
+              {" · "}
+              {estimate.quality ?? "low"} quality
             </p>
             <p style={{ ...dimText, marginTop: "0.25rem" }}>
               Total {usd(estimate.totalCents)} · {usd(estimate.remainingCents)} of today's media

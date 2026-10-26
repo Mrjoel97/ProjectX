@@ -1,3 +1,5 @@
+> Last verified: 2026-10-26 — brandKits is classified as tenant-owned lifecycle data. Proposed identity content remains outside audit payloads; approved Vault snapshots retain tenant ownership and hash verification. Tenant table inventory and brand lifecycle tests pass locally.
+
 > Last verified: 2026-10-24 — The audit viewer explicitly projects the real media task-budget approval event: campaign reference, selected count, approved extra cents, task maximum cents and daily-window timestamp only. Prompts and product/voice references stay excluded. The forward event inventory and privacy projection regression cover this read boundary; no audit writer or spending authority changed.
 
 > Combined-source checkpoint: 2026-10-24 — Retain media campaign/presentation ownership and native-audio file lifecycle controls alongside direct-social credential summaries, bounded metadata retention and truthful revocation results. Dated table counts and social rollout receipts below describe their original sources/deployments; they do not establish rollout of this merged media candidate.

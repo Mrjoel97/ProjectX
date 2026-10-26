@@ -87,6 +87,7 @@ export const TENANT_TABLE_CLASSIFICATION = {
   feedback: "tenant_owned",
   // One deployment-wide optimizer switch/threshold row; it contains no tenant data.
   optimizerConfig: "global",
+  brandKits: "tenant_owned",
   tenantProfiles: "tenant_owned",
   goals: "tenant_owned",
   spendEvents: "tenant_owned",

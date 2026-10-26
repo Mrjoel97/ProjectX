@@ -3190,3 +3190,7 @@ New shared llm/schema/contracts/writer sources change exact-source evaluator ide
 
 
 > Last verified: 2026-10-24 — The media director now documents the 15-second native option and explicitly selected product images. Source changes require normal registry activation; they do not activate a hosted skill automatically.
+
+### 2026-10-26 — creative direction and brand proposal registry
+
+Media Director v11 adds approved-brand grounding, purposeful camera paths, executable overlay timing/cut-or-fade instructions and playback review requirements. Canonical Markdown and derived TypeScript remain byte-mirrored. `brand-kit-designer` is appended as a new v1 draft-only registry seed; its structured proposal cannot approve itself or activate a Vault brand. Human approval and tenant/version binding belong to the brand workflow, not the prompt. The mirror test covers the new body. Local changes do not seed a hosted deployment; release must seed and verify the active registry versions.

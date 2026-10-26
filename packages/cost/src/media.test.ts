@@ -20,6 +20,7 @@ import {
   MEDIA_DEFAULT_VOICE,
   MEDIA_GENERATED_SECONDS_CAP,
   MEDIA_IMAGE_PRICING,
+  MEDIA_IMAGE_QUALITY_PRICING,
   MEDIA_JOB_CAP_USD,
   MEDIA_MUSIC_PRICING,
   MEDIA_NATIVE_GENERATED_SECONDS_CAP,
@@ -37,6 +38,35 @@ import {
 } from "./media";
 
 const VIDEO_MODEL = MEDIA_DEFAULT_VIDEO.model;
+describe("reviewed image quality policies", () => {
+  const image = { kind: "image", ...MEDIA_DEFAULT_IMAGE } as const;
+  it("keeps historical low while reserving the explicit selected profile", () => {
+    expect(estimateMediaUsd(image)).toEqual({ ok: true, value: 0.006 });
+    for (const quality of ["low", "medium", "high"] as const) {
+      expect(estimateMediaUsd({ ...image, quality })).toEqual({
+        ok: true,
+        value: MEDIA_IMAGE_QUALITY_PRICING[quality],
+      });
+    }
+    expect(estimateMediaUsd({ ...image, quality: "high" })).toEqual({ ok: true, value: 0.2 });
+    const batch = chooseMediaBatch(
+      Array.from({ length: 10 }, () => ({ ...image, quality: "high" as const })),
+      3.5,
+    );
+    expect(batch.ok).toBe(true);
+    if (batch.ok) expect(batch.value.estUsd).toBeCloseTo(2, 10);
+  });
+  it("refuses unpriced models and geometry rather than applying a cheaper quality", () => {
+    expect(estimateMediaUsd({ ...image, model: "unqualified/sunburst", quality: "high" })).toEqual({
+      ok: false,
+      error: { code: "unknown_model" },
+    });
+    expect(estimateMediaUsd({ ...image, width: 2048, quality: "high" })).toEqual({
+      ok: false,
+      error: { code: "illegal_duration" },
+    });
+  });
+});
 const clip = (
   resolution: VideoRes = MEDIA_DEFAULT_VIDEO.resolution,
   // ANNOTATED, like `resolution` above. `MEDIA_DEFAULT_VIDEO` is `as const`, so `.seconds` is the
@@ -381,6 +411,7 @@ describe("chooseMediaBatch — the cents floor is applied ONCE, on the total", (
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 const MEDIA_SRC = read("./media.ts");
 const FIXTURES = JSON.parse(read("./media.fixtures.json")) as {
+  imageQualityProfiles: { policyUsd: Record<string, number> };
   readAt: string;
   entries: {
     id: string;
@@ -402,6 +433,9 @@ const FIXTURES = JSON.parse(read("./media.fixtures.json")) as {
 };
 
 describe("the price tables agree with the committed vendor fixture", () => {
+  it("keeps explicit quality policy evidence in sync", () => {
+    expect(MEDIA_IMAGE_QUALITY_PRICING).toEqual(FIXTURES.imageQualityProfiles.policyUsd);
+  });
   // WAS `entries.find(...)` — FIRST MATCH ONLY, so a SECOND fixture entry of the same kind was
   // never checked against its table row at all. That held while every kind was a singleton and
   // stops holding the moment one is not (33.1-04 adds a second `video` entry), which is why the

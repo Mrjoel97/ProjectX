@@ -21,6 +21,7 @@ import type * as billingApi from "../billingApi.js";
 import type * as billingLedger from "../billingLedger.js";
 import type * as billingRollup from "../billingRollup.js";
 import type * as billingWebhook from "../billingWebhook.js";
+import type * as brandKits from "../brandKits.js";
 import type * as blueprint from "../blueprint.js";
 import type * as briefings from "../briefings.js";
 import type * as buffer from "../buffer.js";
@@ -212,6 +213,7 @@ declare const fullApi: ApiFromModules<{
   billingLedger: typeof billingLedger;
   billingRollup: typeof billingRollup;
   billingWebhook: typeof billingWebhook;
+  brandKits: typeof brandKits;
   blueprint: typeof blueprint;
   briefings: typeof briefings;
   buffer: typeof buffer;

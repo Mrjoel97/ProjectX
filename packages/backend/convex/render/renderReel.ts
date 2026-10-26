@@ -22,6 +22,7 @@ import {
   isNativeCaptionWav,
   toAss,
 } from "@pikar/core/captions";
+import { type MediaFinishing, parseMediaFinishing } from "@pikar/core/mediaFinishing";
 import { SEEDANCE_STANDARD_MODEL } from "@pikar/core/mediaProviderContract";
 import {
   CARD_DEFAULT_BG,
@@ -106,7 +107,7 @@ type RenderInputs = {
    *  inside the script, because each of the three is a cheaper failure than the one after it. */
   targetSeconds: number;
   nativeAudio?: true;
-  scenes: Array<{ kind: "video" | "image" | "card"; seconds: number }>;
+  scenes: Array<{ kind: "video" | "image" | "card"; seconds: number } & MediaFinishing>;
   /** An OPAQUE ref the blob route resolves — a `mediaJobs` row for anything that was bought, or a
    *  `vaultDocuments` row for an `uploaded_video` scene, whose bytes were already the tenant's.
    *  `resolveRenderAsset` is the single place that knows which table an id belongs to; the runner
@@ -258,7 +259,10 @@ export const batchToRender = internalQuery({
       if (!Number.isInteger(shot.seconds) || shot.seconds < 1) {
         return { ok: false, reason: "incomplete_blocks" };
       }
-      scenes.push({ kind, seconds: shot.seconds });
+      const finishing =
+        plan.mediaAudioMode === "native" ? parseMediaFinishing(shot, shot.seconds * 1000) : {};
+      if (finishing === null) return { ok: false, reason: "incomplete_blocks" };
+      scenes.push({ kind, seconds: shot.seconds, ...finishing });
 
       // THE PICTURE. A `card` is drawn from text and has no job — which is the whole reason the
       // `unrenderable_block` refusal at `media.reserveJobInner` could finally be narrowed. The
@@ -1077,7 +1081,13 @@ export const renderReel = internalAction({
         ]
       : undefined;
     const reparsed = parseAssemblySidecar(raw);
-    if (!reparsed.ok) {
+    const expectedFinishing = scenes.filter(
+      (s) => s.overlay !== undefined || s.transitionOut !== undefined,
+    ).length;
+    if (
+      !reparsed.ok ||
+      (expectedFinishing > 0 && reparsed.value.finishingCueCount !== expectedFinishing)
+    ) {
       await ctx.runMutation(internal.render.renderReel.recordRender, {
         tenantId: a.tenantId,
         planId,

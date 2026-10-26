@@ -18,7 +18,11 @@ import { concatWavTakes, isNativeCaptionWav } from "@pikar/core/captions";
 import { expect, test } from "vitest";
 
 const bash = process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "/bin/bash";
+const font = ["C:/Windows/Fonts/arial.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"].find(
+  existsSync,
+);
 const available =
+  font &&
   existsSync(bash) &&
   ["ffmpeg", "ffprobe"].every(
     (command) => spawnSync(command, ["-version"], { windowsHide: true }).status === 0,
@@ -54,7 +58,7 @@ test.skipIf(!available)(
           "-f",
           "lavfi",
           "-i",
-          "testsrc2=size=360x640:rate=24:duration=2",
+          "color=c=blue:size=360x640:rate=24:duration=2",
           "-f",
           "lavfi",
           "-i",
@@ -89,18 +93,50 @@ test.skipIf(!available)(
         `#!/usr/bin/env bash\nexec '${which.replace(/'/gu, `'\\''`)}' -cpucount 2 "$@"\n`,
         { mode: 0o755 },
       );
+      if (!font) throw new Error("Missing fixture font");
+      copyFileSync(font, join(work, "in/font.ttf"));
+      writeFileSync(join(work, "in/overlay01.txt"), "FORMA: 100% clarity");
       const assemble = () =>
         run(bash, [
           "--noprofile",
           "--norc",
           "-c",
-          'export PATH="$PWD/fixture-bin:$PATH"; bash assemble.sh --scene video:2 --scene video:2 --target-seconds 4 --native-audio',
+          'export PATH="$PWD/fixture-bin:$PATH"; export ASSEMBLE_FONT="in/font.ttf"; bash assemble.sh --scene video:2 --scene video:2 --target-seconds 4 --native-audio --finish 0:fade:1:500:1500',
         ]);
       await assemble();
+      // Inspect decoded pixels at the real overlay window and transition boundary.
+      const pixelsAt = async (time: number) => {
+        await ffmpeg([
+          "-ss",
+          String(time),
+          "-i",
+          "out/final.mp4",
+          "-frames:v",
+          "1",
+          "-vf",
+          "crop=600:160:60:160,format=gray",
+          "-f",
+          "rawvideo",
+          "frame.raw",
+        ]);
+        return readFileSync(join(work, "frame.raw"));
+      };
+      const before = await pixelsAt(0.2);
+      const title = await pixelsAt(0.8);
+      const after = await pixelsAt(1.7);
+      const boundary = await pixelsAt(2);
+      const bright = (b: Buffer) => [...b].filter((v) => v > 200).length;
+      const mean = (b: Buffer) => [...b].reduce((a, v) => a + v, 0) / b.length;
+      expect(bright(before)).toBe(0);
+      expect(bright(title)).toBeGreaterThan(200);
+      expect(bright(after)).toBe(0);
+      expect(mean(boundary)).toBeLessThan(mean(after) / 2);
       const originalFinal = readFileSync(join(work, "out/final.mp4"));
       const sidecar = JSON.parse(readFileSync(join(work, "out/final.mp4.assembly.json"), "utf8"));
       expect(parseAssemblySidecar(JSON.stringify(sidecar)).ok).toBe(true);
       expect(sidecar.native_audio).toBe(true);
+      expect(sidecar.finishing_version).toBe(1);
+      expect(sidecar.finishing_cue_count).toBe(1);
       expect(sidecar.sfx_vol).toBe(1);
       expect(sidecar.music).toBe("none");
       expect(sidecar.gates).toContain("native_audio_at_scene_start");

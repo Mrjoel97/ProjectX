@@ -125,6 +125,7 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
     "currency",
     "charges",
   ],
+  "brand_kit.approved": ["docId", "revision", "contentHash"],
   "blueprint.confirmed": [
     "docId",
     "sourceDocCount",

@@ -10,6 +10,7 @@ import type { EvalEvidence, EvalEvidenceTenantTarget } from "@pikar/contracts/sk
 import {
   ATTACHMENT_EXTRACTOR_SKILL,
   BMC_SKILL,
+  BRAND_KIT_DESIGNER_SKILL,
   BUSINESS_BLUEPRINT_SKILL,
   BUSINESS_PROFILE_SKILL,
   COCKPIT_AGENT_SKILL,
@@ -59,6 +60,7 @@ import {
 } from "@pikar/contracts/skill";
 import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachmentExtractor";
 import { bmcSkillBody } from "@pikar/contracts/skills/bmc";
+import { brandKitDesignerBody } from "@pikar/contracts/skills/brandKitDesigner";
 import { businessBlueprintSkillBody } from "@pikar/contracts/skills/businessBlueprint";
 import { businessProfileSkillBody } from "@pikar/contracts/skills/businessProfile";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
@@ -821,6 +823,8 @@ const SEEDS = [
   // synthesizing from a hardcoded fallback — which is the correct direction and is deliberate.
   { name: KNOWLEDGE_QUERY_PLANNER_SKILL, body: knowledgeQueryPlannerSkillBody },
   { name: KNOWLEDGE_SYNTHESIZER_SKILL, body: knowledgeSynthesizerSkillBody },
+  // Draft-only proposal; human approval and activation are enforced by the brand workflow.
+  { name: BRAND_KIT_DESIGNER_SKILL, body: brandKitDesignerBody },
 ];
 
 /** Every seeded skill name. Derived from `SEEDS`, never typed a second time. */

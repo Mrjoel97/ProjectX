@@ -1,3 +1,5 @@
+> Last verified: 2026-10-26 — Active approved brand context is separate from blueprint and finance grounding. Image plans and batch items pin the approved brand revision and explicit high quality for new proposals; historical unspecified quality remains low. The image canvas displays quality and estimated reservation. Native finishing fields survive plan persistence. Local verification is separate from beta deployment.
+
 > Last verified: 2026-10-24 — The workspace campaign regression uses the real rate limiter to exercise current budget projections while preserving private-child exclusion and exact legacy collection scope. All eight focused inventory tests pass; no workspace runtime or approval authority changed.
 
 > Combined-source checkpoint: 2026-10-24 — Preserve per-chat artifact tabs, frame-free document reading, native film review and conversation-only exact task-limit approval alongside customer-controlled social connections and saved-revision publishing review. Current media source defaults are USD 100/customer/day and USD 2,000 shared/day. Existing deployed social receipts do not establish deployment or activation of these media/workspace changes.
