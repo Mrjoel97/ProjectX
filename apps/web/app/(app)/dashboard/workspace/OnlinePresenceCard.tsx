@@ -25,6 +25,7 @@ export function OnlinePresenceCardView({
     );
 
   const { artifact, assessment } = session;
+  const isShop = artifact?.kind === "storefront";
   const published = artifact !== null && artifact.publishedVersion === artifact.version;
   const approved = artifact !== null && artifact.approvedVersion === artifact.version;
   const needsReview =
@@ -75,6 +76,21 @@ export function OnlinePresenceCardView({
                       "Open the finished draft to review its pages and approve the exact version before publication.",
                   };
   const questions = assessment && !assessment.ok ? assessment.missing.slice(0, 5) : [];
+  const displayedCopy = isShop
+    ? {
+        title: "Your shop draft",
+        status:
+          session.status === "ready"
+            ? "Ready to rebuild shop draft"
+            : published
+              ? "Presentation published"
+              : approved
+                ? "Presentation approved"
+                : "Shop draft ready for review",
+        detail:
+          "This is your shop presentation, with its product catalogue. Review the exact version in Sites. Test checkout requires a verified merchant connection and the shop readiness checks shown there.",
+      }
+    : copy;
 
   return (
     <section
@@ -122,11 +138,11 @@ export function OnlinePresenceCardView({
             fontWeight: 600,
           }}
         >
-          {copy.status}
+          {displayedCopy.status}
         </span>
       </div>
-      <h3 style={{ margin: 0, color: "var(--ink)", fontSize: "1.2rem" }}>{copy.title}</h3>
-      <p style={muted}>{copy.detail}</p>
+      <h3 style={{ margin: 0, color: "var(--ink)", fontSize: "1.2rem" }}>{displayedCopy.title}</h3>
+      <p style={muted}>{displayedCopy.detail}</p>
       {questions.length ? (
         <ul style={{ margin: 0, paddingLeft: "1.2rem", color: "var(--ink)", lineHeight: 1.6 }}>
           {questions.map((entry) => (
@@ -144,7 +160,7 @@ export function OnlinePresenceCardView({
           }}
         >
           <p style={muted}>
-            Website version {artifact.version}
+            {isShop ? "Shop draft" : "Website"} version {artifact.version}
             {published ? " · Published" : approved ? " · Approved" : " · Draft"}
           </p>
           {artifact.currentDraftVersion !== undefined &&
@@ -165,7 +181,7 @@ export function OnlinePresenceCardView({
               width: "fit-content",
             }}
           >
-            Review website version {artifact.version} →
+            Review {isShop ? "shop draft" : "website"} version {artifact.version} →
           </Link>
         </div>
       ) : null}

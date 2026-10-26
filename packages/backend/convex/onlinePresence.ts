@@ -1,3 +1,4 @@
+import { merchantSetupSourceRefs } from "@pikar/core/merchantSetup";
 import {
   assessOnlinePresenceBrief,
   mergeOnlinePresenceBrief,
@@ -14,6 +15,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
 import { assertTenantWritable, internalMutation } from "./lib/tenantLifecycle";
+import { shopSetupReviewForTenant, type ShopSetupReview } from "./onlinePresenceShop";
 import { imageSource, listImageCandidates, resolveDocumentAssets } from "./webAssets";
 import { createProjectWithVersion, reviseProjectWithVersion } from "./webProjects";
 import { materializeActiveRecipe } from "./webRecipes";
@@ -221,6 +223,18 @@ const selectedRefs = (brief: unknown): string[] => {
   return brief.sourceRefs.filter((ref): ref is string => typeof ref === "string").slice(0, 32);
 };
 
+/** Shared server-only source authority for exact shop-package review. The authenticated adapter
+ * supplies tenantId; a model payload never chooses or approves a session or source revision. */
+export async function onlinePresenceShopContext(
+  ctx: DatabaseCtx,
+  tenantId: string,
+  planId: Id<"plans">,
+): Promise<{ session: Session; sources: OnlinePresenceSource[] }> {
+  const session = await ownedSession(ctx, tenantId, planId);
+  const sources = await resolveSources(ctx, session, selectedRefs(session.brief));
+  return { session, sources };
+}
+
 function brandColorSourced(assessment: Extract<OnlinePresenceAssessment, { ok: true }>): boolean {
   const color = assessment.brief.design?.primaryColor;
   if (!color) return true;
@@ -290,7 +304,7 @@ type StatusAssessment =
   | {
       ok: true;
       warnings: readonly OnlinePresenceWarning[];
-      recipeId: "business-site" | "campaign-landing";
+      recipeId: "business-site" | "campaign-landing" | "storefront-catalogue";
       publicationRequiresExactVersionApproval: true;
     };
 const statusAssessment = (assessment: OnlinePresenceAssessment): StatusAssessment =>
@@ -332,6 +346,7 @@ function contextSources(
 }
 
 export type OnlinePresenceArtifactReceipt = {
+  kind: "site" | "landing" | "storefront";
   projectId: Id<"webProjects">;
   version: number;
   contentHash: string;
@@ -361,6 +376,7 @@ async function artifactFor(
     .first();
   if (!version || version.contentHash !== session.projectContentHash) return null;
   return {
+    kind: project.kind,
     projectId: project._id,
     version: session.projectVersion,
     contentHash: session.projectContentHash,
@@ -381,6 +397,7 @@ async function artifactFor(
 
 export type OnlinePresenceContext = {
   assetCandidates: Awaited<ReturnType<typeof listImageCandidates>>;
+  shopSetupReview: ShopSetupReview | null;
   briefBuilt: boolean;
   revision: number;
   threadId: string;
@@ -423,6 +440,10 @@ export const contextForTenant = internalQuery({
       assessment: session.brief === undefined ? null : statusAssessment(assessment),
       latestUserMessage: session.humanMessages.at(-1)?.text ?? "",
       assetCandidates: await listImageCandidates(ctx, args.tenantId),
+      shopSetupReview:
+        session.brief && typeof session.brief === "object" && session.brief.kind === "shop"
+          ? await shopSetupReviewForTenant(ctx, args.tenantId, args.planId)
+          : null,
     };
   },
 });
@@ -445,6 +466,8 @@ export const saveBrief = internalMutation({
           v.literal("contactConsent"),
           v.literal("design"),
           v.literal("media"),
+          v.literal("catalogue"),
+          v.literal("shopSetup"),
         ),
       ),
     ),
@@ -464,12 +487,20 @@ export const saveBrief = internalMutation({
         assessment: { ok: false, missing: merged.missing, warnings: [] },
       };
     const brief = merged.brief;
-    if (
-      merged.inheritedMedia &&
-      validateWebRecipeMedia(brief.media) &&
-      Array.isArray(brief.sourceRefs)
-    ) {
-      const images = [brief.media.logo, brief.media.hero, ...(brief.media.gallery ?? [])];
+    if ((merged.inheritedMedia || merged.inheritedCatalogue) && Array.isArray(brief.sourceRefs)) {
+      const images: { storageRef: string }[] = [];
+      if (merged.inheritedMedia && validateWebRecipeMedia(brief.media))
+        images.push(
+          ...[brief.media.logo, brief.media.hero, ...(brief.media.gallery ?? [])].filter(
+            (image): image is NonNullable<typeof image> => image !== undefined,
+          ),
+        );
+      if (merged.inheritedCatalogue && Array.isArray(brief.catalogue)) {
+        for (const item of brief.catalogue) {
+          if (item && typeof item === "object" && typeof item.imageStorageRef === "string")
+            images.push({ storageRef: item.imageStorageRef });
+        }
+      }
       const refs: string[] = [];
       for (const image of images) {
         if (!image) continue;
@@ -504,6 +535,42 @@ export const saveBrief = internalMutation({
         ...brief.sourceRefs,
         ...new Set(refs.filter((ref) => !(brief.sourceRefs as unknown[]).includes(ref))),
       ];
+    }
+    if (merged.inheritedShopSetup && Array.isArray(brief.sourceRefs)) {
+      const previous = new Map(
+        (session.sourceSnapshots ?? []).map((snapshot) => [snapshot.ref, snapshot.revision]),
+      );
+      const refs = merchantSetupSourceRefs(brief.shopSetup).filter((ref) => previous.has(ref));
+      const current = await resolveSources(ctx, session, [...selectedRefs(brief), ...refs]);
+      if (
+        refs.some((ref) => {
+          const source = current.find((source) => source.ref === ref);
+          return (
+            !source ||
+            source.revision !== previous.get(ref) ||
+            source.status !== "approved" ||
+            source.intent !== "current" ||
+            source.stale
+          );
+        })
+      )
+        return {
+          ok: false,
+          revision: session.revision,
+          assessment: {
+            ok: false,
+            missing: [
+              {
+                field: "shopSetup",
+                reason: "unknown_source",
+                question:
+                  "Refresh the changed or unavailable shop setup evidence before retaining this package.",
+              },
+            ],
+            warnings: [],
+          },
+        };
+      brief.sourceRefs = [...new Set([...brief.sourceRefs, ...refs])];
     }
     const sources = await resolveSources(ctx, session, selectedRefs(brief));
     const assessment = assessOnlinePresenceBrief(brief, sources);

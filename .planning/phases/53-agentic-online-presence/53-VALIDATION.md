@@ -1,5 +1,19 @@
 # Phase53 local validation — 2026-10-21
 
+## Merchant runtime and v6 design closeout — 2026-10-24
+
+The final isolated candidate passed all four package typechecks and the Next cloud
+build. Focused setup, stock, cart/payment, custody, refund/digital, export/deletion,
+source-identity and UI checks passed; overlapping counts and actual limitations are
+recorded in [the closeout](../../../docs/releases/2026-10-24-merchant-design-closeout.md).
+Three generated example directions use the actual renderer. Runtime/backend deployment
+and stable staging readback are recorded separately from this source validation.
+
+No real provider qualification, current v6 native browser witness or new paid model
+evaluation was earned. Public checkout remains proof-gated. Carrier dispatch and
+outbound buyer notifications are not implemented. Do not mark 53-02/03/06 complete,
+activate recipes from local examples, or reuse older exact-source evidence.
+
 ## Quality and commerce preparation continuation — 2026-10-23
 
 See [53-06 actual continuation](53-06-SUMMARY.md) for renderer v5, actual three-width

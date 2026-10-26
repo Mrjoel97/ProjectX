@@ -58,6 +58,108 @@ describe("closed recipe design renderer", () => {
     ).toThrow(/WEB_DESIGN_PROFILE_INVALID/);
   });
 
+  test("surface choices are hash-bound while retaining exactly the same supported content, assets and form routes", () => {
+    const input = {
+      ...base,
+      media: {
+        hero: { storageRef: `webasset:source:${"a".repeat(64)}`, alt: "Owner supplied scene" },
+      },
+    };
+    const outputs = ["minimal", "glass", "clay"].map((surfaceStyle) =>
+      materializeWebRecipeWithProvenance("campaign-landing", { ...input, surfaceStyle }),
+    );
+    expect(new Set(outputs.map(({ document }) => canonicalWebDocument(document))).size).toBe(1);
+    const hashes = outputs.map(({ document, designProfile }) =>
+      designedWebDocumentHash(document, designProfile),
+    );
+    expect(new Set(hashes).size).toBe(3);
+    for (const { document, designProfile } of outputs) {
+      const html = renderDesignedWebDocument(document, designProfile, {
+        slug: "owned",
+        page: "campaign",
+      });
+      expect(html).toContain(`data-surface-style="${designProfile.surfaceStyle}"`);
+      expect(html).toContain('action="/p/owned/campaign/forms/signup"');
+      expect(html).toContain('action="/p/owned/campaign/cta/primary"');
+      expect(html).toContain(`/p/owned/assets/source/${"a".repeat(64)}`);
+      expect(html).toContain("I agree to hear from this publisher.");
+      expect(html).not.toMatch(/<script|onload=|https:\/\/fonts/);
+    }
+    const { document, designProfile } = outputs[0]!;
+    expect(() =>
+      renderDesignedWebDocument(document, { ...designProfile, surfaceStyle: "unsafe" } as never),
+    ).toThrow("WEB_DESIGN_PROFILE_INVALID");
+    expect(() =>
+      materializeWebRecipeWithProvenance("campaign-landing", {
+        ...input,
+        surfaceStyle: "backdrop:url(evil)",
+      }),
+    ).toThrow("invalid_surface_style");
+  });
+
+  test("consent-only image-backed campaigns link to their actual inquiry form without inventing an external target", () => {
+    const { document, designProfile } = materializeWebRecipeWithProvenance("campaign-landing", {
+      brandName: "Retreat",
+      headline: "A quiet place",
+      formConsent: "Contact me about this inquiry.",
+      surfaceStyle: "glass",
+      media: { hero: { storageRef: `webasset:scene:${"b".repeat(64)}`, alt: "Provided scene" } },
+    });
+    const html = renderDesignedWebDocument(document, designProfile, {
+      slug: "retreat",
+      page: "campaign",
+    });
+    expect(html).toContain('href="#inquiry-signup"');
+    expect(html).toContain(
+      '<form id="inquiry-signup" method="post" action="/p/retreat/campaign/forms/signup">',
+    );
+    expect(html).toContain('name="email" type="email" autocomplete="email" required');
+    expect(html).not.toContain("data-target=");
+    expect(document.pages[0]?.nodes.some((node) => node.kind === "cta")).toBe(false);
+  });
+
+  test("catalogue uses real hash-bound item images and native details, with no inferred checkout", () => {
+    const ref = `webasset:vessel:${"c".repeat(64)}`;
+    const { document, designProfile } = materializeWebRecipeWithProvenance("storefront-catalogue", {
+      brandName: "Ceramics",
+      surfaceStyle: "clay",
+      items: [
+        {
+          id: "jug",
+          name: "A ceramic jug",
+          description: "A supplied product description.",
+          imageStorageRef: ref,
+          displayPriceText: "$48",
+        },
+      ],
+    });
+    const html = renderDesignedWebDocument(document, designProfile, {
+      slug: "ceramics",
+      page: "catalogue",
+    });
+    expect(html.indexOf(`data-asset-ref="${ref}"`)).toBeLessThan(
+      html.indexOf("<h3>A ceramic jug</h3>"),
+    );
+    expect(html).toContain(
+      "<details><summary>View details</summary><p>A supplied product description.</p></details>",
+    );
+    expect(html).toContain("Ordering is unavailable");
+    expect(html).not.toMatch(/<form|buy now|add to cart|payment|checkout/i);
+    expect(() =>
+      materializeWebRecipeWithProvenance("storefront-catalogue", {
+        brandName: "Ceramics",
+        items: [
+          {
+            id: "jug",
+            name: "Jug",
+            description: "Vessel",
+            imageStorageRef: "https://outside.example/jug.jpg",
+          },
+        ],
+      }),
+    ).toThrow("invalid_storage_ref");
+  });
+
   test("hashes a validated profile independently of persistence key order", () => {
     const { document, designProfile: profile } = materializeWebRecipeWithProvenance(
       "campaign-landing",
@@ -78,6 +180,7 @@ describe("closed recipe design renderer", () => {
       bundleHash: profile.bundleHash,
       ...(profile.pageOverride === undefined ? {} : { pageOverride: profile.pageOverride }),
       ...(profile.artDirection === undefined ? {} : { artDirection: profile.artDirection }),
+      ...(profile.surfaceStyle === undefined ? {} : { surfaceStyle: profile.surfaceStyle }),
     };
     const persisted = JSON.parse(JSON.stringify(reordered));
     const expected = designedWebDocumentHash(document, profile);
@@ -107,6 +210,105 @@ describe("closed recipe design renderer", () => {
     expect(html).toContain("main>*{min-width:0}");
     expect(html).toContain("img,input,textarea,select{max-width:100%}");
     expect(html).toContain("W".repeat(256));
+    expect(html).toContain("html{scroll-behavior:auto}button:active,.cta:active{transform:none}");
+    expect(html).not.toContain("@keyframes");
+  });
+
+  test("motion changes only presentation across surfaces, preserving every owned image, action and source fact", () => {
+    const input = {
+      ...base,
+      media: {
+        hero: { storageRef: `webasset:owned_scene:${"a".repeat(64)}`, alt: "Selected scene" },
+      },
+    };
+    for (const surfaceStyle of ["minimal", "glass", "clay"] as const) {
+      const still = materializeWebRecipeWithProvenance("campaign-landing", {
+        ...input,
+        surfaceStyle,
+        design: { motion: 1 },
+      });
+      const moving = materializeWebRecipeWithProvenance("campaign-landing", {
+        ...input,
+        surfaceStyle,
+        design: { motion: 10 },
+      });
+      const route = { slug: "owned-campaign", page: "campaign" };
+      const stillHtml = renderDesignedWebDocument(still.document, still.designProfile, route);
+      const movingHtml = renderDesignedWebDocument(moving.document, moving.designProfile, route);
+      const withoutStyle = (html: string) => html.replace(/<style>[\s\S]*?<\/style>/, "");
+      expect(canonicalWebDocument(still.document)).toBe(canonicalWebDocument(moving.document));
+      expect(withoutStyle(stillHtml)).toBe(withoutStyle(movingHtml));
+      expect(movingHtml).toContain('action="/p/owned-campaign/campaign/cta/primary"');
+      expect(movingHtml).toContain('action="/p/owned-campaign/campaign/forms/signup"');
+      expect(movingHtml).toContain("I agree to hear from this publisher.");
+      expect(movingHtml).not.toMatch(/<script|onload=|animationend|<canvas/);
+      expect(designedWebDocumentHash(still.document, still.designProfile, route)).not.toBe(
+        designedWebDocumentHash(moving.document, moving.designProfile, route),
+      );
+    }
+  });
+
+  test("hero choreography consumes bounded dial tokens and releases actions immediately on user intent", () => {
+    const durations: number[] = [];
+    for (const motion of [3, 6, 10]) {
+      const result = materializeWebRecipeWithProvenance("campaign-landing", {
+        ...base,
+        design: { motion },
+      });
+      const html = renderDesignedWebDocument(result.document, result.designProfile);
+      const css = html.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? "";
+      const enter = Number(css.match(/--motion-enter:(\d+)ms/)?.[1]);
+      const step = Number(css.match(/--motion-step:(\d+)ms/)?.[1]);
+      const rise = Number(css.match(/--motion-rise:(\d+)px/)?.[1]);
+      const feedback = Number(css.match(/--motion-feedback:(\d+)ms/)?.[1]);
+      durations.push(enter);
+      expect(enter).toBeGreaterThanOrEqual(500);
+      expect(enter + step * 2).toBeLessThanOrEqual(1_000);
+      expect(rise).toBeGreaterThan(0);
+      expect(rise).toBeLessThanOrEqual(16);
+      expect(feedback).toBeGreaterThanOrEqual(150);
+      expect(feedback).toBeLessThanOrEqual(200);
+      expect(css).toContain(".hero h1{animation:pikar-copy-arrive var(--motion-enter)");
+      expect(css).toContain("animation-delay:var(--motion-step)");
+      expect(css).toContain("animation-delay:calc(var(--motion-step)*2)");
+      expect(css).toContain("translateY(var(--motion-rise))");
+      expect(css).toContain("button,.cta{transition:transform var(--motion-feedback)");
+      expect(css).toContain(
+        ".hero-action:hover,.hero-action:focus-within,.hero-action:active{animation:none}",
+      );
+    }
+    expect(durations[0]).toBeLessThan(durations[1]!);
+    expect(durations[1]).toBeLessThan(durations[2]!);
+  });
+
+  test("progressive scroll effects are motion-preference and feature guarded, with no hidden or script-dependent content", () => {
+    const result = materializeWebRecipeWithProvenance("campaign-landing", {
+      ...base,
+      design: { motion: 6 },
+    });
+    const html = renderDesignedWebDocument(result.document, result.designProfile);
+    const css = html.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? "";
+    const layer = css.slice(css.indexOf("@media(prefers-reduced-motion:no-preference)"));
+    expect(layer).toContain(
+      "@supports (animation-timeline:view()) and (animation-range:entry 0% cover 20%)",
+    );
+    expect(layer).toContain(
+      "animation:pikar-section-arrive 1ms linear both;animation-timeline:view();animation-range:entry 0% cover 20%",
+    );
+    expect(layer).toContain("#gallery>.web-media img,.catalogue-items article>.web-media img");
+    expect(layer).toContain(".catalogue-items details[open]>p");
+    expect(layer).not.toMatch(
+      /opacity:|visibility:|display:|pointer-events:|height:|width:|filter:|infinite|javascript|url\(/i,
+    );
+    const keyframes = [...layer.matchAll(/@keyframes [^{]+\{from\{([^}]+)\}to\{([^}]+)\}\}/g)];
+    expect(keyframes).toHaveLength(4);
+    for (const frame of keyframes) {
+      expect(frame[1]).toMatch(/^transform:/);
+      expect(frame[2]).toBe("transform:none");
+    }
+    expect(css).toContain(
+      "@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;transform:none!important;scroll-behavior:auto!important}",
+    );
   });
 
   test("art directions change real composition and typography while preserving source facts and actions", () => {
@@ -163,6 +365,34 @@ describe("closed recipe design renderer", () => {
       expect(result.document.brand.primaryColor).toBe(primaryColor);
     }
     expect(() => webColorContrast("red;url(evil)", "#ffffff")).toThrow("WEB_COLOR_INVALID");
+  });
+
+  test("tactile and glass control boundaries remain distinguishable for pale and dark source colors", () => {
+    for (const surfaceStyle of ["glass", "clay"] as const) {
+      for (const primaryColor of ["#FFFFFF", "#FFFF00", "#001122", "#777777"]) {
+        const result = materializeWebRecipeWithProvenance("campaign-landing", {
+          ...base,
+          surfaceStyle,
+          primaryColor,
+        });
+        const html = renderDesignedWebDocument(result.document, result.designProfile);
+        const edge = html.match(
+          surfaceStyle === "glass"
+            ? /\[data-surface-style=glass\] \.has-media \.hero-action \.cta\{border-color:([^;}]+)/
+            : /\[data-surface-style=clay\] \.cta\{border-color:([^;}]+)/,
+        )?.[1];
+        const backgrounds =
+          surfaceStyle === "glass" ? ["#153b36", "#293d39"] : ["#f8f4ee", "#efe8df"];
+        expect(edge).toBeDefined();
+        for (const background of backgrounds)
+          expect(
+            webColorContrast(
+              edge === "transparent" ? primaryColor : (edge ?? primaryColor),
+              background,
+            ),
+          ).toBeGreaterThanOrEqual(3);
+      }
+    }
   });
 
   test("legacy profiles remain accepted and both direction and brand color affect immutable identity", () => {
@@ -289,4 +519,97 @@ test("the selected landing pattern changes a consumed copy measure on the same d
     "body[data-art-direction=editorial] .has-media .hero-copy{max-width:100%;display:grid",
   );
   expect(canonicalWebDocument(result.document)).toContain("A supported business offer");
+});
+
+test("minimal image-led heroes overlay real readable HTML and preserve the exact inquiry destination", () => {
+  const imageRef = `webasset:studio_image:${"c".repeat(64)}`;
+  const result = materializeWebRecipeWithProvenance("business-site", {
+    brandName: "Quiet Form",
+    headline: "Space to feel at home.",
+    summary: "Interiors shaped around the way you live.",
+    surfaceStyle: "minimal",
+    artDirection: "editorial",
+    contactConsent: "I agree to be contacted about this inquiry.",
+    media: {
+      hero: { storageRef: imageRef, alt: "Supplied interior illustration", aspect: "landscape" },
+    },
+  });
+  const html = renderDesignedWebDocument(result.document, result.designProfile, {
+    slug: "quiet-form",
+    page: "home",
+  });
+  const hero = html.slice(
+    html.indexOf('<div class="hero-composition'),
+    html.indexOf('<div class="content-flow"'),
+  );
+  expect(hero).toContain("<h1>Space to feel at home.</h1>");
+  expect(hero).toContain("Interiors shaped around the way you live.");
+  expect(hero).toContain(`data-asset-ref="${imageRef}"`);
+  expect(hero).toContain('href="#inquiry-contact"');
+  expect(html).toContain('id="inquiry-contact"');
+  expect(html).toContain('action="/p/quiet-form/home/forms/contact"');
+  expect(html).toContain("I agree to be contacted about this inquiry.");
+  expect(html).toContain("body[data-surface-style=minimal] .has-media .hero-copy{display:block");
+  expect(html).toContain(
+    "linear-gradient(90deg,rgba(0,0,0,.74) 0%,rgba(0,0,0,.64) 55%,rgba(0,0,0,.12) 100%)",
+  );
+  expect(html).toContain(".hero-composition.has-media:before{background:rgba(0,0,0,.64)}");
+  // Even the brightest possible image under the mobile scrim has readable white text.
+  expect(webColorContrast("#ffffff", "#5c5c5c")).toBeGreaterThanOrEqual(4.5);
+  expect(hero).not.toMatch(/<script|<canvas|<svg|onload=|background-image:/);
+});
+
+test("clay shop heroes overlay real copy and collection action while preserving all product images and facts", () => {
+  const heroRef = `webasset:collection_scene:${"d".repeat(64)}`;
+  const productRef = `webasset:jug_photo:${"e".repeat(64)}`;
+  const result = materializeWebRecipeWithProvenance("storefront-catalogue", {
+    brandName: "Soft Form",
+    intro: "Sculptural pieces for everyday rituals, with the full product facts below.",
+    surfaceStyle: "clay",
+    design: { motion: 6 },
+    media: {
+      hero: { storageRef: heroRef, alt: "Selected collection scene", focalPoint: { x: 55, y: 50 } },
+    },
+    items: [
+      {
+        id: "jug",
+        name: "Everyday jug",
+        description: "A supplied product description.",
+        displayPriceText: "£48",
+        imageStorageRef: productRef,
+      },
+    ],
+  });
+  const html = renderDesignedWebDocument(result.document, result.designProfile, {
+    slug: "soft-form",
+    page: "catalogue",
+  });
+  const hero = html.slice(
+    html.indexOf('<div class="hero-composition'),
+    html.indexOf('<div class="content-flow"'),
+  );
+  expect(hero).toContain("<h1>Soft Form</h1>");
+  expect(hero).toContain("Sculptural pieces for everyday rituals");
+  expect(hero).toContain(`data-asset-ref="${heroRef}"`);
+  expect(hero).toContain('href="#pikar-collection"');
+  expect(html).toContain('id="pikar-collection"');
+  expect(html).toContain(`data-asset-ref="${productRef}"`);
+  expect(html).toContain("Everyday jug");
+  expect(html).toContain("£48");
+  expect(html).toContain("A supplied product description.");
+  expect(html).toContain("object-position:55% 50%");
+  expect(html).toContain(
+    "body[data-surface-style=clay] .hero-composition.has-media{position:relative;isolation:isolate;display:flex",
+  );
+  expect(html).toContain(
+    "body[data-surface-style=clay] .has-media .hero-rail.hero-visual{position:absolute;inset:0;z-index:-2;width:100%;height:100%",
+  );
+  expect(html).toContain(
+    "body[data-surface-style=clay] .hero-composition.has-media{padding:32px 24px;min-height:620px;gap:0}",
+  );
+  // The scrim's fully protected region tracks actual copy height, not a fixed viewport percentage.
+  expect(html).toContain('.hero-copy:before{content:"";position:absolute;inset:-64px -50vw -100px');
+  expect(html).toContain("rgba(0,0,0,.68) calc(100% - 100px)");
+  expect(webColorContrast("#ffffff", "#6e6e6e")).toBeGreaterThanOrEqual(4.5);
+  expect(html).not.toMatch(/<script|<form|buy now|add to cart|background-image:/i);
 });

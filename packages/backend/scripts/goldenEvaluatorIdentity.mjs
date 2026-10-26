@@ -6,6 +6,30 @@ import { fileURLToPath } from "node:url";
 // Reuse the existing server-enforced suite revision to retire evidence when evaluator
 // execution changes. Exclude the contracts constant and generated manifests to avoid cycles.
 export const EVALUATOR_FILES = [
+  // Shared merchant/setup leaves must also retire previously qualified agent evidence.
+  "apps/web/app/(app)/dashboard/sites/SiteEditor.tsx",
+  "apps/web/app/(app)/dashboard/sites/MerchantWorkspace.tsx",
+  "apps/web/app/(app)/dashboard/sites/ShopSetupReview.tsx",
+  "apps/web/app/(app)/dashboard/sites/merchantPresentation.ts",
+  "apps/web/app/(app)/dashboard/sites/merchant.module.css",
+  "packages/backend/convex/onlinePresenceShop.ts",
+  "packages/backend/convex/merchantCommerce.ts",
+  "packages/backend/convex/merchantHttp.ts",
+  "packages/backend/convex/merchantOperations.ts",
+  "packages/backend/convex/vaultFolders.ts",
+  "packages/backend/convex/merchantProvider.ts",
+  "packages/backend/convex/lib/merchantProviderClient.ts",
+  "packages/backend/convex/tenantCatalogue.ts",
+  "packages/backend/convex/tenantOrders.ts",
+  "packages/backend/convex/http.ts",
+  "packages/backend/convex/billingWebhook.ts",
+  "packages/core/src/merchantBuyer.ts",
+  "packages/core/src/merchantSetup.ts",
+  "packages/core/src/tenantCommerce.ts",
+  "packages/core/src/tenantInventory.ts",
+  "packages/core/src/tenantOrder.ts",
+  "packages/core/src/tenantMerchant.ts",
+  "packages/contracts/src/tenantCommerce.ts",
   // Phase53: shared service/tool/render dependencies must retire exact-source evidence.
   "packages/backend/convex/onlinePresence.ts",
   "packages/backend/convex/onlinePresenceRun.ts",
@@ -90,6 +114,7 @@ export const EVALUATOR_FILES = [
   "packages/backend/convex/vaultRag.ts",
   "packages/backend/convex/vaultGround.ts",
   "packages/backend/convex/vaultSmoke.ts",
+  "packages/cost/src/cost.ts",
   "packages/cost/src/evalBudget.ts",
   "packages/core/src/researchEvidence.ts",
   "packages/core/src/researchControl.ts",

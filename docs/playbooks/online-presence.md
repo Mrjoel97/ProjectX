@@ -1,3 +1,5 @@
+> Last verified: 2026-10-24 — V6 adds hash-bound minimal/glass/clay surfaces and three actual renderer-generated examples. Shop briefs can prepare a private catalogue and sourced operating proposal; exact native setup approval, verified Stripe-first sandbox readiness and exact website publication remain separate gates. Merchant runtime is documented in merchant-commerce.md and ADR-065. No live payment qualification, carrier dispatch or external notification delivery is claimed; notices are prepared/portal-only. Current v6 native browser verification and fresh recipe qualification remain pending.
+
 > Last verified: 2026-10-24 — Native revisions exposed optional-field loss: a service correction omitted the hero and a subsequent rebuild omitted About. The shared brief contract now preserves nine omitted optional fields; supplied lists and nested media/design objects replace their whole field. A closed clearFields operation explicitly removes content, rejects duplicates/set-clear conflicts and clears CTA label/destination together. Only actual owned hash-matching image source refs are retained automatically, with the existing source/consent/asset/revision checks rerun. The same native fixture remains evidence of the original defect, not acceptance of this repair. Local core37/37, backend18/18 and runner3/3 tests pass, including service/headline revisions retaining four pages and the same image, explicit mailto pair-clear, stale/refusal cases and source-loss build refusal. A current built-brief hash now distinguishes saved unbuilt changes from an older artifact; the server reports the unbuilt state without an automatic build or extra model loop. Required facts/sourceRefs, URL safety, exact-version publication and commerce-unavailable gates remain unchanged. The older omission-only CTA correction below is superseded for existing briefs: use explicit pair-clear.
 
 > Last verified: 2026-10-24 — A native website attempt supplied inquiry-form consent but saved an unsupported `mailto:` CTA and never reached build. Specialist and tool-field guidance now explicitly use `contactConsent` alone for the built-in email inquiry form, omit both CTA fields, and never derive a mail link from a business email. Existing URL validation is unchanged. Core27/27 and backend17/17 focused tests pass, including consent-only landing/website materialization and replacing the same thread's stored bad CTA by omission. These local checks do not establish a successful hosted retry or email notification delivery.
@@ -10,6 +12,8 @@
 
 > Last verified: 2026-10-21 —53-04 Taste and UI/UX Pro Max quality pass adds business-directed editorial/studio/technical rendering, source-backed brand colors, useful home content and content-dependent pages. Profile direction and current renderer/compiler identity flow through schema, provenance and immutable versions; old published bytes remain unchanged. Real browser checks cover1440/768/390, touch targets, contrast/focus, long text and actual actions. See docs/design/online-presence-quality.md and53-04; no hosted model/recipe acceptance is implied.
 
+> Last verified: 2026-10-26 — Isolated provider comparison preparation adds renderer/compiler v7 CSS motion. Motion remains code-owned, script-free, readable before and during animation, with reduced-motion and unsupported-browser fallback. The three fictional examples explicitly request moderate motion. Edits from v6 are recognized without rewriting previous published bytes. See ADR-066 and the provider pilot task list; no model/design winner or new recipe activation is implied.
+
 # Playbook: Agentic online presence
 
 > Last verified: 2026-10-21 against the isolated Phase53 working tree; local verification is recorded in `53-VALIDATION.md`. Hosted qualification remains open.
@@ -17,7 +21,7 @@
 
 ## Purpose
 
-Prepare a business website or landing page from the customer's business context and conversation. The agent prepares the brief, copy and private pages; the customer supplies missing information and reviews the version before publication. A shop request records its business brief but remains blocked by the unfinished commerce runtime.
+Prepare a business website or landing page from the customer's business context and conversation. The agent prepares the brief, copy and private pages; the customer supplies missing information and reviews the version before publication. A shop request can prepare a private catalogue and sourced operating proposal. Native exact-package setup approval and separately verified merchant readiness are required before sandbox checkout; presentation is not proof of an operating shop.
 
 ## Key files and flow
 
@@ -27,6 +31,8 @@ Prepare a business website or landing page from the customer's business context 
 4. `webRecipes.ts` binds active canonical recipe identity and qualification to `core/webRecipes.ts`, `webDesignRenderer.ts` and `webRuntime.ts`. Stored immutable versions carry actual rendered page artifacts and hashes. Repeating an unchanged saved brief reconciles its existing project; a changed brief creates a new immutable version.
 5. `OnlinePresenceCard.tsx` shows real receipt state. `SiteEditor.tsx` reviews an exact version; `PreviewCanvas.tsx` selects its stored pages and mobile/desktop widths. Its inert iframe receives a presentation-only base target; stored bytes and hashes are untouched.
 6. `webProjects.ts` owns exact-version/hash approval, publish, update, unpublish and rollback. `webHttp.ts` registers `/p/` GET/HEAD and consented inquiry POST through `webRuntime.ts` and `webForms.ts`.
+7. `onlinePresenceShop.ts` reviews and atomically approves the sourced operating package; `merchantCommerce.ts`, `merchantProvider.ts`, `merchantHttp.ts` and `merchantOperations.ts` own separately gated sandbox checkout and operations. See merchant-commerce.md and ADR-065.
+8. `sites/examples.ts` materializes the three actual renderer examples; the sandboxed viewer substitutes only the six provenance-pinned illustrative assets. The explicit outer action starts an ordinary workflow with the customer's own facts.
 
 ## Invariants
 
@@ -36,8 +42,8 @@ Prepare a business website or landing page from the customer's business context 
 - Approval and publication bind the same saved version and content hash. Edits preserve already published bytes. A stale revision refuses. Cross-tenant access, erasure and exact approval are tested in `webProjectLifecycle.test.ts`, `webProjects.test.ts` and `webRuntime.test.ts`.
 - Public serving resolves only published immutable bytes for the configured host and live tenant. No scripts, arbitrary executable HTML or public preview fallback. Contact forms require provided consent, bounded streamed input, idempotence, suppression and rate controls. Tests: `webHttp.test.ts`, `webForms.test.ts`.
 - `webProjects`, `webProjectVersions`, `webMetrics`, `webSubmissions`, `onlinePresenceSessions` are tenant-owned in the existing export/deletion registry. Stored artifact IDs participate in blob erasure. Audit holds refs, counts and hashes, never raw source/site copy.
-- The hourly `web-form-retention` cron only deletes expired privacy rows in bounded pages. No generalized user recurrence is introduced.
-- Storefront runtime and checkout are code-owned unavailable. Platform subscription billing and invoice connector credentials do not establish a customer's merchant checkout.
+- The hourly `web-form-retention` cron deletes expired inquiry rows in bounded pages. Merchant maintenance adds fixed bounded capability reads and privacy/digital-access cleanup; it does not introduce generalized user recurrence or automatic uncertain money retries.
+- A storefront presentation is distinct from operational checkout. Public sandbox checkout requires exact approved setup, current verified Stripe capability, actual policies/mappings/stock and verified test-payment proof. PayPal remains separately gated and optional. Platform subscription billing and invoice connector credentials supply no merchant authority. No live payment qualification is claimed.
 
 ## Changing and verifying
 
@@ -49,4 +55,4 @@ Run the focused core web/online-presence tests, backend online-presence/project/
 
 The checked-in source does not automatically deploy or seed a shared environment. The owner-requested dedicated stage is configured and canonical skills/recipe candidates are seeded; its operations and remaining admission are recorded in `docs/online-presence-staging.md`. Development needs the configured Convex backend, `online-presence-specialist` registry seed, qualified active recipes and valid public runtime host. Until those exist the workflow must return a truthful unavailable result. Production release needs the existing readiness programme plus exact-source native authenticated end-to-end review and recipe browser qualification. Local mocked provider/tool tests exercise integration but do not certify model quality, real customer sign-in or hosted publication.
 
-Custom domains, rich customer asset selection, real merchant onboarding, Stripe plus PayPal test-mode checkout, inventory holds, paid stock races, refunds, delivery and digital fulfillment remain separate work. Preserve the already recorded merchant decisions in the discovery report; do not re-ask them or enable a shop from a flag.
+Custom domains and production commerce remain open. Source now includes sandbox merchant onboarding, checkout, inventory holds, native refunds, recorded physical handoff and policy-bound digital access; these require real provider/native qualification and cannot be enabled from a flag. Carrier dispatch and external customer email delivery are not implemented; notices are prepared/portal-only. Preserve the recorded merchant decisions and distinguish implementation from observed provider operation. V6 native browser review and fresh recipe qualification remain pending.

@@ -379,6 +379,8 @@ export const pageReadFeeUsd = (): number => WEB_PAGE_READ_USD_TAVILY;
 // into two and SILENTLY DROP EVERY OPENAI ROW — leaving the fallback ids unpriced and billing $0,
 // the precise failure this file's other comments exist to prevent. One row per real model id.
 export const PRICING: Record<string, { inPerMTok: number; outPerMTok: number }> = {
+  // Explicit comparison support only; DEFAULT_MODEL and ordinary routing remain unchanged.
+  "or/moonshotai/kimi-k3.1-pro": { inPerMTok: 2, outPerMTok: 10 },
   // OpenAI — no longer the default, still priced so a revert or a fallback cannot bill $0.
   [OPENAI_DEFAULT_MODEL]: { inPerMTok: 0.15, outPerMTok: 0.6 },
   [OPENAI_CHEAP_MODEL]: { inPerMTok: 0.1, outPerMTok: 0.4 },

@@ -47,6 +47,8 @@ export function evalBudgetModel(args: {
   beforeCall?: () => void;
   /** General golden suite uses real local tools/RAG; native vertical grants stay closed. */
   mode?: "golden";
+  /** Internal operator-only proposal comparison. Never derived from a model/tool argument. */
+  websiteComparison?: true;
 }): ReturnType<typeof wrapLanguageModel> {
   const goldenCall = {
     kind: "chat",
@@ -120,6 +122,7 @@ export function evalBudgetModel(args: {
           callId: crypto.randomUUID(),
           model: args.modelId,
           outputTokens: EVAL_MAX_OUTPUT_TOKENS,
+          ...(args.websiteComparison ? { websiteComparison: true as const } : {}),
           ...(goldenOptions ? { providerCall: goldenCall } : {}),
         });
         let result: Awaited<ReturnType<typeof doGenerate>>;

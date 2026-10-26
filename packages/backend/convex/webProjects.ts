@@ -21,9 +21,10 @@ import { internalQuery, type MutationCtx } from "./_generated/server";
 import { appendAudit } from "./audit";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { assertTenantWritable } from "./lib/tenantLifecycle";
+import { merchantReadiness } from "./merchantCommerce";
 import { resolveDocumentAssets } from "./webAssets";
 
-const projectKind = v.union(v.literal("site"), v.literal("landing"));
+const projectKind = v.union(v.literal("site"), v.literal("landing"), v.literal("storefront"));
 const documentInput = v.any();
 type ProjectRow = {
   _id: Id<"webProjects">;
@@ -63,6 +64,7 @@ export type RecipeRef = {
   rendererVersion?: string;
   designProfile: {
     artDirection?: "editorial" | "studio" | "technical";
+    surfaceStyle?: "minimal" | "glass" | "clay";
     bundleHash: string;
     compilerHash: string;
     patternId: string;
@@ -130,9 +132,8 @@ async function receipt(
 }
 
 export function runtimeReady(project: ProjectRow): boolean {
-  // ponytail: storefront runtime remains dark until Phase 50's typed merchant-lifecycle
-  // contract is implemented; no request, environment, tenant, owner or database flag upgrades it.
-  if (project.kind === "storefront") return false;
+  // Hosting is necessary but not commerce authority. Storefront publication and serving also
+  // require current server-verified merchant accounts, policies, mappings and sandbox proof.
   return (
     ((project.domainMode === "platform_path" &&
       project.hostingDeclaration.hosting === "pikar_platform_path") ||
@@ -189,6 +190,8 @@ async function appendVersion(
       "web-design-renderer-v2",
       "web-design-renderer-v3",
       "web-design-renderer-v4",
+      "web-design-renderer-v5",
+      "web-design-renderer-v6",
       WEB_DESIGN_RENDERER_VERSION,
     ].includes(recipeRef.rendererVersion);
   if (recipeRef?.rendererVersion !== undefined && !designed)
@@ -459,7 +462,11 @@ async function publish(
     );
     return { ok: false, code, revision: project.revision };
   };
-  if (project.kind === "storefront") return fail("unavailable", "COMMERCE_UNAVAILABLE");
+  if (
+    project.kind === "storefront" &&
+    !(await merchantReadiness(ctx, project.tenantId, project._id, args.version)).publicCheckoutReady
+  )
+    return fail("unavailable", "COMMERCE_UNAVAILABLE");
   if (
     project.domainMode === "platform_path" &&
     (!platformRuntimeHost() || project.publicHost !== platformRuntimeHost())
@@ -544,8 +551,6 @@ export const unpublish = tenantMutation({
   handler: async (ctx, args) => {
     const project = (await ctx.db.get(args.projectId)) as ProjectRow | null;
     if (!project || project.tenantId !== ctx.tenantId) throw new Error("WEB_PROJECT_UNAVAILABLE");
-    if (project.kind === "storefront")
-      return { ok: false, code: "COMMERCE_UNAVAILABLE", revision: project.revision };
     const actor = String(ctx.userId);
     if (project.revision !== args.expectedRevision) {
       await receipt(
@@ -605,7 +610,7 @@ export const getProject = tenantQuery({
   args: { projectId: v.id("webProjects") },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
-    if (!project || project.tenantId !== ctx.tenantId || project.kind === "storefront") return null;
+    if (!project || project.tenantId !== ctx.tenantId) return null;
     return project;
   },
 });
@@ -616,7 +621,6 @@ export const listProjects = tenantQuery({
     ctx.db
       .query("webProjects")
       .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
-      .filter((q) => q.neq(q.field("kind"), "storefront"))
       .order("desc")
       .take(100),
 });
@@ -625,7 +629,7 @@ export const getVersion = tenantQuery({
   args: { projectId: v.id("webProjects"), version: v.number() },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
-    if (!project || project.tenantId !== ctx.tenantId || project.kind === "storefront") return null;
+    if (!project || project.tenantId !== ctx.tenantId) return null;
     return ctx.db
       .query("webProjectVersions")
       .withIndex("by_tenant_project_version", (q) =>
@@ -639,7 +643,7 @@ export const listVersions = tenantQuery({
   args: { projectId: v.id("webProjects") },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
-    if (!project || project.tenantId !== ctx.tenantId || project.kind === "storefront") return [];
+    if (!project || project.tenantId !== ctx.tenantId) return [];
     return ctx.db
       .query("webProjectVersions")
       .withIndex("by_tenant_project_version", (q) =>
@@ -675,7 +679,11 @@ export const resolvePublished = internalQuery({
         .unique();
       if (lifecycle?.state !== undefined) return { state: "not_found" as const };
     }
-    if (!project || project.kind === "storefront" || !runtimeReady(project))
+    if (!project || !runtimeReady(project)) return { state: "invalid_host" as const };
+    if (
+      project.kind === "storefront" &&
+      !(await merchantReadiness(ctx, project.tenantId, project._id)).publicCheckoutReady
+    )
       return { state: "invalid_host" as const };
     if (project.publishedVersion === undefined) return { state: "unpublished" as const };
     const version = await ctx.db

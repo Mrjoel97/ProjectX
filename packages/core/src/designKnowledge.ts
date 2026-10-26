@@ -59,9 +59,12 @@ export type DesignDials = {
 
 /** Pikar-owned art directions; the pinned upstream bundle remains reviewed reference data. */
 export type ArtDirection = "editorial" | "studio" | "technical";
+/** A bounded surface treatment; never arbitrary CSS supplied by a model. */
+export type SurfaceStyle = "minimal" | "glass" | "clay";
 
 export type DesignBrief = {
   readonly artDirection?: ArtDirection;
+  readonly surfaceStyle?: SurfaceStyle;
   readonly businessType?: string;
   readonly audience?: string;
   readonly brandName?: string;
@@ -74,6 +77,7 @@ export type DesignBrief = {
 
 export type DesignProfileRef = {
   readonly artDirection?: ArtDirection;
+  readonly surfaceStyle?: SurfaceStyle;
   readonly bundleHash: typeof DESIGN_KNOWLEDGE_BUNDLE_HASH;
   readonly compilerHash: typeof DESIGN_KNOWLEDGE_COMPILER_HASH;
   readonly patternId: string;
@@ -290,6 +294,7 @@ export function validateDesignProfileRef(input: unknown): input is DesignProfile
       "dials",
       "pageOverride",
       "artDirection",
+      "surfaceStyle",
     ])
   )
     return false;
@@ -315,6 +320,10 @@ export function validateDesignProfileRef(input: unknown): input is DesignProfile
       input.artDirection !== "editorial" &&
       input.artDirection !== "studio" &&
       input.artDirection !== "technical") ||
+    (input.surfaceStyle !== undefined &&
+      input.surfaceStyle !== "minimal" &&
+      input.surfaceStyle !== "glass" &&
+      input.surfaceStyle !== "clay") ||
     (input.pageOverride !== undefined &&
       (typeof input.pageOverride !== "string" || input.pageOverride.length > 64))
   )
@@ -364,6 +373,17 @@ export function selectDesignProfile(brief: DesignBrief = {}): DesignSelection {
     typographyId: "modern-professional",
     formProfileId: "forms-first",
     artDirection,
+    surfaceStyle: accessibility
+      ? "minimal"
+      : input.surfaceStyle === "minimal" ||
+          input.surfaceStyle === "glass" ||
+          input.surfaceStyle === "clay"
+        ? input.surfaceStyle
+        : storefront && /\b(?:homeware|ceramic|playful|handmade|children)\b/.test(signals)
+          ? "clay"
+          : campaign && /\b(?:retreat|travel|hospitality|immersive)\b/.test(signals)
+            ? "glass"
+            : "minimal",
     dials: {
       variance: dial(input.dials?.variance, presets[artDirection].variance),
       motion: accessibility ? 1 : dial(input.dials?.motion, presets[artDirection].motion),

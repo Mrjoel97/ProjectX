@@ -208,7 +208,8 @@
     "apps/web/app/fonts.css",
     "apps/web/app/fonts.test.ts",
     "apps/web/public/fonts/",
-    "apps/web/app/(app)/layout.test.tsx"
+    "apps/web/app/(app)/layout.test.tsx",
+    "apps/web/app/(app)/dashboard/sites/"
   ],
   "cockpit.md": [
     "scripts/check-phase23-probe-controls",
@@ -423,6 +424,8 @@
     "apps/web/app/(app)/dashboard/pipeline/"
   ],
   "guardrails.md": [
+    "packages/backend/convex/presenceComparison",
+    "packages/core/src/presenceComparison",
     "packages/backend/convex/authoringProbe",
     "packages/backend/convex/goldenBudget.test.ts",
     "packages/backend/convex/guardrails.ts",
@@ -565,6 +568,13 @@
     "packages/backend/convex/revenueFinance"
   ],
   "online-presence.md": [
+    "packages/backend/convex/presenceComparison",
+    "packages/core/src/presenceComparison",
+    "packages/contracts/skills/website-design-proposal.md",
+    "packages/contracts/src/skills/websiteDesignProposal.ts",
+    "packages/backend/convex/lib/stitchDesignClient",
+    "packages/backend/convex/presenceDesignProbe",
+    "packages/backend/convex/webProjectLegacyRendering",
     "apps/web/app/(app)/ops/web-recipes/",
     "packages/backend/convex/webRecipeQualification.test.ts",
     "packages/core/src/onlinePresence",
@@ -607,6 +617,27 @@
     "packages/core/src/tenantCommerce",
     "packages/core/src/tenantInventory",
     "packages/core/src/tenantOrder",
-    "apps/web/app/(app)/layout.test.tsx"
+    "apps/web/app/(app)/layout.test.tsx",
+    "apps/web/public/presence-examples/"
+  ],
+  "merchant-commerce.md": [
+    "packages/contracts/src/tenantCommerce",
+    "packages/core/src/tenantCommerce",
+    "packages/core/src/tenantInventory",
+    "packages/core/src/tenantOrder",
+    "packages/core/src/tenantMerchant",
+    "packages/core/src/merchantBuyer",
+    "packages/core/src/merchantSetup",
+    "packages/core/src/tenantData.ts",
+    "packages/backend/convex/merchant",
+    "packages/backend/convex/lib/merchantProviderClient",
+    "packages/backend/convex/tenantCatalogue",
+    "packages/backend/convex/tenantOrders",
+    "packages/backend/convex/onlinePresenceShop",
+    "apps/web/app/(app)/dashboard/sites/MerchantWorkspace",
+    "apps/web/app/(app)/dashboard/sites/merchantWorkspace",
+    "apps/web/app/(app)/dashboard/sites/ShopSetupReview",
+    "apps/web/app/(app)/dashboard/sites/merchantPresentation",
+    "apps/web/app/(app)/dashboard/sites/merchant.module.css"
   ]
 }

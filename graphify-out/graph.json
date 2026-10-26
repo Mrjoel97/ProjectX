@@ -111305,6 +111305,136 @@
       "id": "packages_backend_convex_schema_webassets_table",
       "community": 460,
       "norm_label": "webAssets (table)"
+    },
+    {
+      "label": "tenantMerchantAccounts (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4121",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_tenantmerchantaccounts_table",
+      "community": 460,
+      "norm_label": "tenantMerchantAccounts (table)"
+    },
+    {
+      "label": "tenantMerchantPayments (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4148",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_tenantmerchantpayments_table",
+      "community": 460,
+      "norm_label": "tenantMerchantPayments (table)"
+    },
+    {
+      "label": "tenantMerchantEvents (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4184",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_tenantmerchantevents_table",
+      "community": 460,
+      "norm_label": "tenantMerchantEvents (table)"
+    },
+    {
+      "label": "tenantMerchantOperations (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4195",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_tenantmerchantoperations_table",
+      "community": 460,
+      "norm_label": "tenantMerchantOperations (table)"
+    },
+    {
+      "label": "tenantMerchantAutomation (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4220",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_tenantmerchantautomation_table",
+      "community": 460,
+      "norm_label": "tenantMerchantAutomation (table)"
+    },
+    {
+      "label": "tenantProducts (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4233",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_tenantproducts_table",
+      "community": 460,
+      "norm_label": "tenantProducts (table)"
+    },
+    {
+      "label": "tenantStock (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4250",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_tenantstock_table",
+      "community": 460,
+      "norm_label": "tenantStock (table)"
+    },
+    {
+      "label": "tenantReservations (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4264",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_tenantreservations_table",
+      "community": 460,
+      "norm_label": "tenantReservations (table)"
+    },
+    {
+      "label": "tenantCommercePolicies (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4286",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_tenantcommercepolicies_table",
+      "community": 460,
+      "norm_label": "tenantCommercePolicies (table)"
+    },
+    {
+      "label": "tenantCommerceMappings (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4326",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_tenantcommercemappings_table",
+      "community": 460,
+      "norm_label": "tenantCommerceMappings (table)"
+    },
+    {
+      "label": "tenantCarts (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4338",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_tenantcarts_table",
+      "community": 460,
+      "norm_label": "tenantCarts (table)"
+    },
+    {
+      "label": "tenantOrders (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4363",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_tenantorders_table",
+      "community": 460,
+      "norm_label": "tenantOrders (table)"
+    },
+    {
+      "label": "tenantOrderAttempts (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4440",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_tenantorderattempts_table",
+      "community": 460,
+      "norm_label": "tenantOrderAttempts (table)"
     }
   ],
   "links": [
@@ -306221,6 +306351,136 @@
       "confidence_score": 1,
       "source": "apps_web_app_auth_signin_page",
       "target": "packages_backend_convex_invites_authproviders"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4121",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_tenantmerchantaccounts_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4148",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_tenantmerchantpayments_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4184",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_tenantmerchantevents_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4195",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_tenantmerchantoperations_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4220",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_tenantmerchantautomation_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4233",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_tenantproducts_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4250",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_tenantstock_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4264",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_tenantreservations_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4286",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_tenantcommercepolicies_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4326",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_tenantcommercemappings_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4338",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_tenantcarts_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4363",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_tenantorders_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L4440",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_tenantorderattempts_table"
     }
   ],
   "hyperedges": [],

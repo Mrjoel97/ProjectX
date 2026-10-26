@@ -1,0 +1,59 @@
+{
+  "generatedAt": "2026-10-24T13:49:59.489Z",
+  "assets": [
+    {
+      "name": "studio",
+      "path": "/presence-examples/studio.webp",
+      "bytes": 200924,
+      "sha256": "78bacab9b8befa6b92043b4e16f2ce9eff15fa5968eda616666ff37b9db155d4",
+      "generated": true,
+      "illustrativeDemo": true,
+      "source": "Built-in image_gen; fictional scenes and product concepts, no real client claim"
+    },
+    {
+      "name": "retreat",
+      "path": "/presence-examples/retreat.webp",
+      "bytes": 160678,
+      "sha256": "76d10c1f320f14f3893c25d78777435133e2a07372c2e9514faef88834094c32",
+      "generated": true,
+      "illustrativeDemo": true,
+      "source": "Built-in image_gen; fictional scenes and product concepts, no real client claim"
+    },
+    {
+      "name": "homeware",
+      "path": "/presence-examples/homeware.webp",
+      "bytes": 108292,
+      "sha256": "df65d495ed7f6119d38ef20950aafe0b76b4cb627bda2bd814a161b244cd17a4",
+      "generated": true,
+      "illustrativeDemo": true,
+      "source": "Built-in image_gen; fictional scenes and product concepts, no real client claim"
+    },
+    {
+      "name": "jug",
+      "path": "/presence-examples/jug.webp",
+      "bytes": 117664,
+      "sha256": "13a4427b941e55e0f94e9e5171a463705677f3a39f98f267c3b9be5e4304e12d",
+      "generated": true,
+      "illustrativeDemo": true,
+      "source": "Built-in image_gen; fictional scenes and product concepts, no real client claim"
+    },
+    {
+      "name": "bowl",
+      "path": "/presence-examples/bowl.webp",
+      "bytes": 78198,
+      "sha256": "0d30eb7f70408624274a0fb326cdf8debf390a5f97c3c3e894b7e230d5368856",
+      "generated": true,
+      "illustrativeDemo": true,
+      "source": "Built-in image_gen; fictional scenes and product concepts, no real client claim"
+    },
+    {
+      "name": "vase",
+      "path": "/presence-examples/vase.webp",
+      "bytes": 96142,
+      "sha256": "522ca8487b9cdd2bbff5a76459090c8e6215f01edd1047f0853d96895bd5cb9b",
+      "generated": true,
+      "illustrativeDemo": true,
+      "source": "Built-in image_gen; fictional scenes and product concepts, no real client claim"
+    }
+  ]
+}

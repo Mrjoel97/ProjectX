@@ -2,6 +2,7 @@ import type { WebCtaNode, WebDocument, WebNode } from "@pikar/contracts/webRunti
 import type { HttpRouter } from "convex/server";
 import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
+import { decorateMerchantPage } from "./merchantHttp";
 import { servePublishedAsset } from "./webAssets";
 
 export function registerPublicWebRoutes(router: HttpRouter): void {
@@ -101,9 +102,23 @@ export function registerPublicWebRoutes(router: HttpRouter): void {
         });
         if (!metric.ok) return publicNotFound();
         const headers = runtimeHeaders(resolved.hostingDeclaration);
-        return new Response(req.method === "HEAD" ? null : resolved.html, {
+        const commerce =
+          resolved.projectKind === "storefront"
+            ? await decorateMerchantPage(ctx, {
+                projectId: resolved.projectId,
+                version: resolved.version,
+                slug,
+                html: resolved.html,
+              })
+            : null;
+        if (commerce && !commerce.enabled) return publicNotFound();
+        return new Response(req.method === "HEAD" ? null : (commerce?.html ?? resolved.html), {
           status: 200,
-          headers: { ...headers, "Content-Type": "text/html; charset=utf-8" },
+          headers: {
+            ...headers,
+            "Content-Type": "text/html; charset=utf-8",
+            ...(commerce ? { "X-Pikar-Commerce-Runtime": commerce.commerceRuntime } : {}),
+          },
         });
       } catch {
         return publicUnavailable();

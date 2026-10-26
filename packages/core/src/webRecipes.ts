@@ -3,6 +3,7 @@ import {
   type ArtDirection,
   type DesignDials,
   type DesignProfileRef,
+  type SurfaceStyle,
   selectDesignProfile,
   validateDesignProfileRef,
 } from "./designKnowledge";
@@ -15,7 +16,7 @@ import {
 } from "./webRuntime";
 
 export const WEB_RECIPE_SCHEMA_VERSION = 1 as const;
-export const WEB_RECIPE_COMPILER_ID = "web-recipes-v5" as const;
+export const WEB_RECIPE_COMPILER_ID = "web-recipes-v7" as const;
 export type WebRecipeMedia = {
   readonly logo?: { readonly storageRef: string; readonly alt: string };
   readonly hero?: Omit<WebMediaNode, "kind" | "placement">;
@@ -77,6 +78,7 @@ export type WebRecipeDefinition = {
 };
 
 export type BusinessSiteInput = {
+  readonly surfaceStyle?: SurfaceStyle;
   readonly media?: WebRecipeMedia;
   readonly artDirection?: ArtDirection;
   readonly primaryColor?: string;
@@ -93,6 +95,7 @@ export type BusinessSiteInput = {
   readonly design?: Partial<DesignDials>;
 };
 export type CampaignLandingInput = {
+  readonly surfaceStyle?: SurfaceStyle;
   readonly media?: WebRecipeMedia;
   readonly artDirection?: ArtDirection;
   readonly primaryColor?: string;
@@ -108,6 +111,7 @@ export type CampaignLandingInput = {
   readonly design?: Partial<DesignDials>;
 };
 export type StorefrontCatalogueInput = {
+  readonly surfaceStyle?: SurfaceStyle;
   readonly media?: WebRecipeMedia;
   readonly artDirection?: ArtDirection;
   readonly primaryColor?: string;
@@ -189,6 +193,7 @@ const httpsHref = (value: unknown): value is string => {
 };
 const inputKeys: Record<WebRecipeId, readonly string[]> = {
   "business-site": [
+    "surfaceStyle",
     "brandName",
     "media",
     "artDirection",
@@ -205,6 +210,7 @@ const inputKeys: Record<WebRecipeId, readonly string[]> = {
     "design",
   ],
   "campaign-landing": [
+    "surfaceStyle",
     "media",
     "artDirection",
     "primaryColor",
@@ -220,6 +226,7 @@ const inputKeys: Record<WebRecipeId, readonly string[]> = {
     "design",
   ],
   "storefront-catalogue": [
+    "surfaceStyle",
     "brandName",
     "intro",
     "items",
@@ -279,6 +286,7 @@ function validateItems(value: unknown, errors: WebRecipeValidationIssue[]): void
       issue(errors, `items[${index}].description`, "invalid_text");
     if (
       item.imageStorageRef !== undefined &&
+      !parseWebAssetRef(item.imageStorageRef) &&
       !/^storage:[a-zA-Z0-9:_-]{1,240}$/.test(String(item.imageStorageRef))
     )
       issue(errors, `items[${index}].imageStorageRef`, "invalid_storage_ref");
@@ -303,6 +311,13 @@ export function validateWebRecipeInput(
   validateDials(input.design, "design", errors);
   if (input.media !== undefined && !validateWebRecipeMedia(input.media))
     issue(errors, "media", "invalid_media");
+  if (
+    input.surfaceStyle !== undefined &&
+    input.surfaceStyle !== "minimal" &&
+    input.surfaceStyle !== "glass" &&
+    input.surfaceStyle !== "clay"
+  )
+    issue(errors, "surfaceStyle", "invalid_surface_style");
   if (
     input.artDirection !== undefined &&
     input.artDirection !== "editorial" &&
@@ -376,6 +391,7 @@ const definitionSeed = [
         maxLength: 8,
       },
       { id: "artDirection", label: "Art direction", type: "text", required: false, maxLength: 16 },
+      { id: "surfaceStyle", label: "Surface style", type: "text", required: false, maxLength: 16 },
       { id: "primaryColor", label: "Brand accent", type: "text", required: false, maxLength: 7 },
       { id: "brandName", label: "Brand name", type: "text", required: true, maxLength: 128 },
       { id: "headline", label: "Headline", type: "text", required: true, maxLength: 256 },
@@ -433,6 +449,7 @@ const definitionSeed = [
         maxLength: 8,
       },
       { id: "artDirection", label: "Art direction", type: "text", required: false, maxLength: 16 },
+      { id: "surfaceStyle", label: "Surface style", type: "text", required: false, maxLength: 16 },
       { id: "primaryColor", label: "Brand accent", type: "text", required: false, maxLength: 7 },
       { id: "brandName", label: "Brand name", type: "text", required: true, maxLength: 128 },
       { id: "headline", label: "Campaign headline", type: "text", required: true, maxLength: 256 },
@@ -495,6 +512,7 @@ const definitionSeed = [
         maxLength: 8,
       },
       { id: "artDirection", label: "Art direction", type: "text", required: false, maxLength: 16 },
+      { id: "surfaceStyle", label: "Surface style", type: "text", required: false, maxLength: 16 },
       { id: "primaryColor", label: "Brand accent", type: "text", required: false, maxLength: 7 },
       { id: "brandName", label: "Brand name", type: "text", required: true, maxLength: 128 },
       {
@@ -879,6 +897,7 @@ export function materializeWebRecipeWithProvenance(
   const design = isRecord(checked.value.design) ? checked.value.design : {};
   const selection = selectDesignProfile({
     ...(checked.value.artDirection ? { artDirection: checked.value.artDirection } : {}),
+    ...(checked.value.surfaceStyle ? { surfaceStyle: checked.value.surfaceStyle } : {}),
     pageGoal:
       idValue === "business-site"
         ? "business"

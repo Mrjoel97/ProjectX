@@ -92,6 +92,26 @@ describe("closed design knowledge", () => {
     expect(result.profile.dials.variance).toBe(5);
   });
 
+  it("selects requested surface treatment within accessibility precedence and validates the closed enum", () => {
+    for (const surfaceStyle of ["minimal", "glass", "clay"] as const) {
+      const selected = selectDesignProfile({ pageGoal: "business", surfaceStyle });
+      expect(selected.profile.surfaceStyle).toBe(surfaceStyle);
+      expect(validateDesignProfileRef(selected.profile)).toBe(true);
+      expect(
+        selectDesignProfile({ surfaceStyle, accessibilityPosture: "high" }).profile.surfaceStyle,
+      ).toBe("minimal");
+    }
+    const fallback = selectDesignProfile().profile;
+    expect(fallback.surfaceStyle).toBe("minimal");
+    expect(validateDesignProfileRef({ ...fallback, surfaceStyle: "custom;url(evil)" })).toBe(false);
+    const { surfaceStyle: _surface, ...legacy } = fallback;
+    expect(validateDesignProfileRef(legacy)).toBe(true);
+    expect(
+      selectDesignProfile({ pageGoal: "catalogue", businessType: "Handmade ceramics" }).profile
+        .surfaceStyle,
+    ).toBe("clay");
+  });
+
   it("selects bounded business-directed presentation while explicit brand and accessibility take precedence", () => {
     expect(
       selectDesignProfile({ businessType: "Creative design studio" }).profile.artDirection,

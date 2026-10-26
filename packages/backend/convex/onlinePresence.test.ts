@@ -246,7 +246,7 @@ test("confirmed generated Blueprint is admitted; arbitrary generated or foreign 
   ).toBe(false);
 });
 
-test("shop intent persists as blocked requirements without creating a pretend shop", async () => {
+test("shop intent asks for catalogue facts without creating a pretend shop", async () => {
   const { t, tenantId, planId, session, brief, threadId } = await setup();
   const saved = await t.mutation(internal.onlinePresence.saveBrief, {
     tenantId,
@@ -257,12 +257,12 @@ test("shop intent persists as blocked requirements without creating a pretend sh
   expect(saved.ok).toBe(false);
   expect(saved.assessment).toMatchObject({
     ok: false,
-    missing: [expect.objectContaining({ reason: "commerce_unavailable" })],
+    missing: [expect.objectContaining({ field: "catalogue", reason: "missing" })],
   });
   const row = await t
     .withIdentity({ subject: `${tenantId}|session` })
     .query(api.onlinePresence.sessionForThread, { threadId });
-  expect(row?.status).toBe("blocked");
+  expect(row?.status).toBe("collecting");
   expect(row?.brief.kind).toBe("shop");
   expect(await t.run((ctx) => ctx.db.query("webProjects").collect())).toEqual([]);
 });

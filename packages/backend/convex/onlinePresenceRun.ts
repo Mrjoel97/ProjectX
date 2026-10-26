@@ -69,7 +69,11 @@ export const run = internalAction({
               ? ` The existing website is still version ${after.artifact.version}; it does not include these saved changes.`
               : ""
           }`
-        : result.reply;
+        : outcome === "awaiting_review" && after.artifact
+          ? after.artifact.publishedVersion === after.artifact.version
+            ? `Website version ${after.artifact.version} is published. [Review this version](${after.artifact.projectUrl}&version=${after.artifact.version}).`
+            : `Website version ${after.artifact.version} is ready for your review. [Open the exact version](${after.artifact.projectUrl}&version=${after.artifact.version}). Check its pages and source disclosures before approving publication.`
+          : result.reply;
     return { ok: true, reply, costUsd: result.costUsd, outcome };
   },
 });

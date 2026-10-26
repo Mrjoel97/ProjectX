@@ -10,6 +10,7 @@ export type PublicPageResult =
       readonly version: number;
       readonly contentHash: string;
       readonly projectId: string;
+      readonly projectKind: "site" | "landing" | "storefront";
       readonly tenantId: string;
       readonly hostingDeclaration: HostingDeclaration;
     }
@@ -30,9 +31,7 @@ export const resolvePage = internalQuery({
       slug: args.slug,
     });
     if (resolved.state !== "published") return { state: resolved.state };
-    // Defense in depth: a malformed seeded pointer must not turn the private storefront kind into
-    // an anonymous public response, even if a future resolver path is changed.
-    if (resolved.project.kind === "storefront") return { state: "invalid_host" };
+    // The published resolver also verifies current merchant readiness for a storefront.
     const document = resolved.version.document as WebDocument;
     if (!document.pages.some((candidate) => candidate.slug === args.page))
       return { state: "not_found" };
@@ -47,6 +46,7 @@ export const resolvePage = internalQuery({
       version: resolved.version.version,
       contentHash: resolved.version.contentHash,
       projectId: String(resolved.project._id),
+      projectKind: resolved.project.kind,
       tenantId: resolved.project.tenantId,
       hostingDeclaration: resolved.project.hostingDeclaration,
     };

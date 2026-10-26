@@ -136,10 +136,161 @@ export function buildOnlinePresenceTools(context: {
                   "Evidence-backed HTTPS destination, or supported landing-page local path. Never mailto. Omit for the built-in inquiry form.",
               },
               proof: { type: "array", items: { type: "string", maxLength: 512 }, maxItems: 6 },
+              catalogue: {
+                type: "array",
+                maxItems: 20,
+                description:
+                  "For a private shop presentation, the actual sourced products. This does not activate stock, checkout or merchant payments. Preserve existing products when revising unrelated content.",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", maxLength: 64 },
+                    name: { type: "string", maxLength: 256 },
+                    description: { type: "string", maxLength: 4000 },
+                    imageStorageRef: {
+                      type: "string",
+                      maxLength: 256,
+                      description:
+                        "Only an exact prepared owned webasset reference returned by the asset tool.",
+                    },
+                    displayPriceText: {
+                      type: "string",
+                      maxLength: 128,
+                      description:
+                        "Display only the actual source-backed price and currency; omit unknown prices.",
+                    },
+                    availabilityLabel: { type: "string", maxLength: 128 },
+                  },
+                  required: ["id", "name", "description"],
+                  additionalProperties: false,
+                },
+              },
+              shopSetup: {
+                type: "object",
+                description:
+                  "Private proposed shop operating package from actual source facts. Omit unknown fields; missing facts are returned for one grouped follow-up. Native exact-package review, not this proposal, activates products and operating choices.",
+                properties: {
+                  version: { type: "integer", const: 1 },
+                  sellerCountry: { type: "string", pattern: "^[A-Z]{2}$" },
+                  currency: { type: "string", pattern: "^[A-Z]{3}$" },
+                  countries: {
+                    type: "array",
+                    maxItems: 249,
+                    items: { type: "string", pattern: "^[A-Z]{2}$" },
+                  },
+                  products: {
+                    type: "array",
+                    maxItems: 20,
+                    items: {
+                      type: "object",
+                      properties: {
+                        catalogueItemId: { type: "string", maxLength: 64 },
+                        sku: { type: "string", maxLength: 64 },
+                        variant: { type: "string", maxLength: 64 },
+                        goodsKind: { type: "string", enum: ["physical", "digital"] },
+                        priceMinor: { type: "integer", minimum: 1, maximum: 1000000000 },
+                        stock: {
+                          type: "object",
+                          properties: {
+                            kind: { type: "string", enum: ["finite", "untracked"] },
+                            onHand: { type: "integer", minimum: 0, maximum: 1000000000 },
+                            reservationTtlMs: {
+                              type: "integer",
+                              minimum: 60000,
+                              maximum: 3600000,
+                              multipleOf: 60000,
+                            },
+                          },
+                          additionalProperties: false,
+                        },
+                        digitalDeliverySourceRef: { type: "string", maxLength: 256 },
+                        evidence: {
+                          type: "array",
+                          maxItems: 32,
+                          items: {
+                            type: "object",
+                            properties: {
+                              sourceRef: { type: "string", maxLength: 256 },
+                              quote: { type: "string", maxLength: 2000 },
+                            },
+                            required: ["sourceRef", "quote"],
+                            additionalProperties: false,
+                          },
+                        },
+                      },
+                      additionalProperties: false,
+                    },
+                  },
+                  policy: {
+                    type: "object",
+                    properties: {
+                      sellerOfRecordRef: { type: "string", maxLength: 256 },
+                      taxRounding: { type: "string", const: "half_up" },
+                      physical: {
+                        type: "object",
+                        properties: {
+                          shippingSourceRef: { type: "string", maxLength: 256 },
+                          shippingMinor: { type: "integer", minimum: 0, maximum: 1000000000 },
+                          returnsPolicyRef: { type: "string", maxLength: 256 },
+                          taxSourceRef: { type: "string", maxLength: 256 },
+                          taxBasisPoints: { type: "integer", minimum: 0, maximum: 10000 },
+                          refundPolicyRef: { type: "string", maxLength: 256 },
+                          buyerRetentionRef: { type: "string", maxLength: 256 },
+                        },
+                        additionalProperties: false,
+                      },
+                      digital: {
+                        type: "object",
+                        properties: {
+                          deliveryRef: { type: "string", maxLength: 256 },
+                          revocationRef: { type: "string", maxLength: 256 },
+                          noShipping: { type: "boolean", const: true },
+                          taxSourceRef: { type: "string", maxLength: 256 },
+                          taxBasisPoints: { type: "integer", minimum: 0, maximum: 10000 },
+                          refundPolicyRef: { type: "string", maxLength: 256 },
+                          buyerRetentionRef: { type: "string", maxLength: 256 },
+                        },
+                        additionalProperties: false,
+                      },
+                    },
+                    additionalProperties: false,
+                  },
+                  automation: {
+                    type: "object",
+                    properties: {
+                      autoDigitalDelivery: { type: "boolean" },
+                      digitalValidityDays: { type: "integer", minimum: 1, maximum: 30 },
+                      buyerRetentionDays: { type: "integer", minimum: 1, maximum: 30 },
+                      policyRef: { type: "string", maxLength: 256 },
+                    },
+                    additionalProperties: false,
+                  },
+                  evidence: {
+                    type: "array",
+                    maxItems: 32,
+                    items: {
+                      type: "object",
+                      properties: {
+                        sourceRef: { type: "string", maxLength: 256 },
+                        quote: { type: "string", maxLength: 2000 },
+                      },
+                      required: ["sourceRef", "quote"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                additionalProperties: false,
+              },
               design: {
                 type: "object",
                 properties: {
                   artDirection: { type: "string", enum: ["editorial", "studio", "technical"] },
+                  surfaceStyle: {
+                    type: "string",
+                    enum: ["minimal", "glass", "clay"],
+                    description:
+                      "Business-appropriate visual treatment: refined minimal, atmospheric glass with imagery, or tactile clay for playful products. Honor the customer's preference; preserve readable controls.",
+                  },
                   primaryColor: { type: "string", pattern: "^#[a-fA-F0-9]{6}$", maxLength: 7 },
                 },
                 additionalProperties: false,

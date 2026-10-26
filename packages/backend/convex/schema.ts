@@ -38,7 +38,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 const webRecipeName = literals(WEB_RECIPE_SKILL_NAMES);
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 79 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 92 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -78,6 +78,12 @@ const webRecipeName = literals(WEB_RECIPE_SKILL_NAMES);
 // │   feedback, optimizerConfig, tenantProfiles, goals,                        │
 // │   foundationInterviews, foundationTranscripts, foundationRevisions          │
 // │   inboxFixtures                                                            │
+// │                                                                            │
+// │ ── Tenant commerce and merchant operations ────────────────────────────── │
+// │   tenantProducts, tenantStock, tenantReservations, tenantCommercePolicies, │
+// │   tenantCommerceMappings, tenantCarts, tenantOrders, tenantOrderAttempts, │
+// │   tenantMerchantAccounts, tenantMerchantPayments, tenantMerchantEvents,  │
+// │   tenantMerchantOperations, tenantMerchantAutomation                     │
 // │                                                                            │
 // │ ── Finance ─────────────────────────────────────────────── ~L1981          │
 // │   spendEvents, spendCoverage, financeInputs                                │
@@ -4118,6 +4124,342 @@ export default defineSchema({
   })
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_source", ["tenantId", "vaultDocumentId", "sourceRevision"]),
+  tenantMerchantAccounts: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    provider: v.union(v.literal("stripe"), v.literal("paypal")),
+    environment: v.literal("test"),
+    sellerCountry: v.string(),
+    currency: v.string(),
+    revision: v.number(),
+    status: v.union(
+      v.literal("connecting"),
+      v.literal("ready"),
+      v.literal("unavailable"),
+      v.literal("revoked"),
+    ),
+    providerAccountId: v.optional(v.string()),
+    trackingId: v.string(),
+    capability: v.optional(v.any()),
+    onboardingUrl: v.optional(v.string()),
+    lastFailure: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_updated", ["updatedAt"])
+    .index("by_status_provider_updated", ["status", "provider", "updatedAt"])
+    .index("by_tenant_project_provider", ["tenantId", "projectId", "provider"])
+    .index("by_provider_account", ["provider", "providerAccountId"]),
+  tenantMerchantPayments: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    orderId: v.id("tenantOrders"),
+    localAttemptId: v.id("tenantOrderAttempts"),
+    merchantAccountId: v.id("tenantMerchantAccounts"),
+    provider: v.union(v.literal("stripe"), v.literal("paypal")),
+    state: v.any(),
+    providerOrderId: v.optional(v.string()),
+    checkoutUrl: v.optional(v.string()),
+    buyerTokenHash: v.optional(v.string()),
+    buyerEmail: v.optional(v.string()),
+    buyerPurgeAt: v.optional(v.number()),
+    buyerAddress: v.optional(
+      v.object({
+        name: v.string(),
+        line1: v.string(),
+        line2: v.optional(v.string()),
+        city: v.string(),
+        region: v.optional(v.string()),
+        postalCode: v.string(),
+        country: v.string(),
+      }),
+    ),
+    deliveryReviewReason: v.optional(
+      v.union(v.literal("buyer_address_missing"), v.literal("buyer_country_mismatch")),
+    ),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_order", ["tenantId", "orderId"])
+    .index("by_buyer_purge", ["buyerPurgeAt"])
+    .index("by_provider_order", ["provider", "providerOrderId"])
+    .index("by_tenant_project", ["tenantId", "projectId"]),
+  tenantMerchantEvents: defineTable({
+    tenantId: v.string(),
+    provider: v.union(v.literal("stripe"), v.literal("paypal")),
+    eventRef: v.string(),
+    paymentId: v.id("tenantMerchantPayments"),
+    fingerprint: v.string(),
+    outcome: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_provider_event", ["provider", "eventRef"]),
+  tenantMerchantOperations: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    orderId: v.id("tenantOrders"),
+    paymentId: v.id("tenantMerchantPayments"),
+    kind: v.union(
+      v.literal("refund"),
+      v.literal("physical_shipment"),
+      v.literal("digital_entitlement"),
+      v.literal("buyer_notice"),
+    ),
+    state: v.any(),
+    idempotencyKey: v.string(),
+    storageId: v.optional(v.id("_storage")),
+    sourceDocumentId: v.optional(v.id("vaultDocuments")),
+    sourceHash: v.optional(v.string()),
+    shipmentDetails: v.optional(v.object({ carrier: v.string(), trackingReference: v.string() })),
+    expiresAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_order", ["tenantId", "orderId"])
+    .index("by_expiry", ["expiresAt"])
+    .index("by_tenant_key", ["tenantId", "idempotencyKey"]),
+  tenantMerchantAutomation: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    revision: v.number(),
+    autoDigitalDelivery: v.boolean(),
+    digitalValidityDays: v.number(),
+    policyRef: v.string(),
+    buyerRetentionDays: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project", ["tenantId", "projectId"]),
+
+  tenantProducts: defineTable({
+    tenantId: v.string(),
+    digitalDeliveryDocumentId: v.optional(v.id("vaultDocuments")),
+    digitalDeliverySourceHash: v.optional(v.string()),
+    goodsKind: v.optional(v.union(v.literal("physical"), v.literal("digital"))),
+    sku: v.string(),
+    variant: v.string(),
+    currency: v.string(),
+    priceMinor: v.number(),
+    status: v.union(v.literal("draft"), v.literal("active"), v.literal("retired")),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_sku_variant", ["tenantId", "sku", "variant"]),
+
+  tenantStock: defineTable({
+    tenantId: v.string(),
+    productId: v.id("tenantProducts"),
+    kind: v.union(v.literal("finite"), v.literal("untracked")),
+    onHand: v.optional(v.number()),
+    reserved: v.optional(v.number()),
+    reservationTtlMs: v.optional(v.number()),
+    approvedUntracked: v.optional(v.boolean()),
+    revision: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_product", ["tenantId", "productId"]),
+
+  tenantReservations: defineTable({
+    tenantId: v.string(),
+    productId: v.id("tenantProducts"),
+    quantity: v.number(),
+    status: v.union(
+      v.literal("held"),
+      v.literal("released"),
+      v.literal("expired"),
+      v.literal("consumed"),
+    ),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    orderId: v.optional(v.id("tenantOrders")),
+    attemptId: v.optional(v.id("tenantOrderAttempts")),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_product", ["tenantId", "productId"])
+    .index("by_tenant_order", ["tenantId", "orderId"])
+    .index("by_tenant_product_status_expiry", ["tenantId", "productId", "status", "expiresAt"])
+    .index("by_tenant_status_expiry", ["tenantId", "status", "expiresAt"]),
+
+  tenantCommercePolicies: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    revision: v.number(),
+    sellerOfRecordRef: v.string(),
+    taxSourceRef: v.optional(v.string()),
+    shippingSourceRef: v.optional(v.string()),
+    refundPolicyId: v.optional(v.string()),
+    currency: v.string(),
+    countries: v.array(v.string()),
+    taxBasisPoints: v.optional(v.number()),
+    taxRounding: v.optional(v.literal("half_up")),
+    shippingMinor: v.optional(v.number()),
+    physical: v.optional(
+      v.object({
+        shippingSourceRef: v.string(),
+        shippingMinor: v.number(),
+        returnsPolicyRef: v.string(),
+        taxSourceRef: v.string(),
+        taxBasisPoints: v.number(),
+        refundPolicyRef: v.string(),
+        buyerRetentionRef: v.string(),
+      }),
+    ),
+    digital: v.optional(
+      v.object({
+        deliveryRef: v.string(),
+        revocationRef: v.string(),
+        noShipping: v.literal(true),
+        taxSourceRef: v.string(),
+        taxBasisPoints: v.number(),
+        refundPolicyRef: v.string(),
+        buyerRetentionRef: v.string(),
+      }),
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project_revision", ["tenantId", "projectId", "revision"]),
+
+  tenantCommerceMappings: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    presentationItemId: v.string(),
+    productId: v.id("tenantProducts"),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project_item", ["tenantId", "projectId", "presentationItemId"]),
+
+  tenantCarts: defineTable({
+    tenantId: v.string(),
+    buyerTokenHash: v.optional(v.string()),
+    buyerRequestHash: v.optional(v.string()),
+    projectId: v.id("webProjects"),
+    lines: v.array(
+      v.object({
+        presentationItemId: v.string(),
+        productId: v.id("tenantProducts"),
+        quantity: v.number(),
+        expectedProductRevision: v.number(),
+        expectedUnitMinor: v.number(),
+      }),
+    ),
+    addressCountry: v.string(),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project", ["tenantId", "projectId"])
+    .index("by_tenant_project_buyer", ["tenantId", "projectId", "buyerTokenHash"])
+    .index("by_tenant_expiry", ["tenantId", "expiresAt"]),
+
+  tenantOrders: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    cartId: v.id("tenantCarts"),
+    cartRevision: v.number(),
+    snapshot: v.object({
+      tenantId: v.string(),
+      projectId: v.string(),
+      currency: v.string(),
+      country: v.string(),
+      policyId: v.string(),
+      policyRevision: v.number(),
+      sellerOfRecordRef: v.string(),
+      taxRounding: v.optional(v.literal("half_up")),
+      taxSourceRef: v.optional(v.string()),
+      shippingSourceRef: v.optional(v.string()),
+      refundPolicyId: v.optional(v.string()),
+      physicalPolicy: v.optional(
+        v.object({
+          shippingSourceRef: v.string(),
+          shippingMinor: v.number(),
+          returnsPolicyRef: v.string(),
+          taxSourceRef: v.string(),
+          taxBasisPoints: v.number(),
+          refundPolicyRef: v.string(),
+          buyerRetentionRef: v.string(),
+        }),
+      ),
+      digitalPolicy: v.optional(
+        v.object({
+          deliveryRef: v.string(),
+          revocationRef: v.string(),
+          noShipping: v.literal(true),
+          taxSourceRef: v.string(),
+          taxBasisPoints: v.number(),
+          refundPolicyRef: v.string(),
+          buyerRetentionRef: v.string(),
+        }),
+      ),
+      lines: v.array(
+        v.object({
+          presentationItemId: v.string(),
+          productId: v.string(),
+          sku: v.string(),
+          goodsKind: v.optional(v.union(v.literal("physical"), v.literal("digital"))),
+          taxSourceRef: v.optional(v.string()),
+          refundPolicyRef: v.optional(v.string()),
+          buyerRetentionRef: v.optional(v.string()),
+          productRevision: v.number(),
+          stockRevision: v.number(),
+          unitMinor: v.number(),
+          quantity: v.number(),
+          lineMinor: v.number(),
+        }),
+      ),
+      subtotalMinor: v.number(),
+      taxMinor: v.number(),
+      shippingMinor: v.number(),
+      totalMinor: v.number(),
+      hash: v.string(),
+    }),
+    snapshotHash: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("expired"),
+      v.literal("cancelled"),
+      v.literal("cancel_requested"),
+      v.literal("paid"),
+      v.literal("paid_needs_review"),
+    ),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_cart", ["tenantId", "cartId"]),
+
+  tenantOrderAttempts: defineTable({
+    tenantId: v.string(),
+    orderId: v.id("tenantOrders"),
+    cartId: v.id("tenantCarts"),
+    cartRevision: v.number(),
+    retryKeyHash: v.string(),
+    snapshotHash: v.string(),
+    status: v.union(v.literal("local_pending"), v.literal("refused"), v.literal("expired")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_order", ["tenantId", "orderId"])
+    .index("by_tenant_cart_revision", ["tenantId", "cartId", "cartRevision"])
+    .index("by_tenant_cart_retry", ["tenantId", "cartId", "retryKeyHash"]),
+
   webProjects: defineTable({
     tenantId: v.string(),
     kind: v.union(v.literal("site"), v.literal("landing"), v.literal("storefront")),
@@ -4216,6 +4558,9 @@ export default defineSchema({
         designProfile: v.object({
           artDirection: v.optional(
             v.union(v.literal("editorial"), v.literal("studio"), v.literal("technical")),
+          ),
+          surfaceStyle: v.optional(
+            v.union(v.literal("minimal"), v.literal("glass"), v.literal("clay")),
           ),
           bundleHash: v.string(),
           compilerHash: v.string(),

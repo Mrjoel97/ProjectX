@@ -6,7 +6,7 @@ current_phase: 48
 current_plan: "48-02 — October21 evaluation partial28/46, budgetclosed198settled/0holds/$0.14551101. Precise golden-envelope repair implemented offline; freechecks/review, no deployment or paid rerun authorized."
 status: in_progress
 stopped_at: "2026-10-21 — separately approved23-07 run31a81b38 exited2 after28passes/0fails/0retries. ServerconfirmedEVAL_BUDGET_EXHAUSTED; normalclose13:47:31.744Z,198settled/0holds/$0.14551101. Noeval-result/Bmutation/activation/cleanup/rerun. Phase23 sixofnine/48partial/49notstarted."
-last_updated: "2026-10-23"
+last_updated: "2026-10-24"
 progress:
   total_phases: 80
   completed_phases: 54
@@ -16,6 +16,22 @@ progress:
 ---
 
 # Project State
+
+## Merchant runtime and design closeout — 2026-10-24
+
+The isolated cut implements source-backed shop setup, test-mode merchant adapters,
+authoritative carts/stock/payment reconciliation, native refunds and bounded digital
+access, plus three real-renderer examples with minimal/glass/clay directions and
+image-overlay copy/actions. Focused authority, privacy and UI checks passed. The final
+dedicated Vercel candidate passed contracts/core/backend/web strict checking and Next
+build. Source identities were refreshed without awarding evaluation or browser evidence.
+See [the closeout](../docs/releases/2026-10-24-merchant-design-closeout.md).
+
+Real provider checkout and v6 browser/recipe qualification remain unearned. Browser and
+desktop controls failed; the explicitly approved Stripe CLI configuration contains no
+usable test-key entry. Physical carrier dispatch and outbound buyer email are not
+implemented. No new paid model window opened; production, phase counters and previous
+native receipts are unchanged. This is not a completed commerce acceptance claim.
 
 ## Native website lifecycle continuation — 2026-10-24
 

@@ -5,6 +5,8 @@ import { useAction, useQuery } from "convex/react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { PRESENCE_EXAMPLES } from "./examples";
+import styles from "./examples.module.css";
 import { SiteEditor } from "./SiteEditor";
 
 const card = {
@@ -61,6 +63,35 @@ export default function SitesPage() {
           and bring you a version to review.
         </p>
       </header>
+      <section aria-labelledby="presence-examples">
+        <h2 id="presence-examples">Find your direction</h2>
+        <p style={{ color: "var(--ink-soft)", marginBottom: 24 }}>
+          Explore a website, a landing page and a shop. These fictional examples use generated
+          illustrations; your agent builds around your own business.
+        </p>
+        <div className={styles.gallery}>
+          {PRESENCE_EXAMPLES.map((example) => (
+            <Link
+              className={styles.example}
+              href={`/dashboard/sites/examples/${example.id}`}
+              key={example.id}
+            >
+              <img
+                src={example.image}
+                alt={`${example.title} generated illustration`}
+                width={960}
+                height={640}
+              />
+              <p className={styles.type}>
+                {example.kind} · {example.style}
+              </p>
+              <h3>{example.title}</h3>
+              <p>{example.description}</p>
+              <span className={styles.open}>Explore example →</span>
+            </Link>
+          ))}
+        </div>
+      </section>
       <section style={card} aria-labelledby="presence-start">
         <h2 id="presence-start">Let Pikar build your website</h2>
         <label style={{ display: "grid", gap: "0.5rem" }}>
@@ -100,8 +131,8 @@ export default function SitesPage() {
         </button>
         {notice && <p role="status">{notice}</p>}
         <p style={{ color: "var(--ink-soft)", fontSize: "0.88rem" }}>
-          You review the exact version before it goes public. Shop checkout remains unavailable
-          while merchant payment and delivery capabilities are being completed.
+          You review the exact version before it goes public. A shop draft presents your products;
+          test checkout requires a verified merchant connection and the shop readiness checks.
         </p>
       </section>
       {selected && (
@@ -111,11 +142,11 @@ export default function SitesPage() {
         />
       )}
       <section style={card} aria-labelledby="presence-projects">
-        <h2 id="presence-projects">Your websites</h2>
+        <h2 id="presence-projects">Your sites</h2>
         {projects === undefined ? (
-          <p role="status">Loading your websites…</p>
+          <p role="status">Loading your sites…</p>
         ) : projects.length === 0 ? (
-          <p>Your first website will appear here after Pikar creates a draft.</p>
+          <p>Your website, landing page or shop will appear here after Pikar creates a draft.</p>
         ) : (
           <ul style={{ paddingLeft: "1.25rem", display: "grid", gap: "0.8rem" }}>
             {projects.map((project) => (

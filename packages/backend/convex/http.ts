@@ -12,14 +12,15 @@ import { verifyStripeSignature } from "./billingWebhook";
 import { type ConnectResult, callbackRedirectPath, DEFAULT_REDIRECT_PATH } from "./connectorOAuth";
 import { isTrustedFunnelStorageUrl } from "./funnels";
 import { verifyState } from "./gmailAuth";
+import { registerMerchantRoutes } from "./merchantHttp";
 import { MICROSOFT_TOKEN_ENDPOINT, verifyMicrosoftState } from "./microsoftAuth";
-
 import { uploadHttp } from "./uploads";
 import { registerPublicWebRoutes } from "./webHttp";
 import { connectHttp as zernioConnectHttp } from "./zernioActions";
 
 const http = httpRouter();
 registerPublicWebRoutes(http);
+registerMerchantRoutes(http);
 http.route({ path: "/uploads", method: "POST", handler: uploadHttp });
 http.route({ path: "/uploads", method: "OPTIONS", handler: uploadHttp });
 http.route({ path: "/zernio/connect", method: "POST", handler: zernioConnectHttp });

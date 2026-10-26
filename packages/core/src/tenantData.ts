@@ -34,6 +34,21 @@ export const TENANT_TABLE_CLASSIFICATION = {
   webProjectVersions: "tenant_owned",
   webProjects: "tenant_owned",
   webAssets: "tenant_owned",
+  tenantProducts: "tenant_owned",
+  tenantMerchantAccounts: "tenant_owned",
+  tenantMerchantPayments: "tenant_owned",
+  tenantMerchantEvents: "tenant_owned",
+  tenantMerchantOperations: "tenant_owned",
+  tenantMerchantAutomation: "tenant_owned",
+
+  tenantStock: "tenant_owned",
+  tenantReservations: "tenant_owned",
+  tenantCommercePolicies: "tenant_owned",
+  tenantCommerceMappings: "tenant_owned",
+  tenantCarts: "tenant_owned",
+  tenantOrders: "tenant_owned",
+  tenantOrderAttempts: "tenant_owned",
+
   uploadReceipts: "tenant_owned",
   audit: "audit_immutable",
   // The DLQ shares the refs-only compliance plane and is never user-content export/deletion data.
@@ -325,6 +340,7 @@ export const STORAGE_ID_FIELDS = {
   vaultDocuments: ["storageId", "transcriptionStorageId"],
   webProjectVersions: ["artifactStorageId"],
   webAssets: ["storageId"],
+  tenantMerchantOperations: ["storageId"],
   funnels: ["storageId"], // Fixed artifact bytes can outlive a changed/deleted Vault reference.
   mediaJobs: ["assetStorageId"],
 } as const satisfies Record<string, readonly string[]>;

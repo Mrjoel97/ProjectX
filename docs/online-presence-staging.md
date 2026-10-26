@@ -6,6 +6,22 @@ staging workstream. Infrastructure is deployed and a bounded native website life
 has been observed; broader acceptance remains open. Current evidence:
 [53-02 summary](../.planning/phases/53-agentic-online-presence/53-02-SUMMARY.md).
 
+## Merchant runtime and image-led examples — 2026-10-24
+
+The new dedicated candidate passed contracts, core, backend and frontend strict
+typechecks plus the Next build. It adds three real-renderer examples, image-overlay
+copy/actions and source-backed native shop setup with sandbox merchant adapters.
+See [the current closeout](releases/2026-10-24-merchant-design-closeout.md) for focused
+checks and remaining conditions. A cloud build is not a native browser or provider
+qualification receipt. Backend apply and stable alias promotion are separate steps.
+
+The user approved existing local Stripe CLI test credentials as a fallback after both
+browser controls failed. Only the documented Stripe configuration was checked; it has
+no usable secret or restricted test-key entry. No key was copied or live credential
+used. The current v6 recipe identity retires old qualification; no new activation or
+paid model test is claimed. Physical carrier dispatch and outbound buyer email remain
+outside this implementation. Earlier dated observations below remain historical.
+
 ## Latest native lifecycle and closed window — 2026-10-24
 
 Runtime `bea65ebf0f3e3efb016e77ee56bf9eefba5b12b6` is deployed to this dedicated stage.

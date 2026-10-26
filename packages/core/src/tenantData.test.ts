@@ -55,7 +55,8 @@ describe("tenant table classification registry", () => {
     // + Buffer connections, transient OAuth, campaign posts and reports = 71.
     // + Zernio connection credentials and cached reports = 73.
     // + site projects/versions, form coordination, metrics and presence sessions and copied web assets = 79.
-    expect(schemaTables).toHaveLength(79);
+    // + eight local commerce and five merchant provider/operations tables = 92.
+    expect(schemaTables).toHaveLength(92);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });

@@ -8,6 +8,7 @@ import {
   onlinePresenceServiceState,
 } from "./onlinePresence";
 import { materializeWebRecipe, validateWebRecipeInput } from "./webRecipes";
+import { validateWebDocument } from "./webRuntime";
 
 const source: OnlinePresenceSource = {
   ref: "foundation:business:3",
@@ -135,6 +136,9 @@ describe("attended online presence brief", () => {
     [],
     "studio",
     { artDirection: "luxury" },
+    { surfaceStyle: "arbitrary-style" },
+    { surfaceStyle: "glass;background:url(https://example.com)" },
+    { surfaceStyle: 42 },
     { css: "body{color:red}" },
     { primaryColor: "#abc" },
     { primaryColor: "#12345678" },
@@ -146,6 +150,17 @@ describe("attended online presence brief", () => {
     expect(result.ok).toBe(false);
     if (!result.ok)
       expect(result.missing).toContainEqual(expect.objectContaining({ reason: "invalid" }));
+  });
+
+  test("carries each requested visual style into both materialized recipe profiles", () => {
+    for (const kind of ["website", "landing"] as const) {
+      for (const surfaceStyle of ["minimal", "glass", "clay"] as const) {
+        const result = assess({ kind, design: { surfaceStyle } });
+        if (!result.ok) throw new Error("Expected supported visual style");
+        expect(result.input).toMatchObject({ surfaceStyle });
+        expect(result.brief.design).toEqual({ surfaceStyle });
+      }
+    }
   });
 
   test("materializes approved context into an existing business recipe without inventing consent", () => {
@@ -208,14 +223,116 @@ describe("attended online presence brief", () => {
     );
   });
 
-  test("shop remains unavailable even with complete approved business evidence", () => {
+  test("a shop draft asks for actual catalogue facts instead of inventing products or prices", () => {
     const result = assess({ kind: "shop" });
     expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("Expected shop refusal");
+    if (result.ok) throw new Error("Expected missing catalogue facts");
     expect(result.missing).toContainEqual(
-      expect.objectContaining({ reason: "commerce_unavailable" }),
+      expect.objectContaining({ field: "catalogue", reason: "missing" }),
     );
     expect(onlinePresenceServiceState(result)).toBe("needs_information");
+  });
+
+  test("materializes a sourced private catalogue presentation without financial or checkout authority", () => {
+    const catalogue = [
+      {
+        id: "garden-plan",
+        name: "Garden plan",
+        description: "An illustrated planning guide.",
+        imageStorageRef: `webasset:ownedasset:${"b".repeat(64)}`,
+      },
+    ];
+    const result = assess({
+      kind: "shop",
+      catalogue,
+      design: { surfaceStyle: "glass", artDirection: "studio" },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected private shop presentation");
+    expect(result.recipeId).toBe("storefront-catalogue");
+    expect(result.input).toMatchObject({
+      brandName: brief.businessName,
+      intro: brief.summary,
+      items: catalogue,
+      surfaceStyle: "glass",
+    });
+    expect(result.input).not.toHaveProperty("totalMinor");
+    expect(result.input).not.toHaveProperty("merchantAccountRef");
+    const document = materializeWebRecipe(result.recipeId, result.input);
+    expect(document.kind).toBe("storefront");
+    expect(document.pages[0]?.nodes).toContainEqual(
+      expect.objectContaining({ kind: "catalogue", items: catalogue }),
+    );
+    expect(
+      validateWebDocument({
+        ...document,
+        pages: [
+          {
+            ...document.pages[0],
+            nodes: [
+              ...(document.pages[0]?.nodes ?? []),
+              {
+                kind: "cta",
+                label: "Buy now",
+                target: { kind: "https", url: "https://example.com/checkout" },
+              },
+            ],
+          },
+        ],
+      }).ok,
+    ).toBe(false);
+  });
+
+  test.each(
+    [
+      [],
+      null,
+      [{ id: "item", name: "Missing description" }],
+      Array.from({ length: 51 }, (_, index) => ({
+        id: `item-${index}`,
+        name: "Item",
+        description: "Description",
+      })),
+      [{ id: "item", name: "Item", description: "Description", unitMinor: 100 }],
+      [{ id: "item", name: "Item", description: "Description", goodsKind: "service" }],
+    ].map((catalogue) => ({ catalogue })),
+  )("refuses malformed, unbounded or financial catalogue payloads: %j", ({ catalogue }) => {
+    const result = assess({ kind: "shop", catalogue });
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.missing).toContainEqual(
+        expect.objectContaining({ field: "catalogue", reason: "invalid" }),
+      );
+  });
+
+  test.each([
+    "storage:legacy-image",
+    "https://example.com/image.png",
+    "javascript:alert(1)",
+    `webasset:owned:${"a".repeat(63)}`,
+  ])("new shop briefs refuse product image references outside owned prepared assets: %s", (imageStorageRef) => {
+    expect(
+      assess({
+        kind: "shop",
+        catalogue: [{ id: "item", name: "Item", description: "Description", imageStorageRef }],
+      }).ok,
+    ).toBe(false);
+  });
+
+  test("omitted catalogue lists preserve content and report inheritance; explicit set/clear do not", () => {
+    const catalogue = [{ id: "item", name: "Item", description: "Description" }];
+    const previous = { ...brief, kind: "shop", catalogue };
+    const inherited = mergeOnlinePresenceBrief(previous, { ...brief, kind: "shop" });
+    expect(inherited).toMatchObject({ ok: true, inheritedCatalogue: true, brief: { catalogue } });
+    const replaced = mergeOnlinePresenceBrief(previous, {
+      ...brief,
+      kind: "shop",
+      catalogue: [{ ...catalogue[0], name: "New title" }],
+    });
+    expect(replaced).toMatchObject({ ok: true, inheritedCatalogue: false });
+    const cleared = mergeOnlinePresenceBrief(previous, { ...brief, kind: "shop" }, ["catalogue"]);
+    expect(cleared).toMatchObject({ ok: true, inheritedCatalogue: false });
+    if (cleared.ok) expect(cleared.brief).not.toHaveProperty("catalogue");
   });
 
   test("maps a supported landing CTA and preserves explicit consent text", () => {

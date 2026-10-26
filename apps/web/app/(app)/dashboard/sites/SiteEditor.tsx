@@ -6,6 +6,7 @@ import type { FunctionArgs } from "convex/server";
 import Link from "next/link";
 import { useCallback, useState } from "react";
 import { PreviewCanvas } from "./preview/PreviewCanvas";
+import { MerchantWorkspace } from "./MerchantWorkspace";
 
 type ProjectId = FunctionArgs<typeof api.webProjects.getProject>["projectId"];
 const button = {
@@ -305,6 +306,7 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
           ))}
         </ul>
       </details>
+      {project.kind === "storefront" && <MerchantWorkspace projectId={projectId} />}
     </section>
   );
 }

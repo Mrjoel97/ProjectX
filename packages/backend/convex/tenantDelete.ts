@@ -1,3 +1,4 @@
+import { commerceDeletionBlocker } from "@pikar/core/tenantCommercePrivacy";
 import type { EntryId } from "@convex-dev/rag";
 import {
   type DeletableTenantTable,
@@ -207,6 +208,18 @@ export const authorizeTenantDeletion = internalMutation({
      */
     if (!user || String(args.userId) !== args.tenantId) {
       throw new Error("TENANT_SELF_REQUIRED");
+    }
+    // Existing financial/order linkage remains closed until a reviewed retention policy exists.
+    for (const table of ["tenantOrders", "tenantOrderAttempts", "tenantReservations"] as const) {
+      const rows = await ctx.db
+        .query(table)
+        .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+        .take(501);
+      if (rows.length >= 501) throw new Error("COMMERCE_RETENTION_REVIEW_REQUIRED");
+      for (const row of rows) {
+        const blocker = commerceDeletionBlocker(table, row);
+        if (blocker) throw new Error(blocker);
+      }
     }
     const google = await ctx.db
       .query("gmailTokens")

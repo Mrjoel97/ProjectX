@@ -1,6 +1,9 @@
+import { type MerchantSetupDraft, parseMerchantSetupDraft } from "./merchantSetup";
+import { parseWebAssetRef } from "./webAssets";
 import {
   type BusinessSiteInput,
   type CampaignLandingInput,
+  type StorefrontCatalogueInput,
   validateWebRecipeInput,
   validateWebRecipeMedia,
   type WebRecipeMedia,
@@ -26,6 +29,8 @@ export const ONLINE_PRESENCE_OPTIONAL_FIELDS = [
   "contactConsent",
   "design",
   "media",
+  "catalogue",
+  "shopSetup",
 ] as const;
 export type OnlinePresenceClearField = (typeof ONLINE_PRESENCE_OPTIONAL_FIELDS)[number];
 export type OnlinePresenceBrief = {
@@ -40,11 +45,16 @@ export type OnlinePresenceBrief = {
   ctaLabel?: string;
   ctaHref?: string;
   proof?: readonly string[];
+  /** Private presentation only; display labels never authorize financial catalogue/order amounts. */
+  catalogue?: StorefrontCatalogueInput["items"];
+  /** Draft only. Authoritative products and standing policy require exact native owner review. */
+  shopSetup?: MerchantSetupDraft;
   /** Prepared tenant-owned raster assets; ownership/source binding is checked again by the adapter. */
   media?: WebRecipeMedia;
   /** Creative presentation choices, never a grant to insert CSS or claim a brand identity. */
   design?: {
     artDirection?: "editorial" | "studio" | "technical";
+    surfaceStyle?: "minimal" | "glass" | "clay";
     /** Only an explicitly sourced six-digit brand color; omit for the style's default palette. */
     primaryColor?: string;
   };
@@ -98,8 +108,8 @@ export type OnlinePresenceAssessment = {
   | {
       ok: true;
       brief: OnlinePresenceBrief;
-      recipeId: "campaign-landing" | "business-site";
-      input: BusinessSiteInput | CampaignLandingInput;
+      recipeId: "campaign-landing" | "business-site" | "storefront-catalogue";
+      input: BusinessSiteInput | CampaignLandingInput | StorefrontCatalogueInput;
       /** Persist these selected revisions alongside the brief; do not log their text. */
       sources: readonly OnlinePresenceSource[];
       publicationRequiresExactVersionApproval: true;
@@ -116,7 +126,13 @@ export function mergeOnlinePresenceBrief(
   incoming: unknown,
   clearFields: unknown = [],
 ):
-  | { ok: true; brief: Record<string, unknown>; inheritedMedia: boolean }
+  | {
+      ok: true;
+      brief: Record<string, unknown>;
+      inheritedMedia: boolean;
+      inheritedCatalogue: boolean;
+      inheritedShopSetup: boolean;
+    }
   | { ok: false; missing: readonly OnlinePresenceMissing[] } {
   const invalid = (question: string) => ({
     ok: false as const,
@@ -152,6 +168,14 @@ export function mergeOnlinePresenceBrief(
       !Object.hasOwn(incoming, "media") &&
       !clearFields.includes("media") &&
       brief.media !== undefined,
+    inheritedCatalogue:
+      !Object.hasOwn(incoming, "catalogue") &&
+      !clearFields.includes("catalogue") &&
+      brief.catalogue !== undefined,
+    inheritedShopSetup:
+      !Object.hasOwn(incoming, "shopSetup") &&
+      !clearFields.includes("shopSetup") &&
+      brief.shopSetup !== undefined,
   };
 }
 
@@ -175,6 +199,8 @@ const KEYS = [
   "design",
   "sourceRefs",
   "contactConsent",
+  "catalogue",
+  "shopSetup",
 ] as const;
 
 /** Validate before saving AND immediately before materializing; selected sources can change.
@@ -199,15 +225,46 @@ export function assessOnlinePresenceBrief(
   for (const key of Object.keys(raw))
     if (!(KEYS as readonly string[]).includes(key))
       add(key, "invalid", "Remove the unsupported brief field.");
+  if (raw.shopSetup !== undefined && !parseMerchantSetupDraft(raw.shopSetup).valid)
+    add(
+      "shopSetup",
+      "invalid",
+      "Use only supported, bounded shop setup draft fields. Leave unknown facts absent.",
+    );
   if (!["landing", "website", "shop"].includes(String(raw.kind)))
     add("kind", "missing", "Do you need a landing page, a business website, or an online shop?");
-  // This gate is unconditional. Neither model prose nor a caller-supplied readiness bit opens commerce.
-  if (raw.kind === "shop")
+  // This prepares a private presentation, never a declaration of working checkout or fulfilment.
+  if (raw.kind === "shop" && raw.catalogue === undefined)
     add(
-      "kind",
-      "commerce_unavailable",
-      "Online shop checkout and fulfilment are not ready. We can record requirements, but cannot deliver or publish a working shop yet.",
+      "catalogue",
+      "missing",
+      "Which products should the private shop draft show, with their names, descriptions and any prepared owned images? Leave unknown prices and stock out; checkout readiness is checked separately.",
     );
+  if (raw.catalogue !== undefined) {
+    const catalogue = validateWebRecipeInput("storefront-catalogue", {
+      brandName: "Draft",
+      items: raw.catalogue,
+    });
+    if (!catalogue.ok)
+      add(
+        "catalogue",
+        "invalid",
+        "Provide the bounded product names, descriptions and optional display labels supported by the catalogue recipe.",
+      );
+    if (Array.isArray(raw.catalogue))
+      for (const item of raw.catalogue) {
+        if (
+          record(item) &&
+          item.imageStorageRef !== undefined &&
+          !parseWebAssetRef(item.imageStorageRef)
+        )
+          add(
+            "catalogue",
+            "invalid",
+            "Use only returned prepared owned image references for product images.",
+          );
+      }
+  }
   const required = {
     businessName: [128, "What business name should appear publicly?"],
     headline: [256, "What main message should the page communicate?"],
@@ -237,12 +294,14 @@ export function assessOnlinePresenceBrief(
   if (raw.design !== undefined) {
     if (
       !record(raw.design) ||
-      Object.keys(raw.design).some((key) => !["artDirection", "primaryColor"].includes(key))
+      Object.keys(raw.design).some(
+        (key) => !["artDirection", "surfaceStyle", "primaryColor"].includes(key),
+      )
     )
       add(
         "design",
         "invalid",
-        "Use a supported art direction and an explicitly sourced brand color only.",
+        "Use a supported art direction, surface style and an explicitly sourced brand color only.",
       );
     else {
       if (
@@ -254,6 +313,11 @@ export function assessOnlinePresenceBrief(
           "invalid",
           "Choose editorial, studio, or technical presentation.",
         );
+      if (
+        raw.design.surfaceStyle !== undefined &&
+        !["minimal", "glass", "clay"].includes(String(raw.design.surfaceStyle))
+      )
+        add("design.surfaceStyle", "invalid", "Choose minimal, glass, or clay presentation.");
       if (
         raw.design.primaryColor !== undefined &&
         (typeof raw.design.primaryColor !== "string" ||
@@ -324,46 +388,73 @@ export function assessOnlinePresenceBrief(
   }
   if (missing.length) return { ok: false, missing, warnings };
   const brief = raw as OnlinePresenceBrief;
-  const recipeId = brief.kind === "landing" ? "campaign-landing" : "business-site";
-  const input: BusinessSiteInput | CampaignLandingInput =
-    recipeId === "campaign-landing"
+  const recipeId =
+    brief.kind === "shop"
+      ? "storefront-catalogue"
+      : brief.kind === "landing"
+        ? "campaign-landing"
+        : "business-site";
+  const input: BusinessSiteInput | CampaignLandingInput | StorefrontCatalogueInput =
+    recipeId === "storefront-catalogue"
       ? {
-          ...(brief.media === undefined ? {} : { media: brief.media }),
           brandName: brief.businessName,
-          headline: brief.headline,
-          offer: brief.offer ?? brief.summary,
-          ...(brief.proof === undefined ? {} : { proofPoints: brief.proof }),
-          ...(brief.ctaLabel === undefined ? {} : { ctaLabel: brief.ctaLabel }),
-          ...(brief.ctaHref === undefined
-            ? {}
-            : brief.ctaHref.startsWith("/")
-              ? { ctaPath: brief.ctaHref }
-              : { ctaHref: brief.ctaHref }),
-          ...(brief.contactConsent === undefined ? {} : { formConsent: brief.contactConsent }),
+          intro: brief.summary,
+          items: brief.catalogue ?? [],
+          ...(brief.media === undefined ? {} : { media: brief.media }),
           ...(brief.design?.artDirection === undefined
             ? {}
             : { artDirection: brief.design.artDirection }),
+          ...(brief.design?.surfaceStyle === undefined
+            ? {}
+            : { surfaceStyle: brief.design.surfaceStyle }),
           ...(brief.design?.primaryColor === undefined
             ? {}
             : { primaryColor: brief.design.primaryColor }),
         }
-      : {
-          ...(brief.media === undefined ? {} : { media: brief.media }),
-          brandName: brief.businessName,
-          headline: brief.headline,
-          summary: brief.summary,
-          ...(brief.services === undefined ? {} : { services: brief.services }),
-          ...(brief.about === undefined ? {} : { about: brief.about }),
-          ...(brief.ctaLabel === undefined ? {} : { ctaLabel: brief.ctaLabel }),
-          ...(brief.ctaHref === undefined ? {} : { ctaHref: brief.ctaHref }),
-          ...(brief.contactConsent === undefined ? {} : { contactConsent: brief.contactConsent }),
-          ...(brief.design?.artDirection === undefined
-            ? {}
-            : { artDirection: brief.design.artDirection }),
-          ...(brief.design?.primaryColor === undefined
-            ? {}
-            : { primaryColor: brief.design.primaryColor }),
-        };
+      : recipeId === "campaign-landing"
+        ? {
+            ...(brief.media === undefined ? {} : { media: brief.media }),
+            brandName: brief.businessName,
+            headline: brief.headline,
+            offer: brief.offer ?? brief.summary,
+            ...(brief.proof === undefined ? {} : { proofPoints: brief.proof }),
+            ...(brief.ctaLabel === undefined ? {} : { ctaLabel: brief.ctaLabel }),
+            ...(brief.ctaHref === undefined
+              ? {}
+              : brief.ctaHref.startsWith("/")
+                ? { ctaPath: brief.ctaHref }
+                : { ctaHref: brief.ctaHref }),
+            ...(brief.contactConsent === undefined ? {} : { formConsent: brief.contactConsent }),
+            ...(brief.design?.artDirection === undefined
+              ? {}
+              : { artDirection: brief.design.artDirection }),
+            ...(brief.design?.surfaceStyle === undefined
+              ? {}
+              : { surfaceStyle: brief.design.surfaceStyle }),
+            ...(brief.design?.primaryColor === undefined
+              ? {}
+              : { primaryColor: brief.design.primaryColor }),
+          }
+        : {
+            ...(brief.media === undefined ? {} : { media: brief.media }),
+            brandName: brief.businessName,
+            headline: brief.headline,
+            summary: brief.summary,
+            ...(brief.services === undefined ? {} : { services: brief.services }),
+            ...(brief.about === undefined ? {} : { about: brief.about }),
+            ...(brief.ctaLabel === undefined ? {} : { ctaLabel: brief.ctaLabel }),
+            ...(brief.ctaHref === undefined ? {} : { ctaHref: brief.ctaHref }),
+            ...(brief.contactConsent === undefined ? {} : { contactConsent: brief.contactConsent }),
+            ...(brief.design?.artDirection === undefined
+              ? {}
+              : { artDirection: brief.design.artDirection }),
+            ...(brief.design?.surfaceStyle === undefined
+              ? {}
+              : { surfaceStyle: brief.design.surfaceStyle }),
+            ...(brief.design?.primaryColor === undefined
+              ? {}
+              : { primaryColor: brief.design.primaryColor }),
+          };
   // Reuse recovered runtime validation rather than duplicate its safe URL/content contract.
   const checked = validateWebRecipeInput(recipeId, input);
   if (!checked.ok) {

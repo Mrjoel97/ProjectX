@@ -52,7 +52,7 @@ test("an exact current built receipt retains the review handoff", async () => {
     revision: 4,
     briefBuilt: true,
     assessment: { ok: true },
-    artifact: { version: 2 },
+    artifact: { version: 2, projectUrl: "/dashboard/sites?project=owned-project" },
   };
   const ctx = {
     storage: {},
@@ -60,7 +60,7 @@ test("an exact current built receipt retains the review handoff", async () => {
     runMutation: vi.fn().mockResolvedValue({ ok: true }),
   };
   vi.mocked(runSpecialistTurn).mockResolvedValueOnce({
-    reply: "Review website version 2.",
+    reply: "Review your site at https://yourprojectlink/dashboard/sites?project=wrong-project",
     costUsd: 0,
     truncated: false,
   } as never);
@@ -69,5 +69,9 @@ test("an exact current built receipt retains the review handoff", async () => {
       _handler(ctx: unknown, args: unknown): Promise<{ reply: string; outcome: string }>;
     }
   )._handler(ctx, { tenantId: "tenant", planId: "plan", threadId: "thread", text: "Build" });
-  expect(result).toMatchObject({ outcome: "awaiting_review", reply: "Review website version 2." });
+  expect(result.outcome).toBe("awaiting_review");
+  expect(result.reply).toContain("/dashboard/sites?project=owned-project&version=2");
+  expect(result.reply).not.toContain("yourprojectlink");
+  expect(result.reply).not.toContain("wrong-project");
+  expect(result.reply).not.toContain("is published");
 });

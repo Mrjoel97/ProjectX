@@ -39,6 +39,12 @@ export const RAW_BUILDER_ALLOWLIST: readonly string[] = [
   "webProjects.ts",
   "webRuntime.ts",
   "webForms.ts",
+  "tenantCatalogue.ts",
+  "tenantOrders.ts",
+  "merchantCommerce.ts",
+  "merchantProvider.ts",
+  "merchantOperations.ts",
+  "merchantHttp.ts",
   "onlinePresence.ts",
   // Gmail token store + delivery readers (internalQuery/internalMutation + two
   // tenantQueries). Internal-only surfaces around the crown-jewel refresh tokens.

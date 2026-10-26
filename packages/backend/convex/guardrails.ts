@@ -499,6 +499,7 @@ export const reserveEvalCall = internalMutation({
     callId: v.string(),
     model: v.string(),
     outputTokens: v.number(),
+    websiteComparison: v.optional(v.literal(true)),
     providerCall: v.optional(
       v.union(
         v.object({ kind: v.literal("chat"), model: v.string(), maxOutputTokens: v.number() }),
@@ -518,7 +519,7 @@ export const reserveEvalCall = internalMutation({
   },
   handler: async (
     ctx,
-    { tenantId, budgetId, callId, model, outputTokens, providerCall },
+    { tenantId, budgetId, callId, model, outputTokens, providerCall, websiteComparison },
   ): Promise<Id<"spendEvents">> => {
     if (!/^[a-f0-9-]{36}$/.test(callId)) throw new Error("EVAL_CALL_ID_INVALID");
     const { envelope, config } = await evalEnvelopeFor(ctx, budgetId, tenantId);
@@ -539,7 +540,14 @@ export const reserveEvalCall = internalMutation({
     const amountCents = providerCall
       ? goldenProviderCeilingCents(providerCall)
       : evalCallCeilingCents(model, outputTokens);
-    const correlationId = `evalcall:${callId}`;
+    if (
+      websiteComparison &&
+      (!/^packeval-[a-f0-9]{8}-presence$/.test(tenantId) ||
+        !["or/openai/gpt-4o-mini", "or/moonshotai/kimi-k3.1-pro"].includes(model) ||
+        providerCall?.kind !== "chat")
+    )
+      throw Error("WEBSITE_COMPARISON_RESERVATION_INVALID");
+    const correlationId = `evalcall:${websiteComparison ? "presence-comparison:" : ""}${callId}`;
     // Re-entry can never authorize another provider execution with a consumed reservation.
     if (
       await ctx.db
@@ -548,6 +556,14 @@ export const reserveEvalCall = internalMutation({
         .first()
     )
       throw new Error("EVAL_CALL_ALREADY_RESERVED");
+    const alternateCorrelationId = `evalcall:${websiteComparison ? "" : "presence-comparison:"}${callId}`;
+    if (
+      await ctx.db
+        .query("spendEvents")
+        .withIndex("by_correlation", (q) => q.eq("correlationId", alternateCorrelationId))
+        .first()
+    )
+      throw Error("EVAL_CALL_ALREADY_RESERVED");
     const rows = await ctx.db
       .query("spendEvents")
       .withIndex("by_eval_budget", (q) => q.eq("evalBudgetId", budgetId))
@@ -558,7 +574,11 @@ export const reserveEvalCall = internalMutation({
     // Only the new operator shop lane refuses concurrent outstanding calls. A failed source may be
     // rendered as no-match by the ordinary tool, but its unknown hold must stop the next provider
     // before egress. Existing golden/vertical/authoring envelopes retain their concurrency.
-    if (envelope.evalEnvelope?.purpose === "shop-preparation") {
+    if (
+      envelope.evalEnvelope?.purpose === "shop-preparation" ||
+      websiteComparison ||
+      rows.some((row) => row.correlationId.startsWith("evalcall:presence-comparison:"))
+    ) {
       const settled = new Set(
         rows.filter((row) => row.evalActualUsd !== undefined).map((row) => row.correlationId),
       );

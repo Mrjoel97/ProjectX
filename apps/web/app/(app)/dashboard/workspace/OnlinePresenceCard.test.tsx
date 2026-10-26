@@ -23,6 +23,28 @@ const render = (session: OnlinePresenceCardData | null | undefined) =>
   renderToStaticMarkup(<OnlinePresenceCardView session={session} />);
 
 describe("OnlinePresenceCard", () => {
+  test("identifies a storefront receipt as presentation only and keeps checkout authority in Sites", () => {
+    const html = render({
+      status: "awaiting_review",
+      artifact: { ...artifact, kind: "storefront" },
+      assessment: null,
+    });
+    expect(html).toContain("Your shop draft");
+    expect(html).toContain("Shop draft version 3 · Draft");
+    expect(html).toContain("Test checkout requires a verified merchant connection");
+    expect(html).toContain("Review shop draft version 3");
+    expect(html).toContain('href="/dashboard/sites?project=project-one&amp;version=3"');
+    expect(html).not.toContain("finished draft");
+    expect(html).not.toContain("<button");
+    const published = render({
+      status: "awaiting_review",
+      artifact: { ...artifact, kind: "storefront", approvedVersion: 3, publishedVersion: 3 },
+      assessment: null,
+    });
+    expect(published).toContain("Presentation published");
+    expect(published).toContain("Test checkout requires a verified merchant connection");
+    expect(published).not.toContain("working shop");
+  });
   test("keeps absence and loading distinct and reads the current thread", () => {
     expect(render(null)).toBe("");
     expect(render(undefined)).toContain("Checking your online presence");

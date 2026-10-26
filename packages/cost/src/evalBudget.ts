@@ -9,9 +9,17 @@ export const EVAL_MODEL_BOUNDS: Readonly<
       contextTokens: number;
       promptPerMillion: number;
       completionPerMillion: number;
+      cacheWritePerMillion?: number;
     }
   >
 > = {
+  // OpenRouter official model catalogue, 2026-10-26. Full accepted context, never chars/4.
+  "or/moonshotai/kimi-k3.1-pro": {
+    contextTokens: 1_048_576,
+    promptPerMillion: 2,
+    completionPerMillion: 10,
+    cacheWritePerMillion: 2,
+  },
   "or/openai/gpt-5.6-luna": {
     contextTokens: 1_050_000,
     promptPerMillion: 0.5,
@@ -37,7 +45,8 @@ export function evalCallCeilingCents(model: string, outputTokens: number): numbe
   )
     throw new Error("EVAL_OUTPUT_LIMIT_REQUIRED");
   return Math.ceil(
-    (bound.contextTokens * bound.promptPerMillion + outputTokens * bound.completionPerMillion) /
+    (bound.contextTokens * (bound.promptPerMillion + (bound.cacheWritePerMillion ?? 0)) +
+      outputTokens * bound.completionPerMillion) /
       10_000,
   );
 }

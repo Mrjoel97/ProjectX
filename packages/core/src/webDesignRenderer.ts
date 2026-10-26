@@ -1,4 +1,9 @@
-import type { WebDocument, WebRouteContext } from "@pikar/contracts/webRuntime";
+import type {
+  WebCatalogueNode,
+  WebDocument,
+  WebFormNode,
+  WebRouteContext,
+} from "@pikar/contracts/webRuntime";
 import {
   type DesignKnowledgeBundle,
   type DesignProfileRef,
@@ -6,9 +11,15 @@ import {
   verifiedDesignKnowledgeBundle,
 } from "./designKnowledge";
 import { webAssetPath } from "./webAssets";
-import { canonicalWebDocument, escapeWebText, renderWebPageParts, sha256Bytes } from "./webRuntime";
+import {
+  canonicalWebDocument,
+  escapeWebText,
+  renderWebMedia,
+  renderWebPageParts,
+  sha256Bytes,
+} from "./webRuntime";
 
-export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v5" as const;
+export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v7" as const;
 const encoder = new TextEncoder();
 
 /** The renderer depends on the selected records, not merely the bundle's role labels. */
@@ -83,6 +94,16 @@ export function webColorContrast(foreground: string, background: string): number
   return (Math.max(light, dark) + 0.05) / (Math.min(light, dark) + 0.05);
 }
 
+/** Validated AST items, not model-authored HTML. No ordering/payment capability is inferred. */
+function designedCatalogue(node: WebCatalogueNode, route: WebRouteContext): string {
+  return `<section class="catalogue" aria-label="Catalogue presentation">${node.heading ? `<h2>${escapeWebText(node.heading)}</h2>` : ""}<div class="catalogue-items">${node.items.map((item) => `<article data-catalogue-id="${escapeWebText(item.id)}">${item.imageStorageRef ? renderWebMedia({ kind: "media", storageRef: item.imageStorageRef, alt: item.name, aspect: "square", crop: "contain" }, route) : ""}<div class="product-copy"><h3>${escapeWebText(item.name)}</h3>${item.displayPriceText ? `<p class="display-price">${escapeWebText(item.displayPriceText)}</p>` : ""}${item.availabilityLabel ? `<p class="availability">${escapeWebText(item.availabilityLabel)}</p>` : ""}<details><summary>View details</summary><p>${escapeWebText(item.description)}</p></details></div></article>`).join("")}</div><p class="commerce-unavailable">Ordering is unavailable in this presentation-only catalogue.</p></section>`;
+}
+
+function designedInquiry(node: WebFormNode, route: WebRouteContext): string {
+  const labels = { email: "Email address", name: "Your name", company: "Business name" };
+  return `<form id="inquiry-${escapeWebText(node.id)}" method="post" action="/p/${route.slug}/${route.page}/forms/${node.id}"><fieldset><legend>${escapeWebText(node.heading ?? "Start a conversation")}</legend>${node.fields.map((field) => `<label>${labels[field]}<input name="${field}" type="${field === "email" ? "email" : "text"}" autocomplete="${field === "company" ? "organization" : field}"${field === "email" ? " required" : ""}></label>`).join("")}<label><input name="consent" type="checkbox" required> ${escapeWebText(node.consent)}</label><button type="submit">Send inquiry</button></fieldset></form>`;
+}
+
 /** Closed Pikar-owned art direction, informed by reviewed Taste guidance. The pinned source
  * bundle is provenance, not executable prompts or a claim of an upstream design system. */
 export function renderDesignedWebDocument(
@@ -93,18 +114,33 @@ export function renderDesignedWebDocument(
   assertDesignProfileSources(profile);
   const parts = renderWebPageParts(document, route);
   const direction = profile.artDirection ?? "editorial";
-  const colors = PALETTES[direction];
+  const surfaceStyle = profile.surfaceStyle ?? "minimal";
+  const baseColors = PALETTES[direction];
+  const colors =
+    surfaceStyle === "glass"
+      ? { ...baseColors, paper: "#f3f6f4", card: "#e7eeea", ink: "#163a34", muted: "#375b54" }
+      : surfaceStyle === "clay"
+        ? { ...baseColors, paper: "#f8f4ee", card: "#efe8df", ink: "#303d36", muted: "#536458" }
+        : baseColors;
   const accent = parts.document.brand.primaryColor ?? colors.accent;
   const buttonInk =
     webColorContrast("#000000", accent) >= webColorContrast("#ffffff", accent)
       ? "#000000"
       : "#ffffff";
   const linkInk = webColorContrast(accent, colors.paper) >= 4.5 ? accent : colors.ink;
+  const buttonEdge =
+    surfaceStyle === "glass"
+      ? Math.min(webColorContrast(accent, "#153b36"), webColorContrast(accent, "#293d39")) >= 3
+        ? "transparent"
+        : "#ffffff"
+      : Math.min(webColorContrast(accent, colors.paper), webColorContrast(accent, colors.card)) >= 3
+        ? "transparent"
+        : colors.ink;
   const spacing = 36 - profile.dials.density * 2;
   const width = 1180 + (profile.dials.variance - 5) * 18;
   const motion = profile.dials.motion <= 2 ? 0 : profile.dials.motion * 12;
   const hoverTransform = motion === 0 ? "none" : "translateY(-2px)";
-  const radius = 0;
+  const radius = surfaceStyle === "clay" ? 24 : 0;
   const copyMeasure = profile.patternId === "hero-features-cta" ? "700px" : "100%";
   const controlHeight = profile.formProfileId === "forms-first" ? 44 : 40;
   const heading =
@@ -114,6 +150,17 @@ export function renderDesignedWebDocument(
         ? '"Arial Black",Arial,sans-serif'
         : "Arial,Helvetica,sans-serif";
   const hero = parts.nodes.find((entry) => entry.node.kind === "hero");
+  const inquiry = parts.nodes.find((entry) => entry.node.kind === "form");
+  const contactPage = parts.document.pages.find((page) =>
+    page.nodes.some((node) => node.kind === "form"),
+  );
+  const catalogue = parts.nodes.find((entry) => entry.node.kind === "catalogue");
+  const entryHtml = (entry: (typeof parts.nodes)[number]) =>
+    entry.node.kind === "catalogue"
+      ? designedCatalogue(entry.node, parts.route)
+      : entry.node.kind === "form"
+        ? designedInquiry(entry.node, parts.route)
+        : entry.html;
   const heroIndex = hero ? parts.nodes.indexOf(hero) : -1;
   const cta = hero
     ? parts.nodes.slice(heroIndex + 1).find((entry) => entry.node.kind === "cta")
@@ -135,10 +182,13 @@ export function renderDesignedWebDocument(
   const headlineSize = heroLength > 100 ? "3.6rem" : heroLength > 65 ? "4.4rem" : "5.8rem";
   const content = parts.nodes
     .filter((entry) => entry !== hero && entry !== cta && entry !== rail)
-    .map((entry) => `<div class="content-block node-${entry.node.kind}">${entry.html}</div>`)
+    .map(
+      (entry) =>
+        `<div class="content-block node-${entry.node.kind}"${entry === catalogue ? ' id="pikar-collection"' : ""}>${entryHtml(entry)}</div>`,
+    )
     .join("");
   const heroHtml = hero
-    ? `<div class="hero-composition${rail ? " has-rail" : ""}${rail?.node.kind === "media" ? " has-media" : ""}"><div class="hero-copy">${hero.html}${cta ? `<div class="hero-action">${cta.html}</div>` : ""}</div>${rail ? `<div class="hero-rail${rail.node.kind === "media" ? " hero-visual" : ""}">${rail.html}</div>` : ""}</div>`
+    ? `<div class="hero-composition${rail ? " has-rail" : ""}${rail?.node.kind === "media" ? " has-media" : ""}"><div class="hero-copy">${hero.html}${cta ? `<div class="hero-action">${cta.html}</div>` : inquiry?.node.kind === "form" && rail !== inquiry ? `<div class="hero-action"><a class="cta" href="#inquiry-${escapeWebText(inquiry.node.id)}">Get in touch</a></div>` : !inquiry && contactPage && contactPage.slug !== parts.page.slug ? `<div class="hero-action"><a class="cta" href="/p/${parts.route.slug}/${contactPage.slug}">Get in touch</a></div>` : catalogue ? '<div class="hero-action"><a class="cta" href="#pikar-collection">Explore the collection</a></div>' : ""}</div>${rail ? `<div class="hero-rail${rail.node.kind === "media" ? " hero-visual" : ""}">${entryHtml(rail)}</div>` : ""}</div>`
     : "";
   const home = `/p/${parts.route.slug}/${parts.document.pages[0]?.slug ?? parts.route.page}`;
   const brand = escapeWebText(parts.document.brand.name);
@@ -159,6 +209,96 @@ body[data-art-direction=technical] .site-header{background:var(--hero);color:var
 @media(min-width:768px) and (max-width:1000px){body[data-art-direction=editorial] .hero-composition.has-rail,body[data-art-direction=studio] .hero-composition.has-rail,body[data-art-direction=technical] .hero-composition.has-rail{grid-template-columns:minmax(0,1fr)}.hero h1{max-width:24ch;font-size:clamp(2.4rem,5vw,4rem)}body[data-art-direction=editorial] .has-media .hero-copy{column-gap:32px}body[data-art-direction=editorial] .has-media h1{font-size:clamp(2.6rem,5.2vw,3.8rem)}body[data-art-direction=studio] .hero-composition.has-media{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px}body[data-art-direction=studio] .hero-composition.has-media h1{font-size:clamp(2.4rem,4vw,3rem)}.site-footer{grid-template-columns:minmax(0,1fr)}.site-footer nav ul{gap:8px 22px}}
 @media(max-width:767px){.site-header,main,.site-footer{padding-inline:20px}.site-header{padding-block:16px;align-items:flex-start;flex-direction:column;gap:8px}.site-header nav ul{gap:8px 20px}.site-header nav a{font-size:.94rem}.hero-composition{padding:32px 0 40px;gap:24px}.hero h1{font-size:clamp(2rem,10vw,3.3rem);max-width:100%}.hero p:not(.eyebrow){font-size:1rem;margin-top:20px}.hero-action{margin-top:24px}.hero-rail{padding:22px}.content-block{padding:30px 0}.site-footer{grid-template-columns:minmax(0,1fr);padding-block:32px 24px;margin-top:20px;gap:24px}.footer-brand{font-size:clamp(2rem,10vw,3rem)}.site-footer nav ul{gap:8px 20px}.catalogue-items{grid-template-columns:1fr}.brand-logo{max-width:110px;height:36px}body[data-art-direction=editorial] .hero-composition.has-rail,body[data-art-direction=studio] .hero-composition.has-rail,body[data-art-direction=technical] .hero-composition.has-rail{grid-template-columns:minmax(0,1fr)}body[data-art-direction=editorial] .has-media .hero-copy{display:block}body[data-art-direction=editorial] .has-media .hero{display:block}body[data-art-direction=editorial] .has-media h1{font-size:clamp(2rem,10vw,3.3rem)}body[data-art-direction=editorial] .has-media .hero p{margin-top:20px}body[data-art-direction=editorial] .hero-composition.has-media{padding-top:32px;gap:28px}body[data-art-direction=editorial] #services,body[data-art-direction=studio] #services,body[data-art-direction=technical] #services{display:block}body[data-art-direction=editorial] #services>p{font-size:1.4rem;padding:10px 0}body[data-art-direction=studio] #services>p{font-size:1.35rem;padding-bottom:20px}body[data-art-direction=editorial] #about,body[data-art-direction=studio] #about,body[data-art-direction=technical] #about{padding:24px;display:block}body[data-art-direction=editorial] #about>h2{margin-bottom:24px}body[data-art-direction=editorial] #about>p,body[data-art-direction=studio] #about>p,body[data-art-direction=technical] #about>p{font-size:1.15rem}body[data-art-direction=studio] .hero-composition.has-media{gap:24px}body[data-art-direction=studio] .hero-composition.has-media h1{font-size:clamp(2rem,10vw,3.3rem)}body[data-art-direction=technical] .hero-composition{padding:28px 22px;margin-top:12px}#gallery{grid-template-columns:1fr;gap:20px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;transform:none!important;scroll-behavior:auto!important}}`;
+  // Styles are closed, code-owned compositions. Glass has a readable opaque fallback;
+  // the optional blur never supplies contrast. Clay is confined to tactile objects/controls.
+  const surfaceCss = `
+body[data-surface-style=minimal] .site-header{padding-block:28px}
+body[data-surface-style=minimal] .hero-composition.has-media{position:relative;isolation:isolate;display:flex;align-items:center;min-height:680px;padding:64px;margin-block:12px 0;overflow:hidden;background:#202925}
+body[data-surface-style=minimal] .hero-composition.has-media:before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(0,0,0,.74) 0%,rgba(0,0,0,.64) 55%,rgba(0,0,0,.12) 100%)}
+body[data-surface-style=minimal] .has-media .hero-rail.hero-visual{position:absolute;inset:0;z-index:-2;width:100%;height:100%;padding:0}
+body[data-surface-style=minimal] .hero-visual .web-media{width:100%;height:100%;aspect-ratio:auto!important}
+body[data-surface-style=minimal] .has-media .hero-copy{display:block;width:min(100%,640px);max-width:var(--copy-measure);color:#ffffff}
+body[data-surface-style=minimal] .has-media .hero{display:block;background:transparent;color:inherit}
+body[data-surface-style=minimal] .has-media .hero h1{font-size:clamp(3rem,5.8vw,5.5rem);max-width:14ch;color:#ffffff}
+body[data-surface-style=minimal] .has-media .hero p{font-size:1.05rem;line-height:1.65;max-width:42ch;margin-top:24px;color:#ffffff}
+body[data-surface-style=minimal] .has-media .hero-action{margin-top:28px}
+body[data-surface-style=minimal] .has-media .hero-action button,body[data-surface-style=minimal] .has-media .hero-action .cta{border-color:#ffffff}
+body[data-surface-style=minimal] .content-block{padding-block:calc(var(--space)*2.5)}
+body[data-surface-style=minimal] #gallery{gap:32px}
+body[data-surface-style=minimal] .site-footer{padding-block:64px 40px}
+body[data-surface-style=minimal] .footer-brand{font-weight:400;font-size:clamp(2.8rem,6.8vw,6rem)}
+body[data-surface-style=glass]{--paper:#f3f6f4;--card:#e7eeea;--ink:#163a34;--muted:#375b54}
+body[data-surface-style=glass] .site-header{background:transparent;color:var(--ink);padding-block:24px}
+body[data-surface-style=glass] .hero-composition.has-media{position:relative;isolation:isolate;display:flex;align-items:center;min-height:650px;padding:48px;margin:12px 0 0;overflow:hidden;background:#153b36;border-radius:28px}
+body[data-surface-style=glass] .has-media .hero-rail.hero-visual{position:absolute;inset:0;z-index:-1;width:100%;height:100%;padding:0}
+body[data-surface-style=glass] .has-media .hero-visual .web-media{width:100%;height:100%;aspect-ratio:auto!important}
+body[data-surface-style=glass] .has-media .hero-copy{display:block;width:min(100%,590px);max-width:var(--copy-measure);padding:40px;background:#153b36;color:#ffffff;border-radius:22px}
+body[data-surface-style=glass] .has-media .hero{display:block;background:transparent;color:inherit}
+body[data-surface-style=glass] .has-media .hero h1{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:clamp(2.65rem,4.8vw,4.8rem);line-height:1.04;max-width:17ch;letter-spacing:-.045em}
+body[data-surface-style=glass] .has-media .hero p{margin:24px 0 0;font-size:1.05rem;line-height:1.6;max-width:42ch;color:#ffffff}
+body[data-surface-style=glass] .has-media .hero-action{margin-top:28px}
+body[data-surface-style=glass] .has-media .hero-action button,body[data-surface-style=glass] .has-media .hero-action .cta{border-color:${buttonEdge};border-radius:100px}
+body[data-surface-style=glass] .node-form{max-width:none;padding:40px;background:var(--card);margin-block:48px;border-radius:24px}
+body[data-surface-style=glass] .node-form>form{max-width:600px;margin:auto}
+body[data-surface-style=glass] #proof{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 48px}
+body[data-surface-style=glass] #proof>h2{grid-column:1/-1}
+body[data-surface-style=glass] #proof>p{font-size:1.4rem;line-height:1.45;margin:0;padding:0}
+body[data-surface-style=glass] .site-footer{background:transparent;color:var(--ink);padding-block:48px}
+body[data-surface-style=clay]{--paper:#f8f4ee;--card:#efe8df;--ink:#303d36;--muted:#536458}
+body[data-surface-style=clay] .site-header{background:transparent;color:var(--ink);padding-block:28px}
+body[data-surface-style=clay] .hero-composition.has-media{position:relative;isolation:isolate;display:flex;align-items:flex-start;min-height:680px;padding:56px;gap:0;overflow:hidden;border-radius:28px;background:#303d36;color:#ffffff;margin:0}
+body[data-surface-style=clay] .has-media .hero-rail.hero-visual{position:absolute;inset:0;z-index:-2;width:100%;height:100%;padding:0;border-radius:0}
+body[data-surface-style=clay] .has-media .hero-visual .web-media{width:100%;height:100%;aspect-ratio:auto!important}
+body[data-surface-style=clay] .has-media .hero-copy{position:relative;z-index:0;display:block;width:min(100%,680px);max-width:var(--copy-measure);margin-inline:auto;text-align:center}
+body[data-surface-style=clay] .has-media .hero-copy:before{content:"";position:absolute;inset:-64px -50vw -100px;z-index:-1;background:linear-gradient(180deg,rgba(0,0,0,.72) 0%,rgba(0,0,0,.68) calc(100% - 100px),rgba(0,0,0,0) 100%);pointer-events:none}
+body[data-surface-style=clay] .has-media .hero{display:block;background:transparent;color:inherit}
+body[data-surface-style=clay] .hero h1{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:clamp(2.6rem,5vw,5.1rem);max-width:14ch;letter-spacing:-.045em}
+body[data-surface-style=clay] .has-media .hero h1{margin-inline:auto}
+body[data-surface-style=clay] .has-media .hero p{margin:24px auto 0;font-size:1.05rem;line-height:1.6;max-width:43ch;color:inherit}
+body[data-surface-style=clay] .has-media .hero-action button,body[data-surface-style=clay] .has-media .hero-action .cta{border-color:#ffffff}
+body[data-surface-style=clay] .catalogue-items{gap:28px;align-items:start}
+body[data-surface-style=clay] .catalogue-items article{padding:0;background:transparent;overflow:visible}
+.catalogue-items .web-media{width:100%;background:var(--card)}
+body[data-surface-style=clay] .catalogue-items .web-media{border-radius:28px;box-shadow:inset 0 2px 3px #ffffff,0 12px 28px #303d3612;overflow:hidden}
+.product-copy{padding:24px 0}
+.product-copy h3{font-family:var(--heading);font-size:1.5rem;font-weight:500;margin:0}
+.product-copy .display-price{font-size:1.15rem;margin:8px 0 16px;font-variant-numeric:tabular-nums}
+.product-copy details{margin-top:16px}
+.product-copy summary{display:inline-flex;align-items:center;min-height:44px;cursor:pointer;font-weight:600;text-decoration:underline;text-underline-offset:.3em}
+.product-copy details>p{line-height:1.65;margin:16px 0 0}
+body[data-surface-style=clay] button,body[data-surface-style=clay] .cta{border-color:${buttonEdge};box-shadow:inset 0 2px 2px #ffffff55,0 6px 12px #303d3615}
+body[data-surface-style=clay] .site-footer{background:transparent;color:var(--ink);padding-block:48px}
+body[data-surface-style=clay] .footer-brand{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:clamp(3rem,7vw,6rem)}
+@supports(backdrop-filter:blur(20px)){body[data-surface-style=glass] .has-media .hero-copy{background:rgba(12,35,30,.88);backdrop-filter:blur(20px)}}
+@media(max-width:1000px){body[data-surface-style=minimal] .hero-composition.has-media{padding:44px;min-height:620px}body[data-surface-style=minimal] .has-media .hero h1{font-size:clamp(2.8rem,5.8vw,4.5rem)}body[data-surface-style=glass] .hero-composition.has-media{padding:32px;min-height:600px}body[data-surface-style=glass] .has-media .hero-copy{max-width:540px;padding:32px}body[data-surface-style=clay] .hero-composition.has-media{padding:44px 40px;min-height:620px}body[data-surface-style=clay] .hero h1{font-size:clamp(2.6rem,5vw,3.8rem)}}
+@media(max-width:767px){body[data-surface-style=minimal] .hero-composition.has-media{padding:220px 24px 32px;min-height:620px;align-items:flex-end}body[data-surface-style=minimal] .hero-composition.has-media:before{background:rgba(0,0,0,.64)}body[data-surface-style=minimal] .has-media .hero h1{font-size:clamp(2.3rem,10vw,3.4rem);max-width:17ch}body[data-surface-style=minimal] .has-media .hero p{font-size:1rem;margin-top:20px}body[data-surface-style=minimal] .site-header{padding-block:20px}body[data-surface-style=minimal] .content-block{padding-block:32px}body[data-surface-style=minimal] .site-footer{padding-block:40px 28px}body[data-surface-style=glass] .hero-composition.has-media{padding:180px 16px 16px;align-items:flex-end;min-height:650px;border-radius:20px}body[data-surface-style=glass] .has-media .hero-copy{padding:26px 24px;width:100%;border-radius:16px}body[data-surface-style=glass] .has-media .hero h1{font-size:clamp(2rem,9vw,3rem);max-width:17ch}body[data-surface-style=glass] .has-media .hero p{font-size:1rem;margin-top:20px}body[data-surface-style=glass] .has-media .hero-action{margin-top:22px}body[data-surface-style=glass] #proof{grid-template-columns:1fr;gap:24px}body[data-surface-style=glass] #proof>p{font-size:1.25rem}body[data-surface-style=glass] .node-form{padding:24px;margin-block:24px}body[data-surface-style=clay] .hero-composition.has-media{padding:32px 24px;min-height:620px;gap:0}body[data-surface-style=clay] .hero h1{font-size:clamp(2.4rem,10vw,3.6rem);max-width:17ch}body[data-surface-style=clay] .has-media .hero-visual{border-radius:0}body[data-surface-style=clay] .has-media .hero p{font-size:1rem;margin-top:20px}body[data-surface-style=clay] .has-media .hero-action{margin-top:22px}.catalogue-items .product-copy{padding-bottom:8px}body[data-surface-style=clay] .catalogue-items{gap:32px}}
+`;
+  // ponytail: native CSS keeps this fixed motion vocabulary script-free. Unrecognized view
+  // timelines retain the complete static page; richer scroll scenes need a separate runtime decision.
+  // Copy never fades out, and layout, visibility and action availability never depend on animation.
+  const motionCss =
+    profile.dials.motion <= 2
+      ? "html{scroll-behavior:auto}button:active,.cta:active{transform:none}"
+      : `
+@media(prefers-reduced-motion:no-preference){
+:root{--motion-enter:${420 + profile.dials.motion * 36}ms;--motion-step:70ms;--motion-rise:${6 + profile.dials.motion}px;--motion-feedback:${140 + profile.dials.motion * 6}ms;--motion-ease:cubic-bezier(.22,1,.36,1)}
+@keyframes pikar-copy-arrive{from{transform:translateY(var(--motion-rise))}to{transform:none}}
+@keyframes pikar-picture-settle{from{transform:scale(1.025)}to{transform:none}}
+@keyframes pikar-section-arrive{from{transform:translateY(10px)}to{transform:none}}
+@keyframes pikar-detail-open{from{transform:translateY(4px)}to{transform:none}}
+.hero h1{animation:pikar-copy-arrive var(--motion-enter) var(--motion-ease) backwards}
+.hero p{animation:pikar-copy-arrive var(--motion-enter) var(--motion-ease) backwards;animation-delay:var(--motion-step)}
+.hero-action{animation:pikar-copy-arrive var(--motion-enter) var(--motion-ease) backwards;animation-delay:calc(var(--motion-step)*2)}
+.hero-visual img{animation:pikar-picture-settle var(--motion-enter) cubic-bezier(.33,1,.68,1) backwards}
+.hero-action:hover,.hero-action:focus-within,.hero-action:active{animation:none}
+button,.cta{transition:transform var(--motion-feedback) var(--motion-ease)}
+.catalogue-items details[open]>p{animation:pikar-detail-open var(--motion-feedback) var(--motion-ease)}
+@supports (animation-timeline:view()) and (animation-range:entry 0% cover 20%){
+.content-block.node-section>section>h2,.content-block.node-text>p{animation:pikar-section-arrive 1ms linear both;animation-timeline:view();animation-range:entry 0% cover 20%}
+#gallery>.web-media img,.catalogue-items article>.web-media img{animation:pikar-picture-settle 1ms linear both;animation-timeline:view();animation-range:entry 0% cover 20%}
+}
+}
+`;
   const navigationLinks = parts.document.navigation
     .map(
       (item) =>
@@ -172,7 +312,7 @@ body[data-art-direction=technical] .site-header{background:var(--hero);color:var
     ? `<nav aria-label="Footer"><ul>${navigationLinks}</ul></nav>`
     : "";
   const description = parts.page.description ?? parts.document.description ?? parts.document.title;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}</style></head><body data-art-direction="${direction}" data-pattern="${profile.patternId}"><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${motionCss}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer></body></html>`;
 }
 
 export function renderDesignedWebDocumentBytes(
@@ -208,6 +348,7 @@ export function designedWebDocumentHashMaterial(
     },
     ...(profile.pageOverride === undefined ? {} : { pageOverride: profile.pageOverride }),
     ...(profile.artDirection === undefined ? {} : { artDirection: profile.artDirection }),
+    ...(profile.surfaceStyle === undefined ? {} : { surfaceStyle: profile.surfaceStyle }),
   };
   return encoder.encode(
     `${WEB_DESIGN_RENDERER_VERSION}\n${canonicalWebDocument(document)}\n${JSON.stringify(canonicalProfile)}\n${rendered}`,
