@@ -20,6 +20,7 @@ const state = vi.hoisted(() => ({
   start: vi.fn(),
   control: vi.fn(),
   reconcile: vi.fn(),
+  configure: vi.fn(),
   query: vi.fn(),
 }));
 vi.mock("convex/react", () => ({
@@ -54,7 +55,9 @@ vi.mock("convex/react", () => ({
       ? state.setup
       : getFunctionName(ref) === "managedServiceRuns:reconcile"
         ? state.reconcile
-        : state.control,
+        : getFunctionName(ref) === "managedServiceRecurrence:configure"
+          ? state.configure
+          : state.control,
   useAction: () => state.start,
   useConvex: () => ({ query: state.query }),
 }));
@@ -110,11 +113,19 @@ beforeEach(() => {
   state.runs = [];
   state.buffer = true;
   state.zernio = true;
-  for (const fn of [state.setup, state.start, state.control, state.query, state.reconcile])
+  for (const fn of [
+    state.setup,
+    state.start,
+    state.control,
+    state.query,
+    state.reconcile,
+    state.configure,
+  ])
     fn.mockReset();
   state.setup.mockResolvedValue({ revision: 1, controlRevision: 1 });
   state.start.mockResolvedValue({ runId: "new-run", state: "running", existing: false });
   state.control.mockResolvedValue({ providerCancellationRequested: false });
+  state.configure.mockResolvedValue({ enabled: true });
   state.query.mockImplementation((ref: FunctionReference<"query">) =>
     Promise.resolve(getFunctionName(ref) === "managedServices:status" ? state.service : {}),
   );
@@ -168,6 +179,53 @@ const save = async () => {
       ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
   );
 };
+
+test("two-day schedule submits its chosen expiry and current service pins without starting an extra run", async () => {
+  const now = Date.parse("2026-10-26T10:15:00Z");
+  const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+  try {
+    state.service = { ...saved(true, "active", 2, 2), budgetLimitCents: 50 };
+    state.services = [state.service];
+    await render();
+    await click("Set a schedule");
+    const form = host.querySelector<HTMLFormElement>(
+      'form[aria-label="Review automatic work schedule"]',
+    );
+    if (!form) throw new Error("Missing schedule form");
+    const duration = form.querySelector<HTMLSelectElement>('[name="days"]');
+    const time = form.querySelector<HTMLInputElement>('[name="time"]');
+    const zone = form.querySelector<HTMLSelectElement>('[name="timeZone"]');
+    const consent = form.querySelector<HTMLInputElement>('[name="consent"]');
+    if (!duration || !time || !zone || !consent) throw new Error("Missing schedule field");
+    expect(duration.value).toBe("7");
+    expect([...duration.options].map((option) => option.value)).toEqual(["2", "7", "14", "30"]);
+    await act(async () => {
+      duration.value = "2";
+      time.value = "18:00";
+      zone.value = "Africa/Dar_es_Salaam";
+      consent.click();
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(state.configure).toHaveBeenCalledExactlyOnceWith({
+      serviceId: "social-marketing",
+      expectedRevision: 2,
+      expectedControlRevision: 2,
+      expectedApprovalRevision: 0,
+      schedule: {
+        cadence: "daily",
+        weekday: null,
+        hour: 18,
+        minute: 0,
+        timeZone: "Africa/Dar_es_Salaam",
+      },
+      expiresAtMs: Date.parse("2026-10-28T10:15:00Z"),
+    });
+    expect(state.start).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("Schedule approved");
+  } finally {
+    clock.mockRestore();
+  }
+});
 
 test("setup uses server-owned pins and chosen accounts, with review and budget boundaries visible", async () => {
   await render();

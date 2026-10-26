@@ -277,6 +277,7 @@ function ScheduleReview({
       <label style={field}>
         Approve this schedule for
         <select style={control} name="days" defaultValue="7">
+          <option value="2">2 days</option>
           <option value="7">7 days</option>
           <option value="14">14 days</option>
           <option value="30">30 days</option>
