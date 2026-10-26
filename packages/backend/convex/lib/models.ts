@@ -52,6 +52,7 @@
  */
 import { createOpenAI, openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { COMPLEX_CANDIDATE_MODEL, PRICING, ROUTINE_CANDIDATE_MODEL } from "@pikar/cost";
 import type { LanguageModel } from "ai";
 import { isFixtureTenant, isOfflineFixtureConsent } from "./env";
 
@@ -201,6 +202,20 @@ export const resolveModel = (id: string): LanguageModel => {
   // stays the PRICING/audit key, so `or/openai/gpt-4o-mini` and `openai/gpt-4o-mini` price and audit
   // as the different billing paths they are. No per-model settings: unlike ox-alpha these are not
   // reasoning-mandatory, and the 45 s lane is the one place reasoning has actually cost us runs.
+  if (id === ROUTINE_CANDIDATE_MODEL || id === COMPLEX_CANDIDATE_MODEL) {
+    const ceiling = PRICING[id];
+    if (!ceiling) throw new Error("Candidate model has no price ceiling");
+    return openRouter().chat(id.slice(3), {
+      reasoning:
+        id === COMPLEX_CANDIDATE_MODEL
+          ? { effort: "low", exclude: false }
+          : { effort: "none", enabled: false },
+      provider: {
+        require_parameters: true,
+        max_price: { prompt: ceiling.inPerMTok, completion: ceiling.outPerMTok },
+      },
+    });
+  }
   if (id.startsWith("or/")) return openRouter().chat(id.slice(3));
   // FAIL CLOSED. Routing a `google/` id to `openai()` is precisely the silent misroute this module
   // was created to stop; a caller that can reach Vertex handles the prefix before calling here.

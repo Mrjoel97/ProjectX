@@ -30,6 +30,8 @@ The integrated tool-description correction refreshed both source identities toge
 
 # Optional vertical packs
 
+> Last verified: 2026-10-26 — Refreshed the evaluator fingerprint for the staged DeepSeek/Kimi model routes and their conservative pricing settings. The six-lane forty-case corpus remains byte-identical; generator and five shared source-identity checks pass. This prepares comparison candidates only; it neither activates verticals nor proves live model quality.
+
 Last verified: 2026-09-14 — `/admin` now contains a closed owner review console for an exact native
 evaluation run UUID. It displays sealed output bytes and hash, exact source links, stable criterion
 IDs and mechanically resolved runtime facts; every other criterion requires an explicit decision

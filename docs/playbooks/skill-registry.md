@@ -44,6 +44,8 @@ The October24 native-Node Zernio helper import correction refreshes the evaluato
 
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-10-26 — Staged DeepSeek/Kimi resolver and conservative pricing changes refresh the golden source revision and both generated manifests. The 46 golden and 40 vertical fixture cases remain unchanged; five identity regression checks and the vertical generator check pass. No active model lane, registry body, skill status or historical evaluation result changes, and no paid evaluation is performed.
+
 > Last verified: 2026-09-14 — the deterministic research-PDF dependency and native vertical
 > review-console sources moved both evaluator identities. `AGENT_EVAL_SUITE.revision`, the golden
 > manifest and the generated vertical evaluator revision were refreshed only after source freeze.

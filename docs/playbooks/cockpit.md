@@ -2488,6 +2488,8 @@ Three explicit tool snapshots now include the draft-answer tool only for attende
 >
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-10-26 — DeepSeek V4.1 Flash and Kimi K3.1 Pro are staged model candidates through the existing OpenRouter resolver, not active production lane defaults. Flash uses non-thinking routine mode; Kimi uses explicit low reasoning with details retained. The installed provider sends required-parameter routing and maximum prompt/completion prices matching conservative admission rates. Mocked transport tests execute a two-step tool loop and verify unchanged `reasoning_details` on the second request. This proves SDK serialization, not live model access or task quality; the small real integration remains outstanding. Existing OpenAI primary/fallback pins remain unchanged.
+
 > **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this
 > subsystem's files to clear a CI `Lint` red that had been blocking the `Test` and `Build`
 > steps behind it since 2026-08-27. Whitespace, line wrapping and import order ONLY — no

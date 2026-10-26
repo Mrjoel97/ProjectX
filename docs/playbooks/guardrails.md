@@ -12,6 +12,8 @@
 
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+> Last verified: 2026-10-26 — Staged candidates `or/deepseek/deepseek-v4.1-flash` and `or/moonshotai/kimi-k3.1-pro` have conservative input/output ceilings of $0.30/$1.20 and $2/$10 per million tokens respectively. The shared resolver applies those same amounts as OpenRouter provider maximum prices and requires supported parameters; no cache discount reduces admission estimates. Existing native actual-cost settlement and active model pins are unchanged. Price and wire tests are offline; no live call, deployment or production model switch is implied.
+
 Last verified: 2026-09-13 — evaluation-mode page extraction claims the same durable
 tenant/request allowance as ordinary research immediately before provider egress. Exhaustion
 refuses the second extraction without a Tavily call; the evaluation spend envelope remains a
