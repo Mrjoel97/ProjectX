@@ -12,6 +12,8 @@ Integrated CI guard checks now cover the concise proposal-only answer tool, its 
 
 # Playbook: Managed services
 
+> Last verified: 2026-10-26 — Each managed `social.report` run now invokes the existing bounded Zernio refresh before the Executive, independently of the standalone daily-report setting. The exact selected-account set and permission generation must match the service; execution context, connection execution revision and report availability are checked again afterward. A throttled refresh may reuse a native ready snapshot without changing its timestamp; stale, missing, failed or withdrawn evidence stops before a paid agent turn. The existing terminal/accounting path settles that known pre-agent stop; failures after agent dispatch retain uncertainty. Twelve focused orchestration checks pass. Hosted cycles and production release remain unverified.
+
 > Last verified: 2026-10-23 — Goal linkage, user usefulness feedback, trusted report history and the cited brain view pass local pure/native tests. Execution completion, usefulness and metric movement remain separate; business improvement is not established by any of them. Read-only projections preserve unknown attribution and source clocks. No hosted service cycle, activation or release is certified by these checks.
 
 > Last verified: 2026-10-23 — Attended setup, durable execution, scoped SDK tools, per-run ledger admission and the service UI pass focused local tests. The scripted native path creates one owned thread/workflow, stages a draft, saves its reply and rejects duplicate execution. Release/live admission remains closed; local proof is not hosted acceptance.
