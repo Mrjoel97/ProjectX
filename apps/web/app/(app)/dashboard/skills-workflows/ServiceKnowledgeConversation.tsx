@@ -386,8 +386,7 @@ function Conversation({
                     ) : (
                       <>
                         Finish the service setup before Pikar can prepare. You can confirm these
-                        details now.{" "}
-                        <Link href="/dashboard/skills-workflows">Review service setup</Link>.
+                        details now. <Link href="/dashboard/marketing">Review service setup</Link>.
                       </>
                     )}
                   </p>

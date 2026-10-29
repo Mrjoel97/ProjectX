@@ -6,7 +6,7 @@ import type { ActionCtx } from "./_generated/server";
 import { contentHash } from "./lib/hash";
 
 const SERVICE_ID = "social-marketing";
-const SETTINGS_PATH = "/dashboard/skills-workflows";
+const SETTINGS_PATH = "/dashboard/marketing";
 const noArguments = jsonSchema<Record<string, never>>({
   type: "object",
   properties: {},

@@ -9,7 +9,6 @@ import { SkillAuthoringPanel } from "../workspace/SkillAuthoringPanel";
 import { WorkflowPackOwnerControls } from "../workspace/WorkflowPackOwnerControls";
 import { WorkflowPackOwnerPreview } from "../workspace/WorkflowPackOwnerPreview";
 import { WorkflowPackQuickStarts } from "../workspace/WorkflowPackQuickStarts";
-import { ManagedServicesPanel } from "./ManagedServicesPanel";
 
 export default function SkillsAndWorkflowsPage() {
   return (
@@ -26,8 +25,8 @@ export default function SkillsAndWorkflowsPage() {
 
 function SkillsAndWorkflowsLibrary() {
   const router = useRouter();
-  const tabs = ["services", "workflows", "skills"] as const;
-  const [section, setSection] = useState<(typeof tabs)[number]>("services");
+  const tabs = ["workflows", "skills"] as const;
+  const [section, setSection] = useState<(typeof tabs)[number]>("workflows");
   const [sending, setSending] = useState(false);
   const openThread = (threadId: string, label: string) => {
     router.push(
@@ -148,7 +147,7 @@ function SkillsAndWorkflowsLibrary() {
         </p>
         <h1 style={{ margin: "0.25rem 0", color: "var(--ink)" }}>Skills and Workflows</h1>
         <p style={{ margin: 0, color: "var(--ink-soft)" }}>
-          Set up work for Pikar to handle, start a guided workflow, or review your business skills.
+          Start a guided workflow or review your business skills.
         </p>
       </header>
       <div
@@ -176,7 +175,7 @@ function SkillsAndWorkflowsLibrary() {
                       ? tabs.length - 1
                       : (tabs.indexOf(tab) + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) %
                         tabs.length
-                ] ?? "services";
+                ] ?? "workflows";
               setSection(next);
               event.currentTarget.parentElement
                 ?.querySelector<HTMLButtonElement>(`#${next}-tab`)
@@ -192,25 +191,10 @@ function SkillsAndWorkflowsLibrary() {
               color: section === tab ? "var(--card)" : "var(--ink)",
             }}
           >
-            {tab === "services" ? "Services" : tab === "workflows" ? "Workflows" : "Skills"}
+            {tab === "workflows" ? "Workflows" : "Skills"}
           </button>
         ))}
       </div>
-      <section
-        id="services-panel"
-        role="tabpanel"
-        aria-labelledby="services-tab"
-        hidden={section !== "services"}
-      >
-        <ErrorBoundary
-          label="managed-services"
-          fallback={
-            <p role="alert">Services could not be loaded. Refresh this page to try again.</p>
-          }
-        >
-          <ManagedServicesPanel />
-        </ErrorBoundary>
-      </section>
       <section
         id="workflows-panel"
         role="tabpanel"
