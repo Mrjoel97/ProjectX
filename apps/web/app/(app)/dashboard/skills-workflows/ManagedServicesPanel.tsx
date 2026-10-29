@@ -365,7 +365,7 @@ function ServiceSetup({
           <input type="checkbox" disabled />
           Run on a schedule
         </label>
-        <span style={muted}>Recurring services are not available yet.</span>
+        <span style={muted}>Save this setup first, then review and approve a schedule.</span>
       </div>
       {error && (
         <p role="alert" style={{ margin: 0 }}>

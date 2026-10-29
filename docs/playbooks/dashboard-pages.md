@@ -1,3 +1,5 @@
+> Last verified: 2026-10-29 — Production postflight for release 9d9a111f found an outdated new-service scheduling notice. Setup now directs the user to save first and then review and approve a schedule. Existing saved-service scheduling controls, readiness checks and explicit approval are unchanged. No service is started or scheduled by this copy correction.
+
 > Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social and recurring-service changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
 
 > Last verified: 2026-10-26 — The finance privacy regression checks complete numeric values rather than numeric substrings, so a daily-reset timestamp containing the shared ceiling digits cannot cause a false leak failure. Tenant rail values and exclusion of deployment ceilings remain asserted; runtime finance behavior is unchanged.
