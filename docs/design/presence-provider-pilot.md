@@ -2,6 +2,8 @@
 
 Date: 2026-10-26. Scope: isolated online-presence branch and dedicated staging only.
 
+Owner decision on 2026-10-29: require Stitch followed by Kimi for the future customer workflow. This supersedes the optional-provider recommendation below; the pilot results remain historical evidence. See [implementation status and remaining activation work](required-presence-workflow.md).
+
 ## Plan and task list
 
 - [x] Inspect the current renderer, model gateway and provider boundaries with three agents.

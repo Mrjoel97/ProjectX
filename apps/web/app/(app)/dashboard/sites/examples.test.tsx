@@ -62,7 +62,7 @@ describe("real renderer examples", () => {
       for (const page of example.pages) {
         const rendered = new DOMParser().parseFromString(page.html, "text/html");
         expect(rendered.querySelector('meta[name="generator"]')?.getAttribute("content")).toBe(
-          "web-design-renderer-v7",
+          "web-design-renderer-v8",
         );
         expect(rendered.querySelector("style")?.textContent).toContain(
           ".hero h1{animation:pikar-copy-arrive var(--motion-enter)",

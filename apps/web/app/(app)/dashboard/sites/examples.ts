@@ -48,6 +48,24 @@ function asset(name: string) {
  * registry evidence, provider request or public merchant capability. */
 export function buildPresenceExample(id: PresenceExampleId) {
   const hero = asset(id);
+  // Material studies are explicitly illustrative, never photographs of a client's work.
+  const gallery =
+    id === "studio"
+      ? [
+          {
+            name: "homeware",
+            alt: "Generated study of sculptural ceramics and warm interior materials",
+          },
+          {
+            name: "bowl",
+            alt: "Generated peach ceramic bowl, an illustrative colour and material study",
+          },
+          {
+            name: "vase",
+            alt: "Generated cream ceramic vase, an illustrative study of form and proportion",
+          },
+        ]
+      : [];
   const media = {
     hero: {
       storageRef: hero.ref,
@@ -56,6 +74,16 @@ export function buildPresenceExample(id: PresenceExampleId) {
       aspect: "landscape" as const,
       focalPoint: { x: id === "retreat" ? 72 : 55, y: 50 },
     },
+    ...(gallery.length
+      ? {
+          gallery: gallery.map(({ name, alt }) => ({
+            storageRef: asset(name).ref,
+            alt,
+            crop: "cover" as const,
+            aspect: "landscape" as const,
+          })),
+        }
+      : {}),
   };
   const result =
     id === "studio"
@@ -141,7 +169,11 @@ export function buildPresenceExample(id: PresenceExampleId) {
     },
   };
   const slug = `example-${id}`;
-  const images = [hero, ...(id === "homeware" ? [asset("jug"), asset("bowl"), asset("vase")] : [])];
+  const images = [
+    hero,
+    ...gallery.map(({ name }) => asset(name)),
+    ...(id === "homeware" ? [asset("jug"), asset("bowl"), asset("vase")] : []),
+  ];
   const pages = document.pages.map((page) => ({
     slug: page.slug,
     title: page.title,

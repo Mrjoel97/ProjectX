@@ -19,6 +19,40 @@ describe("closed recipe design renderer", () => {
     ctaPath: "/learn",
   };
 
+  test("approved galleries become keyboard-accessible script-free carousels with real asset routes", () => {
+    const gallery = ["Workspace", "Material detail", "Design process"].map((alt, index) => ({
+      storageRef: `webasset:photo${index}:${String(index + 1).repeat(64)}`,
+      alt,
+    }));
+    const { document, designProfile } = materializeWebRecipeWithProvenance("campaign-landing", {
+      ...base, media: { gallery }, design: { variance: 5, density: 5, motion: 6 },
+    });
+    const html = renderDesignedWebDocument(document, designProfile, { slug: "gallery", page: "campaign" });
+    expect(html).toContain('class="designed-gallery gallery-carousel"');
+    expect(html).toContain('tabindex="0" aria-label="Gallery images; use arrow keys to scroll"');
+    for (let index = 1; index <= 3; index += 1) {
+      expect(html).toContain(`href="#gallery-image-${index}"`);
+      expect(html).toContain(`id="gallery-image-${index}"`);
+      expect(html).toContain(`/p/gallery/assets/photo${index - 1}/${String(index).repeat(64)}`);
+    }
+    expect(html).toContain("scroll-snap-type:x proximity");
+    expect(html).toContain(".gallery-carousel .gallery-track{scroll-behavior:auto;scroll-snap-type:none}");
+    expect(html).not.toMatch(/<script|autoplay|aria-hidden="true"/);
+    expect(html).toContain('loading="lazy"');
+  });
+
+  test("small galleries remain readable grids and gallery labels are escaped", () => {
+    const { document, designProfile } = materializeWebRecipeWithProvenance("campaign-landing", {
+      ...base,
+      media: { gallery: [{ storageRef: `webasset:detail:${"a".repeat(64)}`, alt: 'Paper & "ink"' }] },
+    });
+    const html = renderDesignedWebDocument(document, designProfile);
+    expect(html).toContain('class="designed-gallery"');
+    expect(html).not.toContain('class="gallery-controls"');
+    expect(html).toContain('Paper &amp; &quot;ink&quot;');
+    expect(html).toContain('class="gallery-caption"');
+  });
+
   test("dials change actual styled HTML while document and form identities stay fixed", () => {
     const original = materializeWebRecipeWithProvenance("campaign-landing", base);
     const dialled = materializeWebRecipeWithProvenance("campaign-landing", {
@@ -210,7 +244,7 @@ describe("closed recipe design renderer", () => {
     expect(html).toContain("main>*{min-width:0}");
     expect(html).toContain("img,input,textarea,select{max-width:100%}");
     expect(html).toContain("W".repeat(256));
-    expect(html).toContain("html{scroll-behavior:auto}button:active,.cta:active{transform:none}");
+    expect(html).toContain("html,.gallery-carousel .gallery-track{scroll-behavior:auto}button:active,.cta:active{transform:none}");
     expect(html).not.toContain("@keyframes");
   });
 
@@ -295,7 +329,7 @@ describe("closed recipe design renderer", () => {
     expect(layer).toContain(
       "animation:pikar-section-arrive 1ms linear both;animation-timeline:view();animation-range:entry 0% cover 20%",
     );
-    expect(layer).toContain("#gallery>.web-media img,.catalogue-items article>.web-media img");
+    expect(layer).toContain("#gallery>.web-media img,.gallery-slide .web-media img,.catalogue-items article>.web-media img");
     expect(layer).toContain(".catalogue-items details[open]>p");
     expect(layer).not.toMatch(
       /opacity:|visibility:|display:|pointer-events:|height:|width:|filter:|infinite|javascript|url\(/i,

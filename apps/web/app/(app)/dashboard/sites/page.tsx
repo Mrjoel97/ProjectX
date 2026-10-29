@@ -91,6 +91,14 @@ export default function SitesPage() {
             </Link>
           ))}
         </div>
+        <p style={{ marginTop: 24 }}>
+          <a href="/presence-examples/fieldwork.html" target="_blank" rel="noopener noreferrer">
+            Explore the refined studio design with its image gallery →
+          </a>
+          <span style={{ display: "block", color: "var(--ink-soft)", marginTop: 6 }}>
+            A fictional design preview; forms and purchases are not connected.
+          </span>
+        </p>
       </section>
       <section style={card} aria-labelledby="presence-start">
         <h2 id="presence-start">Let Pikar build your website</h2>

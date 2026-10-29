@@ -187,7 +187,7 @@ describe("canonical web recipes", () => {
       expect(html).toContain(
         "https://appointments.example/consultation?service=design&amp;locale=en",
       );
-      expect(result.recipe.compilerId).toBe("web-recipes-v7");
+      expect(result.recipe.compilerId).toBe("web-recipes-v8");
       expect(
         materializeWebRecipeWithProvenance(family, {
           ...input,

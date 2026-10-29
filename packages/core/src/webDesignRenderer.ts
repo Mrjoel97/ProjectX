@@ -3,6 +3,7 @@ import type {
   WebDocument,
   WebFormNode,
   WebRouteContext,
+  WebSectionNode,
 } from "@pikar/contracts/webRuntime";
 import {
   type DesignKnowledgeBundle,
@@ -19,7 +20,7 @@ import {
   sha256Bytes,
 } from "./webRuntime";
 
-export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v7" as const;
+export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v8" as const;
 const encoder = new TextEncoder();
 
 /** The renderer depends on the selected records, not merely the bundle's role labels. */
@@ -104,6 +105,18 @@ function designedInquiry(node: WebFormNode, route: WebRouteContext): string {
   return `<form id="inquiry-${escapeWebText(node.id)}" method="post" action="/p/${route.slug}/${route.page}/forms/${node.id}"><fieldset><legend>${escapeWebText(node.heading ?? "Start a conversation")}</legend>${node.fields.map((field) => `<label>${labels[field]}<input name="${field}" type="${field === "email" ? "email" : "text"}" autocomplete="${field === "company" ? "organization" : field}"${field === "email" ? " required" : ""}></label>`).join("")}<label><input name="consent" type="checkbox" required> ${escapeWebText(node.consent)}</label><button type="submit">Send inquiry</button></fieldset></form>`;
 }
 
+/** A fixed, script-free carousel of approved media. No autoplay, remote assets or hidden slides. */
+function designedGallery(node: WebSectionNode, route: WebRouteContext): string | undefined {
+  if (node.id !== "gallery" || !node.children.every((child) => child.kind === "media"))
+    return undefined;
+  const images = node.children.filter((child) => child.kind === "media");
+  const carousel = images.length >= 3;
+  const label = node.heading ?? "Gallery";
+  const slides = images.map((image, index) => `<li id="gallery-image-${index + 1}" class="gallery-slide" aria-label="Image ${index + 1} of ${images.length}">${renderWebMedia(image, route)}<p class="gallery-caption">${escapeWebText(image.alt)}</p></li>`).join("");
+  const links = carousel ? `<nav class="gallery-controls" aria-label="Choose gallery image">${images.map((_, index) => `<a href="#gallery-image-${index + 1}" aria-label="View image ${index + 1}">${index + 1}</a>`).join("")}</nav>` : "";
+  return `<section id="gallery" class="designed-gallery${carousel ? " gallery-carousel" : ""}" aria-labelledby="gallery-heading"><div class="gallery-heading"><h2 id="gallery-heading">${escapeWebText(label)}</h2>${carousel ? '<p>Explore the images. Swipe or choose an image below.</p>' : ""}</div><ul class="gallery-track"${carousel ? ' tabindex="0" aria-label="Gallery images; use arrow keys to scroll"' : ""}>${slides}</ul>${links}</section>`;
+}
+
 /** Closed Pikar-owned art direction, informed by reviewed Taste guidance. The pinned source
  * bundle is provenance, not executable prompts or a claim of an upstream design system. */
 export function renderDesignedWebDocument(
@@ -160,7 +173,9 @@ export function renderDesignedWebDocument(
       ? designedCatalogue(entry.node, parts.route)
       : entry.node.kind === "form"
         ? designedInquiry(entry.node, parts.route)
-        : entry.html;
+        : entry.node.kind === "section"
+          ? (designedGallery(entry.node, parts.route) ?? entry.html)
+          : entry.html;
   const heroIndex = hero ? parts.nodes.indexOf(hero) : -1;
   const cta = hero
     ? parts.nodes.slice(heroIndex + 1).find((entry) => entry.node.kind === "cta")
@@ -276,9 +291,16 @@ body[data-surface-style=clay] .footer-brand{font-family:Georgia,"Times New Roman
   // ponytail: native CSS keeps this fixed motion vocabulary script-free. Unrecognized view
   // timelines retain the complete static page; richer scroll scenes need a separate runtime decision.
   // Copy never fades out, and layout, visibility and action availability never depend on animation.
+  const galleryCss = `
+h2,h3{text-wrap:balance}p{text-wrap:pretty}.hero p:not(.eyebrow){max-width:48ch}
+#gallery.designed-gallery{display:block}.gallery-heading{display:flex;align-items:baseline;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:28px}.gallery-heading h2{margin:0;max-width:24ch}.gallery-heading p{margin:0;max-width:40ch}
+.gallery-track{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;min-width:0}.gallery-slide{min-width:0;scroll-margin-block:24px}.gallery-caption{margin:16px 0 0;font-size:1rem;line-height:1.5;max-width:52ch}.gallery-carousel .gallery-track{display:flex;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x proximity;scroll-behavior:smooth;gap:28px;padding-bottom:16px;scrollbar-width:thin}.gallery-carousel .gallery-slide{flex:0 0 68%;scroll-snap-align:start;scroll-snap-stop:normal}.gallery-track .web-media{aspect-ratio:4/3!important}.gallery-controls{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}.gallery-controls a{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;background:var(--card);color:var(--ink);text-decoration:none;border:1px solid currentColor}.gallery-controls a:hover,.gallery-controls a:focus-visible{background:var(--ink);color:var(--paper)}
+@media(max-width:767px){.gallery-track{grid-template-columns:1fr;gap:24px}.gallery-carousel .gallery-slide{flex-basis:88%}.gallery-carousel .gallery-track{gap:16px}.gallery-heading{gap:12px}.gallery-heading p{font-size:1rem}}
+@media(prefers-reduced-motion:reduce){.gallery-carousel .gallery-track{scroll-behavior:auto;scroll-snap-type:none}}
+`;
   const motionCss =
     profile.dials.motion <= 2
-      ? "html{scroll-behavior:auto}button:active,.cta:active{transform:none}"
+      ? "html,.gallery-carousel .gallery-track{scroll-behavior:auto}button:active,.cta:active{transform:none}"
       : `
 @media(prefers-reduced-motion:no-preference){
 :root{--motion-enter:${420 + profile.dials.motion * 36}ms;--motion-step:70ms;--motion-rise:${6 + profile.dials.motion}px;--motion-feedback:${140 + profile.dials.motion * 6}ms;--motion-ease:cubic-bezier(.22,1,.36,1)}
@@ -295,7 +317,7 @@ button,.cta{transition:transform var(--motion-feedback) var(--motion-ease)}
 .catalogue-items details[open]>p{animation:pikar-detail-open var(--motion-feedback) var(--motion-ease)}
 @supports (animation-timeline:view()) and (animation-range:entry 0% cover 20%){
 .content-block.node-section>section>h2,.content-block.node-text>p{animation:pikar-section-arrive 1ms linear both;animation-timeline:view();animation-range:entry 0% cover 20%}
-#gallery>.web-media img,.catalogue-items article>.web-media img{animation:pikar-picture-settle 1ms linear both;animation-timeline:view();animation-range:entry 0% cover 20%}
+#gallery>.web-media img,.gallery-slide .web-media img,.catalogue-items article>.web-media img{animation:pikar-picture-settle 1ms linear both;animation-timeline:view();animation-range:entry 0% cover 20%}
 }
 }
 `;
@@ -312,7 +334,7 @@ button,.cta{transition:transform var(--motion-feedback) var(--motion-ease)}
     ? `<nav aria-label="Footer"><ul>${navigationLinks}</ul></nav>`
     : "";
   const description = parts.page.description ?? parts.document.description ?? parts.document.title;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${motionCss}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${galleryCss}${motionCss}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer></body></html>`;
 }
 
 export function renderDesignedWebDocumentBytes(
