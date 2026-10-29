@@ -35,11 +35,11 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 79 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 80 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
-// │   users, betaWaitlist, betaInvites, authRevocations                                         │
+// │   brandKits, users, betaWaitlist, betaInvites, authRevocations                                         │
 // │                                                                            │
 // │ ── Governance & Audit ──────────────────────────────────── ~L150           │
 // │   audit, deadLetters, skills, tenantSkills, savedPrompts,                  │
@@ -176,6 +176,10 @@ const shotElement = v.object({
   windowStartMs: v.number(),
   description: v.string(),
   overlay: v.optional(v.string()),
+  overlayStartMs: v.optional(v.number()),
+  overlayEndMs: v.optional(v.number()),
+  transitionOut: v.optional(v.union(v.literal("cut"), v.literal("fade"))),
+  motionGraphic: v.optional(v.literal("orbit-ring")),
   prompt: v.string(),
   narration: v.string(), // the block's SPOKEN line. Content-plane. Never audited.
   /** 20.2, `uploaded_video` only: the tenant's own footage, as a vault doc REF — never a
@@ -1456,6 +1460,12 @@ export default defineSchema({
      *  submitted only after their Generate click, and never copied to audit/telemetry rows. */
     mediaMode: v.optional(v.union(v.literal("reel"), v.literal("image"))),
     /** Absent historical reels retain separately generated narration and music. */
+    brandKitRef: v.optional(
+      v.object({ docId: v.id("vaultDocuments"), revision: v.number(), contentHash: v.string() }),
+    ),
+    mediaImageQuality: v.optional(
+      v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
+    ),
     mediaAudioMode: v.optional(v.union(v.literal("native"), v.literal("separate"))),
     /** Explicit per-product human picks. SHA identifies immutable image bytes, not citation text. */
     mediaProductReferences: v.optional(
@@ -3021,6 +3031,22 @@ export default defineSchema({
   // A new TABLE is the only option, not a choice: there is no `tenants` table to add a column to
   // (tenancy is a `tenantId: string` column on every row). ONE ROW PER TENANT, read through
   // by_tenant. New table ⇒ no migration (prior-phase discipline).
+  // Drafts stay outside Vault; active identifies an immutable approved snapshot.
+  brandKits: defineTable({
+    tenantId: v.string(),
+    revision: v.number(),
+    draft: v.optional(v.object({ revision: v.number(), kit: v.string(), reviewHash: v.string() })),
+    active: v.optional(
+      v.object({
+        revision: v.number(),
+        kit: v.string(),
+        docId: v.id("vaultDocuments"),
+        contentHash: v.string(),
+        reviewHash: v.string(),
+        approvedAt: v.number(),
+      }),
+    ),
+  }).index("by_tenant", ["tenantId"]),
   tenantProfiles: defineTable({
     tenantId: v.string(),
     // Written only by the internal onboarding harness. Synthetic profiles must not arm
@@ -3277,7 +3303,12 @@ export default defineSchema({
         seconds: v.number(),
         generateAudio: v.optional(v.boolean()),
       }),
-      v.object({ kind: v.literal("image"), width: v.number(), height: v.number() }),
+      v.object({
+        kind: v.literal("image"),
+        width: v.number(),
+        height: v.number(),
+        quality: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
+      }),
       v.object({
         kind: v.literal("tts"),
         characters: v.number(),

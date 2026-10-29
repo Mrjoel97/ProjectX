@@ -1026,9 +1026,16 @@ test("a child edit after review refuses the stale approval before spending", asy
   expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
 });
 
-test("fifteen fractional image estimates reserve fifteen conservative cents on both existing rails", async () => {
+test("fifteen historical low-quality image estimates reserve fifteen conservative cents on both existing rails", async () => {
   const t = harness();
   const { campaignId } = await stage(t, 15);
+  // New proposals select high quality. Preserve this fractional-rounding regression on
+  // historical plans, whose missing quality must continue to mean the original low tier.
+  const campaign = await row(t, campaignId);
+  await t.run(async (ctx) => {
+    for (const item of campaign.items)
+      await ctx.db.patch(item.planId, { mediaImageQuality: undefined });
+  });
   expect(await approve(t, campaignId)).toEqual({ ok: true });
   await t.run(async (ctx) => {
     const jobs = await ctx.db.query("mediaJobs").collect();

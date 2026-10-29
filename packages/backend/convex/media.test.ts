@@ -45,9 +45,11 @@ import { contentHash } from "./lib/hash";
 import {
   buildSubmitBody,
   MAX_STOCK_ASSET_BYTES,
+  nativeReelReviewHash,
   pickStockAudio,
   pickStockPhoto,
   pickStockVideo,
+  reserveImageInner,
   reserveJobInner,
   reserveSceneJobInner,
   type SubmittableSpec,
@@ -58,6 +60,47 @@ import { maybeStartCaptions } from "./mediaComplete";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+
+test("native review binds brand revision and decorative geometry while preserving finishing cues", async () => {
+  const plan = {
+    _id: "reviewed-plan",
+    mediaAudioMode: "native",
+    targetDurationSeconds: 15,
+    brandKitRef: { docId: "brand-doc", revision: 1, contentHash: "brand-one" },
+    shots: [
+      {
+        index: 0,
+        visual: "generated_video",
+        seconds: 15,
+        windowStartMs: 0,
+        description: "Owned bottle hero",
+        prompt: "Owned bottle hero",
+        narration: "",
+        overlay: "FORMA",
+        overlayStartMs: 500,
+        overlayEndMs: 3000,
+        transitionOut: "fade",
+        motionGraphic: "orbit-ring",
+      },
+    ],
+  } as unknown as Doc<"plans">;
+  const hash = await nativeReelReviewHash(plan);
+  expect(
+    await nativeReelReviewHash({ ...plan, brandKitRef: { ...plan.brandKitRef!, revision: 2 } }),
+  ).not.toBe(hash);
+  expect(
+    await nativeReelReviewHash({
+      ...plan,
+      shots: plan.shots?.map((shot) => ({ ...shot, motionGraphic: undefined })),
+    }),
+  ).not.toBe(hash);
+  expect(sceneDeckOf(plan)?.scenes[0]).toMatchObject({
+    overlayStartMs: 500,
+    overlayEndMs: 3000,
+    transitionOut: "fade",
+    motionGraphic: "orbit-ring",
+  });
+});
 const rateLimiterModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
 );
@@ -3336,6 +3379,88 @@ async function seedImagePlan(t: T, tenantId = A, prompt = "A sunlit baobab at da
 }
 
 describe("standalone image: one reviewed prompt through the existing media rail", () => {
+  test("explicit quality binds reviewed prompt, price and immutable provider spec", async () => {
+    const t = harness();
+    const { planId, prompt } = await seedImagePlan(t);
+    await t.run((ctx) => ctx.db.patch(planId, { mediaImageQuality: "high" }));
+    const estimate = await asA(t).query(api.media.imageEstimate, { planId });
+    expect(estimate).toMatchObject({ quality: "high", totalCents: 20, refusal: null });
+    if (!("reviewHash" in estimate)) throw new Error("missing review hash");
+    const before = await mediaLeft(t);
+    expect(await asA(t).mutation(api.media.generateImage, { planId })).toMatchObject({
+      ok: false,
+      reason: "review_changed",
+    });
+    expect(
+      await asA(t).mutation(api.media.generateImage, {
+        planId,
+        expectedReviewHash: estimate.reviewHash,
+        maxCostCents: 1,
+      }),
+    ).toMatchObject({ ok: false, reason: "over_reviewed_cost" });
+    await t.run((ctx) => ctx.db.patch(planId, { imagePrompt: "Changed product" }));
+    expect(
+      await asA(t).mutation(api.media.generateImage, {
+        planId,
+        expectedReviewHash: estimate.reviewHash,
+        maxCostCents: 20,
+      }),
+    ).toMatchObject({ ok: false, reason: "review_changed" });
+    expect(await mediaLeft(t)).toBe(before);
+    expect(await rows(t)).toHaveLength(0);
+    await t.run((ctx) => ctx.db.patch(planId, { imagePrompt: prompt }));
+    const generated = await asA(t).mutation(api.media.generateImage, {
+      planId,
+      expectedReviewHash: estimate.reviewHash,
+      maxCostCents: 20,
+    });
+    expect(generated.ok).toBe(true);
+    if (!generated.ok) throw new Error("reservation failed");
+    const batch = await t.query(internal.media.batchToSubmit, {
+      tenantId: A,
+      batchId: generated.batchId,
+    });
+    expect(batch.lines[0]).toMatchObject({
+      spec: { quality: "high" },
+      promptHash: await contentHash(prompt),
+    });
+  });
+
+  test("image prompt drift after reservation refuses before any network request", async () => {
+    const t = harness();
+    const { planId, prompt } = await seedImagePlan(t);
+    await t.run((ctx) => ctx.db.patch(planId, { mediaImageQuality: "high" }));
+    const reserved = await t.run((ctx) => reserveImageInner(ctx, { tenantId: A, planId, prompt }));
+    if (!reserved.ok) throw new Error("reservation failed");
+    await t.run((ctx) => ctx.db.patch(planId, { imagePrompt: "Changed after reservation" }));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const result = await t.action(internal.media.submitBatch, {
+        tenantId: A,
+        batchId: reserved.batchId,
+      });
+      expect(result.failed).toBe(1);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect((await rows(t))[0]).toMatchObject({
+        status: "failed",
+        failureReason: "image_prompt_changed",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("high quality oversized prompt is refused by estimate and reservation without spend", async () => {
+    const t = harness();
+    const { planId } = await seedImagePlan(t, A, "界".repeat(1400));
+    await t.run((ctx) => ctx.db.patch(planId, { mediaImageQuality: "high" }));
+    expect(await asA(t).query(api.media.imageEstimate, { planId })).toMatchObject({
+      refusal: "invalid_prompt",
+    });
+    expect(await rows(t)).toHaveLength(0);
+  });
+
   test("estimate consumes nothing and exactly matches the reservation", async () => {
     const t = harness();
     const { planId, prompt } = await seedImagePlan(t);

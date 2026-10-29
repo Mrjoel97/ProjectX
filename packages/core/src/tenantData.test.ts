@@ -57,7 +57,7 @@ describe("tenant table classification registry", () => {
     // + presentation preview sidecars and media campaign manifests = 75.
     // + native social credentials, OAuth states, posts and global webhook health = 79.
     // Re-derived from the merged schema (79 unique tables), preserving both feature lanes.
-    expect(schemaTables).toHaveLength(79);
+    expect(schemaTables).toHaveLength(80);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });

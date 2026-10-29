@@ -398,7 +398,9 @@
     "apps/web/app/lib/uploadTranscriptionAudio.ts",
     "packages/core/src/workbookReport",
     "packages/core/src/presentation",
-    "packages/backend/convex/vaultPresentations"
+    "packages/backend/convex/vaultPresentations",
+    "packages/core/src/brandKit",
+    "packages/backend/convex/brandKits"
   ],
   "media.md": [
     "packages/core/src/mediaBudget",
@@ -430,7 +432,11 @@
     "apps/web/app/(app)/dashboard/workspace/MediaCampaign",
     "packages/backend/scripts/run-image-quality-qualification",
     "packages/backend/scripts/run-reel-quality-qualification",
-    "packages/backend/scripts/run-seedance-quality-qualification"
+    "packages/backend/scripts/run-seedance-quality-qualification",
+    "packages/core/src/mediaFinishing",
+    "packages/core/src/orbitRing",
+    "packages/backend/scripts/prepare-director-comparison.mjs",
+    "packages/backend/scripts/evaluate-director-comparison"
   ],
   "contacts-crm.md": [
     "packages/core/src/marketingLead",

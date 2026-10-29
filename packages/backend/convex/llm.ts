@@ -1423,14 +1423,15 @@ export function buildHistoryBlock(history: HistoryMessage[] | undefined): string
  */
 function buildTurnPrompt(a: {
   spine: string | null;
+  brandSpine?: string | null;
   finance: string | null;
   history: { role: "user" | "assistant"; content: string }[] | undefined;
   plan: PlanRow | null;
   tz: string | undefined;
   text: string;
 }): string {
-  const { spine, finance, history, plan, tz, text } = a;
-  const standing = [spine, finance].filter((p) => p !== null).join("\n");
+  const { spine, brandSpine, finance, history, plan, tz, text } = a;
+  const standing = [spine, brandSpine, finance].filter((p) => p != null).join("\n");
   return `${standing === "" ? "" : `${standing}\n\n`}${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, tz)}\n\nThe user says: ${text}`;
 }
 
@@ -5886,12 +5887,16 @@ export async function runSpecialistTurn(
       : isMedia
         ? [MEDIA_MODEL, MEDIA_FALLBACK_MODEL]
         : [DEFAULT_MODEL, CHEAP_MODEL];
+  const pinnedBrandSpine = await ctx.runQuery(internal.brandKits.pinnedSpineForPlan, {
+    tenantId,
+    planId,
+  });
   const res = await runAgentLoop(ctx, {
     tenantId,
     planId,
     system: skill.body,
     structuredResearch: isResearch,
-    prompt,
+    prompt: pinnedBrandSpine ? `${prompt}\n\n${pinnedBrandSpine}` : prompt,
     visualInput: args.visualInput,
     evalContext: args.evalContext,
     evalBudgetId: args.evalBudgetId,
@@ -6615,6 +6620,7 @@ export const runCockpitAgent = internalAction({
     // tenant with figures and no confirmed blueprint (the ordinary state of a new account), and it
     // must never be concatenated upstream of `evaluations.ts`'s grounding chunk. See
     // `buildTurnPrompt`.
+    const brandSpine = await ctx.runQuery(internal.brandKits.spineForTenant, { tenantId });
     let finance: string | null = null;
     try {
       finance = await ctx.runQuery(internal.cash.financeSpineFor, { tenantId });
@@ -6634,7 +6640,15 @@ export const runCockpitAgent = internalAction({
           planId,
           system: skill.body,
           // History ABOVE the plan context; "The user says:" stays the FINAL line (the current turn).
-          prompt: buildTurnPrompt({ spine, finance, history, plan, tz: clientContext?.tz, text }),
+          prompt: buildTurnPrompt({
+            spine,
+            brandSpine,
+            finance,
+            history,
+            plan,
+            tz: clientContext?.tz,
+            text,
+          }),
           primary: {
             model: forceTimeout ? timeoutModel() : resolveModel(primaryId),
             id: primaryId,
@@ -6709,6 +6723,7 @@ export const __cockpitTurnPrompt = internalAction({
     } catch {
       spine = null;
     }
+    const brandSpine = await ctx.runQuery(internal.brandKits.spineForTenant, { tenantId });
     let finance: string | null = null;
     try {
       finance = await ctx.runQuery(internal.cash.financeSpineFor, { tenantId });
@@ -6716,6 +6731,7 @@ export const __cockpitTurnPrompt = internalAction({
       finance = null;
     }
     return buildTurnPrompt({
+      brandSpine,
       spine,
       finance,
       history: undefined,

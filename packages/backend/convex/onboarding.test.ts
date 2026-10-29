@@ -386,6 +386,7 @@ test("cross-tenant: tenant B never retrieves tenant A's committed profile (SC#3)
     driveOwned: [],
     chunks: [],
     spine: null,
+    brandSpine: null,
   });
 
   // And tenant B's own gate is still open (A's profile is invisible to B).

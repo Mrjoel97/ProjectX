@@ -165,6 +165,7 @@ set -euo pipefail
 
 IN_DIR="in"; OUT="out/final.mp4"; CLIP=10; SFXVOL="0.12"; BLOCKS=""; TARGET=""; NATIVE_AUDIO=0
 KINDS=(); SECS=()
+FINISH=(); TRANSITIONS=(); OVERLAYS=(); OVERLAY_START=(); OVERLAY_END=(); GRAPHICS=()
 MUSIC=""            # the requested mood slug, "" for a reel with no bed
 MUSIC_FILE=""       # 33.1-06: a track already in in/ (fetched from a public library); beats the library lookup
 MUSIC_USED="none"   # what actually made it into the mix — the sidecar reports THIS, not the ask
@@ -193,6 +194,7 @@ while [[ $# -gt 0 ]]; do
     # before any work, and the finished file must land within 0.5s of it.
     --target-seconds) TARGET="$2"; shift 2 ;;
     --native-audio) NATIVE_AUDIO=1; shift ;;
+    --finish) FINISH+=("$2"); shift 2 ;;
     # KIND:SECONDS, one per scene, IN ORDER. Order is the reel's order and the index, which is the
     # same rule the deck parser follows — the display `#` column is never read as a position.
     --scene)
@@ -244,6 +246,16 @@ for ((i=0;i<SCENES;i++)); do
   awk -v s="${SECS[i]}" 'BEGIN{exit (s+0>=1 && s+0==int(s+0))?0:1}' || { echo "ERROR: scene $((i+1)) length must be a positive whole number of seconds, got: ${SECS[i]}" >&2; exit 1; }
 done
 
+# Finishing cues never retime clips or overlap native speech.
+for cue in "${FINISH[@]}"; do
+  [[ "$NATIVE_AUDIO" == 1 && "$cue" =~ ^[0-9]+:(cut|fade):[01]:[0-9]+:[0-9]+(:[01])?$ ]] || { echo "ERROR: invalid native finishing cue" >&2; exit 2; }
+  IFS=: read -r idx transition overlay os oe graphic <<< "$cue"
+  idx=$((10#$idx)); os=$((10#$os)); oe=$((10#$oe))
+  [[ "$idx" -lt "$SCENES" && -z "${TRANSITIONS[idx]:-}" && "$os" -lt "$oe" && "$oe" -le $((${SECS[idx]} * 1000)) && $((oe-os)) -ge 500 ]] || { echo "ERROR: finishing timing/index invalid" >&2; exit 2; }
+  TRANSITIONS[idx]="$transition"; OVERLAYS[idx]="$overlay"; OVERLAY_START[idx]="$os"; OVERLAY_END[idx]="$oe"
+  GRAPHICS[idx]="${graphic:-0}"
+done
+
 # LEVEL LAW: voice is ALWAYS 1.0; SFX is clamped at 0.20 so no caller can bury the narration.
 SFXVOL="$(awk -v v="$SFXVOL" 'BEGIN{v=v+0; if(v<0)v=0; if(v>0.2){print "WARN: --sfx-vol clamped to 0.20 (voice stays 1.0)" > "/dev/stderr"; v=0.2} printf "%.3f", v}')"
 
@@ -270,7 +282,7 @@ PBJSON=()   # per-scene sidecar entries
 # base images — and a card whose text failed to draw is a black rectangle the render still calls
 # a success. Probe, then hard-error naming the fix.
 FONT=""
-if printf '%s\n' "${KINDS[@]}" | grep -qx card; then
+if [[ ${#FINISH[@]} -gt 0 ]] || printf '%s\n' "${KINDS[@]}" | grep -qx card; then
   # The libass precedent from `burn_caps.sh`: REFUSE a build that cannot draw rather than produce
   # a black rectangle with exit 0. drawtext is a --enable-libfreetype filter and is absent from
   # minimal builds.
@@ -373,6 +385,36 @@ for ((i=0;i<SCENES;i++)); do
   # shape, so the audio placement below does not care which kind it came from.
   pic="$TMP/p_$(printf '%03d' "$i").mp4"
   NORM="fps=${FPS},format=yuv420p,setsar=1"
+  # Fade through the background without changing timeline length or audio offsets.
+  if [[ "$i" -gt 0 && "${TRANSITIONS[i-1]:-cut}" == fade ]]; then
+    NORM="${NORM},fade=t=in:st=0:d=0.2:color=${CARD_BG}"
+  fi
+  if [[ "${TRANSITIONS[i]:-cut}" == fade && "$i" -lt $((SCENES-1)) ]]; then
+    fend="$(awk -v s="$SEC" 'BEGIN{printf "%.3f",s-0.2}')"
+    NORM="${NORM},fade=t=out:st=${fend}:d=0.2:color=${CARD_BG}"
+  fi
+  if [[ "${GRAPHICS[i]:-0}" == 1 ]]; then
+    graphic="$IN_DIR/$(printf 'motion%02d.ass' "$n")"
+    [[ -s "$graphic" && $(wc -c < "$graphic") -le 5242880 ]] || { echo "ERROR: motion graphic missing or oversized" >&2; exit 2; }
+    NORM="${NORM},ass='${graphic}'"
+  fi
+  if [[ "${OVERLAYS[i]:-0}" == 1 ]]; then
+    txt="$IN_DIR/$(printf 'overlay%02d.txt' "$n")"
+    [[ -s "$txt" && $(wc -c < "$txt") -le 320 && $(wc -w < "$txt") -le 12 ]] || { echo "ERROR: overlay text missing or oversized" >&2; exit 2; }
+    wrapped="$IN_DIR/$(printf 'overlay%02d' "$n").wrapped.txt"
+    awk '{ for(j=1;j<=NF;j++) { if(length(line)+length($j)+1>25 && line!="") {print line; line=""}; line=line (line==""?"":" ") $j } } END { if(line!="") print line }' "$txt" > "$wrapped"
+    os="$(awk -v t="${OVERLAY_START[i]}" 'BEGIN{printf "%.3f",t/1000}')"
+    oe="$(awk -v t="${OVERLAY_END[i]}" 'BEGIN{printf "%.3f",t/1000}')"
+    k=0
+    while IFS= read -r ln || [[ -n "$ln" ]]; do
+      lf="$IN_DIR/$(printf 'overlay%02d' "$n").l$k.txt"
+      printf '%s' "$ln" > "$lf"
+      # Fixed profile: 400ms cubic ease-out rise, 120ms text fade at either edge, then a
+      # still readable hold. Expressions contain only validated numeric timing, never copy.
+      NORM="${NORM},drawtext=fontfile='${FONT}':textfile='${lf}':expansion=none:fontcolor=white:fontsize=$((H/27)):box=1:boxcolor=black@0.65:boxborderw=12:x=(w-text_w)/2:y='h*0.16+${k}*$((H/22))+h*0.025*pow(1-min(1,max(0,(t-${os})/0.4)),3)':alpha='max(0,min(1,min((t-${os})/0.12,(${oe}-t)/0.12)))':enable='gte(t,${os})*lt(t,${oe})'"
+      k=$((k+1))
+    done < "$wrapped"
+  fi
   case "$KIND" in
     video)
       clip="$IN_DIR/$(printf 'block%02d.mp4' "$n")"
@@ -785,7 +827,8 @@ fi
   # whose bed was missing from the snapshot says "none" here, which is the whole reason the
   # degrade path is not silent. No new entry in `gates`: the bed is not separately asserted, and
   # claiming a gate this script does not run is the one thing a proof plane must never do.
-  printf '{"script":"assemble_final.sh","out":"%s","scene_count":%d,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"music":"%s","card_bg":"%s","audio_sample_rate_hz":%s,"normalization_mode":"%s","native_audio":%s,"gates":["clip_covers_window",%s,"no_time_stretch","master_audio_timeline","%s","duration_within_0.5s","full_decode"],"scenes":[' \
+  printf '{"finishing_version":2,"finishing_cue_count":%d,' "${#FINISH[@]}"
+  printf '"script":"assemble_final.sh","out":"%s","scene_count":%d,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"music":"%s","card_bg":"%s","audio_sample_rate_hz":%s,"normalization_mode":"%s","native_audio":%s,"gates":["clip_covers_window",%s,"no_time_stretch","master_audio_timeline","%s","duration_within_0.5s","full_decode"],"scenes":[' \
     "$(basename "$OUT")" "$SCENES" "$TARGET" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$DIEG_GAIN" "$MUSIC_USED" "$CARD_BG" "$AUDIO_RATE" "$NORMALIZATION_MODE" "$([[ "$NATIVE_AUDIO" == 1 ]] && echo true || echo false)" "$AUDIO_GATES" "$NORMALIZATION_GATE"
   for ((i=0;i<SCENES;i++)); do printf '%s%s' "${PBJSON[i]}" "$([[ $i -lt $((SCENES-1)) ]] && echo ,)"; done
   printf '],"ts":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"

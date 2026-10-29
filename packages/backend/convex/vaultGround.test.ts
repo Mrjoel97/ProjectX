@@ -335,6 +335,7 @@ describe("vaultGroundHydrated (identity-less internalAction — real titles + ca
       driveOwned: [],
       chunks: [],
       spine: null,
+      brandSpine: null,
     });
   });
 });

@@ -1,3 +1,4 @@
+import { brandImageDirection } from "@pikar/core/brandKit";
 import { mediaTaskIncreaseCents } from "@pikar/core/mediaBudget";
 import {
   ambiguousCampaignFailure,
@@ -10,10 +11,12 @@ import {
   MEDIA_CAMPAIGN_SETTLEMENT_MS,
   validateCampaignInput,
 } from "@pikar/core/mediaCampaign";
+import { MEDIA_DEFAULT_IMAGE_QUALITY } from "@pikar/cost/media";
 import { ConvexError, type ObjectType, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { approvedBrandForTenant } from "./brandKits";
 import { mediaDailyBudgetInner } from "./guardrails";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
@@ -148,8 +151,15 @@ export async function stageCampaignInner(ctx: MutationCtx, args: StageArgs): Pro
     ...(creationKey ? { creationKey } : {}),
   });
   const items: Item[] = [];
+  const brand = await approvedBrandForTenant(ctx, args.tenantId);
   const videoPlans: StageResult["videoPlans"] = [];
   for (const input of inputs) {
+    const imagePrompt =
+      input.kind === "image"
+        ? [input.prompt.trim(), ...(brand ? [brandImageDirection(brand.kit)] : [])].join("\n\n")
+        : undefined;
+    if (imagePrompt && new TextEncoder().encode(imagePrompt).length > 4096)
+      throw new ConvexError({ code: "CAMPAIGN_REFUSED", reason: "invalid_prompt" });
     const planId = await ctx.db.insert("plans", {
       tenantId: args.tenantId,
       threadId: args.threadId,
@@ -158,7 +168,17 @@ export async function stageCampaignInner(ctx: MutationCtx, args: StageArgs): Pro
       mediaMode: input.kind === "image" ? "image" : "reel",
       ...(input.kind === "video" ? { mediaAudioMode: "native" as const } : {}),
       mediaCampaignId: campaignId,
-      ...(input.kind === "image" ? { imagePrompt: input.prompt.trim() } : {}),
+      ...(brand
+        ? {
+            brandKitRef: {
+              docId: brand.docId,
+              revision: brand.revision,
+              contentHash: brand.contentHash,
+            },
+          }
+        : {}),
+      ...(input.kind === "image" ? { mediaImageQuality: MEDIA_DEFAULT_IMAGE_QUALITY } : {}),
+      ...(imagePrompt === undefined ? {} : { imagePrompt }),
       status: input.kind === "image" ? "proposed" : "collecting",
       createdAt: now,
     });

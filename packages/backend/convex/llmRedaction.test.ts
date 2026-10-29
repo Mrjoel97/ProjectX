@@ -114,7 +114,7 @@ test("runCockpitAgent has one spine-first turn-prompt assembly with the exact le
   );
 
   expect(handler).toMatch(
-    /prompt:\s*buildTurnPrompt\(\{\s*spine,\s*finance,\s*history,\s*plan,\s*tz:\s*clientContext\?\.tz,\s*text\s*\}\)/,
+    /prompt:\s*buildTurnPrompt\(\{\s*spine,\s*brandSpine,\s*finance,\s*history,\s*plan,\s*tz:\s*clientContext\?\.tz,\s*text,?\s*\}\)/,
   );
   expect(handler.match(/\bprompt:/g) ?? []).toHaveLength(1);
   expect(src).not.toContain(
@@ -126,7 +126,7 @@ test("runCockpitAgent has one spine-first turn-prompt assembly with the exact le
   // and the finance line (`internal.cash.financeSpineFor`). Still one expression, still
   // zero bytes when both are null, still the current user turn as the final line.
   expect(code).toMatch(
-    /const standing = \[spine, finance\]\.filter\(\(p\) => p !== null\)\.join\("\\n"\);/,
+    /const standing = \[spine, brandSpine, finance\]\.filter\(\(p\) => p != null\)\.join\("\\n"\);/,
   );
   expect(code).toMatch(
     /return `\$\{standing === "" \? "" : `\$\{standing\}\\n\\n`\}\$\{buildHistoryBlock\(history\)\}\$\{buildAgentContext\(plan \?\? \{\}, tz\)\}\\n\\nThe user says: \$\{text\}`;/,

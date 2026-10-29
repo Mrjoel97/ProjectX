@@ -1,3 +1,5 @@
+> Last verified: 2026-10-26 — Brand approval requires the authenticated tenant and exact draft revision/hash. Image generation binds reviewed prompt, quality, brand revision and estimate; new explicit-quality plans require review hash and price ceiling. Batch hashes already include complete plan content. No shared-limit override or new model approval authority is introduced.
+
 > Combined-source checkpoint: 2026-10-24 — Preserve exact tenant/thread/current-output media checks, human task-bound budget approval and the direct-social account/media/publication boundaries. Both closed inventories must include the combined source. Earlier focused checks remain historical evidence; final merged-candidate CI and hosted acceptance remain separate gates.
 
 > Last verified: 2026-10-23 — Queued campaign cancellation now rechecks exact plan tenant, campaign and conversation plus every batch row before terminal writes through media.ts; submitted batches remain untouched. No public function, grant or scheduling authority is added.

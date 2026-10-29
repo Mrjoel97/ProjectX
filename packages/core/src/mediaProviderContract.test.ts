@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   buildSubmitBody,
+  IMAGE_QUALITY_PROMPT_MAX_BYTES,
   referenceImageHasExpectedType,
   SEEDANCE_CANDIDATE_MODEL,
   SEEDANCE_MINI_CANDIDATE_MODEL,
@@ -10,6 +11,38 @@ import {
 } from "./mediaProviderContract";
 
 describe("existing media provider wire contract", () => {
+  test("explicit image quality reaches the provider without changing historical low", () => {
+    for (const quality of ["low", "medium", "high"] as const) {
+      expect(
+        buildSubmitBody(
+          { kind: "image", model: "openai/gpt-image-2", width: 1024, height: 1536, quality },
+          "Approved brand illustration",
+        ),
+      ).toMatchObject({ quality, size: "1024x1536", model: "openai/gpt-image-2" });
+    }
+  });
+  test("unreviewed image profiles and oversized UTF-8 prompts refuse before submission", () => {
+    const spec = {
+      kind: "image",
+      model: "openai/gpt-image-2",
+      width: 1024,
+      height: 1536,
+      quality: "high",
+    } as const;
+    expect(() => buildSubmitBody({ ...spec, model: "unqualified/sunburst" }, "p")).toThrow(
+      "unsupported_image_quality_profile",
+    );
+    expect(() => buildSubmitBody({ ...spec, width: 2048 }, "p")).toThrow(
+      "unsupported_image_quality_profile",
+    );
+    expect(() => buildSubmitBody(spec, "a".repeat(IMAGE_QUALITY_PROMPT_MAX_BYTES + 1))).toThrow(
+      "image_quality_prompt_too_large",
+    );
+    expect(() => buildSubmitBody(spec, "水".repeat(1400))).toThrow(
+      "image_quality_prompt_too_large",
+    );
+    expect(buildSubmitBody(spec, "a".repeat(IMAGE_QUALITY_PROMPT_MAX_BYTES)).quality).toBe("high");
+  });
   test("reference image metadata cannot disguise non-image bytes", () => {
     expect(
       referenceImageHasExpectedType(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), "image/png"),

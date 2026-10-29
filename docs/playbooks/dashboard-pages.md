@@ -1,3 +1,5 @@
+> Last verified: 2026-10-26 — The finance privacy regression checks complete numeric values rather than numeric substrings, so a daily-reset timestamp containing the shared ceiling digits cannot cause a false leak failure. Tenant rail values and exclusion of deployment ceilings remain asserted; runtime finance behavior is unchanged.
+
 > Last verified: 2026-10-24 — Preserve main c765168d legal disclosures and owned-domain callback alongside the media workspace. This integration does not replace the policy pages or alter the approved public contact details. Combined-source CI and hosted acceptance remain separate.
 
 > Combined-source checkpoint: 2026-10-24 — Preserve the tabbed artifact workspace and in-conversation media budget request while retaining social draft locking, explicit destination/approval controls and truthful disconnect/data-erasure disclosures. Reading an output or social account does not authorize generation or publication. Final merged-candidate CI and release remain pending.

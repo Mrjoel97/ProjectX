@@ -18,6 +18,8 @@
  *     tier. A priced resolution must be present on both the estimate and the provider request.
  *  3. The cents floor happens ONCE, on the batch total. See chooseMediaBatch.
  */
+
+import type { ImageQuality } from "@pikar/core/mediaProviderContract";
 import type { MediaAudioMode } from "@pikar/core/nativeMedia";
 import { err, ok, type Result } from "@pikar/core/result";
 import { MUSIC_MOODS, type VisualKind } from "@pikar/core/storyboard";
@@ -85,6 +87,16 @@ export const MEDIA_IMAGE_PRICING: Record<string, number> = {
   // cent measurement rounded DOWN would be silent drift, so the rounding is stated rather than
   // folded away.
   "openai/gpt-image-2": 0.006,
+};
+
+/** Explicit 1024x1536 GPT Image 2 quality reservation policies. Measured 2026-10-22:
+ * medium $0.041645 and high $0.165125 at 97 prompt tokens. New profiles bound prompt
+ * bytes at the provider boundary; headroom is policy, never a guaranteed invoice cap.
+ * Undefined quality retains the historical per-model table above. */
+export const MEDIA_IMAGE_QUALITY_PRICING: Record<ImageQuality, number> = {
+  low: 0.006,
+  medium: 0.07,
+  high: 0.2,
 };
 
 /** USD per 1000 SUBMITTED characters. Character billing is the REQUIREMENT, not a preference: the
@@ -221,6 +233,9 @@ export const MEDIA_DEFAULT_VIDEO = {
  *  `openai/gpt-image-2`, and `buildSubmitBody`'s image arm sends `spec.model` through UNSTRIPPED.
  *  This string, `MEDIA_IMAGE_PRICING`'s live key and `media.fixtures.json`'s image `id` are three
  *  copies of one value and must move together — the fixture-parity test is what enforces that. */
+/** New plans explicitly persist this quality; missing historical quality still means low. */
+export const MEDIA_DEFAULT_IMAGE_QUALITY: ImageQuality = "high";
+
 export const MEDIA_DEFAULT_IMAGE = {
   model: "openai/gpt-image-2",
   width: 1024,
@@ -277,7 +292,7 @@ export const MEDIA_DEFAULT_STOCK = {
 
 export type MediaSpec =
   | { kind: "video"; model: string; resolution: VideoRes; seconds: number; generateAudio?: boolean }
-  | { kind: "image"; model: string; width: number; height: number }
+  | { kind: "image"; model: string; width: number; height: number; quality?: ImageQuality }
   | { kind: "tts"; model: string; characters: number }
   | { kind: "stt"; model: string; audioMinutes: number }
   /** The deck-wide music bed. A $0 line, and it IS a line: it is reserved with the rest of the job
@@ -343,6 +358,13 @@ export function estimateMediaUsd(spec: MediaSpec): Result<number, MediaCostError
       return ok(perSecond * (spec.seconds + allowanceSeconds));
     }
     case "image": {
+      if (spec.quality !== undefined) {
+        const policy = MEDIA_IMAGE_QUALITY_PRICING[spec.quality];
+        if (typeof policy !== "number" || spec.model !== "openai/gpt-image-2")
+          return err({ code: "unknown_model" });
+        if (spec.width !== 1024 || spec.height !== 1536) return err({ code: "illegal_duration" });
+        return ok(policy);
+      }
       const perMegapixel = MEDIA_IMAGE_PRICING[spec.model];
       if (perMegapixel === undefined) return err({ code: "unknown_model" });
       if (!counted(spec.width, spec.height)) return err({ code: "illegal_duration" });

@@ -1,3 +1,7 @@
+> Last verified: 2026-10-26 — Refreshed evaluator source fingerprints for the final reviewed native-finishing implementation. Registry skill content and corpus cases are unchanged by this fingerprint refresh; candidate Kimi remains unpromoted.
+
+> Last verified: 2026-10-26 — Director v12 describes the implemented animated title profile and optional decorative orbit-ring, and explicitly holds faithful product3D requests until approved model/material assets, renderer support and preview evidence exist. Generated orbits are not labeled mesh renders. Registry mirror checks pass; no paid model comparison or activation is claimed.
+
 > Last verified: 2026-10-24 — Current golden source revision is regenerated after integrating main c765168d callback/policy work. The 46 input cases and historical receipts are unchanged; no registry seeding, activation or paid evaluation is performed.
 
 > Combined-source checkpoint: 2026-10-24 — Preserve canonical media-director v9/native-film guidance and the direct-social tool boundaries. Older director versions and source fingerprints below are historical checkpoints. Regenerate the exact merged evaluator identities with unchanged corpus bytes and historical receipts; this merge creates no paid qualification, registry seed, activation or release approval.
@@ -3190,3 +3194,7 @@ New shared llm/schema/contracts/writer sources change exact-source evaluator ide
 
 
 > Last verified: 2026-10-24 — The media director now documents the 15-second native option and explicitly selected product images. Source changes require normal registry activation; they do not activate a hosted skill automatically.
+
+### 2026-10-26 — creative direction and brand proposal registry
+
+Media Director v11 adds approved-brand grounding, purposeful camera paths, executable overlay timing/cut-or-fade instructions and playback review requirements. Canonical Markdown and derived TypeScript remain byte-mirrored. `brand-kit-designer` is appended as a new v1 draft-only registry seed; its structured proposal cannot approve itself or activate a Vault brand. Human approval and tenant/version binding belong to the brand workflow, not the prompt. The mirror test covers the new body. Local changes do not seed a hosted deployment; release must seed and verify the active registry versions.

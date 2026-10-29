@@ -1,10 +1,11 @@
+import { type MediaFinishing, parseMediaFinishing } from "./mediaFinishing";
 import { GENERATED_CLIP_SECONDS, MAX_CHARS_PER_SECOND, MUSIC_MOODS } from "./storyboard";
 
 /** Absence on existing plans means separate audio; new native plans opt in explicitly. */
 export type MediaAudioMode = "native" | "separate";
 export const NATIVE_TARGET_DURATIONS = [15, 30, 45, 60] as const;
 
-type NativeScene = {
+type NativeScene = MediaFinishing & {
   index?: number;
   startMs?: number;
   durationMs: number;
@@ -22,7 +23,8 @@ export type NativeDeckRefusal =
   | "duration_mismatch"
   | "narration_too_long"
   | "bad_scene_timing"
-  | "missing_prompt";
+  | "missing_prompt"
+  | "bad_finishing";
 
 /** Revalidates stored scenes before admission. Native speech must fit its own clip: another
  * silent scene cannot lend time to audio already generated inside a different provider clip. */
@@ -55,6 +57,8 @@ export function validateNativeSceneDeck(deck: {
     if ((scene.narration ?? "").length > seconds * MAX_CHARS_PER_SECOND) {
       return { ok: false, reason: "narration_too_long", sceneIndex: i };
     }
+    if (parseMediaFinishing(scene, scene.durationMs) === null)
+      return { ok: false, reason: "bad_finishing", sceneIndex: i };
     totalMs += scene.durationMs;
   }
   return totalMs === deck.targetDurationSeconds * 1000
@@ -71,11 +75,11 @@ export function buildNativeScenePrompt(
 ): string {
   const mood = (MUSIC_MOODS as readonly string[]).includes(musicMood ?? "") ? musicMood : null;
   return [
-    "Create this single reviewed audiovisual scene. Keep the product identity and stated facts consistent. Speak only the exact narration; if empty, add no speech. Generate the scene sound natively; do not add other dialogue or lyrics.",
+    "Create this single reviewed audiovisual scene. Keep the product identity and stated facts consistent. Speak only the exact narration; if empty, add no speech. Generate the scene sound natively; do not add other dialogue or lyrics. Leave room for the separately rendered title; do not generate lettering or logos.",
     JSON.stringify({
       visual: scene.prompt,
       exactNarration: scene.narration ?? "",
-      onScreenText: scene.overlay ?? "",
+      postProductionText: scene.overlay ?? "",
       sound: {
         musicMood: mood,
         ambience: "appropriate to the reviewed scene",

@@ -1,3 +1,11 @@
+> Last verified: 2026-10-26 — Media finishing labels accept absent and null cue fields from the tenant query. Timing text renders only for numeric start/end values, avoiding a fabricated zero interval for legacy scenes. The compile-time Block contract matches the full reactive projection.
+
+> Last verified: 2026-10-26 — Scene review displays animated title timing, fade selection and the optional decorative3D ring before generation. These fields and the approved brand revision are bound into native review hashes.
+
+> Last verified: 2026-10-26 — Free Kimi resolver/SDK tests exercise supported required-tool selection and two-step fixture continuation. Signed reasoning details survive; unsigned details are filtered by the installed provider and do not establish live reasoning compatibility. Existing director routing remains unchanged after the failed live probe; no paid retry.
+
+> Last verified: 2026-10-26 — Active approved brand context is separate from blueprint and finance grounding. Image plans and batch items pin the approved brand revision and explicit high quality for new proposals; historical unspecified quality remains low. The image canvas displays quality and estimated reservation. Native finishing fields survive plan persistence. Local verification is separate from beta deployment.
+
 > Last verified: 2026-10-24 — The workspace campaign regression uses the real rate limiter to exercise current budget projections while preserving private-child exclusion and exact legacy collection scope. All eight focused inventory tests pass; no workspace runtime or approval authority changed.
 
 > Combined-source checkpoint: 2026-10-24 — Preserve per-chat artifact tabs, frame-free document reading, native film review and conversation-only exact task-limit approval alongside customer-controlled social connections and saved-revision publishing review. Current media source defaults are USD 100/customer/day and USD 2,000 shared/day. Existing deployed social receipts do not establish deployment or activation of these media/workspace changes.
