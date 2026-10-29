@@ -1,6 +1,8 @@
-> Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social and recurring-service changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
+> Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social, recurring-service and indexed watchdog changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
 
 > Last verified: 2026-10-26 — brandKits is classified as tenant-owned lifecycle data. Proposed identity content remains outside audit payloads; approved Vault snapshots retain tenant ownership and hash verification. Tenant table inventory and brand lifecycle tests pass locally.
+
+> Last verified: 2026-10-29 — The watchdog cron comment now names indexed candidate ranges. Its cadence and arming gate are unchanged; recovery retains the existing notifications and insert-only audit paths. No audit payload, retention or export behavior changed.
 
 > Last verified: 2026-10-24 — The audit viewer explicitly projects the real media task-budget approval event: campaign reference, selected count, approved extra cents, task maximum cents and daily-window timestamp only. Prompts and product/voice references stay excluded. The forward event inventory and privacy projection regression cover this read boundary; no audit writer or spending authority changed.
 

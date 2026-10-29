@@ -245,6 +245,13 @@ const NON_TENANT_LEADING: Record<string, string> = {
   // `billingRollup.tick` and `billingRollup.periodForPost`, both internal and both reached only
   // from the cron chain; there is no tenant-facing caller and no argument a caller could supply.
   // The tenant-facing surface (`billing.invoices`) uses `by_tenant`, which does lead with tenantId.
+  // Internal watchdog maintenance has no requesting tenant. Row-owned tenantIds
+  // still scope every recovery lookup/write; no customer query uses these ranges.
+  "mediaJobs.by_watchdog_status_updatedAt": "internal stale submitted-job recovery across tenants",
+  "plans.by_watchdog_renderStatus": "internal pending/rendering-plan recovery across tenants",
+  "plans.by_watchdog_captionStatus": "internal transcribing-plan recovery across tenants",
+  "plans.by_watchdog_status_kind_createdAt":
+    "internal stale collecting-memo recovery across tenants",
   "billingPeriods.by_status_dueAt":
     "deployment-wide claim scan from the cron; no tenant-facing caller",
 };
@@ -285,6 +292,51 @@ test("social provider-leading indexes have only the two reviewed internal retent
   expect(cleanup.match(/paginate\(\{ numItems: 50/g)).toHaveLength(2);
   expect(cleanup).toContain('q.eq("tenantId", post.tenantId).eq("provider", "youtube")');
   expect(cleanup).toContain("youtubePostMetadataCleared()");
+});
+
+test("watchdog global indexes have only reviewed internal migration consumers", () => {
+  const consumers = [];
+  for (const [path, source] of Object.entries(sources)) {
+    if (path.endsWith(".test.ts")) continue;
+    for (const site of source.matchAll(/\.withIndex\("(by_watchdog_[^"]+)"/g)) {
+      const declaration = [
+        ...source.slice(0, site.index).matchAll(/export const (\w+) = (\w+)\.define\(/g),
+      ].pop();
+      consumers.push({ path, index: site[1], name: declaration?.[1], builder: declaration?.[2] });
+    }
+  }
+  expect(consumers).toEqual([
+    {
+      path: "./reliabilitySweep.ts",
+      index: "by_watchdog_status_updatedAt",
+      name: "sweepSubmittedMediaJobs",
+      builder: "indexedMigrations",
+    },
+    {
+      path: "./reliabilitySweep.ts",
+      index: "by_watchdog_renderStatus",
+      name: "sweepPendingRenderPlans",
+      builder: "indexedMigrations",
+    },
+    {
+      path: "./reliabilitySweep.ts",
+      index: "by_watchdog_renderStatus",
+      name: "sweepRenderingPlans",
+      builder: "indexedMigrations",
+    },
+    {
+      path: "./reliabilitySweep.ts",
+      index: "by_watchdog_captionStatus",
+      name: "sweepTranscribingPlans",
+      builder: "indexedMigrations",
+    },
+    {
+      path: "./reliabilitySweep.ts",
+      index: "by_watchdog_status_kind_createdAt",
+      name: "sweepCollectingMemoPlans",
+      builder: "indexedMigrations",
+    },
+  ]);
 });
 
 describe("every tenant-owned index leads with tenantId, or names why it does not", () => {

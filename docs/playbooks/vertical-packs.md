@@ -1,10 +1,12 @@
-> Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social and recurring-service changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
+> Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social, recurring-service and indexed watchdog changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
 
 > Last verified: 2026-10-26 — Final renderer palette and nullable-review fixes refresh source fingerprints only; all40vertical and46golden cases remain unchanged. No qualification scores or paidreceipts are rewritten.
 
 > Last verified: 2026-10-26 — Refreshed source fingerprints for final motion finishing and CI integration fixes; the40-case corpus is unchanged and no vertical evaluation was purchased.
 
 > Last verified: 2026-10-26 — Refreshed evaluator source fingerprints after approved-brand grounding and deterministic media finishing. The40-case,6-lane corpus content is unchanged; no paid evaluation, score promotion or vertical workflow activation occurred.
+
+> Last verified: 2026-10-29 — Regenerated the native evaluator source identity after additive watchdog schema indexes. Six lanes, forty cases and their source bytes are unchanged; corpus --check and evaluator identity regressions pass offline. This does not grant paid qualification, skill activation or deployment authority.
 
 > Last verified: 2026-10-24 — Regenerate the current vertical source fingerprint after integrating main c765168d. The 40 cases across six lanes remain byte-equivalent and no historical qualification is relabeled or replayed.
 

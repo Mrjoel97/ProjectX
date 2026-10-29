@@ -2019,6 +2019,9 @@ export default defineSchema({
     .index("by_thread", ["tenantId", "threadId"])
     // Pulse layer (living-map §3.1): windowed status reads for the tenant-wide outcome counts.
     .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
+    .index("by_watchdog_renderStatus", ["renderStatus"])
+    .index("by_watchdog_captionStatus", ["captionStatus"])
+    .index("by_watchdog_status_kind_createdAt", ["status", "kind", "createdAt"])
     // Phase-17 (ACTN-02). The action-retrier's `onComplete` receives ONLY `{runId, result}` — no
     // context bag — so the run id is the sole correlation handle back to the plan that started it.
     // This index is what makes that resolvable; without it the terminal cannot find its own plan.
@@ -3654,6 +3657,7 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
+    .index("by_watchdog_status_updatedAt", ["status", "updatedAt"])
     .index("by_plan_created", ["tenantId", "planId", "createdAt"])
     .index("by_plan_status", ["tenantId", "planId", "status"])
     .index("by_plan_slot_kind_created", ["tenantId", "planId", "blockIndex", "kind", "createdAt"])

@@ -7,7 +7,7 @@ import { REVIEW_THREAD_ID } from "@pikar/core";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { type ReactNode, Suspense, useCallback, useEffect, useState } from "react";
-import { BrainIcon, ClockIcon, DotsIcon, StarIcon, TrashIcon } from "../../../(auth)/icons";
+import { BrainIcon, ClockIcon, DotsIcon, StarIcon } from "../../../(auth)/icons";
 import { ServiceKnowledgeConversation } from "../skills-workflows/ServiceKnowledgeConversation";
 import { ArtifactWorkspace } from "./ArtifactWorkspace";
 import { ChatPane } from "./ChatPane";
