@@ -185,6 +185,30 @@ describe("groupIntoLines — a line that fits a 9:16 frame", () => {
 });
 
 describe("toAss — a valid file, and text that cannot become markup", () => {
+  it("smooth cues keep speech endpoints and clamp motion/fades to short cue durations", () => {
+    const ass = toAss([{ startS: 2, endS: 2.08, text: "Now" }], {
+      treatment: "smooth",
+      playResX: 720,
+      playResY: 1280,
+    });
+    expect(ass).toContain("0:00:02.00,0:00:02.08");
+    expect(ass).toContain("\\move(360,1024,360,1012,0,40)");
+    expect(ass).toContain("\\fad(20,20)");
+    expect(ass).toContain("Style: Default,DejaVu Sans,38,");
+  });
+
+  it("smooth markup is closed: narration cannot inject effects or benchmark branding", () => {
+    const ass = toAss([{ startS: 1, endS: 3, text: "Fresh {\\pos(0,0)} ideas" }], {
+      treatment: "smooth",
+    });
+    const row = ass.split("\n").find((line) => line.startsWith("Dialogue:")) ?? "";
+    expect(row.match(/\{/g)).toHaveLength(1);
+    expect(row).not.toContain("\\pos(0,0)");
+    expect(row).toContain("Fresh pos(0,0) ideas");
+    expect(ass).not.toMatch(/FORMA|D7B77A|7AB7D7/);
+    expect(toAss([{ startS: 1, endS: 3, text: "Original" }])).not.toContain("\\move");
+  });
+
   it.each([
     [1080, 1920],
     [720, 1280],

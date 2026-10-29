@@ -1435,7 +1435,9 @@ export const burnCaptions = internalAction({
           balanceReadability: true,
         });
     if (!captions.ok) return await fail(captions.error.code);
-    const ass = toAss(captions.value);
+    // Neutral, bounded phrase animation for native films. Product-specific colour and
+    // messaging belong to the reviewed creative direction, never a benchmark template.
+    const ass = toAss(captions.value, job.nativeAudio ? { treatment: "smooth" } : {});
     // An empty track means the transcript held no words for any block. `burn_caps.sh` refuses an
     // empty track, but refusing here saves a whole sandbox to learn that.
     if (!ass.includes("Dialogue:")) return await fail("caption_track_empty");

@@ -22,9 +22,8 @@
  *
  * ponytail: a ~120-line `.ass` writer instead of a subtitle library. `.ass` is a plain text format
  * and we emit ONE style and ONE event type; a dependency would be more lines of `package.json`
- * churn than of saved code. The ceiling is that we support exactly the subset ffmpeg's `subtitles=`
- * filter needs — no karaoke, no positioning animation, no multiple styles. Upgrade path if that
- * ever changes: a real library, at which point this file is deleted rather than extended.
+ * churn than of saved code. The ceiling is a closed style and bounded phrase entrance; no
+ * arbitrary model-authored markup, karaoke or downloadable fonts.
  */
 
 import type { AssemblyReport, AssemblyScene } from "./assembly";
@@ -221,17 +220,31 @@ function escapeAss(text: string): string {
  */
 export function toAss(
   lines: readonly CaptionLine[],
-  opts: { playResX?: number; playResY?: number } = {},
+  opts: { playResX?: number; playResY?: number; treatment?: "smooth" } = {},
 ): string {
   const x = opts.playResX ?? 1080;
   const y = opts.playResY ?? 1920;
   const marginX = Math.ceil(x * 0.08);
   const marginY = Math.ceil(y * 0.2);
+  const smooth = opts.treatment === "smooth";
+  const fontSize = smooth ? Math.round(Math.min(x * 0.053, y * 0.03)) : 64;
   const rows: string[] = [];
   for (const line of lines) {
     const text = escapeAss(line.text);
     if (text.length === 0) continue; // a blank Dialogue row is a row libass renders as nothing
-    rows.push(`Dialogue: 0,${assTime(line.startS)},${assTime(line.endS)},Default,,0,0,0,,${text}`);
+    // Animation is generated here, never parsed from narration. Keep each effect inside
+    // its original speech cue, even for a very short cue; do not shift word endpoints.
+    const durationMs = Math.max(0, Math.floor((line.endS - line.startS) * 1000));
+    const fadeIn = Math.min(140, Math.floor(durationMs / 4));
+    const fadeOut = Math.min(180, Math.floor(durationMs / 4));
+    const riseMs = Math.min(220, Math.floor(durationMs / 2));
+    const baseline = y - marginY;
+    const entrance = smooth
+      ? `{\\an2\\move(${Math.round(x / 2)},${baseline},${Math.round(x / 2)},${baseline - Math.round(y * 0.009)},0,${riseMs})\\fad(${fadeIn},${fadeOut})}`
+      : "";
+    rows.push(
+      `Dialogue: 0,${assTime(line.startS)},${assTime(line.endS)},Default,,0,0,0,,${entrance}${text}`,
+    );
   }
   return [
     "[Script Info]",
@@ -250,7 +263,9 @@ export function toAss(
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
     // White/outlined, above native/social player chrome: bottom 20%, horizontal inset at least 8%.
-    `Style: Default,DejaVu Sans,64,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,0,2,${marginX},${marginX},${marginY},1`,
+    smooth
+      ? `Style: Default,DejaVu Sans,${fontSize},&H00FFFFFF,&H00FFFFFF,&H9014100D,&H9014100D,0,0,0,0,100,100,0,0,3,${Math.round(y * 0.008)},0,2,${marginX},${marginX},${marginY},1`
+      : `Style: Default,DejaVu Sans,64,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,0,2,${marginX},${marginX},${marginY},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
