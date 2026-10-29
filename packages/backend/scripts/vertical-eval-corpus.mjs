@@ -77,6 +77,7 @@ export const EVALUATOR_FILES = [
   "packages/backend/convex/zernio.ts",
   "packages/backend/convex/zernioActions.ts",
   "packages/core/src/zernio.ts",
+  "packages/core/src/zernioNarrative.ts",
   "packages/core/src/zernioPilot.ts",
   "packages/revenue/src/credential.ts",
   "packages/backend/convex/lib/webResearchTools.ts",
