@@ -85,12 +85,17 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
   const published =
     project.publishedVersion === selected.version &&
     project.publishedContentHash === selected.contentHash;
-  const reviewReady =
+  const sourceReady =
     session !== undefined &&
     (session === null ||
       (session.version === selected.version && session.contentHash === selected.contentHash)) &&
     ((selected.assetSnapshots?.length ?? 0) === 0 ||
       (previewReadiness?.pin === previewPin && previewReadiness.ready));
+  // The server binds readiness to this version's content, provider receipt and all page artifacts.
+  // A loaded preview alone cannot qualify a generated design for approval or publication.
+  const providerReviewRequired = selected.requiresProviderReview === true || !!selected.providerReceipt;
+  const providerReviewReady = !providerReviewRequired || selected.browserQualityReady === true;
+  const reviewReady = sourceReady && providerReviewReady;
   const firstPage = (selected.document as { pages: { slug: string }[] }).pages[0]?.slug;
   const publicUrl =
     project.publicHost && firstPage
@@ -141,6 +146,16 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
         version={selected.version}
         onReadinessChange={onPreviewReadiness}
       />
+      {providerReviewRequired && !providerReviewReady && (
+        <aside aria-label="Visual quality review" style={{ background: "var(--canvas)", padding: 16, borderRadius: 12 }}>
+          <h3>{selected.browserReview?.status === "failed" ? "Design needs refinement" : "Visual quality review pending"}</h3>
+          <p role="status">
+            {selected.browserReview?.status === "failed"
+              ? "This version has not passed its visual checks. Pikar needs to resolve the findings before approval or publication."
+              : "This version is waiting for desktop, mobile and reduced-motion checks. Approval and publication become available only when its saved design passes review."}
+          </p>
+        </aside>
+      )}
       {reviewReady && (session?.sourceWarnings?.length ?? 0) > 0 && (
         <aside
           aria-label="Information to review"
@@ -176,7 +191,7 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
         Check the pages and the information you want to make public. Approval applies only to the
         version shown above.
       </p>
-      {!reviewReady && (
+      {!sourceReady && (
         <p role="status">
           Loading the source information and saved images for this version before approval…
         </p>

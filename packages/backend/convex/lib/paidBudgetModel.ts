@@ -7,7 +7,7 @@ import {
 import { type LanguageModel, wrapLanguageModel } from "ai";
 import type { GenericActionCtx } from "convex/server";
 import { internal } from "../_generated/api";
-import type { DataModel } from "../_generated/dataModel";
+import type { DataModel, Id } from "../_generated/dataModel";
 
 function refuseCacheWrites(value: unknown): void {
   if (!value || typeof value !== "object") return;
@@ -28,7 +28,13 @@ export function paidBudgetModel(args: {
   modelId: string;
   rail?: "ingest";
   onCost?: (usd: number) => void;
+  /** Server-selected native website design context; never supplied by model tool arguments. */
+  websiteDesign?: { planId: Id<"plans">; revision: number; runRef: string };
+  beforeCall?: () => Promise<void>;
 }): ReturnType<typeof wrapLanguageModel> {
+  const kimi = args.modelId === "or/moonshotai/kimi-k3.1-pro";
+  if (Boolean(args.websiteDesign) !== kimi || (args.websiteDesign && args.rail))
+    throw new Error("PAID_WEBSITE_MODEL_SCOPE_INVALID");
   const call = {
     kind: "chat",
     model: args.modelId,
@@ -55,16 +61,23 @@ export function paidBudgetModel(args: {
             params.maxOutputTokens ?? EVAL_MAX_OUTPUT_TOKENS,
             EVAL_MAX_OUTPUT_TOKENS,
           ),
-          providerOptions: { openrouter: options },
+          providerOptions: {
+            openrouter: {
+              ...options,
+              ...(args.websiteDesign ? { reasoning: { effort: "low" as const } } : {}),
+            },
+          },
         };
       },
       wrapGenerate: async ({ doGenerate }) => {
+        await args.beforeCall?.();
         const reservationId = await args.ctx.runMutation(internal.guardrails.reservePaidCall, {
           tenantId: args.tenantId,
           callId: crypto.randomUUID(),
           model: args.modelId,
           ceilingCents,
           rail: args.rail,
+          ...(args.websiteDesign ? { websiteDesign: args.websiteDesign } : {}),
         });
         let result: Awaited<ReturnType<typeof doGenerate>>;
         try {

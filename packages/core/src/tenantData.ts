@@ -338,7 +338,11 @@ export const STORAGE_ID_FIELDS = {
   attachments: ["storageId"],
   intakeArtifacts: ["storageId"],
   vaultDocuments: ["storageId", "transcriptionStorageId"],
-  webProjectVersions: ["artifactStorageId"],
+  webProjectVersions: [
+    "artifactStorageId",
+    "providerReceipt.stitchHtmlStorageId",
+    "providerReceipt.stitchImageStorageId",
+  ],
   webAssets: ["storageId"],
   tenantMerchantOperations: ["storageId"],
   funnels: ["storageId"], // Fixed artifact bytes can outlive a changed/deleted Vault reference.
@@ -366,7 +370,14 @@ export function storageIdsIn(table: string, row: Record<string, unknown>): strin
   for (const path of paths) {
     const split = path.indexOf("[].");
     if (split === -1) {
-      push(row[path]);
+      let value: unknown = row;
+      for (const part of path.split(".")) {
+        value =
+          value !== null && typeof value === "object"
+            ? (value as Record<string, unknown>)[part]
+            : undefined;
+      }
+      push(value);
       continue;
     }
     // `indexOf`/`slice` rather than destructuring `split("[].")`: under

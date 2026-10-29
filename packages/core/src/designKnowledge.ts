@@ -1,4 +1,5 @@
 import { designKnowledgeBundle } from "./designKnowledge.generated";
+import { validateWebLayoutPlan, type WebLayoutPlan } from "./webLayoutPlan";
 
 /** Immutable identities accepted from the Plan 49-01 offline compiler. */
 export const DESIGN_KNOWLEDGE_SCHEMA_VERSION = "design-knowledge-v1" as const;
@@ -76,6 +77,7 @@ export type DesignBrief = {
 };
 
 export type DesignProfileRef = {
+  readonly layoutPlan?: WebLayoutPlan;
   readonly artDirection?: ArtDirection;
   readonly surfaceStyle?: SurfaceStyle;
   readonly bundleHash: typeof DESIGN_KNOWLEDGE_BUNDLE_HASH;
@@ -295,6 +297,7 @@ export function validateDesignProfileRef(input: unknown): input is DesignProfile
       "pageOverride",
       "artDirection",
       "surfaceStyle",
+      "layoutPlan",
     ])
   )
     return false;
@@ -324,6 +327,7 @@ export function validateDesignProfileRef(input: unknown): input is DesignProfile
       input.surfaceStyle !== "minimal" &&
       input.surfaceStyle !== "glass" &&
       input.surfaceStyle !== "clay") ||
+    (input.layoutPlan !== undefined && !validateWebLayoutPlan(input.layoutPlan)) ||
     (input.pageOverride !== undefined &&
       (typeof input.pageOverride !== "string" || input.pageOverride.length > 64))
   )

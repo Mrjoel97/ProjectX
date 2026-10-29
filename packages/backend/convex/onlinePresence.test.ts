@@ -10,19 +10,25 @@ import {
   WEB_RECIPE_UPSTREAM_PROVENANCE,
 } from "@pikar/contracts/webRecipeSkill";
 import type { WebDocument } from "@pikar/contracts/webRuntime";
+import { validateDesignProfileRef } from "@pikar/core/designKnowledge";
 import { ONLINE_PRESENCE_TOOLS } from "@pikar/core/onlinePresence";
+import { renderDesignedWebDocument } from "@pikar/core/webDesignRenderer";
+import { canonicalWebLayoutPlan } from "@pikar/core/webLayoutPlan";
 import {
   canonicalWebRecipeDefinition,
   WEB_RECIPE_BUNDLE_HASH,
   WEB_RECIPE_COMPILER_ID,
   WEB_RECIPE_DEFINITIONS,
 } from "@pikar/core/webRecipes";
+import { canonicalWebDocument, sha256Bytes } from "@pikar/core/webRuntime";
+import { type FunctionReference, getFunctionName, makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { artifactHashes } from "./lib/presencePublication";
 import { runSpecialistTurn } from "./llm";
 import schema from "./schema";
 import { evaluateWebRecipeCandidate } from "./webRecipeEvals";
@@ -58,6 +64,85 @@ async function setup(text = "Acme designs gardens for homeowners.") {
   return { t, tenantId, threadId, planId, session, brief };
 }
 type Stack = Awaited<ReturnType<typeof setup>>;
+/** OFFLINE provider fixture only. These hashes prove native finalization, never real provider
+ * execution or browser quality. Production code cannot invoke this test helper. */
+async function offlineProviderBuild(
+  t: Stack["t"],
+  args: {
+    tenantId: string;
+    planId: Id<"plans">;
+    expectedRevision: number;
+  },
+) {
+  const snapshot = await t.mutation(internal.onlinePresence.designSnapshot, args);
+  if (!("document" in snapshot)) return t.mutation(internal.onlinePresence.buildProject, args);
+  const digest = (value: unknown) => sha256Bytes(new TextEncoder().encode(JSON.stringify(value)));
+  const layoutPlan = canonicalWebLayoutPlan({
+    version: 1,
+    hero: "overlay-left",
+    sectionLayout: "editorial-columns",
+    services: "rows",
+    gallery: "carousel",
+    spacing: "relaxed",
+    headingScale: "balanced",
+    motion: "subtle",
+  });
+  const profile = { ...snapshot.recipeRef.designProfile, layoutPlan };
+  if (!validateDesignProfileRef(profile)) throw Error("Invalid offline profile fixture");
+  const runRef = crypto.randomUUID().replaceAll("-", "").slice(0, 16);
+  const identity = {
+    tenantId: args.tenantId,
+    planId: args.planId,
+    revision: args.expectedRevision,
+    runRef,
+  };
+  const stitchHash = digest("OFFLINE mocked Stitch reference"),
+    kimiHash = digest("OFFLINE mocked Kimi plan");
+  const hashes = artifactHashes(
+    snapshot.document.pages.map((page) => ({
+      pageSlug: page.slug,
+      html: renderDesignedWebDocument(snapshot.document, profile, {
+        slug: snapshot.slug,
+        page: page.slug,
+      }),
+    })),
+  );
+  await t.mutation(makeFunctionReference<"mutation">("presenceDesignControl:claim"), {
+    ...identity,
+    workflow: true,
+    sourceFingerprint: snapshot.sourceFingerprint,
+  });
+  await t.mutation(makeFunctionReference<"mutation">("presenceDesignControl:advance"), {
+    ...identity,
+    phase: "stitch_complete",
+    designHash: stitchHash,
+  });
+  await t.mutation(makeFunctionReference<"mutation">("presenceDesignControl:advance"), {
+    ...identity,
+    phase: "kimi_complete",
+    designHash: stitchHash,
+    proposalHash: kimiHash,
+    documentHash: sha256Bytes(new TextEncoder().encode(canonicalWebDocument(snapshot.document))),
+    artifactsHash: digest(hashes),
+  });
+  return t.mutation(internal.onlinePresence.buildProject, {
+    ...args,
+    designCompletion: {
+      profile,
+      providerReceipt: {
+        pipelineVersion: "stitch-kimi-required-v1",
+        runRef,
+        stitchHash,
+        kimiHash,
+        sourceFingerprint: snapshot.sourceFingerprint,
+        briefHash: snapshot.briefHash,
+        layoutHash: digest(layoutPlan),
+        artifactHashes: hashes,
+        pendingBrowser: true,
+      },
+    },
+  });
+}
 async function vault(t: Stack["t"], tenantId: string, overrides: Record<string, unknown> = {}) {
   return t.run((ctx) =>
     ctx.db.insert("vaultDocuments", {
@@ -420,7 +505,7 @@ test("brand color must be explicit in selected business evidence and survives ac
   });
   expect(saved.ok).toBe(true);
   await activeRecipe(t);
-  const built = await t.mutation(internal.onlinePresence.buildProject, {
+  const built = await offlineProviderBuild(t, {
     tenantId,
     planId,
     expectedRevision: saved.revision,
@@ -437,7 +522,7 @@ test("brand color must be explicit in selected business evidence and survives ac
     }),
   );
   expect(
-    await t.mutation(internal.onlinePresence.buildProject, {
+    await offlineProviderBuild(t, {
       tenantId,
       planId,
       expectedRevision: built.revision,
@@ -473,7 +558,7 @@ test("source changes between saved brief and materialization stop before any pro
   });
   expect(saved.ok).toBe(true);
   await t.run((ctx) => ctx.db.patch(doc, { text: "Acme now serves a different audience." }));
-  const result = await t.mutation(internal.onlinePresence.buildProject, {
+  const result = await offlineProviderBuild(t, {
     tenantId,
     planId,
     expectedRevision: saved.revision,
@@ -491,7 +576,7 @@ test("missing active qualification fails closed; deleting tenants cannot create 
     brief,
   });
   await expect(
-    t.mutation(internal.onlinePresence.buildProject, {
+    offlineProviderBuild(t, {
       tenantId,
       planId,
       expectedRevision: saved.revision,
@@ -544,7 +629,16 @@ test("a qualified build produces real multiple pages and immutable provenance, w
     expectedRevision: session.revision,
     brief,
   });
-  const built = await t.mutation(internal.onlinePresence.buildProject, {
+  // An active native recipe alone cannot bypass the mandatory provider chain.
+  expect(
+    await t.mutation(internal.onlinePresence.buildProject, {
+      tenantId,
+      planId,
+      expectedRevision: saved.revision,
+    }),
+  ).toMatchObject({ ok: false, reason: "required_design_pipeline" });
+  expect(await t.run((ctx) => ctx.db.query("webProjectVersions").collect())).toEqual([]);
+  const built = await offlineProviderBuild(t, {
     tenantId,
     planId,
     expectedRevision: saved.revision,
@@ -557,7 +651,7 @@ test("a qualified build produces real multiple pages and immutable provenance, w
   expect(rows[0]?.sourceRefs).toEqual([expect.stringMatching(/^user:[^#]+#[a-f0-9]{64}$/)]);
   expect(rows[0]?.sourceRefs[0]?.startsWith(`${brief.sourceRefs[0]}#`)).toBe(true);
   expect(rows[0]?.recipeRef?.inputHash).toMatch(/^sha256:[a-f0-9]{64}$/);
-  const repeated = await t.mutation(internal.onlinePresence.buildProject, {
+  const repeated = await offlineProviderBuild(t, {
     tenantId,
     planId,
     expectedRevision: built.revision,
@@ -582,7 +676,7 @@ test("a qualified build produces real multiple pages and immutable provenance, w
     expectedRevision: built.revision,
     brief: { ...brief, headline: "Outdoor spaces for everyday life" },
   });
-  const rebuilt = await t.mutation(internal.onlinePresence.buildProject, {
+  const rebuilt = await offlineProviderBuild(t, {
     tenantId,
     planId,
     expectedRevision: revised.revision,
@@ -599,7 +693,7 @@ test("a qualified build produces real multiple pages and immutable provenance, w
     (await t.query(internal.onlinePresence.contextForTenant, { tenantId, planId })).artifact,
   ).toBeNull();
   expect(
-    await t.mutation(internal.onlinePresence.buildProject, {
+    await offlineProviderBuild(t, {
       tenantId,
       planId,
       expectedRevision: rebuilt.revision,
@@ -621,7 +715,7 @@ test("actual supplied inquiry wording and booking URL produce a working structur
     brief: { ...brief, ctaLabel: "Book a consultation", ctaHref, contactConsent: consent },
   });
   expect(saved.ok).toBe(true);
-  const built = await t.mutation(internal.onlinePresence.buildProject, {
+  const built = await offlineProviderBuild(t, {
     tenantId,
     planId,
     expectedRevision: saved.revision,
@@ -741,7 +835,12 @@ test("the real specialist loop prepares owned imagery, saves a brief, and builds
   const actionCtx = {
     runQuery: t.query.bind(t),
     runMutation: t.mutation.bind(t),
-    runAction: t.action.bind(t),
+    // Exercise the actual specialist tools but replace only paid design execution with the
+    // explicitly offline durable provider fixture; all unrelated actions remain real.
+    runAction: (reference: FunctionReference<"action">, args: unknown) =>
+      getFunctionName(reference) === "onlinePresenceDesign:build"
+        ? offlineProviderBuild(t, args as Parameters<typeof offlineProviderBuild>[1])
+        : t.action(reference, args as never),
   } as unknown as Parameters<typeof runSpecialistTurn>[0];
   // The first real tool turn materializes the opaque ref. The following turn exercises a safe
   // preparation retry and supplies exactly that server-produced asset in the model's brief.
@@ -878,7 +977,7 @@ test("the real specialist loop prepares owned imagery, saves a brief, and builds
       about: designedBrief.about,
       contactConsent: consent,
     });
-    const built = await t.mutation(internal.onlinePresence.buildProject, {
+    const built = await offlineProviderBuild(t, {
       tenantId,
       planId,
       expectedRevision: saved.revision,
@@ -951,7 +1050,7 @@ test("the real specialist loop prepares owned imagery, saves a brief, and builds
     brief: { ...brief, headline: "Keep the existing illustration" },
   });
   expect(unavailable.ok).toBe(false);
-  const refusedBuild = await t.mutation(internal.onlinePresence.buildProject, {
+  const refusedBuild = await offlineProviderBuild(t, {
     tenantId,
     planId,
     expectedRevision: unavailable.revision,

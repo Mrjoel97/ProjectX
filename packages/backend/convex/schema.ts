@@ -4498,6 +4498,32 @@ export default defineSchema({
   /** Immutable structured version and its deterministic rendered artifact. */
 
   webProjectVersions: defineTable({
+    requiresProviderReview: v.optional(v.boolean()),
+    providerReceipt: v.optional(
+      v.object({
+        pipelineVersion: v.literal("stitch-kimi-required-v1"),
+        runRef: v.string(),
+        stitchHash: v.string(),
+        kimiHash: v.string(),
+        sourceFingerprint: v.string(),
+        briefHash: v.string(),
+        layoutHash: v.string(),
+        artifactHashes: v.array(v.object({ pageSlug: v.string(), contentHash: v.string() })),
+        pendingBrowser: v.literal(true),
+        stitchHtmlStorageId: v.optional(v.id("_storage")),
+        stitchImageStorageId: v.optional(v.id("_storage")),
+      }),
+    ),
+    browserReview: v.optional(
+      v.object({
+        contentHash: v.string(),
+        artifactHashes: v.array(v.object({ pageSlug: v.string(), contentHash: v.string() })),
+        providerReceiptHash: v.string(),
+        status: v.union(v.literal("passed"), v.literal("failed")),
+        reportHash: v.string(),
+        checkedAt: v.number(),
+      }),
+    ),
     tenantId: v.string(),
     projectId: v.id("webProjects"),
     version: v.number(),
@@ -4556,6 +4582,22 @@ export default defineSchema({
         inputHash: v.string(),
         rendererVersion: v.optional(v.string()),
         designProfile: v.object({
+          layoutPlan: v.optional(
+            v.object({
+              version: v.literal(1),
+              hero: v.union(
+                v.literal("overlay-left"),
+                v.literal("overlay-centered"),
+                v.literal("split"),
+              ),
+              sectionLayout: v.union(v.literal("editorial-columns"), v.literal("stacked")),
+              services: v.union(v.literal("rows"), v.literal("columns")),
+              gallery: v.union(v.literal("grid"), v.literal("carousel")),
+              spacing: v.union(v.literal("relaxed"), v.literal("compact")),
+              headingScale: v.union(v.literal("balanced"), v.literal("display")),
+              motion: v.union(v.literal("none"), v.literal("subtle")),
+            }),
+          ),
           artDirection: v.optional(
             v.union(v.literal("editorial"), v.literal("studio"), v.literal("technical")),
           ),

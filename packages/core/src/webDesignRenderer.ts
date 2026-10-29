@@ -12,6 +12,7 @@ import {
   verifiedDesignKnowledgeBundle,
 } from "./designKnowledge";
 import { webAssetPath } from "./webAssets";
+import { canonicalWebLayoutPlan, type WebLayoutPlan } from "./webLayoutPlan";
 import {
   canonicalWebDocument,
   escapeWebText,
@@ -20,7 +21,7 @@ import {
   sha256Bytes,
 } from "./webRuntime";
 
-export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v8" as const;
+export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v9" as const;
 const encoder = new TextEncoder();
 
 /** The renderer depends on the selected records, not merely the bundle's role labels. */
@@ -106,11 +107,11 @@ function designedInquiry(node: WebFormNode, route: WebRouteContext): string {
 }
 
 /** A fixed, script-free carousel of approved media. No autoplay, remote assets or hidden slides. */
-function designedGallery(node: WebSectionNode, route: WebRouteContext): string | undefined {
+function designedGallery(node: WebSectionNode, route: WebRouteContext, plan?: WebLayoutPlan): string | undefined {
   if (node.id !== "gallery" || !node.children.every((child) => child.kind === "media"))
     return undefined;
   const images = node.children.filter((child) => child.kind === "media");
-  const carousel = images.length >= 3;
+  const carousel = images.length >= 3 && plan?.gallery !== "grid";
   const label = node.heading ?? "Gallery";
   const slides = images.map((image, index) => `<li id="gallery-image-${index + 1}" class="gallery-slide" aria-label="Image ${index + 1} of ${images.length}">${renderWebMedia(image, route)}<p class="gallery-caption">${escapeWebText(image.alt)}</p></li>`).join("");
   const links = carousel ? `<nav class="gallery-controls" aria-label="Choose gallery image">${images.map((_, index) => `<a href="#gallery-image-${index + 1}" aria-label="View image ${index + 1}">${index + 1}</a>`).join("")}</nav>` : "";
@@ -128,6 +129,7 @@ export function renderDesignedWebDocument(
   const parts = renderWebPageParts(document, route);
   const direction = profile.artDirection ?? "editorial";
   const surfaceStyle = profile.surfaceStyle ?? "minimal";
+  const layoutPlan = profile.layoutPlan;
   const baseColors = PALETTES[direction];
   const colors =
     surfaceStyle === "glass"
@@ -151,7 +153,7 @@ export function renderDesignedWebDocument(
         : colors.ink;
   const spacing = 36 - profile.dials.density * 2;
   const width = 1180 + (profile.dials.variance - 5) * 18;
-  const motion = profile.dials.motion <= 2 ? 0 : profile.dials.motion * 12;
+  const motion = profile.dials.motion <= 2 || layoutPlan?.motion === "none" ? 0 : profile.dials.motion * 12;
   const hoverTransform = motion === 0 ? "none" : "translateY(-2px)";
   const radius = surfaceStyle === "clay" ? 24 : 0;
   const copyMeasure = profile.patternId === "hero-features-cta" ? "700px" : "100%";
@@ -174,7 +176,7 @@ export function renderDesignedWebDocument(
       : entry.node.kind === "form"
         ? designedInquiry(entry.node, parts.route)
         : entry.node.kind === "section"
-          ? (designedGallery(entry.node, parts.route) ?? entry.html)
+          ? (designedGallery(entry.node, parts.route, layoutPlan) ?? entry.html)
           : entry.html;
   const heroIndex = hero ? parts.nodes.indexOf(hero) : -1;
   const cta = hero
@@ -298,8 +300,27 @@ h2,h3{text-wrap:balance}p{text-wrap:pretty}.hero p:not(.eyebrow){max-width:48ch}
 @media(max-width:767px){.gallery-track{grid-template-columns:1fr;gap:24px}.gallery-carousel .gallery-slide{flex-basis:88%}.gallery-carousel .gallery-track{gap:16px}.gallery-heading{gap:12px}.gallery-heading p{font-size:1rem}}
 @media(prefers-reduced-motion:reduce){.gallery-carousel .gallery-track{scroll-behavior:auto;scroll-snap-type:none}}
 `;
+  const layoutCss = layoutPlan ? `
+body[data-layout-spacing=relaxed] .content-block{padding-block:80px}body[data-layout-spacing=compact] .content-block{padding-block:40px}
+body[data-layout-hero] .hero-composition.has-media{isolation:isolate;position:relative;overflow:hidden;margin:0 0 32px;gap:0;min-height:640px;padding:56px;display:flex;align-items:center;background:#14231f;color:#ffffff}
+body[data-layout-hero] .has-media .hero-rail.hero-visual{position:absolute;inset:0;z-index:-2;width:100%;height:100%;padding:0;background:transparent;border-radius:0}
+body[data-layout-hero] .has-media .hero-visual .web-media{width:100%;height:100%;aspect-ratio:auto!important}
+body[data-layout-hero] .hero-composition.has-media:before{content:"";position:absolute;inset:0;z-index:-1;background:rgba(0,0,0,.64);pointer-events:none}
+body[data-layout-hero] .has-media .hero-copy:before{display:none}body[data-layout-hero] .has-media .hero-copy{position:relative;z-index:0;display:block;width:100%;max-width:780px;margin:0;padding:0;background:transparent;backdrop-filter:none;border:0;box-shadow:none;color:inherit;text-align:left}
+body[data-layout-hero] .has-media .hero{display:block;color:inherit;background:transparent}body[data-layout-hero] .has-media .hero h1{margin:0;max-width:18ch;font-size:clamp(2.3rem,5.5vw,5.4rem);text-wrap:balance}body[data-layout-hero] .has-media .hero p{margin:24px 0 0;max-width:48ch;color:inherit;text-align:inherit;font-size:1.1rem;line-height:1.6}
+body[data-layout-hero] .has-media .hero-action{margin-top:28px}body[data-layout-hero] .has-media .hero-action .cta,body[data-layout-hero] .has-media .hero-action button{border-color:#ffffff}
+body[data-layout-hero=overlay-centered] .has-media .hero-copy{margin-inline:auto;text-align:center}body[data-layout-hero=overlay-centered] .has-media .hero h1,body[data-layout-hero=overlay-centered] .has-media .hero p{margin-inline:auto}
+body[data-layout-hero=split] .hero-composition.has-media{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:48px;padding:48px 0;min-height:0;background:transparent;color:var(--ink);overflow:visible}body[data-layout-hero=split] .hero-composition.has-media:before{display:none}body[data-layout-hero=split] .has-media .hero-rail.hero-visual{position:relative;inset:auto;z-index:auto;height:auto}body[data-layout-hero=split] .has-media .hero-visual .web-media{height:auto;aspect-ratio:4/5!important}body[data-layout-hero=split] .has-media .hero-action .cta,body[data-layout-hero=split] .has-media .hero-action button{border-color:var(--ink)}
+body[data-layout-heading=balanced] .has-media .hero h1{font-size:clamp(2.3rem,4.4vw,4.4rem)}body[data-layout-heading=display] .has-media .hero h1{font-size:clamp(2.6rem,6vw,6rem)}body[data-layout-heading] h2{max-width:24ch;text-wrap:balance}
+body[data-layout-sections=editorial-columns] #about,body[data-layout-sections=editorial-columns] #proof{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:24px 56px;align-items:start}body[data-layout-sections=editorial-columns] #about>h2,body[data-layout-sections=editorial-columns] #proof>h2{grid-column:1;grid-row:1/20}body[data-layout-sections=editorial-columns] #about>p,body[data-layout-sections=editorial-columns] #proof>p{grid-column:2;margin:0;max-width:55ch}
+body[data-layout-sections=stacked] #about,body[data-layout-sections=stacked] #proof{display:block}body[data-layout-sections=stacked] #about>p,body[data-layout-sections=stacked] #proof>p{max-width:65ch;margin:20px 0}
+body[data-layout-services=rows] #services{display:block}body[data-layout-services=rows] #services>p{display:block;max-width:none;padding:24px 0;margin:0;border-bottom:1px solid var(--rule);font-size:clamp(1.25rem,2.2vw,1.9rem);line-height:1.45}
+body[data-layout-services=columns] #services{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 48px}body[data-layout-services=columns] #services>h2{grid-column:1/-1;grid-row:auto}body[data-layout-services=columns] #services>p{padding:0;margin:0;font-size:1.2rem;line-height:1.6}
+@media(max-width:767px){body[data-layout-hero] .hero-composition.has-media{padding:40px 24px;min-height:600px}body[data-layout-hero] .has-media .hero h1{font-size:clamp(2.2rem,9vw,3.4rem);max-width:18ch}body[data-layout-hero=split] .hero-composition.has-media{grid-template-columns:1fr;gap:28px;min-height:0;padding:24px 0}body[data-layout-hero] .has-media .hero p{font-size:1rem;line-height:1.6}body[data-layout-sections=editorial-columns] #about,body[data-layout-sections=editorial-columns] #proof,body[data-layout-services=columns] #services{display:block}body[data-layout-sections=editorial-columns] #about>p,body[data-layout-sections=editorial-columns] #proof>p,body[data-layout-services=columns] #services>p{margin:20px 0}body[data-layout-spacing=relaxed] .content-block{padding-block:44px}body[data-layout-spacing=compact] .content-block{padding-block:28px}}
+` : "";
+  const layoutAttributes = layoutPlan ? ` data-layout-hero="${layoutPlan.hero}" data-layout-spacing="${layoutPlan.spacing}" data-layout-heading="${layoutPlan.headingScale}" data-layout-sections="${layoutPlan.sectionLayout}" data-layout-services="${layoutPlan.services}"` : "";
   const motionCss =
-    profile.dials.motion <= 2
+    motion === 0
       ? "html,.gallery-carousel .gallery-track{scroll-behavior:auto}button:active,.cta:active{transform:none}"
       : `
 @media(prefers-reduced-motion:no-preference){
@@ -334,7 +355,7 @@ button,.cta{transition:transform var(--motion-feedback) var(--motion-ease)}
     ? `<nav aria-label="Footer"><ul>${navigationLinks}</ul></nav>`
     : "";
   const description = parts.page.description ?? parts.document.description ?? parts.document.title;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${galleryCss}${motionCss}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${galleryCss}${layoutCss}${motionCss}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"${layoutAttributes}><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer></body></html>`;
 }
 
 export function renderDesignedWebDocumentBytes(
@@ -371,6 +392,7 @@ export function designedWebDocumentHashMaterial(
     ...(profile.pageOverride === undefined ? {} : { pageOverride: profile.pageOverride }),
     ...(profile.artDirection === undefined ? {} : { artDirection: profile.artDirection }),
     ...(profile.surfaceStyle === undefined ? {} : { surfaceStyle: profile.surfaceStyle }),
+    ...(profile.layoutPlan === undefined ? {} : { layoutPlan: canonicalWebLayoutPlan(profile.layoutPlan) }),
   };
   return encoder.encode(
     `${WEB_DESIGN_RENDERER_VERSION}\n${canonicalWebDocument(document)}\n${JSON.stringify(canonicalProfile)}\n${rendered}`,

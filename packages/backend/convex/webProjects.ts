@@ -8,6 +8,7 @@ import {
   renderDesignedWebDocumentBytes,
   WEB_DESIGN_RENDERER_VERSION,
 } from "@pikar/core/webDesignRenderer";
+import type { WebLayoutPlan } from "@pikar/core/webLayoutPlan";
 import {
   canonicalWebDocument,
   hashWebDocument,
@@ -20,7 +21,14 @@ import type { Id } from "./_generated/dataModel";
 import { internalQuery, type MutationCtx } from "./_generated/server";
 import { appendAudit } from "./audit";
 import { tenantMutation, tenantQuery } from "./lib/functions";
+import {
+  type PresenceProviderReceipt,
+  presencePublicationReady,
+  validateProviderReceipt,
+} from "./lib/presencePublication";
 import { assertTenantWritable } from "./lib/tenantLifecycle";
+export type WebProviderReceipt = PresenceProviderReceipt;
+
 import { merchantReadiness } from "./merchantCommerce";
 import { resolveDocumentAssets } from "./webAssets";
 
@@ -63,6 +71,7 @@ export type RecipeRef = {
   inputHash: string;
   rendererVersion?: string;
   designProfile: {
+    layoutPlan?: WebLayoutPlan;
     artDirection?: "editorial" | "studio" | "technical";
     surfaceStyle?: "minimal" | "glass" | "clay";
     bundleHash: string;
@@ -170,6 +179,7 @@ async function appendVersion(
   originRecipeRef?: RecipeRef,
   sourceRefs?: readonly string[],
   sourceWarnings?: readonly { code: string; sourceRef?: string }[],
+  providerReceipt?: PresenceProviderReceipt,
 ): Promise<{ version: number; contentHash: string; byteLength: number }> {
   const validated = validatedDocument(document, project.kind);
   const assetSnapshots = await resolveDocumentAssets(ctx, project.tenantId, validated);
@@ -193,6 +203,7 @@ async function appendVersion(
       "web-design-renderer-v5",
       "web-design-renderer-v6",
       "web-design-renderer-v7",
+      "web-design-renderer-v8",
       WEB_DESIGN_RENDERER_VERSION,
     ].includes(recipeRef.rendererVersion);
   if (recipeRef?.rendererVersion !== undefined && !designed)
@@ -218,6 +229,7 @@ async function appendVersion(
     };
   });
   const totalBytes = artifacts.reduce((sum, artifact) => sum + artifact.byteLength, 0);
+  if (providerReceipt) validateProviderReceipt(providerReceipt, artifacts);
   if (totalBytes > 256 * 1024) throw new Error("INVALID_WEB_DOCUMENT");
   const version = (previous?.version ?? 0) + 1;
   await ctx.db.insert("webProjectVersions", {
@@ -232,6 +244,11 @@ async function appendVersion(
     artifactByteLength: totalBytes,
     createdBy,
     createdAt: Date.now(),
+    ...(providerReceipt
+      ? { providerReceipt, requiresProviderReview: true }
+      : previous?.requiresProviderReview || previous?.providerReceipt
+        ? { requiresProviderReview: true }
+        : {}),
     ...(previous ? { basedOnVersion: previous.version } : {}),
     sourceRefs: sourceRefs ? [...sourceRefs] : (previous?.sourceRefs ?? []),
     assetSnapshots,
@@ -257,6 +274,7 @@ export async function createProjectWithVersion(
     createdBy: string;
     sourceRefs?: readonly string[];
     sourceWarnings?: readonly { code: string; sourceRef?: string }[];
+    providerReceipt?: PresenceProviderReceipt;
   },
 ): Promise<{
   projectId: Id<"webProjects">;
@@ -310,6 +328,7 @@ export async function createProjectWithVersion(
     args.recipeRef,
     args.sourceRefs,
     args.sourceWarnings,
+    args.providerReceipt,
   );
   await ctx.db.patch(projectId, {
     draftVersion: version.version,
@@ -335,6 +354,7 @@ export async function reviseProjectWithVersion(
     sourceRefs?: readonly string[];
     recipeRef?: RecipeRef;
     sourceWarnings?: readonly { code: string; sourceRef?: string }[];
+    providerReceipt?: PresenceProviderReceipt;
   },
 ) {
   await assertTenantWritable(ctx, ctx.tenantId);
@@ -350,6 +370,7 @@ export async function reviseProjectWithVersion(
     args.recipeRef,
     args.sourceRefs,
     args.sourceWarnings,
+    args.providerReceipt,
   );
   const revision = project.revision + 1;
   await ctx.db.patch(args.projectId, {
@@ -413,6 +434,7 @@ export const approveVersion = tenantMutation({
       .first();
     if (!version || version.contentHash !== args.contentHash)
       throw new Error("VERSION_HASH_MISMATCH");
+    if (!presencePublicationReady(version)) throw new Error("DESIGN_REVIEW_REQUIRED");
     await ctx.db.patch(args.projectId, {
       approvedVersion: args.version,
       approvedContentHash: args.contentHash,
@@ -493,6 +515,7 @@ async function publish(
     .first();
   if (!version || version.contentHash !== args.contentHash)
     return fail("render_failed", "VERSION_UNAVAILABLE");
+  if (!presencePublicationReady(version)) return fail("unavailable", "DESIGN_REVIEW_REQUIRED");
   const revision = project.revision + 1;
   await ctx.db.patch(project._id, {
     publishedVersion: args.version,
@@ -631,12 +654,13 @@ export const getVersion = tenantQuery({
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project || project.tenantId !== ctx.tenantId) return null;
-    return ctx.db
+    const version = await ctx.db
       .query("webProjectVersions")
       .withIndex("by_tenant_project_version", (q) =>
         q.eq("tenantId", ctx.tenantId).eq("projectId", args.projectId).eq("version", args.version),
       )
       .first();
+    return version ? { ...version, browserQualityReady: presencePublicationReady(version) } : null;
   },
 });
 

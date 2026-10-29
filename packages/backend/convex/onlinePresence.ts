@@ -1,3 +1,4 @@
+import { validateDesignProfileRef } from "@pikar/core/designKnowledge";
 import { merchantSetupSourceRefs } from "@pikar/core/merchantSetup";
 import {
   assessOnlinePresenceBrief,
@@ -8,6 +9,7 @@ import {
   type OnlinePresenceWarning,
 } from "@pikar/core/onlinePresence";
 import { parseWebAssetRef } from "@pikar/core/webAssets";
+import { canonicalWebLayoutPlan, validateWebLayoutPlan } from "@pikar/core/webLayoutPlan";
 import { materializeWebRecipe, validateWebRecipeMedia } from "@pikar/core/webRecipes";
 import { sha256Bytes } from "@pikar/core/webRuntime";
 import { v } from "convex/values";
@@ -15,8 +17,9 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
 import { assertTenantWritable, internalMutation } from "./lib/tenantLifecycle";
-import { shopSetupReviewForTenant, type ShopSetupReview } from "./onlinePresenceShop";
+import { type ShopSetupReview, shopSetupReviewForTenant } from "./onlinePresenceShop";
 import { imageSource, listImageCandidates, resolveDocumentAssets } from "./webAssets";
+import type { WebProviderReceipt } from "./webProjects";
 import { createProjectWithVersion, reviseProjectWithVersion } from "./webProjects";
 import { materializeActiveRecipe } from "./webRecipes";
 
@@ -703,8 +706,107 @@ export const saveBrief = internalMutation({
   },
 });
 
-export const buildProject = internalMutation({
+async function prepareRequiredDesign(
+  ctx: MutationCtx,
+  args: { tenantId: string; planId: Id<"plans">; expectedRevision: number },
+) {
+  await assertTenantWritable(ctx, args.tenantId);
+  const session = await ownedSession(ctx, args.tenantId, args.planId);
+  if (session.revision !== args.expectedRevision) throw new Error("STALE_REVISION");
+  const sources = await resolveSources(ctx, session, selectedRefs(session.brief));
+  const assessment = assessOnlinePresenceBrief(session.brief, sources);
+  if (!assessment.ok)
+    return {
+      ok: false as const,
+      revision: session.revision,
+      assessment: statusAssessment(assessment),
+    };
+  if (!(await assetSourcesCurrent(ctx, args.tenantId, assessment)))
+    return { ok: false as const, revision: session.revision, reason: "asset_source_unavailable" };
+  if (!brandColorSourced(assessment))
+    return { ok: false as const, revision: session.revision, reason: "brand_color_not_sourced" };
+  if (
+    assessment.brief.contactConsent &&
+    !session.humanMessages.some((message) =>
+      message.text.includes(assessment.brief.contactConsent ?? ""),
+    )
+  )
+    return { ok: false as const, revision: session.revision, reason: "consent_not_user_supplied" };
+  if (
+    assessment.brief.ctaHref &&
+    !assessment.sources.some((source) => source.text.includes(assessment.brief.ctaHref ?? ""))
+  )
+    return { ok: false as const, revision: session.revision, reason: "destination_not_sourced" };
+  if (
+    assessment.brief.ctaHref &&
+    !(await localDestinationAvailable(ctx, args.tenantId, assessment.brief.ctaHref))
+  )
+    return { ok: false as const, revision: session.revision, reason: "destination_unavailable" };
+  if (
+    hash(session.sourceSnapshots) !==
+    hash(assessment.sources.map(({ ref, revision }) => ({ ref, revision })))
+  )
+    return { ok: false as const, revision: session.revision, reason: "source_revision_changed" };
+  const briefHash = hash({ brief: assessment.brief, sourceSnapshots: session.sourceSnapshots });
+  if (session.builtBriefHash === briefHash) {
+    const artifact = await artifactFor(ctx, session);
+    if (artifact) return { ok: true as const, revision: session.revision, artifact };
+    return { ok: false as const, revision: session.revision, reason: "project_missing" };
+  }
+  const existing = session.projectId ? await ctx.db.get(session.projectId) : null;
+  if (existing && existing.tenantId !== args.tenantId)
+    throw new Error("ONLINE_PRESENCE_UNAVAILABLE");
+  if (session.projectId && !existing)
+    return { ok: false as const, revision: session.revision, reason: "project_missing" };
+  const slug =
+    existing?.slug ??
+    `presence-${hash({ tenantId: args.tenantId, sessionId: session._id }).slice(0, 24)}`;
+  const values =
+    assessment.recipeId === "business-site"
+      ? { ...assessment.input, pageMode: "multi-page", projectSlug: slug }
+      : assessment.input;
+  const prepared = await materializeActiveRecipe(ctx, assessment.recipeId, values);
+  if (existing && existing.kind !== prepared.document.kind)
+    return { ok: false as const, revision: session.revision, reason: "project_kind_changed" };
+
+  return {
+    ok: true as const,
+    session,
+    assessment,
+    prepared,
+    existing,
+    slug,
+    briefHash,
+    sourceFingerprint: hash(assessment.sources.map(({ ref, revision }) => ({ ref, revision }))),
+  };
+}
+
+export const designSnapshot = internalMutation({
   args: { tenantId: v.string(), planId: v.id("plans"), expectedRevision: v.number() },
+  handler: async (ctx, args) => {
+    const snapshot = await prepareRequiredDesign(ctx, args);
+    if (!snapshot.ok || !snapshot.prepared || !snapshot.session || !snapshot.assessment)
+      return snapshot;
+    return {
+      ok: true as const,
+      revision: snapshot.session.revision,
+      briefHash: snapshot.briefHash,
+      sourceFingerprint: snapshot.sourceFingerprint,
+      brief: snapshot.assessment.brief,
+      document: snapshot.prepared.document,
+      recipeRef: snapshot.prepared.recipeRef,
+      slug: snapshot.slug,
+    };
+  },
+});
+
+export const buildProject = internalMutation({
+  args: {
+    tenantId: v.string(),
+    planId: v.id("plans"),
+    expectedRevision: v.number(),
+    designCompletion: v.optional(v.object({ profile: v.any(), providerReceipt: v.any() })),
+  },
   handler: async (
     ctx,
     args,
@@ -715,60 +817,55 @@ export const buildProject = internalMutation({
     reason?: string;
     assessment?: StatusAssessment;
   }> => {
-    await assertTenantWritable(ctx, args.tenantId);
-    const session = await ownedSession(ctx, args.tenantId, args.planId);
-    if (session.revision !== args.expectedRevision) throw new Error("STALE_REVISION");
-    const sources = await resolveSources(ctx, session, selectedRefs(session.brief));
-    const assessment = assessOnlinePresenceBrief(session.brief, sources);
-    if (!assessment.ok)
-      return { ok: false, revision: session.revision, assessment: statusAssessment(assessment) };
-    if (!(await assetSourcesCurrent(ctx, args.tenantId, assessment)))
-      return { ok: false, revision: session.revision, reason: "asset_source_unavailable" };
-    if (!brandColorSourced(assessment))
-      return { ok: false, revision: session.revision, reason: "brand_color_not_sourced" };
+    const snapshot = await prepareRequiredDesign(ctx, args);
+    if (!snapshot.ok || !snapshot.prepared || !snapshot.session || !snapshot.assessment)
+      return snapshot;
+    const { session, assessment, prepared, existing, slug, briefHash, sourceFingerprint } =
+      snapshot;
+    if (!args.designCompletion)
+      return { ok: false, revision: session.revision, reason: "required_design_pipeline" };
+    const completion = args.designCompletion;
     if (
-      assessment.brief.contactConsent &&
-      !session.humanMessages.some((message) =>
-        message.text.includes(assessment.brief.contactConsent ?? ""),
+      !validateDesignProfileRef(completion.profile) ||
+      !validateWebLayoutPlan(completion.profile.layoutPlan)
+    )
+      throw Error("PRESENCE_DESIGN_PROFILE_INVALID");
+    const providerReceipt = completion.providerReceipt as WebProviderReceipt;
+    if (
+      providerReceipt.briefHash !== briefHash ||
+      providerReceipt.sourceFingerprint !== sourceFingerprint ||
+      providerReceipt.layoutHash !== hash(canonicalWebLayoutPlan(completion.profile.layoutPlan))
+    )
+      throw Error("PRESENCE_DESIGN_CONTEXT_CHANGED");
+    const evidence = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) =>
+        q.eq("correlationId", "presence-design:" + args.planId + ":" + providerReceipt.runRef),
       )
-    )
-      return { ok: false, revision: session.revision, reason: "consent_not_user_supplied" };
+      .take(5);
+    const claimed = evidence[0],
+      terminal = evidence.at(-1);
     if (
-      assessment.brief.ctaHref &&
-      !assessment.sources.some((source) => source.text.includes(assessment.brief.ctaHref ?? ""))
+      !claimed ||
+      !terminal ||
+      claimed.tenantId !== args.tenantId ||
+      claimed.actor !== "presence-design-control" ||
+      claimed.payload.workflow !== true ||
+      claimed.payload.revision !== session.revision ||
+      claimed.payload.sourceFingerprint !== sourceFingerprint ||
+      terminal.eventType !== "presence_design.kimi_complete" ||
+      terminal.payload.designHash !== providerReceipt.stitchHash ||
+      terminal.payload.proposalHash !== providerReceipt.kimiHash ||
+      terminal.payload.artifactsHash !==
+        hash(
+          providerReceipt.artifactHashes.map(({ pageSlug, contentHash }) => ({
+            pageSlug,
+            contentHash,
+          })),
+        )
     )
-      return { ok: false, revision: session.revision, reason: "destination_not_sourced" };
-    if (
-      assessment.brief.ctaHref &&
-      !(await localDestinationAvailable(ctx, args.tenantId, assessment.brief.ctaHref))
-    )
-      return { ok: false, revision: session.revision, reason: "destination_unavailable" };
-    if (
-      hash(session.sourceSnapshots) !==
-      hash(assessment.sources.map(({ ref, revision }) => ({ ref, revision })))
-    )
-      return { ok: false, revision: session.revision, reason: "source_revision_changed" };
-    const briefHash = hash({ brief: assessment.brief, sourceSnapshots: session.sourceSnapshots });
-    if (session.builtBriefHash === briefHash) {
-      const artifact = await artifactFor(ctx, session);
-      if (artifact) return { ok: true, revision: session.revision, artifact };
-      return { ok: false, revision: session.revision, reason: "project_missing" };
-    }
-    const existing = session.projectId ? await ctx.db.get(session.projectId) : null;
-    if (existing && existing.tenantId !== args.tenantId)
-      throw new Error("ONLINE_PRESENCE_UNAVAILABLE");
-    if (session.projectId && !existing)
-      return { ok: false, revision: session.revision, reason: "project_missing" };
-    const slug =
-      existing?.slug ??
-      `presence-${hash({ tenantId: args.tenantId, sessionId: session._id }).slice(0, 24)}`;
-    const values =
-      assessment.recipeId === "business-site"
-        ? { ...assessment.input, pageMode: "multi-page", projectSlug: slug }
-        : assessment.input;
-    const prepared = await materializeActiveRecipe(ctx, assessment.recipeId, values);
-    if (existing && existing.kind !== prepared.document.kind)
-      return { ok: false, revision: session.revision, reason: "project_kind_changed" };
+      throw Error("PRESENCE_DESIGN_EVIDENCE_REQUIRED");
+    prepared.recipeRef.designProfile = completion.profile;
     const versionSourceRefs = assessment.sources.map(
       (source) => `${source.ref}#${source.revision}`,
     );
@@ -779,6 +876,7 @@ export const buildProject = internalMutation({
           document: prepared.document,
           expectedRevision: existing.revision,
           recipeRef: prepared.recipeRef,
+          providerReceipt,
           createdBy: args.tenantId,
           sourceRefs: versionSourceRefs,
           sourceWarnings: assessment.warnings,
@@ -789,6 +887,7 @@ export const buildProject = internalMutation({
           title: assessment.brief.businessName,
           document: prepared.document,
           recipeRef: prepared.recipeRef,
+          providerReceipt,
           createdBy: args.tenantId,
           sourceRefs: versionSourceRefs,
           sourceWarnings: assessment.warnings,

@@ -4,6 +4,7 @@ import {
 } from "@pikar/core/onlinePresence";
 import { jsonSchema, tool } from "ai";
 import type { GenericActionCtx } from "convex/server";
+import { makeFunctionReference } from "convex/server";
 import { internal } from "../_generated/api";
 import type { DataModel, Id } from "../_generated/dataModel";
 
@@ -336,7 +337,7 @@ export function buildOnlinePresenceTools(context: {
     }),
     buildOnlinePresenceProject: tool({
       description:
-        "Build or revise the saved private website draft through its qualified recipe. Rechecks current sources and revision. Returns a real version for review; never publishes or enables checkout.",
+        "Build or revise the saved private website with required Stitch design and Kimi implementation. Rechecks owned sources, budget and revision. Returns an exact private version pending visual review; never substitutes an older recipe when providers fail, publishes, or enables checkout.",
       inputSchema: jsonSchema<{ expectedRevision: number }>({
         type: "object",
         properties: { expectedRevision: { type: "integer", minimum: 0 } },
@@ -345,7 +346,7 @@ export function buildOnlinePresenceTools(context: {
       }),
       execute: ({ expectedRevision }) =>
         run(() =>
-          ctx.runMutation(internal.onlinePresence.buildProject, {
+          ctx.runAction(makeFunctionReference<"action">("onlinePresenceDesign:build"), {
             tenantId,
             planId,
             expectedRevision,

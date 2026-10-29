@@ -908,10 +908,13 @@ export const reservePaidCall = internalMutation({
     model: v.string(),
     ceilingCents: v.number(),
     rail: vRail,
+    websiteDesign: v.optional(
+      v.object({ planId: v.id("plans"), revision: v.number(), runRef: v.string() }),
+    ),
   },
   handler: async (
     ctx,
-    { tenantId, callId, model, ceilingCents, rail },
+    { tenantId, callId, model, ceilingCents, rail, websiteDesign },
   ): Promise<Id<"spendEvents">> => {
     if (
       !/^[a-f0-9-]{36}$/.test(callId) ||
@@ -921,6 +924,56 @@ export const reservePaidCall = internalMutation({
     )
       throw new Error("PAID_ADMISSION_INVALID");
     if ((await getGuardrailConfig(ctx)).killSwitch) throw new Error("PAID_KILL_SWITCH");
+    const kimi = model === "or/moonshotai/kimi-k3.1-pro";
+    if (Boolean(websiteDesign) !== kimi || (websiteDesign && rail === "ingest"))
+      throw new Error("PAID_WEBSITE_MODEL_SCOPE_INVALID");
+    if (websiteDesign) {
+      if (
+        !/^[a-f0-9]{16}$/.test(websiteDesign.runRef) ||
+        !Number.isSafeInteger(websiteDesign.revision) ||
+        websiteDesign.revision < 0 ||
+        ceilingCents !== goldenProviderCeilingCents({ kind: "chat", model, maxOutputTokens: 8192 })
+      )
+        throw new Error("PAID_WEBSITE_ADMISSION_INVALID");
+      const plan = await ctx.db.get(websiteDesign.planId);
+      const session = await ctx.db
+        .query("onlinePresenceSessions")
+        .withIndex("by_tenant_plan", (q) =>
+          q.eq("tenantId", tenantId).eq("planId", websiteDesign.planId),
+        )
+        .unique();
+      if (
+        !plan ||
+        plan.tenantId !== tenantId ||
+        !session ||
+        session.threadId !== plan.threadId ||
+        session.revision !== websiteDesign.revision
+      )
+        throw new Error("PAID_WEBSITE_CONTEXT_CHANGED");
+      // An uncertain response must not become a fresh model attempt under a new run identity.
+      const history = await ctx.db
+        .query("spendEvents")
+        .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", tenantId))
+        .take(5001);
+      if (history.length > 5000) throw new Error("PAID_WEBSITE_LEDGER_LIMIT");
+      const settled = new Set(
+        history
+          .filter(
+            (row) =>
+              row.phase === "actual" || (row.phase === "refunded" && row.evalActualUsd === 0),
+          )
+          .map((row) => row.correlationId),
+      );
+      if (
+        history.some(
+          (row) =>
+            row.model === model && row.phase === "reserved" && !settled.has(row.correlationId),
+        )
+      )
+        throw new Error("PAID_WEBSITE_PRIOR_HOLD");
+      if (history.some((row) => row.model === model && row.evalBreach))
+        throw new Error("PAID_WEBSITE_PRIOR_BREACH");
+    }
     const [tenantRail, deploymentRail] =
       rail === "ingest"
         ? (["ingestSpendCents", "deploymentIngestSpendCents"] as const)

@@ -12,19 +12,23 @@ Decision: 2026-10-29. The owner selected Stitch followed by Kimi K3.1 Pro as req
 - Deterministic quality checks return repair instructions for missing pages, broken local destinations, missing headings/images, unsafe markup, lost inquiry endpoints/consent or missing reduced-motion rules. This does not substitute for browser measurement.
 - Stored versions from renderer v7 remain accepted as historical origin records. Their published bytes are unchanged.
 
-## Not yet customer activation
+## Customer workflow integration — 2026-10-29
 
-The new runner is a staging candidate, not wired into `buildOnlinePresenceProject`. The old native recipe workflow remains unchanged. The current supported document cannot express arbitrary Stitch layouts, and the candidate preserves canonical source content exactly while allowing only supported design profiles. It therefore does **not** reproduce the approved arbitrary HTML layout automatically.
+The real `buildOnlinePresenceProject` tool now calls `onlinePresenceDesign.build`. It resolves a fresh tenant-owned source snapshot, requires Stitch and exact Kimi, records durable provider stages, and finalizes a private native project version. Calling the former mutation without provider completion refuses the build; there is no old-template fallback.
 
-Before making the mandatory pipeline live for users:
+- Ordinary tenant Kimi requests use the existing paid ledger with a dedicated exact-model scope, conservative 428-cent maximum reservation, no model fallback, no hidden retries, and retained uncertain holds. The staging comparison's original $5 envelope is separate and is not automatically inherited by this runtime. No paid calls were made during this integration.
+- Stitch requires the server declaration `PRESENCE_STITCH_BILLING=included_free_no_overage`; a key alone does not establish this. Reference HTML and screenshot blobs are registered to the tenant before subsequent paid work and tracked for account erasure. Completion recovery avoids re-running either provider after a finalization disconnect.
+- Renderer v9 accepts a validated layout plan for hero placement, section composition, services, galleries, spacing, type scale and restrained motion. These are meaningful native layout choices, but **not an arbitrary Stitch HTML importer** or a guarantee that every Stitch composition is reproduced. Historical v8 artifacts remain readable.
+- Immutable versions hold provider and artifact hashes. New provider versions and their edits cannot be approved or published until the exact version has a passing browser receipt. The Sites editor displays pending/failed review and disables publishing accordingly. Database field order is normalized before receipt comparisons.
+- A read-only browser inspector and server-only report endpoint check every page at desktop 1440px, mobile 390px, and actual reduced-motion 390px. Missing or stale reports fail; uncertain photographic contrast requires review. Reports also require separate fidelity evidence and cannot be supplied by an ordinary client.
 
-1. Add a reviewed ordinary-tenant Kimi budget contract using real tenant attribution; do not reuse the fixture-only evaluation envelope. Stitch billing/quota must also be governed for the connected account.
-2. Extend the validated layout representation and importer so Kimi can preserve the Stitch composition without arbitrary HTML, scripts, invented business claims or model-owned commerce authority.
-3. Add an automated browser worker to inspect exact artifacts at desktop/mobile sizes, verify contrast, interaction, image loading, reduced motion and design fidelity, and issue bounded repair requests. Static pass is always marked `browserReviewRequired`.
-4. Persist those exact artifact/provider/browser receipts with the native project version and require them when approving/publishing new mandatory-pipeline versions. Preserve existing historical publications.
-5. Route the user workflow through that qualified chain; validate real forms and the separately governed merchant checkout before announcing operational websites/shops.
+### Remaining activation work
 
-No customer activation, autonomous browser repair, payment qualification or production deployment is claimed here. These explicit remaining tasks prevent a polished preview from being mistaken for a completed customer workflow.
+The deployed automated browser worker, screenshot-based fidelity/overlay review, and bounded repair loop are **not connected yet**. The internal report endpoint is not itself a worker. New required-provider versions therefore remain private until real exact-artifact review is supplied; no passing review is fabricated. A source identity refresh invalidates stale qualification rather than creating evidence. Fresh recipe qualification and a bounded staging run are still required before customer activation.
+
+The generic tenant lifecycle action wrapper was found to receive definition metadata rather than runtime arguments; this new action explicitly binds its tenant storage scope. Auditing other existing users of that wrapper is a separate outstanding repository issue.
+
+Forms and merchant checkout still require their separate end-to-end qualification. No autonomous browser repair, production deployment, or completed operational shop is claimed.
 
 ### Preview carousel refinement
 

@@ -12,6 +12,10 @@ const state = vi.hoisted(() => ({
     contentHash: string;
     document: { pages: { slug: string }[] };
     assetSnapshots?: { assetRef: string }[];
+    requiresProviderReview?: boolean;
+    providerReceipt?: { runRef: string };
+    browserQualityReady?: boolean;
+    browserReview?: { status: "passed" | "failed" };
   }[],
   calls: [] as { name: string; args: unknown }[],
   queries: [] as { name: string; args: unknown }[],
@@ -122,6 +126,41 @@ const click = async (text: string) => {
 };
 
 describe("human website review controls", () => {
+  test("generated designs cannot be approved or published before the server confirms exact visual evidence", async () => {
+    state.versions[0]!.providerReceipt = { runRef: "design-run" };
+    state.versions[0]!.browserReview = { status: "passed" };
+    await mount(3);
+    expect(button("Approve this version").disabled).toBe(true);
+    expect(container.textContent).toContain("Visual quality review pending");
+    expect(container.textContent).not.toContain("Loading the source information");
+    await click("Approve this version");
+    expect(state.calls).toEqual([]);
+    state.project = { ...state.project, approvedVersion: 3, approvedContentHash: hash(3) };
+    await mount(3);
+    expect(button("Publish approved version").disabled).toBe(true);
+    state.versions[0]!.browserQualityReady = true;
+    await mount(3);
+    expect(button("Publish approved version").disabled).toBe(false);
+    expect(container.textContent).not.toContain("Visual quality review pending");
+  });
+
+  test("inherited provider review requirements block new drafts and historical restoration", async () => {
+    state.versions[1]!.requiresProviderReview = true;
+    state.versions[1]!.browserReview = { status: "failed" };
+    await mount(2);
+    expect(button("Approve for restoration").disabled).toBe(true);
+    expect(container.textContent).toContain("Design needs refinement");
+    state.project = { ...state.project, approvedVersion: 2, approvedContentHash: hash(2) };
+    await mount(2);
+    expect(button("Restore reviewed version").disabled).toBe(true);
+    state.versions[1]!.browserQualityReady = true;
+    await mount(2);
+    expect(button("Restore reviewed version").disabled).toBe(false);
+    state.versions[0]!.requiresProviderReview = true;
+    await mount(3);
+    expect(button("Approve this version").disabled).toBe(true);
+  });
+
   test("saved image loading gates approval and readiness cannot carry into another version", async () => {
     state.versions[0]!.assetSnapshots = [{ assetRef: "prepared-image" }];
     await mount(3);
