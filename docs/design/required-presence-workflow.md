@@ -22,13 +22,19 @@ The real `buildOnlinePresenceProject` tool now calls `onlinePresenceDesign.build
 - Immutable versions hold provider and artifact hashes. New provider versions and their edits cannot be approved or published until the exact version has a passing browser receipt. The Sites editor displays pending/failed review and disables publishing accordingly. Database field order is normalized before receipt comparisons.
 - A read-only browser inspector and server-only report endpoint check every page at desktop 1440px, mobile 390px, and actual reduced-motion 390px. Missing or stale reports fail; uncertain photographic contrast requires review. Reports also require separate fidelity evidence and cannot be supplied by an ordinary client.
 
-### Remaining activation work
+### Automatic browser review and bounded repair
 
-The deployed automated browser worker, screenshot-based fidelity/overlay review, and bounded repair loop are **not connected yet**. The internal report endpoint is not itself a worker. New required-provider versions therefore remain private until real exact-artifact review is supplied; no passing review is fabricated. A source identity refresh invalidates stale qualification rather than creating evidence. Fresh recipe qualification and a bounded staging run are still required before customer activation.
+The customer finalizer now schedules a private exact-version browser job. The authenticated staging review endpoint verifies artifact and owned-image hashes before creating a nonpersistent, network-denied browser VM. It captures each page at 1440px, 390px and actual reduced-motion 390px. The server persists tenant-owned reports and screenshots, rechecks governing business sources, and uses exact Kimi image input for a separate fidelity and overlay-readability verdict. Unsupported, uncertain, stale, incomplete or mismatched results cannot approve publication.
+
+A supported layout repair creates a new private immutable version, preserves original source content and provider provenance, and schedules a fresh review. There is at most one automatic repair in a lineage; the repaired version cannot inherit approval or trigger an endless paid loop. Actual model identity and completed output are checked. Evidence hashing normalizes database field order.
+
+The browser snapshot was prepared on the dedicated staging project with Playwright 1.61.1. Its real launch, DOM, screenshot and reduced-motion smoke checks passed. It has a finite 30-day lifetime and will require replacement before expiry. Staging worker credentials are server-only. No model spending switches were enabled by provisioning this browser infrastructure.
+
+Fresh recipe qualification and a bounded customer end-to-end run remain required before activation. Source identity refreshes invalidate stale qualification; they do not create passing evidence. Native layout vocabulary still cannot reproduce every arbitrary Stitch composition, and the visual reviewer must reject unsupported fidelity rather than silently accept it.
 
 The generic tenant lifecycle action wrapper was found to receive definition metadata rather than runtime arguments; this new action explicitly binds its tenant storage scope. Auditing other existing users of that wrapper is a separate outstanding repository issue.
 
-Forms and merchant checkout still require their separate end-to-end qualification. No autonomous browser repair, production deployment, or completed operational shop is claimed.
+Forms and merchant checkout still require their separate end-to-end qualification. No production deployment or completed operational shop is claimed. The automatic repair implementation is bounded to the supported layout vocabulary.
 
 ### Preview carousel refinement
 

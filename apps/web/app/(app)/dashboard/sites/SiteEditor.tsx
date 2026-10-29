@@ -96,6 +96,9 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
   const providerReviewRequired = selected.requiresProviderReview === true || !!selected.providerReceipt;
   const providerReviewReady = !providerReviewRequired || selected.browserQualityReady === true;
   const reviewReady = sourceReady && providerReviewReady;
+  const reviewNeedsRefinement = selected.browserReview?.status === "failed";
+  const reviewJobFailed = selected.browserReviewJob?.state === "failed";
+  const reviewInProgress = selected.browserReviewJob?.state === "running" || selected.browserReviewJob?.state === "captured";
   const firstPage = (selected.document as { pages: { slug: string }[] }).pages[0]?.slug;
   const publicUrl =
     project.publicHost && firstPage
@@ -148,11 +151,17 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
       />
       {providerReviewRequired && !providerReviewReady && (
         <aside aria-label="Visual quality review" style={{ background: "var(--canvas)", padding: 16, borderRadius: 12 }}>
-          <h3>{selected.browserReview?.status === "failed" ? "Design needs refinement" : "Visual quality review pending"}</h3>
+          <h3>{reviewNeedsRefinement ? "Design needs refinement" : reviewJobFailed ? "Visual review could not finish" : reviewInProgress ? "Visual quality review in progress" : "Visual quality review pending"}</h3>
           <p role="status">
-            {selected.browserReview?.status === "failed"
+            {reviewNeedsRefinement
               ? "This version has not passed its visual checks. Pikar needs to resolve the findings before approval or publication."
-              : "This version is waiting for desktop, mobile and reduced-motion checks. Approval and publication become available only when its saved design passes review."}
+              : reviewJobFailed
+                ? published
+                  ? "Automatic visual review could not finish. Further publication changes remain blocked until review succeeds."
+                  : "Automatic visual review could not finish. This version remains private."
+                : reviewInProgress
+                  ? "Pikar is checking this version on desktop and mobile, including reduced motion. Approval and publication remain unavailable until review succeeds."
+                  : "This version is waiting for desktop, mobile and reduced-motion checks. Approval and publication become available only when its saved design passes review."}
           </p>
         </aside>
       )}

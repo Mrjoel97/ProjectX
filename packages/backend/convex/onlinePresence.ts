@@ -12,6 +12,7 @@ import { parseWebAssetRef } from "@pikar/core/webAssets";
 import { canonicalWebLayoutPlan, validateWebLayoutPlan } from "@pikar/core/webLayoutPlan";
 import { materializeWebRecipe, validateWebRecipeMedia } from "@pikar/core/webRecipes";
 import { sha256Bytes } from "@pikar/core/webRuntime";
+import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
@@ -706,7 +707,7 @@ export const saveBrief = internalMutation({
   },
 });
 
-async function prepareRequiredDesign(
+export async function prepareRequiredDesign(
   ctx: MutationCtx,
   args: { tenantId: string; planId: Id<"plans">; expectedRevision: number },
 ) {
@@ -906,6 +907,11 @@ export const buildProject = internalMutation({
     if (!updated) throw new Error("ONLINE_PRESENCE_UNAVAILABLE");
     const artifact = await artifactFor(ctx, updated);
     if (!artifact) throw new Error("ONLINE_PRESENCE_UNAVAILABLE");
+    await ctx.scheduler.runAfter(0, makeFunctionReference<"action">("presenceBrowserRun:run"), {
+      tenantId: args.tenantId,
+      projectId: receipt.projectId,
+      version: receipt.version,
+    });
     return { ok: true, revision, artifact };
   },
 });

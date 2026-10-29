@@ -340,6 +340,9 @@ export const STORAGE_ID_FIELDS = {
   vaultDocuments: ["storageId", "transcriptionStorageId"],
   webProjectVersions: [
     "artifactStorageId",
+    "browserReviewReportStorageId",
+    "browserReviewVisionStorageId",
+    "browserReviewScreenshots[].storageId",
     "providerReceipt.stitchHtmlStorageId",
     "providerReceipt.stitchImageStorageId",
   ],

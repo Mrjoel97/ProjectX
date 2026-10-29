@@ -246,6 +246,7 @@ export const build = internalAction({
       });
       if (!comparisonModelMatches(modelId, output.response.modelId))
         throw Error("PRESENCE_KIMI_MODEL_MISMATCH");
+      if (output.finishReason !== "stop") throw Error("PRESENCE_KIMI_OUTPUT_INCOMPLETE");
       const parsed: unknown = JSON.parse(output.text);
       if (
         !parsed ||

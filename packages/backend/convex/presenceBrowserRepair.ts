@@ -1,0 +1,240 @@
+import { validateDesignProfileRef } from "@pikar/core/designKnowledge";
+import { assessWebBrowserQuality } from "@pikar/core/webBrowserQuality";
+import { renderDesignedWebDocumentBytes } from "@pikar/core/webDesignRenderer";
+import { canonicalWebLayoutPlan, validateWebLayoutPlan } from "@pikar/core/webLayoutPlan";
+import { assessWebQuality } from "@pikar/core/webQuality";
+import { sha256Bytes, validateWebDocument } from "@pikar/core/webRuntime";
+import { makeFunctionReference } from "convex/server";
+import { v } from "convex/values";
+import { internalQuery } from "./_generated/server";
+import {
+  artifactHashes,
+  canonicalEvidenceHash,
+  providerReceiptHash,
+  validateProviderReceipt,
+} from "./lib/presencePublication";
+import { internalAction, internalMutation, lifecycleActionContext } from "./lib/tenantLifecycle";
+import { prepareRequiredDesign } from "./onlinePresence";
+import { reviseProjectWithVersion } from "./webProjects";
+
+const digest = (value: unknown) => sha256Bytes(new TextEncoder().encode(JSON.stringify(value)));
+const scope = { tenantId: v.string(), projectId: v.id("webProjects"), version: v.number() };
+const inputsRef = makeFunctionReference<"query">("presenceBrowserRepair:inputs");
+const applyRef = makeFunctionReference<"mutation">("presenceBrowserRepair:apply");
+export const inputs = internalQuery({
+  args: scope,
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!project || project.tenantId !== args.tenantId || project.draftVersion !== args.version)
+      return null;
+    const version = await ctx.db
+      .query("webProjectVersions")
+      .withIndex("by_tenant_project_version", (q) =>
+        q.eq("tenantId", args.tenantId).eq("projectId", args.projectId).eq("version", args.version),
+      )
+      .unique();
+    if (
+      !version?.providerReceipt ||
+      version.providerReceipt.repair ||
+      version.browserReview?.status !== "failed" ||
+      version.browserReviewJob?.state !== "completed" ||
+      !version.browserReviewVisionStorageId ||
+      !version.browserReviewReportStorageId
+    )
+      return null;
+    for (const storageId of [
+      version.browserReviewVisionStorageId,
+      version.browserReviewReportStorageId,
+    ]) {
+      const owned = await ctx.db
+        .query("uploadReceipts")
+        .withIndex("by_storage", (q) => q.eq("storageId", storageId))
+        .unique();
+      if (owned?.tenantId !== args.tenantId || owned.state !== "complete") return null;
+    }
+    return version;
+  },
+});
+
+/** Reconstruct the exact completed review before trusting a stored repair proposal. */
+export function verifyRepairEvidence(
+  version: {
+    contentHash: string;
+    providerReceipt: Parameters<typeof providerReceiptHash>[0];
+    browserReview: { reportHash: string };
+    browserReviewScreenshots?: { sha256: string }[];
+  },
+  vision: any,
+  capture: any,
+) {
+  if (
+    !vision ||
+    !validateWebLayoutPlan(vision.repairPlan) ||
+    !vision.fidelity ||
+    !vision.visualContrast ||
+    !/^[a-f0-9]{64}$/.test(vision.fidelity.evidenceHash) ||
+    vision.visualContrast.evidenceHash !== vision.fidelity.evidenceHash ||
+    vision.contentHash !== version.contentHash ||
+    vision.providerReceiptHash !== providerReceiptHash(version.providerReceipt) ||
+    !Array.isArray(capture?.reports) ||
+    !Array.isArray(vision.screenshotHashes) ||
+    JSON.stringify(vision.screenshotHashes) !==
+      JSON.stringify(version.browserReviewScreenshots?.map((s) => s.sha256))
+  )
+    throw Error("PRESENCE_REPAIR_EVIDENCE_INVALID");
+  const assessment = assessWebBrowserQuality({
+    pageSlugs: version.providerReceipt.artifactHashes.map((p) => p.pageSlug),
+    reports: capture.reports,
+  });
+  if (
+    canonicalEvidenceHash({
+      reports: capture.reports,
+      fidelity: vision.fidelity,
+      visualContrast: vision.visualContrast,
+      assessment,
+    }) !== version.browserReview.reportHash
+  )
+    throw Error("PRESENCE_REPAIR_EVIDENCE_INVALID");
+  return {
+    layoutPlan: canonicalWebLayoutPlan(vision.repairPlan),
+    visionEvidenceHash: vision.fidelity.evidenceHash as string,
+  };
+}
+
+export const run = internalAction({
+  args: scope,
+  handler: async (rawCtx, args): Promise<{ status: string; version?: number }> => {
+    const ctx = { ...rawCtx, ...lifecycleActionContext(rawCtx, args.tenantId) };
+    const version = await ctx.runQuery(inputsRef, args);
+    if (!version) return { status: "stopped" };
+    const [visionBlob, captureBlob] = await Promise.all([
+      ctx.storage.get(version.browserReviewVisionStorageId),
+      ctx.storage.get(version.browserReviewReportStorageId),
+    ]);
+    if (!visionBlob || !captureBlob || visionBlob.size > 100000 || captureBlob.size > 3200000)
+      return { status: "stopped" };
+    const vision = JSON.parse(await visionBlob.text());
+    if (!vision?.repairPlan) return { status: "stopped" };
+    const evidence = verifyRepairEvidence(version, vision, JSON.parse(await captureBlob.text()));
+    return ctx.runMutation(applyRef, {
+      ...args,
+      ...evidence,
+      visionStorageId: version.browserReviewVisionStorageId,
+      reportHash: version.browserReview.reportHash,
+    });
+  },
+});
+
+export const apply = internalMutation({
+  args: {
+    ...scope,
+    layoutPlan: v.any(),
+    visionEvidenceHash: v.string(),
+    visionStorageId: v.id("_storage"),
+    reportHash: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!project || project.tenantId !== args.tenantId || project.draftVersion !== args.version)
+      throw Error("PRESENCE_REPAIR_STALE");
+    const version = await ctx.db
+      .query("webProjectVersions")
+      .withIndex("by_tenant_project_version", (q) =>
+        q.eq("tenantId", args.tenantId).eq("projectId", args.projectId).eq("version", args.version),
+      )
+      .unique();
+    const session = await ctx.db
+      .query("onlinePresenceSessions")
+      .withIndex("by_tenant_project", (q) =>
+        q.eq("tenantId", args.tenantId).eq("projectId", args.projectId),
+      )
+      .unique();
+    if (
+      !version?.providerReceipt ||
+      version.providerReceipt.repair ||
+      !version.artifacts ||
+      !version.recipeRef ||
+      !session ||
+      session.projectVersion !== args.version ||
+      session.projectContentHash !== version.contentHash ||
+      version.browserReview?.status !== "failed" ||
+      version.browserReviewJob?.state !== "completed" ||
+      version.browserReview.reportHash !== args.reportHash ||
+      version.browserReviewVisionStorageId !== args.visionStorageId ||
+      !validateWebLayoutPlan(args.layoutPlan) ||
+      !/^[a-f0-9]{64}$/.test(args.visionEvidenceHash)
+    )
+      throw Error("PRESENCE_REPAIR_UNAVAILABLE");
+    const snapshot = await prepareRequiredDesign(ctx, {
+      tenantId: args.tenantId,
+      planId: session.planId,
+      expectedRevision: session.revision,
+    });
+    if (
+      !snapshot.ok ||
+      !("artifact" in snapshot) ||
+      snapshot.artifact?.contentHash !== version.contentHash
+    )
+      throw Error("PRESENCE_REPAIR_SOURCES_CHANGED");
+    validateProviderReceipt(version.providerReceipt, version.artifacts);
+    const layoutPlan = canonicalWebLayoutPlan(args.layoutPlan);
+    if (digest(layoutPlan) === version.providerReceipt.layoutHash) return { status: "stopped" };
+    const validated = validateWebDocument(version.document);
+    if (!validated.ok) throw Error("PRESENCE_REPAIR_DOCUMENT_INVALID");
+    const document = validated.value;
+    const recipeRef = {
+      ...version.recipeRef,
+      designProfile: { ...version.recipeRef.designProfile, layoutPlan },
+    };
+    if (!validateDesignProfileRef(recipeRef.designProfile))
+      throw Error("PRESENCE_REPAIR_PROFILE_INVALID");
+    const profile = recipeRef.designProfile;
+    const artifacts = document.pages.map((page) => ({
+      pageSlug: page.slug,
+      html: new TextDecoder().decode(
+        renderDesignedWebDocumentBytes(document, profile, {
+          slug: project.slug,
+          page: page.slug,
+        }),
+      ),
+    }));
+    if (!assessWebQuality({ document, artifacts, routeSlug: project.slug }).ok)
+      throw Error("PRESENCE_REPAIR_QUALITY_FAILED");
+    const providerReceipt = {
+      ...version.providerReceipt,
+      layoutHash: digest(layoutPlan),
+      artifactHashes: artifactHashes(artifacts),
+      repair: {
+        priorVersion: args.version,
+        visionEvidenceHash: args.visionEvidenceHash,
+        attempt: 1 as const,
+      },
+    };
+    const result = await reviseProjectWithVersion(
+      Object.assign(ctx, { tenantId: args.tenantId, userId: args.tenantId }),
+      {
+        projectId: args.projectId,
+        document,
+        expectedRevision: project.revision,
+        createdBy: args.tenantId,
+        recipeRef,
+        providerReceipt,
+        sourceRefs: version.sourceRefs,
+        sourceWarnings: version.sourceWarnings,
+      },
+    );
+    await ctx.db.patch(session._id, {
+      projectVersion: result.version,
+      projectContentHash: result.contentHash,
+      status: "awaiting_review",
+      revision: session.revision + 1,
+      updatedAt: Date.now(),
+    });
+    await ctx.scheduler.runAfter(0, makeFunctionReference<"action">("presenceBrowserRun:run"), {
+      tenantId: args.tenantId,
+      projectId: args.projectId,
+      version: result.version,
+    });
+    return { status: "repaired", version: result.version };
+  },
+});

@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
     providerReceipt?: { runRef: string };
     browserQualityReady?: boolean;
     browserReview?: { status: "passed" | "failed" };
+    browserReviewJob?: { state: "running" | "captured" | "completed" | "failed"; reason?: string };
   }[],
   calls: [] as { name: string; args: unknown }[],
   queries: [] as { name: string; args: unknown }[],
@@ -126,6 +127,29 @@ const click = async (text: string) => {
 };
 
 describe("human website review controls", () => {
+  test("failed automatic review is not shown as indefinitely pending and never exposes internal failure details", async () => {
+    state.versions[0]!.requiresProviderReview = true;
+    state.versions[0]!.browserReviewJob = { state: "failed", reason: "PRIVATE_WORKER_DETAILS" };
+    await mount(3);
+    expect(container.textContent).toContain("Automatic visual review could not finish. This version remains private.");
+    expect(container.textContent).not.toContain("Visual quality review pending");
+    expect(container.textContent).not.toContain("PRIVATE_WORKER_DETAILS");
+    expect(button("Approve this version").disabled).toBe(true);
+    expect(button("Publish approved version").disabled).toBe(true);
+    state.versions[0]!.browserReview = { status: "failed" };
+    await mount(3);
+    expect(container.textContent).toContain("Design needs refinement");
+    expect(container.textContent).not.toContain("Visual review could not finish");
+  });
+
+  test.each(["running", "captured"] as const)("%s review shows active checks while approval stays unavailable", async (stateName) => {
+    state.versions[0]!.requiresProviderReview = true;
+    state.versions[0]!.browserReviewJob = { state: stateName };
+    await mount(3);
+    expect(container.textContent).toContain("Visual quality review in progress");
+    expect(button("Approve this version").disabled).toBe(true);
+  });
+
   test("generated designs cannot be approved or published before the server confirms exact visual evidence", async () => {
     state.versions[0]!.providerReceipt = { runRef: "design-run" };
     state.versions[0]!.browserReview = { status: "passed" };

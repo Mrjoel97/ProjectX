@@ -1,6 +1,22 @@
 import { sha256Bytes } from "@pikar/core/webRuntime";
 import type { Id } from "../_generated/dataModel";
 
+/** Database and HTTP object field ordering cannot change an evidence identity. */
+export function canonicalEvidenceHash(value: unknown): string {
+  const ordered = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(ordered);
+    if (node !== null && typeof node === "object")
+      return Object.fromEntries(
+        Object.entries(node)
+          .filter(([, value]) => value !== undefined)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([key, value]) => [key, ordered(value)]),
+      );
+    return node;
+  };
+  return sha256Bytes(new TextEncoder().encode(JSON.stringify(ordered(value))));
+}
+
 export type PresenceProviderReceipt = {
   pipelineVersion: "stitch-kimi-required-v1";
   runRef: string;
@@ -13,6 +29,7 @@ export type PresenceProviderReceipt = {
   pendingBrowser: true;
   stitchHtmlStorageId?: Id<"_storage">;
   stitchImageStorageId?: Id<"_storage">;
+  repair?: { priorVersion: number; visionEvidenceHash: string; attempt: 1 };
 };
 export const artifactHashes = (artifacts: readonly { pageSlug: string; html: string }[]) =>
   artifacts.map(({ pageSlug, html }) => ({
@@ -38,6 +55,11 @@ export function validateProviderReceipt(
       receipt.layoutHash,
     ].every((value) => hash.test(value)) ||
     receipt.pendingBrowser !== true ||
+    (receipt.repair !== undefined &&
+      (!Number.isSafeInteger(receipt.repair.priorVersion) ||
+        receipt.repair.priorVersion < 1 ||
+        receipt.repair.attempt !== 1 ||
+        !hash.test(receipt.repair.visionEvidenceHash))) ||
     canonicalArtifactHashes(receipt.artifactHashes) !==
       canonicalArtifactHashes(artifactHashes(artifacts))
   )
@@ -67,6 +89,13 @@ export const providerReceiptHash = (receipt: PresenceProviderReceipt) =>
         pendingBrowser: receipt.pendingBrowser,
         stitchHtmlStorageId: receipt.stitchHtmlStorageId,
         stitchImageStorageId: receipt.stitchImageStorageId,
+        repair: receipt.repair
+          ? {
+              priorVersion: receipt.repair.priorVersion,
+              visionEvidenceHash: receipt.repair.visionEvidenceHash,
+              attempt: receipt.repair.attempt,
+            }
+          : undefined,
       }),
     ),
   );

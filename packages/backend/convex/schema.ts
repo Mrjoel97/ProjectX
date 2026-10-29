@@ -4498,6 +4498,33 @@ export default defineSchema({
   /** Immutable structured version and its deterministic rendered artifact. */
 
   webProjectVersions: defineTable({
+    browserReviewJob: v.optional(
+      v.object({
+        runRef: v.string(),
+        state: v.union(
+          v.literal("running"),
+          v.literal("captured"),
+          v.literal("completed"),
+          v.literal("failed"),
+        ),
+        startedAt: v.number(),
+        reason: v.optional(v.string()),
+      }),
+    ),
+    browserReviewReportStorageId: v.optional(v.id("_storage")),
+    browserReviewVisionStorageId: v.optional(v.id("_storage")),
+    browserReviewScreenshots: v.optional(
+      v.array(
+        v.object({
+          storageId: v.id("_storage"),
+          pageSlug: v.string(),
+          viewportWidth: v.number(),
+          reducedMotion: v.boolean(),
+          sha256: v.string(),
+          mimeType: v.string(),
+        }),
+      ),
+    ),
     requiresProviderReview: v.optional(v.boolean()),
     providerReceipt: v.optional(
       v.object({
@@ -4512,6 +4539,13 @@ export default defineSchema({
         pendingBrowser: v.literal(true),
         stitchHtmlStorageId: v.optional(v.id("_storage")),
         stitchImageStorageId: v.optional(v.id("_storage")),
+        repair: v.optional(
+          v.object({
+            priorVersion: v.number(),
+            visionEvidenceHash: v.string(),
+            attempt: v.literal(1),
+          }),
+        ),
       }),
     ),
     browserReview: v.optional(
