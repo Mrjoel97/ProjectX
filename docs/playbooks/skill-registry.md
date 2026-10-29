@@ -1,3 +1,5 @@
+> Last verified: 2026-10-29 — Refreshed golden and vertical evaluator source identities after watchdog candidate indexes changed schema source. Existing case bytes and registry rows remain unchanged. Offline manifest regeneration is not paid qualification, candidate activation or deployment.
+
 > Last verified: 2026-10-24 — Current golden source revision is regenerated after integrating main c765168d callback/policy work. The 46 input cases and historical receipts are unchanged; no registry seeding, activation or paid evaluation is performed.
 
 > Combined-source checkpoint: 2026-10-24 — Preserve canonical media-director v9/native-film guidance and the direct-social tool boundaries. Older director versions and source fingerprints below are historical checkpoints. Regenerate the exact merged evaluator identities with unchanged corpus bytes and historical receipts; this merge creates no paid qualification, registry seed, activation or release approval.

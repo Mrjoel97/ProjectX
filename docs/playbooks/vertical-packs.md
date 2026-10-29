@@ -1,3 +1,5 @@
+> Last verified: 2026-10-29 — Regenerated the native evaluator source identity after additive watchdog schema indexes. Six lanes, forty cases and their source bytes are unchanged; corpus --check and evaluator identity regressions pass offline. This does not grant paid qualification, skill activation or deployment authority.
+
 > Last verified: 2026-10-24 — Regenerate the current vertical source fingerprint after integrating main c765168d. The 40 cases across six lanes remain byte-equivalent and no historical qualification is relabeled or replayed.
 
 > Combined-source checkpoint: 2026-10-24 — Recompute vertical fingerprints after combining native media/batch approval and direct-social lifecycle sources, preserving all forty cases, six lanes and historical receipts. Dated source pins and offline checks below describe their original candidates; they do not qualify this merged source, activate a pack or establish deployment.
