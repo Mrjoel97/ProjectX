@@ -66,6 +66,11 @@ beforeEach(() => {
     expect(options.maxRetries).toBe(0);
     expect(options.maxOutputTokens).toBe(8192);
     expect(options.system).toBe(websiteDesignProposalSkillBody);
+    expect(options.providerOptions).toEqual(
+      model.modelId === PRESENCE_COMPARISON_MODELS.kimi
+        ? { openrouter: { reasoning: { effort: "low" } } }
+        : undefined,
+    );
     const reservationId = await model.ctx.runMutation(internal.guardrails.reserveEvalCall, {
       tenantId: model.tenantId,
       budgetId: model.budgetId,
@@ -256,6 +261,11 @@ test("native three-arm run uses real Stitch hooks, single generation, quarantine
   const result = await t.action(run, args);
   expect(result.status).toBe("complete");
   expect(result.outputs).toHaveLength(3);
+  expect(result.outputs).toMatchObject([
+    { reasoningEffort: "provider_default" },
+    { reasoningEffort: "low" },
+    { reasoningEffort: "low" },
+  ]);
   expect(vi.mocked(generateText)).toHaveBeenCalledTimes(3);
   expect(calls.filter((c) => c === "create_project")).toHaveLength(1);
   expect(calls.filter((c) => c === "generate_screen_from_text")).toHaveLength(1);

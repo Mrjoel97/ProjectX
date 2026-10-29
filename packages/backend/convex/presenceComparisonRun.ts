@@ -296,6 +296,13 @@ export const run = internalAction({
           };
         }
         const modelId = PRESENCE_COMPARISON_MODELS[arm];
+        const reasoningEffort =
+          modelId === PRESENCE_COMPARISON_MODELS.kimi ? "low" : "provider_default";
+        await ctx.runMutation(recordRef, {
+          runRef: args.runRef,
+          event: "opened",
+          payload: { arm, modelRef: modelId, reasoningEffort },
+        });
         const startedAt = Date.now();
         const result = await generateText({
           model: evalBudgetModel({
@@ -324,6 +331,9 @@ export const run = internalAction({
           }),
           maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS,
           maxRetries: 0,
+          ...(reasoningEffort === "low"
+            ? { providerOptions: { openrouter: { reasoning: { effort: "low" } } } }
+            : {}),
         });
         const status = await settled(ctx, activeBudgetId);
         if (!result.text.trim()) throw Error("PRESENCE_COMPARISON_EMPTY_PROPOSAL");
@@ -339,6 +349,7 @@ export const run = internalAction({
           status: modelMatched ? "proposal" : "refused_model_identity",
           requestedModel: modelId,
           observedModel: result.response.modelId,
+          reasoningEffort,
           elapsedMs: Date.now() - startedAt,
           finishReason: result.finishReason,
           proposal,
@@ -365,6 +376,7 @@ export const run = internalAction({
           payload: {
             arm,
             modelRef: modelId,
+            reasoningEffort,
             proposalStorageRef: proposal.storageId,
             proposalHash: proposal.contentHash,
             ...(stitchArtifacts
