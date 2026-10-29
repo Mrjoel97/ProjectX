@@ -114,23 +114,19 @@ async function click(selector: string) {
   await act(async () => button?.click());
 }
 
-test("service setup opens first and keyboard navigation retains workflows and skills", async () => {
+test("workflows opens first; services belongs in Marketing and keyboard navigation reaches skills", async () => {
   await act(async () => root.render(<Page />));
-  expect(host.querySelector("#services-panel")?.hasAttribute("hidden")).toBe(false);
-  expect(host.querySelector("#services-tab")?.getAttribute("aria-selected")).toBe("true");
-  await act(async () =>
-    host
-      .querySelector("#services-tab")
-      ?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })),
-  );
-  expect(host.querySelector("#workflows-panel")?.hasAttribute("hidden")).toBe(false);
+  expect(host.querySelector("#services-tab")).toBeNull();
+  expect(host.querySelector("#services-panel")).toBeNull();
+  expect(host.querySelector("#workflows-tab")?.getAttribute("aria-selected")).toBe("true");
   await act(async () =>
     host
       .querySelector("#workflows-tab")
-      ?.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })),
+      ?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })),
   );
   expect(host.querySelector("#skills-panel")?.hasAttribute("hidden")).toBe(false);
 });
+
 test("tenant library shows live offers and its own agent drafts, skipping owner reads and authoring", async () => {
   await render();
   expect(host.textContent).toContain("Business pulse");
