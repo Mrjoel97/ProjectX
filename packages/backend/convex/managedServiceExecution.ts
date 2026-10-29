@@ -1,4 +1,5 @@
 "use node";
+import { buildZernioNarrative } from "@pikar/core/zernioNarrative";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
@@ -9,6 +10,7 @@ export const execute = internalAction({
   args: { tenantId: v.string(), runId: v.id("managedServiceRuns") },
   handler: async (ctx, args): Promise<null> => {
     let agentStarted = false;
+    let reportNarrative: string | undefined;
     try {
       const context = await ctx.runQuery(internal.managedServiceRuns.getExecutionContext, args);
       if (context.operationIds.includes("social.report")) {
@@ -52,6 +54,10 @@ export const execute = internalAction({
           )
         )
           throw new Error("SERVICE_REPORT_NOT_READY");
+        reportNarrative = [
+          ...buildZernioNarrative(report, Date.now()),
+          "[View the reporting evidence](/dashboard/marketing)",
+        ].join("\n\n");
       }
       agentStarted = true;
       const result = await ctx.runAction(internal.llm.runCockpitAgent, {
@@ -65,7 +71,10 @@ export const execute = internalAction({
       await ctx.runMutation(internal.managedServiceRuns.finish, {
         ...args,
         outcome: result.blocked ? "governed_stop" : "completed",
-        reply: result.reply,
+        reply:
+          !result.blocked && reportNarrative
+            ? `${result.reply}\n\n## Engagement evidence\n\n${reportNarrative}`
+            : result.reply,
       });
     } catch {
       // An accepted provider attempt may still settle: record uncertainty, never retry it.

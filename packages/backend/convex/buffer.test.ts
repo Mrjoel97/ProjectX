@@ -255,7 +255,7 @@ describe("reviewable social draft revisions and recovery", () => {
       await h.t.mutation(internal.buffer.claimPost, { tenantId: h.tenantId, postId }),
     ).toBeNull();
   });
-  test("edits revalidate channels, format, schedules and the original connection", async () => {
+  test("edits revalidate channels, format and schedules", async () => {
     const h = await setup();
     await connect(h);
     const postId = await h.asUser.mutation(api.buffer.stagePost, draft);
@@ -276,6 +276,123 @@ describe("reviewable social draft revisions and recovery", () => {
         channelId: organizationId,
       }),
     ).rejects.toThrow("BUFFER_CHANNEL_NOT_ALLOWED");
+  });
+  test("saving a draft after same-destination reconnect adopts the grant without approval or publishing", async () => {
+    const h = await setup();
+    await connect(h);
+    await withPausedScheduler(async () => {
+      const postId = await h.asUser.mutation(api.buffer.stagePost, draft);
+      await h.t.run(async (ctx) => {
+        const row = await ctx.db
+          .query("bufferConnections")
+          .withIndex("by_tenant", (q) => q.eq("tenantId", h.tenantId))
+          .unique();
+        if (!row) throw new Error("fixture");
+        await ctx.db.patch(row._id, { connectionId: "replacement" });
+      });
+      // Reconnection alone cannot carry the old review into a provider submission.
+      await expect(
+        h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 }),
+      ).rejects.toThrow("BUFFER_CHANNEL_NOT_ALLOWED");
+      await h.asUser.mutation(api.buffer.editPost, {
+        ...draft,
+        postId,
+        revision: 1,
+        text: "Explicitly reviewed after reconnect",
+      });
+      const post = await h.t.run((ctx) => ctx.db.get(postId));
+      expect(post).toMatchObject({
+        connectionId: "replacement",
+        organizationId,
+        channelId,
+        platform: "linkedin",
+        status: "draft",
+        revision: 2,
+        text: "Explicitly reviewed after reconnect",
+      });
+      expect(post?.approvedAt).toBeUndefined();
+      expect(post?.bufferPostId).toBeUndefined();
+      expect(post?.failure).toBeUndefined();
+      await expect(
+        h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 }),
+      ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+      await expect(
+        h.asUser.mutation(api.buffer.editPost, { ...draft, postId, revision: 1 }),
+      ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+      expect(
+        await h.t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect()),
+      ).toHaveLength(0);
+      expect(
+        await h.t.mutation(internal.buffer.claimPost, { tenantId: h.tenantId, postId }),
+      ).toBeNull();
+    });
+  });
+  test.each([
+    "organization",
+    "channel",
+    "platform",
+    "unselected",
+    "unavailable",
+    "disconnected",
+  ] as const)("reconnect edit refuses a changed or unavailable %s destination", async (change) => {
+    const h = await setup();
+    await connect(h);
+    const postId = await h.asUser.mutation(api.buffer.stagePost, draft);
+    const otherChannelId = "1234567890abcdef12345670";
+    await h.t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("bufferConnections")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", h.tenantId))
+        .unique();
+      if (!row) throw new Error("fixture");
+      await ctx.db.patch(row._id, {
+        connectionId: "replacement",
+        organizationId: change === "organization" ? "different-organization" : organizationId,
+        status: change === "disconnected" ? "disconnected" : "connected",
+        selectedChannelIds: change === "unselected" ? [] : [channelId, otherChannelId],
+        channels: [
+          {
+            id: channelId,
+            name: "Own channel",
+            service: change === "platform" ? "tiktok" : "linkedin",
+            available: change !== "unavailable",
+          },
+          {
+            id: otherChannelId,
+            name: "Other selected channel",
+            service: "linkedin",
+            available: true,
+          },
+        ],
+      });
+    });
+    await expect(
+      h.asUser.mutation(api.buffer.editPost, {
+        ...draft,
+        channelId: change === "channel" ? otherChannelId : channelId,
+        postId,
+        revision: 1,
+      }),
+    ).rejects.toThrow(
+      ["unselected", "unavailable", "disconnected"].includes(change)
+        ? "BUFFER_CHANNEL_NOT_ALLOWED"
+        : "BUFFER_CONNECTION_CHANGED",
+    );
+    expect(await h.t.run((ctx) => ctx.db.get(postId))).toMatchObject({
+      connectionId: "connection1",
+      status: "draft",
+      revision: 1,
+    });
+  });
+  test.each([
+    "draft",
+    "approved",
+    "submitting",
+    "unknown",
+  ] as const)("reconnected %s rows retain ownership and draft-only edit fences", async (status) => {
+    const h = await setup();
+    await connect(h);
+    const postId = await h.asUser.mutation(api.buffer.stagePost, draft);
     await h.t.run(async (ctx) => {
       const row = await ctx.db
         .query("bufferConnections")
@@ -283,10 +400,21 @@ describe("reviewable social draft revisions and recovery", () => {
         .unique();
       if (!row) throw new Error("fixture");
       await ctx.db.patch(row._id, { connectionId: "replacement" });
+      await ctx.db.patch(postId, { status });
     });
     await expect(
-      h.asUser.mutation(api.buffer.editPost, { ...draft, postId, revision: 1 }),
-    ).rejects.toThrow("BUFFER_CONNECTION_CHANGED");
+      h.asOther.mutation(api.buffer.editPost, { ...draft, postId, revision: 1 }),
+    ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+    if (status !== "draft") {
+      await expect(
+        h.asUser.mutation(api.buffer.editPost, { ...draft, postId, revision: 1 }),
+      ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+    }
+    expect(await h.t.run((ctx) => ctx.db.get(postId))).toMatchObject({
+      connectionId: "connection1",
+      status,
+      revision: 1,
+    });
   });
   test("expired approved schedules fail before submission and unknown writes remain fenced from edit/reapproval/replay", async () => {
     vi.useFakeTimers();

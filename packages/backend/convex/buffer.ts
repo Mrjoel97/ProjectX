@@ -504,12 +504,18 @@ export const editPost = tenantMutation({
     )
       throw new Error("BUFFER_DRAFT_CHANGED");
     const { row, target } = await draftContext(ctx, ctx.tenantId, draft);
-    if (row.connectionId !== post.connectionId || row.organizationId !== post.organizationId)
+    // An explicit draft save can adopt a reconnected grant only for the same destination.
+    if (
+      row.organizationId !== post.organizationId ||
+      (row.connectionId !== post.connectionId &&
+        (draft.channelId !== post.channelId || target.service !== post.platform))
+    )
       throw new Error("BUFFER_CONNECTION_CHANGED");
     const nextRevision = revision + 1;
     await ctx.db.patch(post._id, {
       ...draft,
       revision: nextRevision,
+      connectionId: row.connectionId,
       platform: target.service,
       // Omitted fields mean remove the previous media/schedule, not silently retain it.
       dueAt: draft.dueAt,

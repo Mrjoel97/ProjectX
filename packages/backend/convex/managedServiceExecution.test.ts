@@ -33,7 +33,15 @@ function fixture() {
   const report = {
     state: "ready",
     fetchedAt: Date.now() - 1000,
-    accounts: [{ accountId: "account-a" }],
+    fromDate: "2026-10-01",
+    toDate: "2026-10-27",
+    accounts: [
+      {
+        accountId: "account-a",
+        platform: "tiktok",
+        posts: [{ postId: "post-a", source: "external", metrics: { views: 12 }, updatedAt: null }],
+      },
+    ],
   };
   let refreshState = "updated";
   let afterRefresh = () => {};
@@ -152,4 +160,24 @@ test("preparation-only work does not call Zernio", async () => {
   f.context.operationIds = ["social.prepare"];
   await f.run();
   expect(f.events).toEqual(["managedServiceRuns:getExecutionContext", "llm:runCockpitAgent"]);
+});
+
+test("completed report persists grounded narrative beside an agent's draft without another agent call", async () => {
+  const f = fixture();
+  await f.run();
+  const saved = f.runMutation.mock.calls[0]?.[1] as { reply: string };
+  expect(saved.reply).toContain("Report ready");
+  expect(saved.reply).toContain("Engagement evidence");
+  expect(saved.reply).toContain("views: 12");
+  expect(saved.reply).toContain("likes: unavailable");
+  expect(saved.reply).toContain(new Date(f.report.fetchedAt).toISOString());
+  expect(saved.reply).toContain("/dashboard/marketing");
+  expect(f.events.filter((e) => e === "llm:runCockpitAgent")).toHaveLength(1);
+});
+
+test("prepare-only replies do not invent a report appendix", async () => {
+  const f = fixture();
+  f.context.operationIds = ["social.prepare"];
+  await f.run();
+  expect(f.runMutation.mock.calls[0]?.[1]).toMatchObject({ reply: "Report ready" });
 });

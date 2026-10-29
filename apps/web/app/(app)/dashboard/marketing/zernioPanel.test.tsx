@@ -138,3 +138,33 @@ test("credentials go only to the one-use HTTP intake; authenticated mutation get
   });
   expect((form.elements.namedItem("key") as HTMLInputElement).value).toBe("");
 });
+
+test("cached evidence has a readable narrative without another provider request", async () => {
+  mocks.queries["zernio:latestReport"] = {
+    fromDate: "2026-07-22",
+    toDate: "2026-10-19",
+    fetchedAt: 1000,
+    accounts: [
+      {
+        accountId: id,
+        platform: "tiktok",
+        posts: [
+          {
+            postId: "200",
+            source: "external",
+            updatedAt: null,
+            metrics: { views: 99, likes: 0 },
+          },
+        ],
+      },
+    ],
+  };
+  await act(async () => root.render(<ZernioMarketing />));
+  const summary = host.querySelector('[aria-label="Engagement summary"]');
+  expect(summary?.textContent).toContain("views: 99");
+  expect(summary?.textContent).toContain("likes: 0");
+  expect(summary?.textContent).toContain("comments: unavailable");
+  expect(summary?.textContent).toContain("cached snapshot is old");
+  expect(summary?.textContent).toContain("cannot establish growth");
+  expect(mocks.calls["zernioActions:refreshReport"]).not.toHaveBeenCalled();
+});
