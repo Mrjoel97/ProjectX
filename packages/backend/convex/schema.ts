@@ -35,14 +35,16 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 79 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 85 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
-// │   users, betaWaitlist, betaInvites, authRevocations                                         │
+// │   brandKits, users, betaWaitlist, betaInvites, authRevocations                                         │
 // │                                                                            │
 // │ ── Governance & Audit ──────────────────────────────────── ~L150           │
-// │   audit, deadLetters, skills, tenantSkills, savedPrompts,                  │
+// │   audit, deadLetters, skills, tenantSkills, savedPrompts, managedServices, │
+// │   managedServiceRuns, managedServiceStandingApprovals,                   │
+// │   managedServiceOccurrences, serviceOutcomeObservations                 │
 // │   knowledgeSearches, pendingTimeouts, exportCursors, guardrailConfig       │
 // │   auditExportQueue                                                       │
 // │                                                                            │
@@ -176,6 +178,10 @@ const shotElement = v.object({
   windowStartMs: v.number(),
   description: v.string(),
   overlay: v.optional(v.string()),
+  overlayStartMs: v.optional(v.number()),
+  overlayEndMs: v.optional(v.number()),
+  transitionOut: v.optional(v.union(v.literal("cut"), v.literal("fade"))),
+  motionGraphic: v.optional(v.literal("orbit-ring")),
   prompt: v.string(),
   narration: v.string(), // the block's SPOKEN line. Content-plane. Never audited.
   /** 20.2, `uploaded_video` only: the tenant's own footage, as a vault doc REF — never a
@@ -192,6 +198,37 @@ const shotElement = v.object({
    *  has NO mutation that can set this, and confirmClaim's arg validator structurally cannot
    *  carry an actor or a timestamp (the schema.ts:120 idiom, provenance-laundering guard). */
   confirmedAt: v.optional(v.number()),
+});
+
+const zernioReportSchema = v.object({
+  fromDate: v.string(),
+  toDate: v.string(),
+  fetchedAt: v.number(),
+  accounts: v.array(
+    v.object({
+      accountId: v.string(),
+      platform: v.union(v.literal("instagram"), v.literal("tiktok")),
+      posts: v.array(
+        v.object({
+          postId: v.string(),
+          nativePostUrl: v.optional(v.string()),
+          source: v.union(v.literal("external"), v.literal("zernio")),
+          updatedAt: v.union(v.string(), v.null()),
+          metrics: v.object({
+            impressions: v.optional(v.number()),
+            reach: v.optional(v.number()),
+            likes: v.optional(v.number()),
+            comments: v.optional(v.number()),
+            shares: v.optional(v.number()),
+            saves: v.optional(v.number()),
+            clicks: v.optional(v.number()),
+            views: v.optional(v.number()),
+            engagementRate: v.optional(v.number()),
+          }),
+        }),
+      ),
+    }),
+  ),
 });
 
 export default defineSchema({
@@ -319,11 +356,250 @@ export default defineSchema({
     .index("by_tenant", ["tenantId"])
     .index("by_state_hash", ["stateHash"])
     .index("by_expiry", ["expiresAt"]),
+  // Inert tenant setup only. No cadence, credentials, execution history or spend copy.
+  // Standing read/prepare consent and durable occurrences; publication remains separately approved.
+  managedServiceStandingApprovals: defineTable({
+    tenantId: v.string(),
+    serviceId: v.id("managedServices"),
+    revision: v.number(),
+    configRevision: v.number(),
+    expiresAtMs: v.number(),
+    createdAt: v.number(),
+    suspendedAtMs: v.optional(v.number()),
+    enabled: v.optional(v.boolean()),
+    controlRevision: v.optional(v.number()),
+    nextDueAtMs: v.optional(v.number()),
+    nextLocalDate: v.optional(v.string()),
+    nextRequestedLocalTime: v.optional(v.string()),
+    scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
+    suspensionReason: v.optional(
+      v.union(
+        v.literal("authorization_required"),
+        v.literal("paused"),
+        v.literal("approval_stale"),
+        v.literal("qualification_required"),
+        v.literal("budget_required"),
+        v.literal("reconciliation_required"),
+        v.literal("expired"),
+      ),
+    ),
+    terms: v.object({
+      goalHash: v.string(),
+      operationIds: v.array(
+        v.union(
+          v.literal("social.prepare"),
+          v.literal("social.report"),
+          v.literal("business.review"),
+          v.literal("workflow.pack.run"),
+        ),
+      ),
+      skillPins: v.array(
+        v.object({
+          skillId: v.string(),
+          name: v.string(),
+          version: v.number(),
+          bodyHash: v.string(),
+          tenantId: v.union(v.string(), v.null()),
+        }),
+      ),
+      recipientRefs: v.array(v.string()),
+      accountPins: v.array(
+        v.object({
+          provider: v.union(v.literal("buffer"), v.literal("zernio")),
+          connectionId: v.string(),
+          accountId: v.string(),
+          connectionRevision: v.number(),
+        }),
+      ),
+      budgetLimitCents: v.number(),
+      schedule: v.object({
+        cadence: v.union(v.literal("daily"), v.literal("weekly")),
+        weekday: v.union(v.number(), v.null()),
+        hour: v.number(),
+        minute: v.number(),
+        timeZone: v.string(),
+      }),
+    }),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_service_enabled", ["tenantId", "serviceId", "enabled"])
+    .index("by_service_revision", ["tenantId", "serviceId", "revision"]),
+  managedServiceOccurrences: defineTable({
+    tenantId: v.string(),
+    serviceId: v.id("managedServices"),
+    approvalId: v.id("managedServiceStandingApprovals"),
+    approvalRevision: v.number(),
+    runId: v.optional(v.id("managedServiceRuns")),
+    occurrenceKey: v.string(),
+    localDate: v.string(),
+    requestedLocalTime: v.string(),
+    timeZone: v.string(),
+    dueAtMs: v.number(),
+    configRevision: v.number(),
+    controlRevision: v.number(),
+    state: v.union(
+      v.literal("claimed"),
+      v.literal("skipped_missed"),
+      v.literal("skipped_overlap"),
+      v.literal("terminal"),
+      v.literal("unknown"),
+    ),
+    reservationId: v.optional(v.id("spendEvents")),
+    receiptIds: v.array(v.id("spendEvents")),
+    unknownHoldCents: v.optional(v.number()),
+    terminalOutcome: v.optional(
+      v.union(
+        v.literal("completed"),
+        v.literal("auth"),
+        v.literal("validation"),
+        v.literal("budget"),
+        v.literal("paused"),
+        v.literal("provider_refusal"),
+        v.literal("retries_exhausted"),
+        v.literal("execution_uncertain"),
+      ),
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_occurrence", ["tenantId", "serviceId", "occurrenceKey"])
+    .index("by_service_state", ["tenantId", "serviceId", "state"]),
+  managedServiceRuns: defineTable({
+    tenantId: v.string(),
+    serviceId: v.id("managedServices"),
+    standingOccurrenceId: v.optional(v.id("managedServiceOccurrences")),
+    standingApprovalId: v.optional(v.id("managedServiceStandingApprovals")),
+    knowledgeHash: v.optional(v.string()),
+    goalId: v.optional(v.id("goals")),
+    usefulness: v.optional(v.union(v.literal("accepted"), v.literal("rejected"))),
+    usefulnessAt: v.optional(v.number()),
+    configRevision: v.number(),
+    controlRevision: v.number(),
+    budgetLimitCents: v.number(),
+    requestKey: v.string(),
+    state: v.union(
+      v.literal("claimed"),
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("unknown"),
+      v.literal("stopped"),
+    ),
+    threadId: v.optional(v.string()),
+    planId: v.optional(v.id("plans")),
+    turnId: v.optional(v.string()),
+    workflowId: v.optional(v.string()),
+    terminalCode: v.optional(
+      v.union(
+        v.literal("completed"),
+        v.literal("governed_stop"),
+        v.literal("execution_uncertain"),
+        v.literal("cancelled"),
+        v.literal("setup_incomplete"),
+        v.literal("control_changed"),
+        v.literal("reconciled_interruption"),
+      ),
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_service_request", ["tenantId", "serviceId", "requestKey"])
+    .index("by_service_state", ["tenantId", "serviceId", "state"])
+    .index("by_service_createdAt", ["tenantId", "serviceId", "createdAt"]),
+  managedServices: defineTable({
+    tenantId: v.string(),
+    serviceId: v.string(),
+    knowledgeConversation: v.optional(
+      v.object({
+        revision: v.number(),
+        configRevision: v.number(),
+        controlRevision: v.number(),
+        state: v.union(
+          v.literal("collecting"),
+          v.literal("deferred"),
+          v.literal("review"),
+          v.literal("ready"),
+        ),
+        draftAnswers: v.array(
+          v.object({
+            key: v.union(
+              v.literal("offering"),
+              v.literal("targetCustomer"),
+              v.literal("brandVoice"),
+              v.literal("publishingBoundaries"),
+            ),
+            value: v.string(),
+          }),
+        ),
+        confirmedAnswers: v.array(
+          v.object({
+            key: v.union(
+              v.literal("offering"),
+              v.literal("targetCustomer"),
+              v.literal("brandVoice"),
+              v.literal("publishingBoundaries"),
+            ),
+            eventId: v.string(),
+            sourceHash: v.string(),
+            confirmationRef: v.id("audit"),
+            confirmedAt: v.number(),
+            supersedes: v.array(v.string()),
+          }),
+        ),
+        reviewHash: v.optional(v.string()),
+        confirmedFromRevision: v.optional(v.number()),
+        confirmedSourceHash: v.optional(v.string()),
+        requestKey: v.string(),
+        launchState: v.optional(v.union(v.literal("resume_required"), v.literal("started"))),
+        launchRunId: v.optional(v.id("managedServiceRuns")),
+        updatedAt: v.number(),
+      }),
+    ),
+    goalId: v.optional(v.id("goals")),
+    revision: v.number(),
+    controlState: v.union(v.literal("active"), v.literal("paused"), v.literal("stopped")),
+    controlRevision: v.number(),
+    goal: v.string(),
+    operationIds: v.array(
+      v.union(
+        v.literal("social.prepare"),
+        v.literal("social.report"),
+        v.literal("business.review"),
+        v.literal("workflow.pack.run"),
+      ),
+    ),
+    accounts: v.array(
+      v.object({
+        provider: v.union(v.literal("buffer"), v.literal("zernio")),
+        connectionId: v.string(),
+        accountId: v.string(),
+        connectionRevision: v.number(),
+      }),
+    ),
+    skills: v.array(
+      v.object({
+        skillId: v.string(),
+        name: v.string(),
+        version: v.number(),
+        bodyHash: v.string(),
+        tenantId: v.union(v.string(), v.null()),
+      }),
+    ),
+    budgetLimitCents: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_service", ["tenantId", "serviceId"]),
   zernioConnections: defineTable({
     tenantId: v.string(),
     connectionId: v.string(),
     profileId: v.string(),
     revision: v.number(),
+    // Selection permission generation; execution revision also fences scheduling edits.
+    grantRevision: v.optional(v.number()),
     status: v.union(
       v.literal("connecting"),
       v.literal("connected"),
@@ -360,40 +636,25 @@ export default defineSchema({
   zernioReports: defineTable({
     tenantId: v.string(),
     connectionId: v.string(),
-    report: v.object({
-      fromDate: v.string(),
-      toDate: v.string(),
-      fetchedAt: v.number(),
-      accounts: v.array(
-        v.object({
-          accountId: v.string(),
-          platform: v.union(v.literal("instagram"), v.literal("tiktok")),
-          posts: v.array(
-            v.object({
-              postId: v.string(),
-              source: v.union(v.literal("external"), v.literal("zernio")),
-              updatedAt: v.union(v.string(), v.null()),
-              metrics: v.object({
-                impressions: v.optional(v.number()),
-                reach: v.optional(v.number()),
-                likes: v.optional(v.number()),
-                comments: v.optional(v.number()),
-                shares: v.optional(v.number()),
-                saves: v.optional(v.number()),
-                clicks: v.optional(v.number()),
-                views: v.optional(v.number()),
-                engagementRate: v.optional(v.number()),
-              }),
-            }),
-          ),
-        }),
-      ),
-    }),
+    report: zernioReportSchema,
   }).index("by_tenant", ["tenantId"]),
+  serviceOutcomeObservations: defineTable({
+    tenantId: v.string(),
+    connectionId: v.string(),
+    connectionRevision: v.number(),
+    snapshotHash: v.string(),
+    report: zernioReportSchema,
+    createdAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_connection_createdAt", ["tenantId", "connectionId", "createdAt"])
+    .index("by_connection_hash", ["tenantId", "connectionId", "snapshotHash"]),
   bufferConnections: defineTable({
     tenantId: v.string(),
     connectionId: v.string(),
     revision: v.number(),
+    // Permission generation is independent from rotating an unchanged OAuth credential.
+    grantRevision: v.optional(v.number()),
     ciphertextB64: v.optional(v.string()),
     ivB64: v.optional(v.string()),
     keyVersion: v.union(v.literal("v1"), v.literal("v2")),
@@ -413,6 +674,7 @@ export default defineSchema({
         id: v.string(),
         name: v.string(),
         service: v.string(),
+        nativeAccountId: v.optional(v.string()),
         available: v.boolean(),
         boards: v.optional(v.array(v.object({ id: v.string(), name: v.string() }))),
       }),
@@ -425,6 +687,8 @@ export default defineSchema({
     .index("by_report_due", ["dailyReports", "nextReportAt"]),
   bufferPosts: defineTable({
     tenantId: v.string(),
+    managedServiceRunId: v.optional(v.id("managedServiceRuns")),
+    platform: v.optional(v.string()),
     connectionId: v.string(),
     organizationId: v.string(),
     campaign: v.string(),
@@ -453,9 +717,27 @@ export default defineSchema({
       v.literal("discarded"),
     ),
     bufferPostId: v.optional(v.string()),
+    replacementPostId: v.optional(v.id("bufferPosts")),
+    publicationReceipt: v.optional(
+      v.object({
+        source: v.literal("buffer-status-v1"),
+        bufferPostId: v.string(),
+        channelId: v.string(),
+        platform: v.union(v.literal("instagram"), v.literal("tiktok")),
+        nativeAccountId: v.string(),
+        nativePostId: v.union(v.string(), v.null()),
+        nativePostUrl: v.string(),
+        sentAt: v.number(),
+        observedAt: v.number(),
+        draftRevision: v.number(),
+        approvedAt: v.number(),
+      }),
+    ),
     failure: v.optional(v.string()),
     approvedAt: v.optional(v.number()),
-  }).index("by_tenant", ["tenantId"]),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_managed_service_run", ["tenantId", "managedServiceRunId"]),
   bufferReports: defineTable({
     tenantId: v.string(),
     connectionId: v.string(),
@@ -1456,6 +1738,12 @@ export default defineSchema({
      *  submitted only after their Generate click, and never copied to audit/telemetry rows. */
     mediaMode: v.optional(v.union(v.literal("reel"), v.literal("image"))),
     /** Absent historical reels retain separately generated narration and music. */
+    brandKitRef: v.optional(
+      v.object({ docId: v.id("vaultDocuments"), revision: v.number(), contentHash: v.string() }),
+    ),
+    mediaImageQuality: v.optional(
+      v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
+    ),
     mediaAudioMode: v.optional(v.union(v.literal("native"), v.literal("separate"))),
     /** Explicit per-product human picks. SHA identifies immutable image bytes, not citation text. */
     mediaProductReferences: v.optional(
@@ -1731,6 +2019,9 @@ export default defineSchema({
     .index("by_thread", ["tenantId", "threadId"])
     // Pulse layer (living-map §3.1): windowed status reads for the tenant-wide outcome counts.
     .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
+    .index("by_watchdog_renderStatus", ["renderStatus"])
+    .index("by_watchdog_captionStatus", ["captionStatus"])
+    .index("by_watchdog_status_kind_createdAt", ["status", "kind", "createdAt"])
     // Phase-17 (ACTN-02). The action-retrier's `onComplete` receives ONLY `{runId, result}` — no
     // context bag — so the run id is the sole correlation handle back to the plan that started it.
     // This index is what makes that resolvable; without it the terminal cannot find its own plan.
@@ -2061,6 +2352,8 @@ export default defineSchema({
       v.literal("readBufferEngagement"),
       v.literal("readZernioEngagement"),
       v.literal("stageBufferPost"),
+      v.literal("readSocialService"),
+      v.literal("startSocialService"),
       v.literal("setMode"),
       v.literal("setSendTime"),
       v.literal("draftBody"),
@@ -3021,6 +3314,22 @@ export default defineSchema({
   // A new TABLE is the only option, not a choice: there is no `tenants` table to add a column to
   // (tenancy is a `tenantId: string` column on every row). ONE ROW PER TENANT, read through
   // by_tenant. New table ⇒ no migration (prior-phase discipline).
+  // Drafts stay outside Vault; active identifies an immutable approved snapshot.
+  brandKits: defineTable({
+    tenantId: v.string(),
+    revision: v.number(),
+    draft: v.optional(v.object({ revision: v.number(), kit: v.string(), reviewHash: v.string() })),
+    active: v.optional(
+      v.object({
+        revision: v.number(),
+        kit: v.string(),
+        docId: v.id("vaultDocuments"),
+        contentHash: v.string(),
+        reviewHash: v.string(),
+        approvedAt: v.number(),
+      }),
+    ),
+  }).index("by_tenant", ["tenantId"]),
   tenantProfiles: defineTable({
     tenantId: v.string(),
     // Written only by the internal onboarding harness. Synthetic profiles must not arm
@@ -3076,6 +3385,7 @@ export default defineSchema({
     /** JSON: `{ blueprint: BusinessBlueprint, diff: BlueprintDiffRow[] }`. One optional string
      *  rather than a nested validator — the draft is read whole, parsed once, and replaced whole. */
     blueprintDraft: v.optional(v.string()),
+    blueprintFieldProvenance: v.optional(v.string()),
     blueprintDraftAt: v.optional(v.number()),
     /** The `ready` doc ids the LIVE blueprint was synthesized from. Stage-1 drift is the set
      *  difference against the tenant's current ready docs — a pure comparison, no detector. */
@@ -3196,6 +3506,7 @@ export default defineSchema({
     kind: v.optional(v.string()),
     // Evaluation uses this same append-only ledger and the existing limiter, never a second bill.
     evalBudgetId: v.optional(v.id("spendEvents")),
+    managedServiceRunId: v.optional(v.id("managedServiceRuns")),
     evalEnvelope: v.optional(
       v.object({
         tenantIds: v.array(v.string()),
@@ -3216,6 +3527,7 @@ export default defineSchema({
     .index("by_tenant_rail_createdAt", ["tenantId", "rail", "createdAt"])
     .index("by_correlation", ["correlationId"])
     .index("by_eval_budget", ["evalBudgetId"])
+    .index("by_managed_service_run", ["tenantId", "managedServiceRunId"])
     .index("by_probe_thread", ["tenantId", "evalAuthoringProbe.threadId"]),
 
   // One durable start per tenant, created before the first paid movement. A missing row means
@@ -3277,7 +3589,12 @@ export default defineSchema({
         seconds: v.number(),
         generateAudio: v.optional(v.boolean()),
       }),
-      v.object({ kind: v.literal("image"), width: v.number(), height: v.number() }),
+      v.object({
+        kind: v.literal("image"),
+        width: v.number(),
+        height: v.number(),
+        quality: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
+      }),
       v.object({
         kind: v.literal("tts"),
         characters: v.number(),
@@ -3340,6 +3657,7 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
+    .index("by_watchdog_status_updatedAt", ["status", "updatedAt"])
     .index("by_plan_created", ["tenantId", "planId", "createdAt"])
     .index("by_plan_status", ["tenantId", "planId", "status"])
     .index("by_plan_slot_kind_created", ["tenantId", "planId", "blockIndex", "kind", "createdAt"])

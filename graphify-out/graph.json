@@ -111305,6 +111305,66 @@
       "id": "packages_backend_convex_schema_mediacampaigns_table",
       "community": 460,
       "norm_label": "mediaCampaigns (table)"
+    },
+    {
+      "label": "brandKits (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L3034",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_brandkits_table",
+      "community": 460,
+      "norm_label": "brandKits (table)"
+    },
+    {
+      "label": "managedServices (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L210",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_managedservices_table",
+      "community": 460,
+      "norm_label": "managedServices (table)"
+    },
+    {
+      "label": "managedServiceRuns (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L211",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_managedserviceruns_table",
+      "community": 460,
+      "norm_label": "managedServiceRuns (table)"
+    },
+    {
+      "label": "managedServiceStandingApprovals (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L243",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_managedservicestandingapprovals_table",
+      "community": 460,
+      "norm_label": "managedServiceStandingApprovals (table)"
+    },
+    {
+      "label": "managedServiceOccurrences (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L292",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_managedserviceoccurrences_table",
+      "community": 460,
+      "norm_label": "managedServiceOccurrences (table)"
+    },
+    {
+      "label": "serviceOutcomeObservations (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L454",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_serviceoutcomeobservations_table",
+      "community": 460,
+      "norm_label": "serviceOutcomeObservations (table)"
     }
   ],
   "links": [
@@ -306188,6 +306248,66 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_llm",
       "target": "packages_backend_convex_vault_upsertsheets"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L3034",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_brandkits_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L210",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_managedservices_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L211",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_managedserviceruns_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L243",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_managedservicestandingapprovals_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L292",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_managedserviceoccurrences_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L454",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_serviceoutcomeobservations_table"
     }
   ],
   "hyperedges": [],

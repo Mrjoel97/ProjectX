@@ -8,10 +8,11 @@
 import { EXTRACTION_WATCHDOG_MS } from "@pikar/vault";
 import { getFunctionName } from "convex/server";
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+import { schedulingTest as test } from "../test/pausedScheduler";
 import { seedOwnedUpload } from "../test/uploadFixtures";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -31,6 +32,10 @@ const workpoolModules = import.meta.glob(
 );
 
 const TENANT = "tenant_folders";
+
+// These are scheduling-only assertions: member walks are invoked explicitly below. Reuse the
+// paused scheduler so queued walks/digest workflows cannot execute in another test or teardown.
+// Date stays real for reservation/refund stamps; no provider work is started merely to drain jobs.
 
 /** Extraction enqueues recorded off the pool — see vault.test.ts for why this is a spy and not
  *  the `_scheduled_functions` system table. */
@@ -92,13 +97,9 @@ const watchdogs = (t: ReturnType<typeof convexTest>) =>
 /**
  * Enqueues recorded for ONE tenant.
  *
- * ⚠ `enqueued` IS SHARED AND IS WRITTEN TO BY OTHER TESTS. convex-test never runs a
- * `scheduler.runAfter` entry inside the test that created it (verified: it stays `{kind:"pending"}`
- * through `finishInProgressScheduledFunctions` AND `finishAllScheduledFunctions`) — it runs during
- * a LATER test, against its own instance, and pushes into this array. Filtering by document id
- * would not discriminate: convex-test ids restart at `00000000000000010000<table>` per instance, so
- * every instance's first document has the SAME id. The tenant string is chosen by the test, so it
- * is the one field that cannot collide. Anything that COUNTS enqueues uses its own tenant.
+ * The scheduler is paused per test, so only explicit member-walk calls may write this spy. Keep
+ * tenant-specific filtering as a second isolation check: convex-test document ids restart per
+ * instance and therefore do not independently identify a harness.
  */
 const enqueuedFor = (tenantId: string) => enqueued.filter((e) => e.args[0]?.tenantId === tenantId);
 
@@ -577,9 +578,9 @@ describe("cancelFolder", () => {
 // ── 6. The member walk, and the three mutations that reach a member from OUTSIDE the walk ────
 //
 // Why this section is invoked DIRECTLY rather than through the scheduler: `reserveFolder` and
-// `cancelFolder` schedule the walk with `ctx.scheduler.runAfter(0, …)`, and convex-test leaves that
-// entry at `{kind:"pending"}` for ever — `finishInProgressScheduledFunctions()` does not help,
-// because the walk is pending, not in-progress. Everything the walk does was therefore UNSAMPLED:
+// `cancelFolder` schedule the walk with `ctx.scheduler.runAfter(0, …)`. This file pauses those
+// callbacks and asserts their persisted scheduling; it invokes the walk separately to sample it.
+// Everything the walk does would otherwise be UNSAMPLED:
 // "reserve dispatches every member" is the mechanism that makes a folder ingest at all, and a wrong
 // mode literal, status filter or index in it would have left the suite green.
 

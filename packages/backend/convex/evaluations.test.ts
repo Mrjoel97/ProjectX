@@ -18,6 +18,7 @@ import { emptyScorecard } from "@pikar/core/growth/index";
 import { v } from "convex/values";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
+import { reviewBlueprintFixture } from "../__fixtures__/reviewedBlueprint";
 // The engine's refs-only evaluation.ran audit hits the auditCounts aggregate; register the
 // component (relative import — the package blocks the deep specifier) so the REAL audit path runs
 // under convex-test instead of throwing "component not registered" (the cockpitTools.test.ts idiom).
@@ -208,9 +209,9 @@ async function seedConfirmedBlueprint(
       derivedAt: Date.now(),
       blueprintDocId: docId,
       blueprintSourceDocIds: [],
-      blueprintConfirmedAt: Date.now(),
     }),
   );
+  await reviewBlueprintFixture(t, tenantId, docId);
   return docId;
 }
 

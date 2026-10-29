@@ -158,5 +158,23 @@
     "generatedSecondsCap": 60,
     "worst60SecondVideoUsd": 11.34,
     "basis": "15four-second clips, each reserving5nominal seconds at$0.1512; render/captions additional. Policy allowances are not guaranteed provider invoices."
+  },
+  "imageQualityProfiles": {
+    "model": "openai/gpt-image-2",
+    "width": 1024,
+    "height": 1536,
+    "promptMaxBytes": 4096,
+    "policyUsd": {
+      "low": 0.006,
+      "medium": 0.07,
+      "high": 0.2
+    },
+    "observedUsd": {
+      "low": 0.005225,
+      "medium": 0.041645,
+      "high": 0.165125
+    },
+    "evidence": ".planning/phases/53-media-and-document-production/53-IMAGE-RESULTS-2026-10-22.md",
+    "note": "One sample per quality; policy headroom is not a provider invoice ceiling. Undefined quality retains legacy low."
   }
 }

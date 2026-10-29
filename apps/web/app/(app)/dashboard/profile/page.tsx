@@ -9,6 +9,7 @@ import { BillingPanel } from "../settings/BillingPanel";
 import { DataControls } from "../settings/DataControls";
 import { ErrorBoundary } from "../workspace/ErrorBoundary";
 import { BlueprintPanel } from "./BlueprintPanel";
+import { BrandKitPanel } from "./BrandKitPanel";
 import { ConnectionsPanel } from "./ConnectionsPanel";
 import { NarrativePanel } from "./NarrativePanel";
 import { ShapePanel } from "./ShapePanel";
@@ -55,6 +56,7 @@ const PROFILE_TABS = [
   { id: "shape", label: "Business shape" },
   { id: "business", label: "What the business is" },
   { id: "blueprint", label: "Blueprint" },
+  { id: "brand", label: "Brand kit" },
 ] as const;
 
 const TABS = [
@@ -367,6 +369,14 @@ function ProfileSurface() {
             hidden={profileTab !== "blueprint"}
           >
             <BlueprintPanel />
+          </div>
+          <div
+            role="tabpanel"
+            id="profile-panel-brand"
+            aria-labelledby="profile-tab-brand"
+            hidden={profileTab !== "brand"}
+          >
+            <BrandKitPanel />
           </div>
         </div>
       </div>

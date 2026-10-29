@@ -114,19 +114,19 @@ test("runCockpitAgent has one spine-first turn-prompt assembly with the exact le
   );
 
   expect(handler).toMatch(
-    /prompt:\s*buildTurnPrompt\(\{\s*spine,\s*finance,\s*history,\s*plan,\s*tz:\s*clientContext\?\.tz,\s*text\s*\}\)/,
+    /prompt:\s*buildTurnPrompt\(\{\s*spine,\s*brandSpine,\s*finance,\s*knowledge,\s*history,\s*plan,\s*tz:\s*clientContext\?\.tz,\s*text,?\s*\}\)/,
   );
   expect(handler.match(/\bprompt:/g) ?? []).toHaveLength(1);
   expect(src).not.toContain(
     "prompt: `${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, clientContext?.tz)}\\n\\nThe user says: ${text}`",
   );
 
-  // TWO standing-context channels since 2026-08-10, joined HERE and nowhere else: the blueprint
+  // Three independent standing-context channels, joined HERE and nowhere else: the blueprint
   // spine (`internal.blueprint.spineForTenant`, which is also `evaluations.ts`'s grounding chunk)
-  // and the finance line (`internal.cash.financeSpineFor`). Still one expression, still
-  // zero bytes when both are null, still the current user turn as the final line.
+  // and finance line, then scoped confirmed service information. Service statements must not enter
+  // the Blueprint grounding string. Still zero bytes when absent and the user turn remains last.
   expect(code).toMatch(
-    /const standing = \[spine, finance\]\.filter\(\(p\) => p !== null\)\.join\("\\n"\);/,
+    /const standing = \[spine, brandSpine, finance, knowledge\]\.filter\(\(p\) => p != null\)\.join\("\\n"\);/,
   );
   expect(code).toMatch(
     /return `\$\{standing === "" \? "" : `\$\{standing\}\\n\\n`\}\$\{buildHistoryBlock\(history\)\}\$\{buildAgentContext\(plan \?\? \{\}, tz\)\}\\n\\nThe user says: \$\{text\}`;/,
@@ -690,7 +690,9 @@ function replyToMessageBlock(): string {
   // 2026-08-31 — in `runSpecialistTurn`, recording which body a PINNED run loaded — and this test
   // went red for a write that has nothing to do with `replyToMessage`. An over-broad scan is not a
   // safer scan: it fails on innocent code, and the pressure that creates is to delete it.
-  const closeAt = rest.indexOf("\n  };\n  return applyGmailCapability(");
+  // The service-scope intersection now follows the same Gmail capability filter. Pin the
+  // actual end of the tool object; preserve both span assertions and every privacy check.
+  const closeAt = rest.indexOf("\n  };\n  const permitted = applyGmailCapability(");
   expect(closeAt, "buildCockpitTools close not found after replyToMessage").toBeGreaterThan(0);
   const block = rest.slice(0, closeAt).replace(/\/\/[^\n]*/g, "");
   // BOTH ENDS PINNED, so the boundary cannot slide silently again. The span must still reach the

@@ -431,6 +431,49 @@ describe("native soundtrack assembly", () => {
       },
       ...over,
     });
+  it("sends literal overlay files and bounded cues, and refuses a stale runner", async () => {
+    const scenes = [
+      {
+        kind: "video",
+        seconds: 15,
+        overlay: "FORMA: 100%",
+        overlayStartMs: 500,
+        overlayEndMs: 2500,
+        transitionOut: "fade",
+        motionGraphic: "orbit-ring",
+      },
+      { kind: "video", seconds: 15 },
+    ];
+    const opts = { nativeWav: pcm16ToWav(new Uint8Array(30 * 48000), 24000) };
+    const stale = deps(opts);
+    expect(
+      await (await handleRenderRequest(post(nativeBody({ scenes })), stale.deps)).json(),
+    ).toMatchObject({ ok: false, code: "missing_output" });
+    expect(stale.rec.fetches.filter((c) => c.url.startsWith(DEPLOYMENT))).toHaveLength(0);
+    const current = deps({
+      ...opts,
+      sidecar: JSON.stringify({
+        ...JSON.parse(SIDECAR_OK),
+        finishing_version: 2,
+        finishing_cue_count: 1,
+      }),
+    });
+    expect(
+      await (
+        await handleRenderRequest(
+          post(nativeBody({ scenes, card: { bg: "0x080808", ink: "0xD7B77A" } })),
+          current.deps,
+        )
+      ).json(),
+    ).toMatchObject({ ok: true });
+    expect(current.rec.commands[0]?.args).toContain("0:fade:1:500:2500:1");
+    const motionFile = current.rec.writes.find((f) => f.path === "in/motion01.ass");
+    expect(new TextDecoder().decode(motionFile?.content)).toContain("[Events]");
+    expect(new TextDecoder().decode(motionFile?.content)).toContain("\\1c&H7AB7D7&");
+    const textFile = current.rec.writes.find((f) => f.path === "in/overlay01.txt");
+    expect(new TextDecoder().decode(textFile?.content)).toBe("FORMA: 100%");
+    expect(current.rec.commands[0]?.args).not.toContain("FORMA: 100%");
+  });
   it("extracts and uploads a checked full-timeline WAV in the same assembly sandbox", async () => {
     const { deps: d, rec } = deps({ nativeWav: pcm16ToWav(new Uint8Array(30 * 48000), 24000) });
     const result = await handleRenderRequest(post(nativeBody()), d);

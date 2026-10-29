@@ -27,3 +27,7 @@ Phase 49 verified boundary; consumes Phase 29 defer record, ADR-046 and Phase 47
 ## Boundary
 
 The owner approved this ordered programme and parallel planning reviews. That is not evidence of a completed paid evaluation, personally executed owner activation, actual provider publication or elapsed-time test. Preserve existing concrete checkpoints and immutable artifacts. Later stages require preceding stage verification, not merely generated plans. Revalidate source/version/environment before using older evidence.
+
+## 2026-10-23 construction amendment
+
+ADR-063 explicitly permits the named inert native adapter and synthetic persistence/ledger tests before activation evidence. It corrects the construction/evidence circularity without modifying the historical defer decision. The callable route remains literalfalse; no cadence, arming, unattended dispatch or provider-consumption integration exists. The ten pure policy tests and synthetic native adapter checks do not supply the missing elapsed live evidence or enable-safe decision. See50-02/03 partial execution summaries.

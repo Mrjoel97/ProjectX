@@ -1,4 +1,23 @@
 {
+  "managed-services.md": [
+    "packages/core/src/serviceKnowledge",
+    "packages/backend/convex/serviceConversations",
+    "packages/backend/__fixtures__/serviceKnowledge",
+    "apps/web/app/(app)/dashboard/skills-workflows/ServiceKnowledgeConversation",
+    "apps/web/app/(app)/dashboard/skills-workflows/serviceKnowledgeConversation",
+    "packages/backend/__fixtures__/reviewedBlueprint",
+    "packages/core/src/managedService",
+    "packages/core/src/serviceOutcomes",
+    "packages/core/src/socialServiceOutcome",
+    "packages/backend/convex/serviceOutcomes",
+    "apps/web/app/(app)/dashboard/skills-workflows/ServiceOutcomesPanel",
+    "apps/web/app/(app)/dashboard/skills-workflows/ServiceRecurrencePanel",
+    "apps/web/app/(app)/dashboard/skills-workflows/serviceRecurrencePanel",
+    "apps/web/e2e/managed-social-service.spec.ts",
+    "packages/backend/convex/managedService",
+    "packages/backend/convex/lib/managedServiceBudget",
+    "apps/web/app/(app)/dashboard/skills-workflows/ManagedServicesPanel"
+  ],
   "zernio.md": [
     "packages/core/src/zernio",
     "packages/backend/scripts/zernioPilot",
@@ -398,7 +417,9 @@
     "apps/web/app/lib/uploadTranscriptionAudio.ts",
     "packages/core/src/workbookReport",
     "packages/core/src/presentation",
-    "packages/backend/convex/vaultPresentations"
+    "packages/backend/convex/vaultPresentations",
+    "packages/core/src/brandKit",
+    "packages/backend/convex/brandKits"
   ],
   "media.md": [
     "packages/core/src/mediaBudget",
@@ -430,7 +451,11 @@
     "apps/web/app/(app)/dashboard/workspace/MediaCampaign",
     "packages/backend/scripts/run-image-quality-qualification",
     "packages/backend/scripts/run-reel-quality-qualification",
-    "packages/backend/scripts/run-seedance-quality-qualification"
+    "packages/backend/scripts/run-seedance-quality-qualification",
+    "packages/core/src/mediaFinishing",
+    "packages/core/src/orbitRing",
+    "packages/backend/scripts/prepare-director-comparison.mjs",
+    "packages/backend/scripts/evaluate-director-comparison"
   ],
   "contacts-crm.md": [
     "packages/core/src/marketingLead",
@@ -476,6 +501,9 @@
     "scripts/check-release-social"
   ],
   "workflow-packs.md": [
+    "apps/web/e2e/workflow-pack-pilot.spec.ts",
+    "apps/web/e2e/workflow-pack-protocol.spec.ts",
+    "apps/web/e2e/workflowPackBrowserProtocol.ts",
     "apps/web/app/(app)/dashboard/skills-workflows/",
     "packages/core/src/workflowPack",
     "packages/backend/convex/workflowPack",

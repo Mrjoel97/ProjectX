@@ -1,3 +1,11 @@
+> Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social, recurring-service and indexed watchdog changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
+
+> Last verified: 2026-10-26 — Refreshed evaluator source fingerprints for the final reviewed native-finishing implementation. Registry skill content and corpus cases are unchanged by this fingerprint refresh; candidate Kimi remains unpromoted.
+
+> Last verified: 2026-10-26 — Director v12 describes the implemented animated title profile and optional decorative orbit-ring, and explicitly holds faithful product3D requests until approved model/material assets, renderer support and preview evidence exist. Generated orbits are not labeled mesh renders. Registry mirror checks pass; no paid model comparison or activation is claimed.
+
+> Last verified: 2026-10-29 — Refreshed golden and vertical evaluator source identities after watchdog candidate indexes changed schema source. Existing case bytes and registry rows remain unchanged. Offline manifest regeneration is not paid qualification, candidate activation or deployment.
+
 > Last verified: 2026-10-24 — Current golden source revision is regenerated after integrating main c765168d callback/policy work. The 46 input cases and historical receipts are unchanged; no registry seeding, activation or paid evaluation is performed.
 
 > Combined-source checkpoint: 2026-10-24 — Preserve canonical media-director v9/native-film guidance and the direct-social tool boundaries. Older director versions and source fingerprints below are historical checkpoints. Regenerate the exact merged evaluator identities with unchanged corpus bytes and historical receipts; this merge creates no paid qualification, registry seed, activation or release approval.
@@ -23,6 +31,20 @@
 > Last verified: 2026-10-23 — Refreshed the evaluator source identity after direct-social YouTube metadata controls and the agent-read boundary changed. Offline golden/vertical validation is recorded in social-connections.md. No paid evaluation, optimizer acceptance or skill activation is implied.
 
 > Last verified: 2026-10-22 — Refreshed AGENT_EVAL_SUITE.revision and the official golden suite manifest after bounded direct-social publishing diagnostics and the approved TikTok media-handoff lease fix changed runtime source. Current source hash is 6bb843bb7500956b514e4305186c68c2899d6a7ffc2c94bf22ab599af2ebe319. Official manifest regeneration and free golden self-check pass; the source repin does not change the corpus, perform a paid evaluation, activate a skill, recover the earlier TikTok error or establish platform approval. Older exact-source evidence is retired.
+
+> Last verified: 2026-10-29 — Social draft recovery and deterministic reporting change pinned runtime sources. Both evaluator inventories include the new pure narrative helper; current source fingerprints are regenerated using the existing offline generators. Historical approvals, handoffs and fixture bodies are preserved. This supplies no new paid evaluation, passing evidence or skill activation.
+
+> Last verified: 2026-10-24 — Platform-specific Buffer draft requirements and fresh native Pinterest-board ownership checks change existing pinned runtime sources. After source freeze, the computed evaluator revision, golden manifest and vertical generated corpus are refreshed together. All fixture bytes remain unchanged, including the forty-six selected golden cases and forty vertical cases. The vertical generator check and five source-identity regressions pass. This mechanical refresh changes no registry instruction body, grant, activation or historical evidence.
+
+> Last verified: 2026-10-24 — The recurring social release candidate continues using the exact existing active global cockpit instruction; no candidate, pack, vertical or tenant instruction is activated. Both generated identities now cover the dispatcher, accounting bridge, native publication/report linkage, conversational adapter and reused Foundation/profile dependencies. Forty-six golden and forty vertical fixture bodies and corpus hashes remain unchanged. The generator checks and five source-identity regressions pass; these fingerprints do not create live qualification evidence.
+
+The inline-prompt guard separately recognizes one exact named Buffer GraphQL protocol document in its exact source file. Changed queries, prose, other files and nested same-name files remain guarded, and the 200-character threshold is unchanged. The draft-answer tool's concise description remains a proposal-only contract; no registry instruction body changes. Fifteen focused inline/registry checks pass.
+
+The October24 native-Node Zernio helper import correction refreshes the evaluator revision and both generated manifests. All 46 golden and 40 vertical fixture cases remain unchanged; this mechanical source identity update performs no paid evaluation or activation.
+
+> Last verified: 2026-10-23 — The evaluator source identity includes the Zernio permission-generation correction and schema/history consumers. The current contract revision and mechanical manifest are refreshed together; golden fixture bodies and case hashes remain unchanged. This retires stale evaluator identities without recording new live qualification or activating any skill.
+
+> Last verified: 2026-10-23 — The local attended-service runtime imports new managed-service helpers. Both evaluator source inventories explicitly pin these dependencies; a source-edit regression ensures each retires both identities. Mechanical revision/manifest refresh preserves all46 golden and40 vertical cases and historical handoffs, including after the tenant-first service budget index repair. No paid evaluation, passing evidence or activation follows from this bookkeeping.
 
 > Last verified: 2026-10-21 — The shared smokeRun helper's bounded read-only transport retry changes evaluator source identity, not skill bodies or either held-out corpus. Golden already fingerprints the helper; the vertical collector also imports it and its closed inventory now explicitly includes it. Regenerate both exact identities after source freeze, preserving all 46 golden and 40 vertical cases and historical handoff/partial/startup receipts. The retry remains opt-in, restricted to exact CLI fetch failures for 23 actual internalQuery exports and capped at two total query invocations across empty-output/transport paths. Native authority failures and paid/action/mutation transport errors are not retried. The legacy unqualified pack empty-output retry remains unchanged and gains no acceptance. Refreshed pins provide no semantic pass or reusable spending authority; current-source handoff, fresh exact paid consent, full observed evidence and separate owner actions remain required.
 
@@ -65,6 +87,8 @@
 > Last verified: 2026-10-24 — Canonical media director v9 and its exact derived mirror propose generated-only native30/45/60s product films, deliberate angles/lighting, grounded product identity and consistent written voice/sound direction. Registry retains creative instructions; the pure native helper is only a deterministic provider-content envelope. No registry seed or activation occurred. Written/cited references do not attach product/voice bytes to the provider, and technical tests cannot certify continuity.
 
 # Playbook: Skill Registry (versioned LLM prompts)
+
+> Last verified: 2026-10-26 — Staged DeepSeek/Kimi resolver and conservative pricing changes refresh the golden source revision and both generated manifests. The 46 golden and 40 vertical fixture cases remain unchanged; five identity regression checks and the vertical generator check pass. No active model lane, registry body, skill status or historical evaluation result changes, and no paid evaluation is performed.
 
 > Last verified: 2026-09-14 — the deterministic research-PDF dependency and native vertical
 > review-console sources moved both evaluator identities. `AGENT_EVAL_SUITE.revision`, the golden
@@ -3190,3 +3214,25 @@ New shared llm/schema/contracts/writer sources change exact-source evaluator ide
 
 
 > Last verified: 2026-10-24 — The media director now documents the 15-second native option and explicitly selected product images. Source changes require normal registry activation; they do not activate a hosted skill automatically.
+
+### 2026-10-26 — creative direction and brand proposal registry
+
+Media Director v11 adds approved-brand grounding, purposeful camera paths, executable overlay timing/cut-or-fade instructions and playback review requirements. Canonical Markdown and derived TypeScript remain byte-mirrored. `brand-kit-designer` is appended as a new v1 draft-only registry seed; its structured proposal cannot approve itself or activate a Vault brand. Human approval and tenant/version binding belong to the brand workflow, not the prompt. The mirror test covers the new body. Local changes do not seed a hosted deployment; release must seed and verify the active registry versions.
+
+### 2026-10-23 — Managed-service outcomes and inert construction identities
+
+The closed golden/vertical evaluator inventories now include the service brain/history/projection policy dependencies and named inert recurrence construction. Refresh generated fingerprints only after final formatting; corpus bytes and historical handoffs remain unchanged. This mechanical retirement prevents prior evidence silently qualifying new runtime/schema dependencies. It does not run an evaluator, spend money or supply qualification. ADR063 keeps recurrence activation deferred.
+
+### 2026-10-23 — Legacy fixture preflight
+
+The isolated golden blueprint seed remains a synthetic unreviewed record. Current-source preflight separately proves the owned fixture document/needle exists and that its needle does not leak into assured standing context. No fake user review is inserted. Case37's expectations and all corpus cases remain unchanged; the source fingerprint is refreshed after this real authority-contract change. These offline controls do not authorize or execute another paid evaluation.
+
+### 2026-10-23 — Bounded attended admission
+
+ADR066 replaces the blanket empty admission with the existing built-in attended social draft/report capability. Only social-marketing, social.prepare/social.report, exactly one active global cockpit pin, current native account scopes and Executive grants may be ready; budget/control/identity and per-step fences still apply. Tenant overrides, additional skills, packs, business review and verticals remain outside admission. This source slice is accepted by its own current-source CI/native public-start proof and authenticated release checks, not by qualifying an unrelated offer-architect candidate. No prior phase/evidence is rewritten. Recurrence stays disabled, drafts still need exact-content review for scheduling, and unknown costs/effects block replay. No paid run or deployment occurred during construction.
+
+Registry compatibility: the narrow built-in cockpit slice reuses the ordinary loader's unique already-active global authority, including supported bootstrap/rollback versions. Exact saved row/version/body and no active tenant overlay remain mandatory in both setup options and readiness. It does not require a new evaluation of an unchanged already-live body. Candidate/tenant activation and all existing evaluator/owner-approval transitions are unchanged; no evidence is manufactured.
+
+### Last verified: 2026-10-23 — Native reviewed test fixtures
+
+Older positive context fixtures now use a shared test-only helper that creates an actual synthetic source/hash and calls native draft writing plus authenticated public confirmation. It obtains real offline audit/field references rather than inserting pretend review metadata. Positive cockpit/evaluation/search/voice context assertions remain; legacy exclusion and the exact ADR063 absence exception remain explicit. This is simulated native test-user behavior, not live owner approval or golden evidence. Production source behavior and corpus cases are unchanged by the fixture correction.

@@ -1,3 +1,7 @@
+> Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social and recurring-service changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
+
+> Last verified: 2026-10-26 — The finance privacy regression checks complete numeric values rather than numeric substrings, so a daily-reset timestamp containing the shared ceiling digits cannot cause a false leak failure. Tenant rail values and exclusion of deployment ceilings remain asserted; runtime finance behavior is unchanged.
+
 > Last verified: 2026-10-24 — Preserve main c765168d legal disclosures and owned-domain callback alongside the media workspace. This integration does not replace the policy pages or alter the approved public contact details. Combined-source CI and hosted acceptance remain separate.
 
 > Combined-source checkpoint: 2026-10-24 — Preserve the tabbed artifact workspace and in-conversation media budget request while retaining social draft locking, explicit destination/approval controls and truthful disconnect/data-erasure disclosures. Reading an output or social account does not authorize generation or publication. Final merged-candidate CI and release remain pending.
@@ -13,6 +17,10 @@
 > Last verified: 2026-10-20 — Connect social now supports explicit customer account selection, bounded recent-content reads, owned-media drafts and saved-revision post review. Publishing remains disabled pending qualification. Direct-social privacy/terms drafts separate mailbox/social consent, local disconnect/provider revocation and agent drafting/customer approval; YouTube terms/privacy links are included. Company/legal placeholders and qualified review remain open; isolated review deployment does not establish production legal readiness.
 
 > Implementation update: 2026-10-20 — Settings Connections and Marketing expose native social account setup, with loading/configuration/consent states and no automatic publishing. Offline/live validation status is tracked in social-connections.md.
+
+> Last verified: 2026-10-29 — Marketing renders a shared plain-language narrative above existing Zernio evidence. It reads the cached snapshot without another provider/model call and preserves old-data, lifetime, sample and attribution limitations. Five interface checks pass; hosted staging acceptance is pending.
+
+> Last verified: 2026-10-23 — Skills and Workflows opens on Services, with goal/account/operation setup, maximum spend per run, native start status and Pause/Stop/Resume. Unavailable services explain that setup may be saved; cadence remains disabled. Existing Workflows/Skills remain accessible. Workspace trace labels cover both service tools. Nineteen local UI tests pass; mocked UI states are not hosted acceptance.
 
 > Last verified: 2026-10-21 — The spend movement validator mirrors schema.ts's optional closed `evalEnvelope.accountingMode: "ledger-nanos-v1"` metadata so the existing append-only writer can preserve a newly opened isolated golden envelope's accounting mode. No writer behavior, ordinary dashboard accounting, existing row, ledger history or saved envelope is changed; marker-free rows remain valid. Admission/settlement policy is owned by guardrails.md and proposed ADR-061.
 
@@ -3272,3 +3280,10 @@ Campaign children are reviewed through the media batch card, not ordinary Approv
 The new workspace campaign card shows real proposed/queued/running/succeeded/failed/partial/reconciliation/cancelled state, per-item review/download and selected paid retry. Cumulative reserved maximum is not actual spend. JSON manifest download contains no bearer URLs and is not a ZIP collection. Missing/failing items cannot be labelled complete or replaced by placeholders.
 
 PPTX remains an owned Vault/Content artifact with a labelled same-spec layout preview and original download, not a second content store or Office-fidelity renderer. Reuse existing provenance, on-demand download and tenant boundaries. Root consolidated regressions, authenticated browser/responsive review and owner artifact quality gates remain open.
+
+### 2026-10-23 — Service supervision
+
+The Skills and Workflows service card links an owned business goal using current configuration/control revisions. The results panel separates completed work, the user's usefulness feedback, supported account measurements and unproven business improvement. Feedback cannot complete a goal or approve a post. Pending work disables goal edits. Check interrupted work asks the native workflow and ledger before closing an interrupted claim; unresolved cost or unavailable liveness keeps it blocked. Closing never automatically starts another run. Synthetic interface states were reviewed at390/768/1440 pixels without horizontal overflow; this is not hosted authenticated acceptance.
+# Finance projection update
+
+> Last verified: 2026-10-24 — Finance reports a recurring service's prepaid standing envelope once. Its `paid_call_standing` provider-detail receipts remain in the append-only ledger for exact run reconciliation but are excluded from displayed money totals and chart buckets. Reads bound the raw ledger scan before filtering and derive the partial indicator from the scanned count, so a full detail page cannot quietly become a complete zero. Native Finance/accounting regression covers cumulative sub-cent usage without duplicate charges; hosted financial and recurring-service acceptance remain separate.

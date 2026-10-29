@@ -1,0 +1,76 @@
+{
+  "schema": "phase23-handoff-refresh-observation.v1",
+  "predecessorHandoffPath": ".planning/phases/23-agent-authored-skills/handoffs/2026-10-21-pr81/23-LIVE-HANDOFF.json",
+  "startupAbortObservationPath": ".planning/phases/23-agent-authored-skills/23-07-STARTUP-2026-10-21-PR81.json",
+  "startupAbortObservationSha256": "8815857b7e559e24c4daf42a2092f0e0ae7b163d329ea0c12b67e3abb851bb2c",
+  "stagingReleaseObservationPath": ".planning/phases/48-readiness-and-qualification-closure/48-STAGING-PR82-RELEASE-2026-10-21.json",
+  "stagingReleaseObservationSha256": "3113664464004c54d805023d965fcbdd59e1a77cfa4f43e09f94f7cc7872b60f",
+  "mergedSha": "2a70886519fccbf0a0524f680f67142c909cbfa7",
+  "refresh": {
+    "observedAt": "2026-10-21T21:43:13.018Z",
+    "path": ".planning/phases/23-agent-authored-skills/handoffs/2026-10-21-pr82/23-LIVE-HANDOFF.json",
+    "sha256": "e7ee9d75acf644ab20d8e72e708b92941649b20b026b8778738b3f371ebf4b62",
+    "predecessorHandoffSha256": "39dfb14558a96cdbede3ca7d0641ee33ed09edaec0526510950528a19a48a930",
+    "historicalHandoffsPreserved": [
+      {
+        "path": ".planning/phases/23-agent-authored-skills/23-LIVE-HANDOFF.json",
+        "sha256": "112ce2643ae15d4b2c39961b09506223bf0d6fe9978993dfe9536cee2dcbdc45"
+      },
+      {
+        "path": ".planning/phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json",
+        "sha256": "ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61"
+      },
+      {
+        "path": ".planning/phases/23-agent-authored-skills/handoffs/2026-10-21-pr81/23-LIVE-HANDOFF.json",
+        "sha256": "39dfb14558a96cdbede3ca7d0641ee33ed09edaec0526510950528a19a48a930"
+      }
+    ],
+    "sourceSha": "821b097ceae440730bc51988af0425fb878687fb",
+    "ciRunId": 39663077579,
+    "releaseRunId": 39668142870,
+    "releaseJobId": 119458556492,
+    "releaseAuthorizationSha256": "d792ee1a6daa2d4dfb5a05767736b963f9777dcaae66dd71fb9774bdb47c1c96",
+    "exactCurrentStateMatch": true,
+    "matchingReads": 6,
+    "nativeAuthVerified": true,
+    "actualResponsiveViewports": [
+      {
+        "width": 1280,
+        "height": 720,
+        "surface": "direct native signed-in review"
+      },
+      {
+        "width": 390,
+        "height": 900,
+        "surface": "read-only embedded review"
+      }
+    ],
+    "keyboardWitnessScope": "direct native signed-in review only; embedded controls not exercised",
+    "authoringWitnessScope": "original source-thread authoring and refusal remain historical; no new agent turn",
+    "viewportWitnessScope": "fresh measured browser dimensions; no touch or physical-device claim",
+    "existingOwnerAtStart": true,
+    "privateNeedleScanPassed": true,
+    "paidReady": false,
+    "paidAuthorized": false,
+    "activationAuthorized": false,
+    "productionDeploymentAuthorized": false,
+    "privateSourceHashes": {
+      "authorization.json": "d792ee1a6daa2d4dfb5a05767736b963f9777dcaae66dd71fb9774bdb47c1c96",
+      "release-observation.json": "44b4ff45a060bd8239803306f305564e534f12829303768c20c686c081d6bb81",
+      "readiness.json": "3541827746458f87989b22c23eb9fd7d62373bd573bdf866f30e109ffcd31614",
+      "native-identities.json": "bf8bd1c072da0c7fac3188b27bede60a18d3600327fcfc6d0a4e2595147682ab",
+      "native-review.json": "8e79d8b0c0f31aa7b4ca62d42c715b5e4aea8143ecb2dce122b57db0387d56d7",
+      "desktop-review-witness.json": "3be9fe1da7dab0ce74364d7669fbfeb062be3cc5b47ba83634f71cb5e246b257",
+      "mobile-review-witness.json": "684f7a809e24b77abe4ac796e531e23f329e37689e7145167d74518f3a3c3090",
+      "release-desktop-pr82.png": "da4c96b89b6bd8ed015bc411bcc7cfe14b89b98e000b9218865b462eef613313",
+      "release-mobile-pr82.png": "ca2de3219f8e2eeefba15f1a38c0e6947e472d650f9669316cb89e2e16522623"
+    }
+  },
+  "sourceVariancePreserved": "Historical owner-ratified cockpit baseline remains unchanged; no registry repair or source-body alignment was performed.",
+  "fixturesRemainSynthetic": true,
+  "currentPaidEvaluationRecorded": false,
+  "currentPublicNonOwnerMutationAttempted": false,
+  "noTouchOrPhysicalDeviceTestingClaim": true,
+  "localReviewConfiguration": "Native local development review only; these offline writers perform no deployment or configuration write.",
+  "authorizationProvenance": "Exact new PR82 staging authorization is hash-bound; it includes existing read-only account checks and a new versioned handoff, excluding paid evaluation, activation and production deployment."
+}

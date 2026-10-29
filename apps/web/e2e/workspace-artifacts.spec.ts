@@ -330,6 +330,55 @@ test.describe("local native-auth artifact workspace", () => {
     writeFileSync(resolve(output, "report.json"), JSON.stringify(observations, null, 2));
   });
 
+  test("brand kit review approves the exact local draft and survives reload", async () => {
+    // Local fixture preparation uses the ordinary authenticated draft mutation, not a model.
+    // No provider key is configured in this dedicated acceptance backend.
+    const helper = pathToFileURL(resolve(ARTIFACT_QA_PRIVATE, "fixture-support.mjs")).href;
+    const staged = await runFile(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        `
+      const {native,ref,target}=await import(${JSON.stringify(helper)});
+      if(target!=="http://127.0.0.1:3340")throw Error("LOCAL_ONLY");
+      const {client}=await native("A");
+      const state=await client.query(ref("brandKits:state"),{});
+      const result=await client.mutation(ref("brandKits:saveDraft"),{expectedRevision:state.revision,kit:{
+        name:"FORMA acceptance",tagline:"Designed for every day",audience:"Independent creators",
+        positioning:"Thoughtful everyday essentials",voice:["Clear","Warm"],
+        palette:[{name:"Ink",hex:"#17242C"},{name:"Paper",hex:"#F6F3EA"}],
+        typography:{heading:"Inter",body:"Inter"},logoDirection:"Simple wordmark",
+        imagery:"Soft daylight and honest product details",motion:"Deliberate camera rise",
+        examples:["Make space for what matters"],prohibitedClaims:["No unverified product claims"]
+      }});
+      console.log(JSON.stringify({revision:result.revision}));
+    `,
+      ],
+      { cwd: ARTIFACT_QA_ROOT, windowsHide: true },
+    );
+    const { revision } = JSON.parse(staged.stdout) as { revision: number };
+    await page.goto(`${ARTIFACT_QA_APP}/dashboard/profile?tab=profile&section=brand`, {
+      waitUntil: "domcontentloaded",
+    });
+    const brand = page.getByRole("region", { name: "Brand kit", exact: true });
+    await expect(brand).toContainText("Proposed · awaiting your approval");
+    await expect(brand).toContainText(`revision ${revision}`);
+    await expect(brand).toContainText("Deliberate camera rise");
+    await brand.getByRole("button", { name: "Approve this brand kit", exact: true }).click();
+    await expect(brand).toContainText("Approved · saved in Knowledge Vault");
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(brand).toContainText("FORMA acceptance");
+    await expect(
+      brand.getByRole("button", { name: "Approve this brand kit", exact: true }),
+    ).toHaveCount(0);
+    await page.screenshot({
+      path: resolve(output, "native-brand-kit-approved.png"),
+      fullPage: true,
+    });
+    passed("brand-kit-exact-revision-approval-and-reload", { revision });
+  });
+
   test("native auth and anonymous refusal precede real owned document controls", async () => {
     const anonymous = await request.newContext();
     try {

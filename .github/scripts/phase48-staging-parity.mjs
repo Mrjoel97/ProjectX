@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stripVTControlCharacters } from "node:util";
+import { buildObservationQuery } from "../../scripts/observe-staging-retention.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const backend = resolve(root, "packages/backend");
@@ -195,16 +196,7 @@ export function summarizeDiff(output, context = {}) {
   };
 }
 
-const retentionQuery = `
-const interviews=await ctx.db.query("foundationInterviews").take(201);
-if(interviews.length>200)throw Error("BOUND");
-const fixtures=interviews.filter(x=>x.tenantId.startsWith("retention-qualification-"));
-if(fixtures.length!==1)throw Error("FIXTURE");
-const digest=async x=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(JSON.stringify(x))))).map(b=>b.toString(16).padStart(2,"0")).join("");
-if(await digest([fixtures[0]._id,fixtures[0].tenantId,fixtures[0]._creationTime])!==${JSON.stringify(fingerprint)})throw Error("FIXTURE");
-const rows=await ctx.db.query("foundationTranscripts").withIndex("by_tenant",q=>q.eq("tenantId",fixtures[0].tenantId)).take(2);
-if(rows.length!==1||rows[0].eventId!=="retention-clock-probe"||Math.abs(rows[0]._creationTime-Date.parse("2026-10-17T10:18:29.493Z"))>1||rows[0].expiresAt!==Date.parse("2026-10-24T10:18:29.493Z")||Date.now()>=rows[0].expiresAt)throw Error("CLOCK");
-return {sha256:await digest([fixtures[0],rows[0]]),checkpointCount:1};`;
+const retentionQuery = buildObservationQuery(fingerprint, { preservationSnapshot: true });
 const registrySelection = [
   ["cockpit-agent", "cockpitAgent", "cockpitAgentSkillBody"],
   ["offer-architect", "offerArchitect", "offerArchitectSkillBody"],
@@ -302,7 +294,7 @@ export async function runParity(env = process.env, execute = spawnSync, onPhase 
     const retention = query(retentionQuery);
     demand(
       keys(retention, ["sha256", "checkpointCount"]) &&
-        retention.checkpointCount === 1 &&
+        [0, 1].includes(retention.checkpointCount) &&
         /^[a-f0-9]{64}$/.test(retention.sha256),
     );
     onPhase(when === "before" ? "before_registry" : "after_registry");

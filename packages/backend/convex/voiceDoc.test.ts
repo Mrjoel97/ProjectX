@@ -14,6 +14,7 @@ import {
 } from "@pikar/voice";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { reviewBlueprintFixture } from "../__fixtures__/reviewedBlueprint";
 // The evaluation write path's refs-only audit hits the auditCounts aggregate; register the
 // component (relative import — the package blocks the deep specifier), the evaluations.test.ts idiom.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -133,9 +134,9 @@ async function seedConfirmedBlueprint(
       derivedAt: Date.now(),
       blueprintDocId: docId,
       blueprintSourceDocIds: [],
-      blueprintConfirmedAt: Date.now(),
     }),
   );
+  await reviewBlueprintFixture(t, tenantId, docId);
   return docId;
 }
 

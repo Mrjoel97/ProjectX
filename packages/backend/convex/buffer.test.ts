@@ -2,6 +2,7 @@ import { BUFFER_SCOPES } from "@pikar/core/buffer";
 import { importCredentialKey, openCredential, sealCredential } from "@pikar/revenue";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { schedulingTest, withPausedScheduler } from "../test/pausedScheduler";
 import { api, internal } from "./_generated/api";
 import { bufferGraphql, bufferJson, callBufferTool } from "./lib/bufferMcp";
 import schema from "./schema";
@@ -65,6 +66,646 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+describe("reviewable social draft revisions and recovery", () => {
+  const draft = {
+    campaign: "Social pilot",
+    channelId,
+    text: "Review this exact draft",
+    mode: "addToQueue" as const,
+  };
+  test("an agent's media-incomplete TikTok draft survives until a new exact-content review", async () => {
+    const h = await setup();
+    await connect(h);
+    // Initialize lazy native modules before pausing callbacks; only publishing jobs are paused.
+    await withPausedScheduler(async () => {
+      await h.t.mutation(internal.buffer.storeChannels, {
+        tenantId: h.tenantId,
+        connectionId: "connection1",
+        organizationId,
+        organizationName: "Own organization",
+        channels: [{ id: channelId, name: "Own TikTok", service: "tiktok", available: true }],
+      });
+      const postId = await h.t.mutation(internal.buffer.stageAgentPost, {
+        tenantId: h.tenantId,
+        ...draft,
+      });
+      expect((await h.asUser.query(api.buffer.posts, {}))[0]).toMatchObject({
+        _id: postId,
+        text: draft.text,
+        platform: "tiktok",
+        status: "draft",
+        revision: 1,
+      });
+      const jobs = () => h.t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+      expect(await jobs()).toHaveLength(0);
+      await expect(
+        h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 }),
+      ).rejects.toThrow("BUFFER_MEDIA_REQUIRED");
+      expect(await jobs()).toHaveLength(0);
+      const retained = (await h.asUser.query(api.buffer.posts, {}))[0];
+      expect(retained).toMatchObject({ text: draft.text, status: "draft", revision: 1 });
+      expect(retained?.approvedAt).toBeUndefined();
+      await h.asUser.mutation(api.buffer.editPost, {
+        ...draft,
+        postId,
+        revision: 1,
+        videoUrl: "https://example.com/reviewed.mp4",
+      });
+      await expect(
+        h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 }),
+      ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+      expect(await jobs()).toHaveLength(0);
+      await h.asUser.mutation(api.buffer.approvePost, { postId, revision: 2 });
+      expect(await jobs()).toHaveLength(1);
+      expect((await h.asUser.query(api.buffer.posts, {}))[0]).toMatchObject({
+        status: "approved",
+        revision: 2,
+        text: draft.text,
+        videoUrl: "https://example.com/reviewed.mp4",
+      });
+    });
+  });
+  schedulingTest(
+    "other media platforms retain incomplete drafts without accepting foreign Pinterest boards",
+    async () => {
+      const h = await setup();
+      await connect(h);
+      for (const service of ["instagram", "youtube", "pinterest"]) {
+        await h.t.mutation(internal.buffer.storeChannels, {
+          tenantId: h.tenantId,
+          connectionId: "connection1",
+          organizationId,
+          organizationName: "Own organization",
+          channels: [
+            {
+              id: channelId,
+              name: "Own channel",
+              service,
+              available: true,
+              ...(service === "pinterest"
+                ? { boards: [{ id: "owned-board", name: "Own board" }] }
+                : {}),
+            },
+          ],
+        });
+        const postId = await h.asUser.mutation(api.buffer.stagePost, draft);
+        await expect(
+          h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 }),
+        ).rejects.toThrow(
+          service === "youtube" ? "BUFFER_YOUTUBE_DETAILS_REQUIRED" : "BUFFER_MEDIA_REQUIRED",
+        );
+        expect((await h.t.run((ctx) => ctx.db.get(postId)))?.status).toBe("draft");
+      }
+      await expect(
+        h.asUser.mutation(api.buffer.stagePost, { ...draft, boardId: "foreign-board" }),
+      ).rejects.toThrow("BUFFER_PINTEREST_BOARD_REQUIRED");
+      await expect(
+        h.asUser.mutation(api.buffer.stagePost, {
+          ...draft,
+          imageUrl: "https://secret@example.com/private.jpg",
+        }),
+      ).rejects.toThrow("BUFFER_INVALID_MEDIA");
+      expect(
+        await h.t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect()),
+      ).toHaveLength(0);
+    },
+  );
+  test("edits are tenant-owned CAS changes, remove omitted media and invalidate stale review decisions", async () => {
+    vi.useFakeTimers();
+    const h = await setup();
+    await connect(h);
+    const postId = await h.asUser.mutation(api.buffer.stagePost, {
+      ...draft,
+      imageUrl: "https://example.com/image.jpg",
+    });
+    expect(
+      await h.asUser.mutation(api.buffer.editPost, {
+        ...draft,
+        postId,
+        revision: 1,
+        text: "Revised draft",
+      }),
+    ).toEqual({ postId, revision: 2 });
+    expect((await h.asUser.query(api.buffer.posts, {}))[0]).toMatchObject({
+      text: "Revised draft",
+      revision: 2,
+      status: "draft",
+    });
+    expect((await h.asUser.query(api.buffer.posts, {}))[0]?.imageUrl).toBeUndefined();
+    await expect(
+      h.asOther.mutation(api.buffer.editPost, { ...draft, postId, revision: 2 }),
+    ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+    await expect(
+      h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 }),
+    ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+    await expect(
+      h.asUser.mutation(api.buffer.discardPost, { postId, revision: 1 }),
+    ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+    await h.asUser.mutation(api.buffer.approvePost, { postId, revision: 2 });
+    await expect(
+      h.asUser.mutation(api.buffer.editPost, { ...draft, postId, revision: 2 }),
+    ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+    expect(
+      (await h.t.mutation(internal.buffer.claimPost, { tenantId: h.tenantId, postId }))?.text,
+    ).toBe("Revised draft");
+  });
+  test("a concurrent edit and approval cannot both win the same visible revision", async () => {
+    vi.useFakeTimers();
+    const h = await setup();
+    await connect(h);
+    const postId = await h.asUser.mutation(api.buffer.stagePost, draft);
+    const results = await Promise.allSettled([
+      h.asUser.mutation(api.buffer.editPost, {
+        ...draft,
+        postId,
+        revision: 1,
+        text: "Changed concurrently",
+      }),
+      h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 }),
+    ]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const post = (await h.asUser.query(api.buffer.posts, {}))[0];
+    if (post?.status === "approved") expect(post).toMatchObject({ text: draft.text, revision: 1 });
+    else {
+      expect(post).toMatchObject({
+        text: "Changed concurrently",
+        revision: 2,
+        status: "draft",
+      });
+      expect(post?.approvedAt).toBeUndefined();
+    }
+  });
+  test("rejection keeps the native draft history and can never be approved or published", async () => {
+    vi.useFakeTimers();
+    const h = await setup();
+    await connect(h);
+    const postId = await h.asUser.mutation(api.buffer.stagePost, draft);
+    await h.asUser.mutation(api.buffer.discardPost, { postId, revision: 1 });
+    expect((await h.asUser.query(api.buffer.posts, {}))[0]).toMatchObject({
+      status: "discarded",
+      revision: 2,
+      text: draft.text,
+    });
+    await expect(
+      h.asUser.mutation(api.buffer.approvePost, { postId, revision: 2 }),
+    ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+    expect(
+      await h.t.mutation(internal.buffer.claimPost, { tenantId: h.tenantId, postId }),
+    ).toBeNull();
+  });
+  test("edits revalidate channels, format and schedules", async () => {
+    const h = await setup();
+    await connect(h);
+    const postId = await h.asUser.mutation(api.buffer.stagePost, draft);
+    await expect(
+      h.asUser.mutation(api.buffer.editPost, {
+        ...draft,
+        postId,
+        revision: 1,
+        mode: "customScheduled",
+        dueAt: Date.now() - 1,
+      }),
+    ).rejects.toThrow("BUFFER_INVALID_SCHEDULE");
+    await expect(
+      h.asUser.mutation(api.buffer.editPost, {
+        ...draft,
+        postId,
+        revision: 1,
+        channelId: organizationId,
+      }),
+    ).rejects.toThrow("BUFFER_CHANNEL_NOT_ALLOWED");
+  });
+  test("saving a draft after same-destination reconnect adopts the grant without approval or publishing", async () => {
+    const h = await setup();
+    await connect(h);
+    await withPausedScheduler(async () => {
+      const postId = await h.asUser.mutation(api.buffer.stagePost, draft);
+      await h.t.run(async (ctx) => {
+        const row = await ctx.db
+          .query("bufferConnections")
+          .withIndex("by_tenant", (q) => q.eq("tenantId", h.tenantId))
+          .unique();
+        if (!row) throw new Error("fixture");
+        await ctx.db.patch(row._id, { connectionId: "replacement" });
+      });
+      // Reconnection alone cannot carry the old review into a provider submission.
+      await expect(
+        h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 }),
+      ).rejects.toThrow("BUFFER_CHANNEL_NOT_ALLOWED");
+      await h.asUser.mutation(api.buffer.editPost, {
+        ...draft,
+        postId,
+        revision: 1,
+        text: "Explicitly reviewed after reconnect",
+      });
+      const post = await h.t.run((ctx) => ctx.db.get(postId));
+      expect(post).toMatchObject({
+        connectionId: "replacement",
+        organizationId,
+        channelId,
+        platform: "linkedin",
+        status: "draft",
+        revision: 2,
+        text: "Explicitly reviewed after reconnect",
+      });
+      expect(post?.approvedAt).toBeUndefined();
+      expect(post?.bufferPostId).toBeUndefined();
+      expect(post?.failure).toBeUndefined();
+      await expect(
+        h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 }),
+      ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+      await expect(
+        h.asUser.mutation(api.buffer.editPost, { ...draft, postId, revision: 1 }),
+      ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+      expect(
+        await h.t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect()),
+      ).toHaveLength(0);
+      expect(
+        await h.t.mutation(internal.buffer.claimPost, { tenantId: h.tenantId, postId }),
+      ).toBeNull();
+    });
+  });
+  test.each([
+    "organization",
+    "channel",
+    "platform",
+    "unselected",
+    "unavailable",
+    "disconnected",
+  ] as const)("reconnect edit refuses a changed or unavailable %s destination", async (change) => {
+    const h = await setup();
+    await connect(h);
+    const postId = await h.asUser.mutation(api.buffer.stagePost, draft);
+    const otherChannelId = "1234567890abcdef12345670";
+    await h.t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("bufferConnections")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", h.tenantId))
+        .unique();
+      if (!row) throw new Error("fixture");
+      await ctx.db.patch(row._id, {
+        connectionId: "replacement",
+        organizationId: change === "organization" ? "different-organization" : organizationId,
+        status: change === "disconnected" ? "disconnected" : "connected",
+        selectedChannelIds: change === "unselected" ? [] : [channelId, otherChannelId],
+        channels: [
+          {
+            id: channelId,
+            name: "Own channel",
+            service: change === "platform" ? "tiktok" : "linkedin",
+            available: change !== "unavailable",
+          },
+          {
+            id: otherChannelId,
+            name: "Other selected channel",
+            service: "linkedin",
+            available: true,
+          },
+        ],
+      });
+    });
+    await expect(
+      h.asUser.mutation(api.buffer.editPost, {
+        ...draft,
+        channelId: change === "channel" ? otherChannelId : channelId,
+        postId,
+        revision: 1,
+      }),
+    ).rejects.toThrow(
+      ["unselected", "unavailable", "disconnected"].includes(change)
+        ? "BUFFER_CHANNEL_NOT_ALLOWED"
+        : "BUFFER_CONNECTION_CHANGED",
+    );
+    expect(await h.t.run((ctx) => ctx.db.get(postId))).toMatchObject({
+      connectionId: "connection1",
+      status: "draft",
+      revision: 1,
+    });
+  });
+  test.each([
+    "draft",
+    "approved",
+    "submitting",
+    "unknown",
+  ] as const)("reconnected %s rows retain ownership and draft-only edit fences", async (status) => {
+    const h = await setup();
+    await connect(h);
+    const postId = await h.asUser.mutation(api.buffer.stagePost, draft);
+    await h.t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("bufferConnections")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", h.tenantId))
+        .unique();
+      if (!row) throw new Error("fixture");
+      await ctx.db.patch(row._id, { connectionId: "replacement" });
+      await ctx.db.patch(postId, { status });
+    });
+    await expect(
+      h.asOther.mutation(api.buffer.editPost, { ...draft, postId, revision: 1 }),
+    ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+    if (status !== "draft") {
+      await expect(
+        h.asUser.mutation(api.buffer.editPost, { ...draft, postId, revision: 1 }),
+      ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+    }
+    expect(await h.t.run((ctx) => ctx.db.get(postId))).toMatchObject({
+      connectionId: "connection1",
+      status,
+      revision: 1,
+    });
+  });
+  test("expired approved schedules fail before submission and unknown writes remain fenced from edit/reapproval/replay", async () => {
+    vi.useFakeTimers();
+    const h = await setup();
+    await connect(h);
+    const expired = await h.asUser.mutation(api.buffer.stagePost, {
+      ...draft,
+      mode: "customScheduled",
+      dueAt: Date.now() + 120000,
+    });
+    await h.asUser.mutation(api.buffer.approvePost, { postId: expired, revision: 1 });
+    vi.setSystemTime(Date.now() + 180000);
+    expect(
+      await h.t.mutation(internal.buffer.claimPost, { tenantId: h.tenantId, postId: expired }),
+    ).toBeNull();
+    expect((await h.t.run((ctx) => ctx.db.get(expired)))?.failure).toBe("schedule_expired");
+    const uncertain = await h.asUser.mutation(api.buffer.stagePost, draft);
+    await h.asUser.mutation(api.buffer.approvePost, { postId: uncertain, revision: 1 });
+    await h.t.mutation(internal.buffer.claimPost, { tenantId: h.tenantId, postId: uncertain });
+    await h.t.mutation(internal.buffer.finishPost, {
+      tenantId: h.tenantId,
+      postId: uncertain,
+      status: "unknown",
+      failure: "check_buffer_before_retry",
+    });
+    await expect(
+      h.asUser.mutation(api.buffer.editPost, { ...draft, postId: uncertain, revision: 1 }),
+    ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+    await expect(
+      h.asUser.mutation(api.buffer.approvePost, { postId: uncertain, revision: 1 }),
+    ).rejects.toThrow("BUFFER_DRAFT_CHANGED");
+    expect(
+      await h.t.mutation(internal.buffer.claimPost, { tenantId: h.tenantId, postId: uncertain }),
+    ).toBeNull();
+  });
+  test("known pre-submission failure recovery creates exactly one new unapproved draft and preserves the failed original", async () => {
+    vi.useFakeTimers();
+    const h = await setup();
+    await connect(h);
+    const postId = await h.asUser.mutation(api.buffer.stagePost, {
+      ...draft,
+      mode: "customScheduled",
+      dueAt: Date.now() + 120000,
+    });
+    await h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 });
+    vi.setSystemTime(Date.now() + 180000);
+    expect(
+      await h.t.mutation(internal.buffer.claimPost, { tenantId: h.tenantId, postId }),
+    ).toBeNull();
+    const attempts = await Promise.allSettled([
+      h.asUser.mutation(api.buffer.restageFailedPost, {
+        ...draft,
+        postId,
+        revision: 1,
+        text: "Human revised replacement",
+      }),
+      h.asUser.mutation(api.buffer.restageFailedPost, {
+        ...draft,
+        postId,
+        revision: 1,
+        text: "Concurrent replacement",
+      }),
+    ]);
+    expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
+    const original = await h.t.run((ctx) => ctx.db.get(postId));
+    expect(original).toMatchObject({ status: "failed", failure: "schedule_expired", revision: 2 });
+    if (!original?.replacementPostId) throw new Error("Missing replacement");
+    const replacementId = original.replacementPostId;
+    expect(await h.t.run((ctx) => ctx.db.get(replacementId))).toMatchObject({
+      status: "draft",
+      revision: 1,
+      mode: "addToQueue",
+    });
+    expect(
+      (await h.asUser.query(api.buffer.posts, {})).filter((post) => post.status === "draft"),
+    ).toHaveLength(1);
+    await expect(
+      h.asOther.mutation(api.buffer.restageFailedPost, { ...draft, postId, revision: 2 }),
+    ).rejects.toThrow("BUFFER_REPLACEMENT_NOT_ALLOWED");
+  });
+  test("uncertain and provider-owned failed posts cannot be cloned through the recovery mutation", async () => {
+    vi.useFakeTimers();
+    const h = await setup();
+    await connect(h);
+    for (const status of ["unknown", "failed"] as const) {
+      const postId = await h.asUser.mutation(api.buffer.stagePost, draft);
+      await h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 });
+      await h.t.mutation(internal.buffer.claimPost, { tenantId: h.tenantId, postId });
+      await h.t.mutation(internal.buffer.finishPost, {
+        tenantId: h.tenantId,
+        postId,
+        status,
+        failure: status === "unknown" ? "check_buffer_before_retry" : "provider_rejected",
+        ...(status === "failed" ? { bufferPostId: organizationId } : {}),
+      });
+      await expect(
+        h.asUser.mutation(api.buffer.restageFailedPost, { ...draft, postId, revision: 1 }),
+      ).rejects.toThrow("BUFFER_REPLACEMENT_NOT_ALLOWED");
+    }
+  });
+});
+
+test("publication receipts bind an actual accepted revision and are retained when a sent post's URL arrives later", async () => {
+  vi.useFakeTimers();
+  const h = await setup();
+  await connect(h);
+  await h.t.mutation(internal.buffer.storeChannels, {
+    tenantId: h.tenantId,
+    connectionId: "connection1",
+    organizationId,
+    organizationName: "Own organization",
+    channels: [
+      {
+        id: channelId,
+        name: "Own TikTok",
+        service: "tiktok",
+        nativeAccountId: "native_account",
+        available: true,
+      },
+    ],
+  });
+  const postId = await h.asUser.mutation(api.buffer.stagePost, {
+    campaign: "Pilot",
+    channelId,
+    text: "Approved native receipt fixture",
+    mode: "addToQueue",
+    videoUrl: "https://example.com/video.mp4",
+  });
+  await h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 });
+  const claimed = await h.t.mutation(internal.buffer.claimPost, { tenantId: h.tenantId, postId });
+  if (!claimed?.approvedAt) throw new Error("fixture");
+  await h.t.mutation(internal.buffer.finishPost, {
+    tenantId: h.tenantId,
+    postId,
+    status: "sent",
+    bufferPostId: organizationId,
+  });
+  expect(
+    (
+      await h.t.query(internal.buffer.pendingPosts, {
+        tenantId: h.tenantId,
+        connectionId: "connection1",
+      })
+    ).map((post) => post.postId),
+  ).toContain(postId);
+  const receipt = {
+    source: "buffer-status-v1" as const,
+    bufferPostId: organizationId,
+    channelId,
+    platform: "tiktok" as const,
+    nativeAccountId: "native_account",
+    nativePostId: "7425678901234567890",
+    nativePostUrl: "https://www.tiktok.com/@pikar_ai/video/7425678901234567890",
+    sentAt: claimed.approvedAt + 1000,
+    observedAt: claimed.approvedAt + 2000,
+    draftRevision: 1,
+    approvedAt: claimed.approvedAt,
+  };
+  await expect(
+    h.t.mutation(internal.buffer.savePostStatuses, {
+      tenantId: h.tenantId,
+      connectionId: "connection1",
+      updates: [
+        {
+          postId,
+          bufferPostId: organizationId,
+          channelId,
+          status: "sent",
+          publicationReceipt: { ...receipt, draftRevision: 2 },
+        },
+      ],
+    }),
+  ).rejects.toThrow("BUFFER_INVALID_PUBLICATION_RECEIPT");
+  await h.t.mutation(internal.buffer.savePostStatuses, {
+    tenantId: h.tenantId,
+    connectionId: "connection1",
+    updates: [
+      {
+        postId,
+        bufferPostId: organizationId,
+        channelId,
+        status: "sent",
+        publicationReceipt: receipt,
+      },
+    ],
+  });
+  expect((await h.t.run((ctx) => ctx.db.get(postId)))?.publicationReceipt).toEqual(receipt);
+  expect(
+    await h.t.query(internal.buffer.pendingPosts, {
+      tenantId: h.tenantId,
+      connectionId: "connection1",
+    }),
+  ).toEqual([]);
+});
+test("the actual provider publication adapter captures a native receipt once, after exact public approval", async () => {
+  vi.useFakeTimers();
+  const h = await setup();
+  await connect(h);
+  vi.stubEnv("CONNECTOR_CREDENTIAL_KEY_V1", btoa("0".repeat(32)));
+  vi.stubEnv("BUFFER_OAUTH_CLIENT_ID", "registered-public-client");
+  const key = await importCredentialKey(btoa("0".repeat(32)), "v1");
+  const sealed = await sealCredential(
+    key,
+    {
+      tenantId: h.tenantId,
+      connectionId: "connection1",
+      provider: "buffer",
+      environment: "production",
+    },
+    JSON.stringify({
+      clientId: "registered-public-client",
+      accessToken: "synthetic-access",
+      refreshToken: "synthetic-refresh",
+      scope: BUFFER_SCOPES.join(" "),
+    }),
+  );
+  await h.t.run(async (ctx) => {
+    const row = await ctx.db
+      .query("bufferConnections")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", h.tenantId))
+      .unique();
+    if (!row) throw new Error("fixture");
+    await ctx.db.patch(row._id, {
+      ciphertextB64: sealed.ciphertextB64,
+      ivB64: sealed.ivB64,
+      keyVersion: sealed.keyVersion,
+      expiresAt: Date.now() + 3600000,
+    });
+  });
+  await h.t.mutation(internal.buffer.storeChannels, {
+    tenantId: h.tenantId,
+    connectionId: "connection1",
+    organizationId,
+    organizationName: "Own organization",
+    channels: [
+      {
+        id: channelId,
+        name: "Own TikTok",
+        service: "tiktok",
+        nativeAccountId: "native_account",
+        available: true,
+      },
+    ],
+  });
+  const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
+    const body = JSON.parse(String(init.body));
+    expect(body.query).toContain("PikarCreatePost");
+    expect(body.query).toContain("externalLink");
+    return Response.json({
+      data: {
+        createPost: {
+          __typename: "PostActionSuccess",
+          post: {
+            id: organizationId,
+            channelId,
+            channelService: "tiktok",
+            status: "sent",
+            schedulingType: "automatic",
+            text: "Approved adapter fixture",
+            externalLink: "https://www.tiktok.com/@pikar_ai/video/7425678901234567890",
+            sentAt: new Date(Date.now()).toISOString(),
+            channel: { id: channelId, service: "tiktok", serviceId: "native_account" },
+          },
+        },
+      },
+    });
+  });
+  vi.stubGlobal("fetch", fetcher);
+  const postId = await h.asUser.mutation(api.buffer.stagePost, {
+    campaign: "Pilot",
+    channelId,
+    text: "Approved adapter fixture",
+    mode: "addToQueue",
+    videoUrl: "https://example.com/video.mp4",
+  });
+  expect(fetcher).not.toHaveBeenCalled();
+  await h.asUser.mutation(api.buffer.approvePost, { postId, revision: 1 });
+  await h.t.finishAllScheduledFunctions(vi.runAllTimers);
+  const post = (await h.asUser.query(api.buffer.posts, {}))[0];
+  expect(post).toMatchObject({
+    status: "sent",
+    bufferPostId: organizationId,
+    publicationReceipt: {
+      source: "buffer-status-v1",
+      nativePostId: "7425678901234567890",
+      draftRevision: 1,
+      approvedAt: post?.approvedAt,
+    },
+  });
+  await h.t.action(internal.bufferActions.publishPost, { tenantId: h.tenantId, postId });
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });
 
 describe("Buffer account isolation and lifecycle", () => {

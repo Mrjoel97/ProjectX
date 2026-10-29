@@ -20,6 +20,8 @@ import {
 } from "@pikar/voice";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { reviewBlueprintFixture } from "../__fixtures__/reviewedBlueprint";
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -29,9 +31,13 @@ const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const rateModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
 );
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 const makeTest = () => {
   const t = convexTest(schema, modules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateModules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   return t;
 };
 
@@ -108,8 +114,8 @@ function seedDoc(
   );
 }
 
-/** Seed the smallest confirmed live blueprint needed to exercise the voice grounding boundary. */
-async function seedConfirmedBlueprint(t: ReturnType<typeof convexTest>): Promise<void> {
+/** Simulated user review mints native authority; false retains the legacy timestamp-only case. */
+async function seedBlueprint(t: ReturnType<typeof convexTest>, reviewed: boolean): Promise<void> {
   const blueprintDocId = await t.run(async (ctx) =>
     ctx.db.insert("vaultDocuments", {
       tenantId: TENANT,
@@ -132,10 +138,11 @@ async function seedConfirmedBlueprint(t: ReturnType<typeof convexTest>): Promise
       tierSource: "confirmed",
       derivedAt: Date.now(),
       blueprintDocId,
-      blueprintConfirmedAt: Date.now(),
+      ...(reviewed ? {} : { blueprintConfirmedAt: Date.now() }),
       blueprintSourceDocIds: [],
     });
   });
+  if (reviewed) await reviewBlueprintFixture(t, TENANT, blueprintDocId);
 }
 
 // ── Task 1: mintClientSecret ──────────────────────────────────────────────────────────────────
@@ -176,7 +183,7 @@ test("mintClientSecret POSTs the client_secrets endpoint with the Bearer key + t
 test("an unscoped voice session receives the tenant's confirmed blueprint spine", async () => {
   const t = makeTest();
   await t.mutation(internal.skills.seedSkills, {});
-  await seedConfirmedBlueprint(t);
+  await seedBlueprint(t, true);
   stubFetch(() => Response.json({ value: "ek_blueprint", expires_at: 1234 }));
 
   await asTenant(t).action(internal.voiceToken.mintClientSecret, {});
@@ -187,6 +194,21 @@ test("an unscoped voice session receives the tenant's confirmed blueprint spine"
   expect(instructions).toContain("Repairs bicycles for city commuters");
   expect(instructions).toContain("</business_blueprint>");
   expect(instructions).not.toContain("# Business blueprint");
+});
+
+test("a legacy confirmation timestamp cannot admit unverified claims into voice standing context", async () => {
+  const t = makeTest();
+  await t.mutation(internal.skills.seedSkills, {});
+  await seedBlueprint(t, false);
+  stubFetch(() => Response.json({ value: "ek_legacy", expires_at: 1234 }));
+  await asTenant(t).action(internal.voiceToken.mintClientSecret, {});
+  const ledger = await asTenant(t).query(api.blueprint.businessLedger, {});
+  expect(ledger.fields).toHaveLength(1);
+  expect(ledger.fields[0]?.sourceState).toBe("unverified");
+  const instructions = sessionOf(0).instructions as string;
+  expect(instructions.startsWith(voiceSessionSkillBody)).toBe(true);
+  expect(instructions).toContain("- (nothing confirmed about this business yet)");
+  expect(instructions).not.toContain("Repairs bicycles for city commuters");
 });
 
 test("mintClientSecret returns ONLY {clientSecret, expiresAt, toolsAtMint} and NEVER the API key", async () => {

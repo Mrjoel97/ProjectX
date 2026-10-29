@@ -1080,7 +1080,11 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
     setBusy(true);
     setNote(null);
     try {
-      const result = await generateImage({ planId });
+      const result = await generateImage({
+        planId,
+        expectedReviewHash: estimate?.reviewHash,
+        maxCostCents: estimate?.totalCents,
+      });
       if (!result.ok) {
         setNote(
           result.reason === "already_started"
@@ -1158,6 +1162,8 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
           <>
             <p style={{ ...dimText, marginTop: "0.45rem" }}>
               1 image · {estimate.width}×{estimate.height} · {estimate.model}
+              {" · "}
+              {estimate.quality ?? "low"} quality
             </p>
             <p style={{ ...dimText, marginTop: "0.25rem" }}>
               Total {usd(estimate.totalCents)} · {usd(estimate.remainingCents)} of today's media
@@ -1576,6 +1582,10 @@ type Block = {
   asset: { source: "vault"; docId: string } | null;
   description: string;
   overlay: string | null;
+  overlayStartMs?: number | null;
+  overlayEndMs?: number | null;
+  transitionOut?: "cut" | "fade" | null;
+  motionGraphic?: "orbit-ring" | null;
   prompt: string;
   narration: string;
   narrationChars: number;
@@ -1832,7 +1842,20 @@ function SceneTile({
         {block.description}
       </p>
       {block.overlay && (
-        <p style={{ ...dimText, ...traceText, margin: "0.3rem 0 0" }}>Overlay: {block.overlay}</p>
+        <p style={{ ...dimText, ...traceText, margin: "0.3rem 0 0" }}>
+          Animated title: {block.overlay}
+          {typeof block.overlayStartMs === "number" && typeof block.overlayEndMs === "number"
+            ? ` · ${(block.overlayStartMs / 1000).toFixed(1)}–${(block.overlayEndMs / 1000).toFixed(1)}s within this scene`
+            : ""}
+        </p>
+      )}
+      {block.transitionOut === "fade" && (
+        <p style={{ ...dimText, margin: "0.3rem 0 0" }}>Transition: fade through background</p>
+      )}
+      {block.motionGraphic === "orbit-ring" && (
+        <p style={{ ...dimText, margin: "0.3rem 0 0" }}>
+          3D accent: orbiting ring around the hero area (decorative, not a product model)
+        </p>
       )}
 
       {/* THE CITATION (33-08) — where this scene's figure came from, and whose word it is.

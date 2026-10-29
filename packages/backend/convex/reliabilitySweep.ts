@@ -27,15 +27,22 @@
 // §4: nothing this module writes carries user content. The reason codes are code-owned literals,
 // the notification copy is a static label, and the collecting fallback body is a fixed sentence
 // that claims NOTHING about what the specialist would have said.
+import { Migrations } from "@convex-dev/migrations";
 import { hasAssetSource } from "@pikar/core/storyboard";
-import { internal } from "./_generated/api";
-import type { Doc, Id } from "./_generated/dataModel";
+import { components, internal } from "./_generated/api";
+import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { dispatchWorkflowLive } from "./dispatchRun";
 import { activeMediaJobs, currentMediaJobs, readMediaBatch } from "./lib/mediaRead";
 import { flipParentWhenSiblingsDone } from "./lib/planRow";
 import { internalMutation } from "./lib/tenantLifecycle";
 import { migrations } from "./migrations";
+import schema from "./schema";
+
+// Only the indexed watchdog needs the schema-aware paginator; other migrations stay unchanged.
+const indexedMigrations = new Migrations<DataModel, typeof schema>(components.migrations, {
+  schema,
+});
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
 // Exported so the tests PIN them rather than describe them. Each one is a stated multiple of the
@@ -126,30 +133,33 @@ const inFlight = (rows: readonly Doc<"mediaJobs">[]): boolean =>
  * through the ordinary path — the canvas can say that in words — rather than through a second,
  * watchdog-shaped terminal that no downstream reader knows about.
  */
+async function recoverMediaJob(ctx: MutationCtx, row: Doc<"mediaJobs">): Promise<void> {
+  if (row.status !== "submitted") return;
+  // STRICTLY past the threshold. A row exactly AT it is not yet stale — the boundary belongs to
+  // the mechanism being backstopped, not to the backstop.
+  if (Date.now() - row.updatedAt <= SUBMITTED_STALL_MS) return;
+
+  // ONE notification per BATCH, not per row: a thirteen-block reel whose provider went dark
+  // stalls thirteen lines, and thirteen identical banners is noise the user learns to dismiss.
+  // The batch is the unit because it is the unit the user approved. Read BEFORE the terminal
+  // below so the row being swept cannot count as its own precedent; a later row in the same pass
+  // sees this one's reason and stays quiet.
+  const alreadyRaised = (await readMediaBatch(ctx, row.tenantId, row.batchId)).some(
+    (s) => s.failureReason === WATCHDOG_JOB_REASON,
+  );
+
+  await ctx.runMutation(internal.mediaComplete.landResult, {
+    jobId: row._id,
+    outcome: { ok: false, code: WATCHDOG_JOB_REASON },
+  });
+  if (!alreadyRaised) await notifyStall(ctx, row.tenantId);
+}
+
+// Legacy operator/in-flight migration: preserve its name and historical cursor range.
 export const sweepStuckMediaJobs = migrations.define({
   table: "mediaJobs",
   batchSize: JOB_BATCH,
-  migrateOne: async (ctx, row): Promise<void> => {
-    if (row.status !== "submitted") return;
-    // STRICTLY past the threshold. A row exactly AT it is not yet stale — the boundary belongs to
-    // the mechanism being backstopped, not to the backstop.
-    if (Date.now() - row.updatedAt <= SUBMITTED_STALL_MS) return;
-
-    // ONE notification per BATCH, not per row: a thirteen-block reel whose provider went dark
-    // stalls thirteen lines, and thirteen identical banners is noise the user learns to dismiss.
-    // The batch is the unit because it is the unit the user approved. Read BEFORE the terminal
-    // below so the row being swept cannot count as its own precedent; a later row in the same pass
-    // sees this one's reason and stays quiet.
-    const alreadyRaised = (await readMediaBatch(ctx, row.tenantId, row.batchId)).some(
-      (s) => s.failureReason === WATCHDOG_JOB_REASON,
-    );
-
-    await ctx.runMutation(internal.mediaComplete.landResult, {
-      jobId: row._id,
-      outcome: { ok: false, code: WATCHDOG_JOB_REASON },
-    });
-    if (!alreadyRaised) await notifyStall(ctx, row.tenantId);
-  },
+  migrateOne: recoverMediaJob,
 });
 
 /**
@@ -288,100 +298,149 @@ async function dispatchLive(ctx: MutationCtx, plan: Doc<"plans">): Promise<boole
  * this pass just failed must not make a legitimately-waiting caption look stranded in the same
  * pass. The next pass will see the new state and decide again.
  */
+async function recoverPlan(ctx: MutationCtx, plan: Doc<"plans">): Promise<void> {
+  const now = Date.now();
+  const renderPlane = plan.renderStatus === "rendering" || plan.renderStatus === "pending";
+  // A caption legitimately WAITS for the render terminal (`maybeBurnCaptions` needs
+  // `renderStatus === "rendered"`), so a reel still in or before the sandbox is not a caption
+  // stall — whatever happens to the render plane will call the caption plane back in.
+  const captionPlane = plan.captionStatus === "transcribing" && !renderPlane;
+  const collectingPlane =
+    // `collecting` + `kind: "memo"` is the DISPATCH-OWNED discriminator, not an invention here:
+    // it is the same pair `plans.stageResearchPlan` already uses to refuse `research_in_flight`.
+    // An ordinary conversation's `collecting` row carries no kind and is never touched — it is a
+    // live chat, and a week-old live chat is still a live chat.
+    plan.status === "collecting" &&
+    plan.kind === "memo" &&
+    now - plan.createdAt > COLLECTING_STALL_MS;
+
+  if (!renderPlane && !captionPlane && !collectingPlane) return;
+
+  // ONE read of the batch for both media planes.
+  const jobs = renderPlane || captionPlane ? await jobsForPlan(ctx, plan) : [];
+  let stalled = false;
+
+  if (renderPlane && (await renderStalled(ctx, plan, jobs, now))) {
+    await ctx.db.patch(plan._id, {
+      renderStatus: "failed",
+      renderReason: WATCHDOG_RENDER_REASON,
+      renderedAt: now,
+    });
+    stalled = true;
+  }
+
+  if (captionPlane && captionStalled(plan, jobs, now)) {
+    // `renderStatus` is NOT touched here or anywhere in this file's caption path (20-17): a
+    // failed burn must leave a rendered reel standing, because a reel without captions is a
+    // degraded deliverable and an unpublished reel is none.
+    await ctx.db.patch(plan._id, {
+      captionStatus: "failed",
+      captionReason: WATCHDOG_CAPTION_REASON,
+    });
+    stalled = true;
+  }
+
+  if (collectingPlane && !(await dispatchLive(ctx, plan))) {
+    // ── 42-03: A FAN-OUT HAS TWO SHAPES HERE, AND THE OLD BRANCH IS ONLY RIGHT FOR ONE ───────
+    //
+    // A stalled CHILD must take the CHILD terminal (`approved`, ADR-037 Decision 4) and re-run
+    // the sibling check, or a fan-out with one dead worker leaves its parent at `collecting`
+    // for ever — invisible to every approvals query, and blocking every future dispatch on that
+    // thread through `isOpenRoot`. Sweeping it to `proposed` instead would be worse than doing
+    // nothing: it would put a SECOND card in the inbox for work the parent already represents.
+    //
+    // A PARENT whose children are still running is NOT stalled at all. Its `collecting` is the
+    // correct state — the work is happening one row down — and `dispatchLive` cannot see that,
+    // because the parent has no workflow of its own. `flipParentWhenSiblingsDone` is the same
+    // predicate the happy path uses; calling it here rather than re-deriving "is this finished"
+    // is what stops the two answers drifting.
+    const children = await ctx.db
+      .query("plans")
+      .withIndex("by_parent", (q) => q.eq("tenantId", plan.tenantId).eq("parentPlanId", plan._id))
+      .collect();
+    if (children.some((c) => c.status === "collecting")) {
+      // A live fan-out. Not stalled, not swept, and deliberately not notified either.
+    } else if (plan.parentPlanId !== undefined) {
+      await ctx.db.patch(plan._id, { status: "approved", body: COLLECTING_FALLBACK_BODY });
+      await flipParentWhenSiblingsDone(ctx, plan.tenantId, plan.parentPlanId);
+      stalled = true;
+    } else {
+      // `proposed` is the honest terminal, and it is an EXISTING one: it is where every other
+      // dispatch outcome lands (`landSpecialistResult`), and it is the only status `PlanCard`
+      // renders. The row stops being invisible and the user can read what happened and re-ask.
+      // No new status member was needed, so none was added.
+      await ctx.db.patch(plan._id, { status: "proposed", body: COLLECTING_FALLBACK_BODY });
+      stalled = true;
+    }
+  }
+
+  // One notification per plan per pass, however many of its planes were swept — the user has one
+  // stalled thing to go and look at, not three.
+  if (stalled) await notifyStall(ctx, plan.tenantId);
+}
+
+// Legacy operator/in-flight migration: preserve its name and historical cursor range.
 export const sweepStuckPlans = migrations.define({
   table: "plans",
   batchSize: PLAN_BATCH,
-  migrateOne: async (ctx, plan): Promise<void> => {
-    const now = Date.now();
-    const renderPlane = plan.renderStatus === "rendering" || plan.renderStatus === "pending";
-    // A caption legitimately WAITS for the render terminal (`maybeBurnCaptions` needs
-    // `renderStatus === "rendered"`), so a reel still in or before the sandbox is not a caption
-    // stall — whatever happens to the render plane will call the caption plane back in.
-    const captionPlane = plan.captionStatus === "transcribing" && !renderPlane;
-    const collectingPlane =
-      // `collecting` + `kind: "memo"` is the DISPATCH-OWNED discriminator, not an invention here:
-      // it is the same pair `plans.stageResearchPlan` already uses to refuse `research_in_flight`.
-      // An ordinary conversation's `collecting` row carries no kind and is never touched — it is a
-      // live chat, and a week-old live chat is still a live chat.
-      plan.status === "collecting" &&
-      plan.kind === "memo" &&
-      now - plan.createdAt > COLLECTING_STALL_MS;
+  migrateOne: recoverPlan,
+});
 
-    if (!renderPlane && !captionPlane && !collectingPlane) return;
+// Distinct names keep old full-table cursors from being reused with a new index range.
+// Select candidates before loading their bodies; the recovery predicates remain authoritative.
+export const sweepSubmittedMediaJobs = indexedMigrations.define({
+  table: "mediaJobs",
+  batchSize: JOB_BATCH,
+  customRange: (q) =>
+    q.withIndex("by_watchdog_status_updatedAt", (q) =>
+      q.eq("status", "submitted").lt("updatedAt", Date.now() - SUBMITTED_STALL_MS),
+    ),
+  migrateOne: recoverMediaJob,
+});
 
-    // ONE read of the batch for both media planes.
-    const jobs = renderPlane || captionPlane ? await jobsForPlan(ctx, plan) : [];
-    let stalled = false;
-
-    if (renderPlane && (await renderStalled(ctx, plan, jobs, now))) {
-      await ctx.db.patch(plan._id, {
-        renderStatus: "failed",
-        renderReason: WATCHDOG_RENDER_REASON,
-        renderedAt: now,
-      });
-      stalled = true;
-    }
-
-    if (captionPlane && captionStalled(plan, jobs, now)) {
-      // `renderStatus` is NOT touched here or anywhere in this file's caption path (20-17): a
-      // failed burn must leave a rendered reel standing, because a reel without captions is a
-      // degraded deliverable and an unpublished reel is none.
-      await ctx.db.patch(plan._id, {
-        captionStatus: "failed",
-        captionReason: WATCHDOG_CAPTION_REASON,
-      });
-      stalled = true;
-    }
-
-    if (collectingPlane && !(await dispatchLive(ctx, plan))) {
-      // ── 42-03: A FAN-OUT HAS TWO SHAPES HERE, AND THE OLD BRANCH IS ONLY RIGHT FOR ONE ───────
-      //
-      // A stalled CHILD must take the CHILD terminal (`approved`, ADR-037 Decision 4) and re-run
-      // the sibling check, or a fan-out with one dead worker leaves its parent at `collecting`
-      // for ever — invisible to every approvals query, and blocking every future dispatch on that
-      // thread through `isOpenRoot`. Sweeping it to `proposed` instead would be worse than doing
-      // nothing: it would put a SECOND card in the inbox for work the parent already represents.
-      //
-      // A PARENT whose children are still running is NOT stalled at all. Its `collecting` is the
-      // correct state — the work is happening one row down — and `dispatchLive` cannot see that,
-      // because the parent has no workflow of its own. `flipParentWhenSiblingsDone` is the same
-      // predicate the happy path uses; calling it here rather than re-deriving "is this finished"
-      // is what stops the two answers drifting.
-      const children = await ctx.db
-        .query("plans")
-        .withIndex("by_parent", (q) => q.eq("tenantId", plan.tenantId).eq("parentPlanId", plan._id))
-        .collect();
-      if (children.some((c) => c.status === "collecting")) {
-        // A live fan-out. Not stalled, not swept, and deliberately not notified either.
-      } else if (plan.parentPlanId !== undefined) {
-        await ctx.db.patch(plan._id, { status: "approved", body: COLLECTING_FALLBACK_BODY });
-        await flipParentWhenSiblingsDone(ctx, plan.tenantId, plan.parentPlanId);
-        stalled = true;
-      } else {
-        // `proposed` is the honest terminal, and it is an EXISTING one: it is where every other
-        // dispatch outcome lands (`landSpecialistResult`), and it is the only status `PlanCard`
-        // renders. The row stops being invisible and the user can read what happened and re-ask.
-        // No new status member was needed, so none was added.
-        await ctx.db.patch(plan._id, { status: "proposed", body: COLLECTING_FALLBACK_BODY });
-        stalled = true;
-      }
-    }
-
-    // One notification per plan per pass, however many of its planes were swept — the user has one
-    // stalled thing to go and look at, not three.
-    if (stalled) await notifyStall(ctx, plan.tenantId);
-  },
+export const sweepPendingRenderPlans = indexedMigrations.define({
+  table: "plans",
+  batchSize: PLAN_BATCH,
+  customRange: (q) =>
+    q.withIndex("by_watchdog_renderStatus", (q) => q.eq("renderStatus", "pending")),
+  migrateOne: recoverPlan,
+});
+export const sweepRenderingPlans = indexedMigrations.define({
+  table: "plans",
+  batchSize: PLAN_BATCH,
+  customRange: (q) =>
+    q.withIndex("by_watchdog_renderStatus", (q) => q.eq("renderStatus", "rendering")),
+  migrateOne: recoverPlan,
+});
+export const sweepTranscribingPlans = indexedMigrations.define({
+  table: "plans",
+  batchSize: PLAN_BATCH,
+  customRange: (q) =>
+    q.withIndex("by_watchdog_captionStatus", (q) => q.eq("captionStatus", "transcribing")),
+  migrateOne: recoverPlan,
+});
+export const sweepCollectingMemoPlans = indexedMigrations.define({
+  table: "plans",
+  batchSize: PLAN_BATCH,
+  customRange: (q) =>
+    q.withIndex("by_watchdog_status_kind_createdAt", (q) =>
+      q
+        .eq("status", "collecting")
+        .eq("kind", "memo")
+        .lt("createdAt", Date.now() - COLLECTING_STALL_MS),
+    ),
+  migrateOne: recoverPlan,
 });
 
 /**
  * The cron entry point (crons.ts, every 30 min).
  *
- * `{ reset: true }` on BOTH, and it is required rather than decorative: a @convex-dev/migrations
+ * `{ reset: true }` on each indexed candidate range, and it is required rather than decorative: a @convex-dev/migrations
  * migration that has COMPLETED no-ops on a bare invocation, so a repeating watchdog that did not
  * reset would run exactly once in the deployment's lifetime. That is the 2026-07-18 stranded-.xlsm
  * lesson, recorded in `docs/playbooks/vault.md` and paid for once already.
  *
- * `runOne` twice rather than `runSerially`: a series SKIPS a migration that already completed,
+ * `runOne` for each range rather than `runSerially`: a series SKIPS a migration that already completed,
  * which is the same trap with an extra step.
  */
 export const runSweep = internalMutation({
@@ -401,8 +460,14 @@ export const runSweep = internalMutation({
     // and does nothing. Remove this gate once the first armed passes are observed to be clean.
     if (process.env.RELIABILITY_SWEEP_ARMED !== "1") return null;
 
-    await migrations.runOne(ctx, internal.reliabilitySweep.sweepStuckMediaJobs, { reset: true });
-    await migrations.runOne(ctx, internal.reliabilitySweep.sweepStuckPlans, { reset: true });
+    for (const migration of [
+      internal.reliabilitySweep.sweepSubmittedMediaJobs,
+      internal.reliabilitySweep.sweepPendingRenderPlans,
+      internal.reliabilitySweep.sweepRenderingPlans,
+      internal.reliabilitySweep.sweepTranscribingPlans,
+      internal.reliabilitySweep.sweepCollectingMemoPlans,
+    ])
+      await indexedMigrations.runOne(ctx, migration, { reset: true });
     return null;
   },
 });

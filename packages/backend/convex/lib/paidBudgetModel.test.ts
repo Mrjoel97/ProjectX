@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { describe, expect, test, vi } from "vitest";
+import type { Id } from "../_generated/dataModel";
 import { paidBudgetModel } from "./paidBudgetModel";
 
 function model() {
@@ -19,6 +20,26 @@ function model() {
   });
 }
 describe("paid model middleware", () => {
+  test("trusted service identity reaches native admission; refused admission never calls the provider", async () => {
+    const inner = model();
+    const provider = vi.spyOn(inner, "doGenerate");
+    const runMutation = vi.fn(async (_ref: unknown, _args: Record<string, unknown>) => {
+      throw new Error("SERVICE_RUN_FENCED");
+    });
+    const runId = "service-fixture" as Id<"managedServiceRuns">;
+    const wrapped = paidBudgetModel({
+      ctx: { runMutation } as never,
+      tenantId: "t",
+      model: inner,
+      modelId: "or/openai/gpt-4o-mini",
+      managedServiceRunId: runId,
+    });
+    await expect(generateText({ model: wrapped, prompt: "test", maxRetries: 0 })).rejects.toThrow(
+      "SERVICE_RUN_FENCED",
+    );
+    expect(runMutation.mock.calls[0]?.[1]).toMatchObject({ managedServiceRunId: runId });
+    expect(provider).not.toHaveBeenCalled();
+  });
   test("admission precedes provider and settlement precedes returning output", async () => {
     const events: string[] = [];
     const inner = model();

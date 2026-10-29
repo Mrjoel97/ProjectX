@@ -2,6 +2,10 @@ import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
+import { PACK_BROWSER_MATRIX, validatePackBrowserScope } from "./workflowPackBrowserProtocol";
+
+// Qualification material and account-bearing traffic must never enter test recordings.
+test.use({ trace: "off", video: "off", screenshot: "off" });
 
 // ══ 27-09 (PACK-02/PACK-04): the authenticated browser evidence plane for the pack pilot ═══════
 //
@@ -160,6 +164,27 @@ const TITLE_TO_PACK: Record<string, string> = {
   "Brand review": "brand-review",
   "Offer and lead plan": "offer-and-lead-plan",
 };
+
+// FREE and offline: enumerate the actual intended per-pack obligations without a page,
+// account, CLI or provider fixture. Passing these prepares inputs; it proves no browser journey.
+// The @evidence refusal below deliberately remains unchanged until real journeys are earned.
+test.describe("@protocol-fixture offline per-pack browser matrix preparation", () => {
+  test("fixture scope and matrix integrity — no browser journeys observed", () => {
+    validatePackBrowserScope();
+    expect(PACK_BROWSER_MATRIX).toHaveLength(6 * 9 * 2);
+    const keys = new Set<string>();
+    for (const row of PACK_BROWSER_MATRIX) {
+      keys.add(`${row.packId}:${row.cell}:${row.viewport.name}`);
+      expect(row.instructions.length).toBeGreaterThan(0);
+      expect(row.prerequisites.length).toBeGreaterThanOrEqual(3);
+      expect(row.liveStatus).toBe("not-observed");
+      expect(row.evidenceWritable).toBe(false);
+      expect(row.viewport.width).toBeGreaterThan(0);
+      expect(row.viewport.height).toBeGreaterThan(0);
+    }
+    expect(keys.size).toBe(PACK_BROWSER_MATRIX.length);
+  });
+});
 
 // ── FREE: the pilot is dark, and the product proves it ────────────────────────────────────────
 /**

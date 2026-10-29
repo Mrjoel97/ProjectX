@@ -96,6 +96,8 @@ import { ensureCoverage, recordMovement } from "./spendLedger";
 /** Every way a job can be refused BEFORE a cent moves. Distinct codes because they send the user
  *  to distinct levers: rewrite a line, cut blocks, wait for tomorrow, or call the operator. */
 export type ReserveRefusal =
+  | "no_image_plan"
+  | "invalid_prompt"
   | "kill_switch"
   | "unknown_model"
   | "over_job_cap"
@@ -157,11 +159,14 @@ export type MediaDailyOverageAllowance = {
  */
 const isBuyableClipLength = (seconds: number): boolean =>
   MEDIA_VIDEO_SECONDS[MEDIA_DEFAULT_VIDEO.model]?.includes(seconds) ?? false;
-const standaloneImageSpec = (): Extract<MediaSpec, { kind: "image" }> => ({
+const standaloneImageSpec = (
+  quality?: "low" | "medium" | "high",
+): Extract<MediaSpec, { kind: "image" }> => ({
   kind: "image",
   model: MEDIA_DEFAULT_IMAGE.model,
   width: MEDIA_DEFAULT_IMAGE.width,
   height: MEDIA_DEFAULT_IMAGE.height,
+  ...(quality === undefined ? {} : { quality }),
 });
 
 /** The shared budget transaction for every media deliverable. Callers construct fully-priced rows;
@@ -852,7 +857,11 @@ export async function reserveImageInner(
 ): Promise<ReserveResult> {
   const cfg = await getGuardrailConfig(ctx);
   if (cfg.killSwitch || cfg.mediaKillSwitch) return { ok: false, reason: "kill_switch" };
-  const spec = standaloneImageSpec();
+  const plan = await ownedPlan(ctx, a.planId, a.tenantId);
+  if (!plan || plan.mediaMode !== "image") return { ok: false, reason: "no_image_plan" };
+  const spec = standaloneImageSpec(plan.mediaImageQuality);
+  if (spec.quality && spec.quality !== "low" && new TextEncoder().encode(a.prompt).length > 4096)
+    return { ok: false, reason: "invalid_prompt" };
   const priced = estimateMediaUsd(spec);
   if (!priced.ok) return { ok: false, reason: priced.error.code };
   const now = Date.now();
@@ -872,6 +881,7 @@ export async function reserveImageInner(
         kind: "image",
         width: MEDIA_DEFAULT_IMAGE.width,
         height: MEDIA_DEFAULT_IMAGE.height,
+        ...(spec.quality === undefined ? {} : { quality: spec.quality }),
       },
       promptHash: await contentHash(a.prompt),
       status: "queued",
@@ -1331,7 +1341,13 @@ function toSubmittable(line: SubmitLine): SubmittableSpec | null {
     };
   }
   if (line.spec.kind === "image") {
-    return { kind: "image", model: line.model, width: line.spec.width, height: line.spec.height };
+    return {
+      kind: "image",
+      model: line.model,
+      width: line.spec.width,
+      height: line.spec.height,
+      ...(line.spec.quality === undefined ? {} : { quality: line.spec.quality }),
+    };
   }
   if (line.spec.kind === "tts") {
     // `voice` and `sampleRateHertz` come off the ROW, which is what the reservation wrote — not off
@@ -1394,6 +1410,7 @@ export const batchToSubmit = internalQuery({
         model: r.model,
         spec: r.spec,
         provider: r.provider,
+        ...(r.spec.kind === "image" ? { promptHash: r.promptHash } : {}),
         ...(r.spec.kind === "video" && r.spec.generateAudio === true
           ? { promptHash: r.promptHash, nativeReviewHash: r.nativeReviewHash }
           : {}),
@@ -2254,13 +2271,16 @@ export const submitBatch = internalAction({
           continue;
         }
         if (
-          spec.kind === "video" &&
-          spec.generateAudio === true &&
+          (spec.kind === "image" || (spec.kind === "video" && spec.generateAudio === true)) &&
           (!line.promptHash || line.promptHash !== (await contentHash(text)))
         ) {
           await ctx.runMutation(internal.media.recordSubmission, {
             jobId: line.jobId,
-            result: { ok: false, blocked: false, code: "native_prompt_changed" },
+            result: {
+              ok: false,
+              blocked: false,
+              code: spec.kind === "image" ? "image_prompt_changed" : "native_prompt_changed",
+            },
           });
           tally.failed += 1;
           continue;
@@ -2727,6 +2747,10 @@ export function deckOf(plan: Doc<"plans">): readonly Block[] | null {
     windowStartMs: s.windowStartMs,
     description: s.description,
     ...(s.overlay === undefined ? {} : { overlay: s.overlay }),
+    ...(s.overlayStartMs === undefined ? {} : { overlayStartMs: s.overlayStartMs }),
+    ...(s.overlayEndMs === undefined ? {} : { overlayEndMs: s.overlayEndMs }),
+    ...(s.transitionOut === undefined ? {} : { transitionOut: s.transitionOut }),
+    ...(s.motionGraphic === undefined ? {} : { motionGraphic: s.motionGraphic }),
     prompt: s.prompt,
     narration: s.narration,
   }));
@@ -2766,6 +2790,10 @@ export function sceneDeckOf(
       description: s.description,
       narration: s.narration,
       ...(s.overlay === undefined ? {} : { overlay: s.overlay }),
+      ...(s.overlayStartMs === undefined ? {} : { overlayStartMs: s.overlayStartMs }),
+      ...(s.overlayEndMs === undefined ? {} : { overlayEndMs: s.overlayEndMs }),
+      ...(s.transitionOut === undefined ? {} : { transitionOut: s.transitionOut }),
+      ...(s.motionGraphic === undefined ? {} : { motionGraphic: s.motionGraphic }),
       prompt: s.prompt,
     })),
   };
@@ -2862,6 +2890,10 @@ export const byPlan = tenantQuery({
           asset: shot.asset ?? null,
           description: shot.description,
           overlay: shot.overlay ?? null,
+          overlayStartMs: shot.overlayStartMs ?? null,
+          overlayEndMs: shot.overlayEndMs ?? null,
+          transitionOut: shot.transitionOut ?? "cut",
+          motionGraphic: shot.motionGraphic ?? null,
           prompt: shot.prompt,
           narration: shot.narration,
           narrationChars: shot.narration.length,
@@ -3202,6 +3234,8 @@ export async function nativeReelReviewHash(plan: Doc<"plans">): Promise<string> 
     JSON.stringify({
       planId: plan._id,
       audioMode: plan.mediaAudioMode,
+      finishingVersion: 2,
+      brandKitRef: plan.brandKitRef,
       shots: plan.shots,
       targetDurationSeconds: plan.targetDurationSeconds,
       artDirection: plan.artDirection,
@@ -3579,6 +3613,18 @@ export const jobEstimate = tenantQuery({
 
 /** The standalone image estimate. It builds the exact pinned spec consumed by
  * `reserveImageInner`, consumes nothing, and exposes the shared media-window remainder. */
+export async function imagePlanReviewHash(plan: Doc<"plans">): Promise<string> {
+  const spec = standaloneImageSpec(plan.mediaImageQuality);
+  return contentHash(
+    JSON.stringify({
+      spec,
+      prompt: plan.imagePrompt?.trim(),
+      brandKitRef: plan.brandKitRef,
+      price: estimateMediaUsd(spec),
+    }),
+  );
+}
+
 export const imageEstimate = tenantQuery({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
@@ -3596,7 +3642,25 @@ export const imageEstimate = tenantQuery({
         refusal: "no_image_plan" as const,
       };
     }
-    const priced = chooseMediaBatch([standaloneImageSpec()], MEDIA_JOB_CAP_USD);
+    if (
+      plan.mediaImageQuality &&
+      plan.mediaImageQuality !== "low" &&
+      new TextEncoder().encode(plan.imagePrompt).length > 4096
+    ) {
+      return {
+        model: MEDIA_DEFAULT_IMAGE.model,
+        width: MEDIA_DEFAULT_IMAGE.width,
+        height: MEDIA_DEFAULT_IMAGE.height,
+        totalCents: 0,
+        capCents,
+        remainingCents,
+        refusal: "invalid_prompt" as const,
+      };
+    }
+    const priced = chooseMediaBatch(
+      [standaloneImageSpec(plan.mediaImageQuality)],
+      MEDIA_JOB_CAP_USD,
+    );
     if (!priced.ok) {
       return {
         model: MEDIA_DEFAULT_IMAGE.model,
@@ -3613,6 +3677,8 @@ export const imageEstimate = tenantQuery({
       width: MEDIA_DEFAULT_IMAGE.width,
       height: MEDIA_DEFAULT_IMAGE.height,
       totalCents: priced.value.estCents,
+      quality: plan.mediaImageQuality ?? "low",
+      reviewHash: await imagePlanReviewHash(plan),
       capCents,
       remainingCents,
       refusal: null,
@@ -3635,7 +3701,16 @@ export async function estimateCampaignPlanInner(
   if (plan.status === "collecting") return { ok: false, reason: "storyboard_in_progress" };
   if (plan.mediaMode === "image") {
     if (!plan.imagePrompt?.trim()) return { ok: false, reason: "no_image_plan" };
-    const estimate = chooseMediaBatch([standaloneImageSpec()], MEDIA_JOB_CAP_USD);
+    if (
+      plan.mediaImageQuality &&
+      plan.mediaImageQuality !== "low" &&
+      new TextEncoder().encode(plan.imagePrompt).length > 4096
+    )
+      return { ok: false, reason: "invalid_prompt" };
+    const estimate = chooseMediaBatch(
+      [standaloneImageSpec(plan.mediaImageQuality)],
+      MEDIA_JOB_CAP_USD,
+    );
     return estimate.ok
       ? {
           ok: true,
@@ -3873,12 +3948,32 @@ export const generateReel = tenantMutation({
  * server-side double-click guard. A terminal failed/blocked attempt may be retried by a fresh
  * human click; its immutable row remains as history and the retry receives a new reservation. */
 export const generateImage = tenantMutation({
-  args: { planId: v.id("plans") },
-  handler: async (ctx, { planId }) => {
+  args: {
+    planId: v.id("plans"),
+    expectedReviewHash: v.optional(v.string()),
+    maxCostCents: v.optional(v.number()),
+  },
+  handler: async (ctx, { planId, expectedReviewHash, maxCostCents }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
     if (plan.mediaCampaignId) return { ok: false as const, reason: "campaign_owned" as const };
     const prompt = plan.mediaMode === "image" ? plan.imagePrompt?.trim() : undefined;
     if (!prompt) return { ok: false as const, reason: "no_image_plan" as const };
+    if (plan.mediaImageQuality !== undefined || expectedReviewHash !== undefined) {
+      if (!expectedReviewHash || expectedReviewHash !== (await imagePlanReviewHash(plan)))
+        return { ok: false as const, reason: "review_changed" as const };
+      const priced = chooseMediaBatch(
+        [standaloneImageSpec(plan.mediaImageQuality)],
+        MEDIA_JOB_CAP_USD,
+      );
+      if (!priced.ok) return { ok: false as const, reason: priced.error.code };
+      if (
+        maxCostCents === undefined ||
+        !Number.isSafeInteger(maxCostCents) ||
+        maxCostCents < priced.value.estCents ||
+        maxCostCents > Math.round(MEDIA_JOB_CAP_USD * 100)
+      )
+        return { ok: false as const, reason: "over_reviewed_cost" as const };
+    }
     const rows = await activeMediaJobs(ctx, ctx.tenantId, planId);
     // IN-FLIGHT ONLY (25.1-03, D8). `succeeded` used to sit in this set, and NOTHING ever deletes a
     // `mediaJobs` row — so the first image a plan produced locked the button for ever, with the

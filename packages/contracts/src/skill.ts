@@ -197,6 +197,9 @@ export const RESEARCH_SPECIALIST_SKILL = "research-specialist" as const;
  */
 export const MEDIA_DIRECTOR_SKILL = "media-director" as const;
 
+/** Draft-only brand proposal; activation and Vault writes require human approval in code. */
+export const BRAND_KIT_DESIGNER_SKILL = "brand-kit-designer" as const;
+
 /** Registry name of the read-only connector-backed revenue specialist (Phase 28, REVN-04/05/06). */
 export const REVENUE_SPECIALIST_SKILL = "revenue-specialist" as const;
 
@@ -735,7 +738,7 @@ export function hasPassingTenantEvidence(
  */
 export const AGENT_EVAL_SUITE = {
   revision:
-    "2026-09-11.budgeted-evaluator.a2947e789cefc0ed844db0c4baab57c9adc405b0dabe1b1040ea15ac3060d861",
+    "2026-09-11.budgeted-evaluator.f3a5eae65059f6d9d0e45cf19e22a804a4712241e639dc8677eec3749e76cf5e",
   casesHash: "5dbe6fdbd447ab2a152ccf928d195ed404ca3bf431f5240397f6be3b627e55fd",
   caseCount: 46,
 } as const;

@@ -112,6 +112,11 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
   // REFS ONLY (§4): a name, a version number, a SHA-256 of the body, and whether the run was pinned.
   // The body itself is never in the payload, so there is nothing here to project that could leak it.
   "agent.skill_loaded": ["skillName", "skillVersion", "skillBodyHash", "pinned"],
+  "managed_service.control_changed": ["serviceRef", "revision", "controlRevision", "controlState"],
+  "managed_service.run_reconciled": ["serviceRef", "runRef", "revision", "controlRevision"],
+  "managed_service.goal_linked": ["serviceRef", "goalRef", "revision", "controlRevision"],
+  "managed_service.usefulness_recorded": ["runRef", "usefulness"],
+  "service.knowledge_confirmed": ["serviceRef", "conversationRevision", "reviewHash", "fieldCount"],
   // 28.1-10. An owner-raised charge on a tenant's bill. `ref` and `periodKey` are the two halves of
   // the Stripe idempotency identity, `charges` is the resulting line COUNT, and there is no
   // description field anywhere in the payload — the owner's reason for a charge belongs in their
@@ -125,6 +130,7 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
     "currency",
     "charges",
   ],
+  "brand_kit.approved": ["docId", "revision", "contentHash"],
   "blueprint.confirmed": [
     "docId",
     "sourceDocCount",
