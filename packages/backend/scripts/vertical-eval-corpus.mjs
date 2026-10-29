@@ -53,6 +53,7 @@ export const EVALUATOR_FILES = [
   "packages/backend/convex/presenceBrowserRun.ts",
   "packages/backend/convex/presenceBrowserRepair.ts",
   "packages/backend/convex/lib/presenceVisionReview.ts",
+  "apps/web/proxy.ts",
   "apps/web/app/api/presence/review/route.ts",
   "apps/web/app/api/presence/review/runner.ts",
   "apps/web/app/api/presence/review/worker.ts",

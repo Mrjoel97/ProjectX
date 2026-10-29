@@ -18,6 +18,8 @@ const isPublic = createRouteMatcher([
   "/signin",
   "/signup",
   "/api/media/render",
+  // Server-to-server review uses its own required bearer credential before any VM starts.
+  "/api/presence/review",
 ]);
 
 export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
