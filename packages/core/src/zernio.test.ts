@@ -13,6 +13,85 @@ const account = {
   isActive: true,
 };
 describe("Zernio production read boundaries", () => {
+  test("retains only exact provider post permalinks under the already-verified account/platform scope", async () => {
+    for (const platform of ["instagram", "tiktok"] as const) {
+      const postId = platform === "instagram" ? "17891234567890123" : "7425678901234567890";
+      const nativePostUrl =
+        platform === "instagram"
+          ? "https://www.instagram.com/reel/Cx_Ab-123/"
+          : "https://www.tiktok.com/@business/video/7425678901234567890";
+      const fetcher = async (input: RequestInfo | URL) =>
+        String(input).includes("/accounts")
+          ? Response.json({ accounts: [{ ...account, platform }] })
+          : Response.json({
+              posts: [
+                {
+                  isExternal: true,
+                  content: "Private text",
+                  platformAnalytics: [
+                    {
+                      platform,
+                      accountId: id,
+                      platformPostId: postId,
+                      platformPostUrl: nativePostUrl,
+                      analytics: { likes: 0 },
+                    },
+                  ],
+                },
+              ],
+              pagination: { page: 1, pages: 1 },
+            });
+      const result = await readZernioReport(
+        key,
+        profile,
+        [id],
+        Date.parse("2026-10-24T10:00:00Z"),
+        fetcher,
+      );
+      expect(result.report.accounts[0]?.posts[0]).toEqual({
+        postId,
+        source: "external",
+        metrics: { likes: 0 },
+        updatedAt: null,
+        nativePostUrl,
+      });
+      expect(JSON.stringify(result.report)).not.toContain("Private text");
+    }
+  });
+  test("unsupported, conflicting or other-platform URL metadata never creates a native mapping", async () => {
+    for (const platformPostUrl of [
+      "https://www.tiktok.com/@business/video/7425678901234567891",
+      "https://www.instagram.com/p/Cx_Ab-123/",
+      "https://evil.test/@business/video/7425678901234567890",
+      "https://www.tiktok.com/@business/video/7425678901234567890?secret=private",
+    ]) {
+      const fetcher = async (input: RequestInfo | URL) =>
+        String(input).includes("/accounts")
+          ? Response.json({ accounts: [account] })
+          : Response.json({
+              posts: [
+                {
+                  isExternal: true,
+                  platformAnalytics: [
+                    {
+                      platform: "tiktok",
+                      accountId: id,
+                      platformPostId: "7425678901234567890",
+                      platformPostUrl,
+                      analytics: { likes: 0 },
+                    },
+                  ],
+                },
+              ],
+              pagination: { page: 1, pages: 1 },
+            });
+      const post = (
+        await readZernioReport(key, profile, [id], Date.parse("2026-10-24T10:00:00Z"), fetcher)
+      ).report.accounts[0]?.posts[0];
+      expect(post?.metrics).toEqual({ likes: 0 });
+      expect(post?.nativePostUrl).toBeUndefined();
+    }
+  });
   test("rejects foreign-profile and duplicate account data, and exposes only supported accounts", () => {
     expect(() =>
       zernioChannels({ accounts: [{ ...account, profileId: other }] }, profile),

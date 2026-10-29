@@ -9,6 +9,7 @@ import { SkillAuthoringPanel } from "../workspace/SkillAuthoringPanel";
 import { WorkflowPackOwnerControls } from "../workspace/WorkflowPackOwnerControls";
 import { WorkflowPackOwnerPreview } from "../workspace/WorkflowPackOwnerPreview";
 import { WorkflowPackQuickStarts } from "../workspace/WorkflowPackQuickStarts";
+import { ManagedServicesPanel } from "./ManagedServicesPanel";
 
 export default function SkillsAndWorkflowsPage() {
   return (
@@ -25,7 +26,8 @@ export default function SkillsAndWorkflowsPage() {
 
 function SkillsAndWorkflowsLibrary() {
   const router = useRouter();
-  const [section, setSection] = useState<"workflows" | "skills">("workflows");
+  const tabs = ["services", "workflows", "skills"] as const;
+  const [section, setSection] = useState<(typeof tabs)[number]>("services");
   const [sending, setSending] = useState(false);
   const openThread = (threadId: string, label: string) => {
     router.push(
@@ -146,8 +148,7 @@ function SkillsAndWorkflowsLibrary() {
         </p>
         <h1 style={{ margin: "0.25rem 0", color: "var(--ink)" }}>Skills and Workflows</h1>
         <p style={{ margin: 0, color: "var(--ink-soft)" }}>
-          Choose a guided workflow or review the skills you and Pikar have drafted for your
-          business.
+          Set up work for Pikar to handle, start a guided workflow, or review your business skills.
         </p>
       </header>
       <div
@@ -155,7 +156,7 @@ function SkillsAndWorkflowsLibrary() {
         aria-label="Skills and workflows"
         style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
       >
-        {(["workflows", "skills"] as const).map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab}
             id={`${tab}-tab`}
@@ -168,13 +169,14 @@ function SkillsAndWorkflowsLibrary() {
               if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
               event.preventDefault();
               const next =
-                event.key === "Home"
-                  ? "workflows"
-                  : event.key === "End"
-                    ? "skills"
-                    : tab === "skills"
-                      ? "workflows"
-                      : "skills";
+                tabs[
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? tabs.length - 1
+                      : (tabs.indexOf(tab) + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) %
+                        tabs.length
+                ] ?? "services";
               setSection(next);
               event.currentTarget.parentElement
                 ?.querySelector<HTMLButtonElement>(`#${next}-tab`)
@@ -190,10 +192,25 @@ function SkillsAndWorkflowsLibrary() {
               color: section === tab ? "var(--card)" : "var(--ink)",
             }}
           >
-            {tab === "workflows" ? "Workflows" : "Skills"}
+            {tab === "services" ? "Services" : tab === "workflows" ? "Workflows" : "Skills"}
           </button>
         ))}
       </div>
+      <section
+        id="services-panel"
+        role="tabpanel"
+        aria-labelledby="services-tab"
+        hidden={section !== "services"}
+      >
+        <ErrorBoundary
+          label="managed-services"
+          fallback={
+            <p role="alert">Services could not be loaded. Refresh this page to try again.</p>
+          }
+        >
+          <ManagedServicesPanel />
+        </ErrorBoundary>
+      </section>
       <section
         id="workflows-panel"
         role="tabpanel"

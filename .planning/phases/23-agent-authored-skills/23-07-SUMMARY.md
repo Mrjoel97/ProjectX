@@ -360,3 +360,30 @@ release, a new versioned handoff and fresh paid approval must precede another at
 No evaluation or source-deployment retry is authorized by the consumed approval.
 
 The original/PR79/PR81 handoffs, checkpoints and both prior partial receipts remain byte-identical. This startup attempt is distinct from the earlier28-pass paid run and is not an extra case failure. Phase 23 remains 6/9, 23-07 partial, 23-08/09 pending, SKILL-02 open, Phase 48 partial and49 not started.
+
+## Current PR82 staging release and validated handoff
+
+PR82 source `821b097ceae440730bc51988af0425fb878687fb` passed CI `39663077579` and staging release
+`39668142870`/job `119458556492`, merged as `2a70886519fccbf0a0524f680f67142c909cbfa7`.
+[Release observation](../48-readiness-and-qualification-closure/48-STAGING-PR82-RELEASE-2026-10-21.json),
+SHA256 `3113664464004c54d805023d965fcbdd59e1a77cfa4f43e09f94f7cc7872b60f`, records preserved configuration, registry,
+protected retention and verified billing. The staging-only authorization is `d792ee1a6daa2d4dfb5a05767736b963f9777dcaae66dd71fb9774bdb47c1c96`.
+
+[Current handoff](handoffs/2026-10-21-pr82/23-LIVE-HANDOFF.json), SHA256
+`e7ee9d75acf644ab20d8e72e708b92941649b20b026b8778738b3f371ebf4b62`, and [refresh observation](handoffs/2026-10-21-pr82/23-HANDOFF-REFRESH.json), SHA256
+`f94d17cf0457952c3c035755d23683f55374bfbf682f7dd9677afd98fb62f59c`, bind the released golden 825ef/5dbe 46-case
+suite; vertical identity is 01d6 with the unchanged 40-case corpus.
+
+Fresh native A owner/B non-owner identities showed NOT_STARTED. Keyboard draft/diff review,
+1280x720 direct native and 390x900 read-only iframe views, followed by six matching reads,
+passed; temporary local configuration was restored. The shared schema, actual private-canary
+scan and assertLiveMatches passed. Candidate/provenance, global/foreign state, registry,
+retention and both historical closed bills remain unchanged. Embedded controls, touch/device
+tests and new authoring/refusal replay are not claimed.
+
+This supersedes only the next-input pointer. All three predecessor handoffs, both partial
+paid attempts, the consumed PR81 startup approval/once record and its bounded zero-work
+receipt remain unchanged. No new paid checkpoint or consent, evaluation result, public B
+mutation, activation, cleanup or production deployment followed. Fresh exact-source admission
+and separate concrete paid approval remain required. Phase 23 stays 6/9, SKILL-02 open,
+Phase 48 partial and Phase 49 not started.

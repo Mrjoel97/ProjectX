@@ -3,7 +3,9 @@
 // Two jobs:
 //  1. Prove the Phase-29 widening is what it claims: tenant-scoped, bounded, and shaped so an
 //     unreachable source cannot carry a result count.
-//  2. Prove recurrence storage is STRUCTURALLY absent. `schema.ts` L~359 carries a comment
+//  2. Prove active recurrence storage is absent outside ADR-063's two exact inert development
+//     tables. Their fields/indexes are closed below; no scheduler handle or enabled flag is allowed.
+//     `schema.ts` L~359 carries a comment
 //     promising there is no `routines` table, cron, trigger, recurrence, next-run timestamp,
 //     execution-history table, canvas or DSL. Until this file existed, that promise was enforced
 //     nowhere — `savedPrompts.test.ts` and `pinnedPrompts.test.ts` scan the MODULE and the UI, and
@@ -57,10 +59,30 @@ function tableBlock(name: string): string {
 }
 
 const dense = (value: string): string => value.replace(/\s+/g, "").replace(/,\)/g, ")");
+const fieldNames = (source: string) =>
+  [
+    ...new Set([...source.matchAll(/[{,\s]([A-Za-z][A-Za-z0-9_]*)\s*:\s*v\./g)].map((m) => m[1])),
+  ].sort();
+// ADR-063 permits this ONE schedule description in an inert approval, not any arming field.
+const INERT_CADENCE =
+  /cadence\s*:\s*v\.union\(\s*v\.literal\("daily"\),\s*v\.literal\("weekly"\),?\s*\)/g;
+function sourceOutsideInertCadence(source: string): string {
+  const marker = "\n  managedServiceStandingApprovals: defineTable(";
+  const start = source.indexOf(marker);
+  if (start < 0) return source;
+  const rest = source.slice(start + marker.length);
+  const next = rest.search(/\n {2}[A-Za-z][A-Za-z0-9]*: defineTable\(/);
+  const end = next < 0 ? source.length : start + marker.length + next;
+  return (
+    source.slice(0, start) +
+    source.slice(start, end).replace(INERT_CADENCE, "") +
+    source.slice(end)
+  ).replace('standingApprovalId: v.optional(v.id("managedServiceStandingApprovals")),', "");
+}
 
 // ── The absence that ROUT-02 depends on ────────────────────────────────────────────────────
 
-describe("recurrence storage is structurally absent", () => {
+describe("recurrence storage is absent outside the named inert ADR-063 development tables", () => {
   const RECURRENCE_TABLES = [
     "routines",
     "routineRuns",
@@ -103,7 +125,9 @@ describe("recurrence storage is structurally absent", () => {
     //
     // MUTATION OBSERVED RED: the same one-line `routines` injection now turns THIS test red too.
     const declared = new Set(
-      [...SOURCE.matchAll(/[{,\s]([A-Za-z][A-Za-z0-9_]*)\s*:\s*v\./g)].map((m) => m[1]),
+      [
+        ...sourceOutsideInertCadence(SOURCE).matchAll(/[{,\s]([A-Za-z][A-Za-z0-9_]*)\s*:\s*v\./g),
+      ].map((m) => m[1]),
     );
     // THE THREE NAMED EXCEPTIONS. Each is a real, pre-existing, ONE-SHOT field, and each is listed
     // here rather than dropped from the ban so the carve-out is visible instead of implicit —
@@ -140,6 +164,103 @@ describe("recurrence storage is structurally absent", () => {
     for (const banned of BANNED_FIELDS) {
       expect([...declared], `a schema field is named ${banned}`).not.toContain(banned);
     }
+  });
+
+  test("ADR-067's opt-in built-in adapter tables have exactly the reviewed fields and tenant-leading indexes", () => {
+    const approvals = tableBlock("managedServiceStandingApprovals");
+    expect(fieldNames(approvals)).toEqual(
+      [
+        "accountId",
+        "accountPins",
+        "bodyHash",
+        "budgetLimitCents",
+        "cadence",
+        "configRevision",
+        "controlRevision",
+        "connectionId",
+        "connectionRevision",
+        "createdAt",
+        "expiresAtMs",
+        "enabled",
+        "goalHash",
+        "hour",
+        "minute",
+        "name",
+        "nextDueAtMs",
+        "nextLocalDate",
+        "nextRequestedLocalTime",
+        "operationIds",
+        "provider",
+        "recipientRefs",
+        "revision",
+        "schedule",
+        "scheduledFunctionId",
+        "serviceId",
+        "skillId",
+        "skillPins",
+        "suspendedAtMs",
+        "suspensionReason",
+        "tenantId",
+        "terms",
+        "timeZone",
+        "version",
+        "weekday",
+      ].sort(),
+    );
+    expect(fieldNames(tableBlock("managedServiceOccurrences"))).toEqual(
+      [
+        "approvalId",
+        "approvalRevision",
+        "configRevision",
+        "controlRevision",
+        "createdAt",
+        "dueAtMs",
+        "localDate",
+        "occurrenceKey",
+        "receiptIds",
+        "requestedLocalTime",
+        "reservationId",
+        "runId",
+        "serviceId",
+        "state",
+        "tenantId",
+        "terminalOutcome",
+        "timeZone",
+        "unknownHoldCents",
+        "updatedAt",
+      ].sort(),
+    );
+    expect([...approvals.matchAll(INERT_CADENCE)]).toHaveLength(1);
+    expect(fieldNames(sourceOutsideInertCadence(SOURCE))).not.toContain("cadence");
+    // Positive controls: extra fields, including on a single line, cannot hide in this carve-out.
+    expect(
+      fieldNames(
+        sourceOutsideInertCadence(`${SOURCE}\n  other: defineTable({ cadence: v.string() })`),
+      ),
+    ).toContain("cadence");
+    expect(
+      fieldNames(
+        sourceOutsideInertCadence(
+          SOURCE.replace("goalHash: v.string()", "goalHash: v.string(), nextRunAt: v.number()"),
+        ),
+      ),
+    ).toContain("nextRunAt");
+    for (const table of ["managedServiceStandingApprovals", "managedServiceOccurrences"])
+      for (const index of indexesOf(table)) expect(index.fields[0]).toBe("tenantId");
+    expect(
+      indexesOf("managedServiceOccurrences").find((i) => i.name === "by_occurrence")?.fields,
+    ).toEqual(["tenantId", "serviceId", "occurrenceKey"]);
+    expect(
+      indexesOf("managedServiceStandingApprovals").find((i) => i.name === "by_service_enabled")
+        ?.fields,
+    ).toEqual(["tenantId", "serviceId", "enabled"]);
+    expect(
+      fieldNames(
+        sourceOutsideInertCadence(
+          `${SOURCE}\n other: defineTable({ standingApprovalId: v.string() })`,
+        ),
+      ),
+    ).toContain("standingApprovalId");
   });
 
   test("the L359 promise is still written down, so removing it is a visible diff", () => {

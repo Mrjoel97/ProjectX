@@ -3,6 +3,7 @@ import { scanText } from "@pikar/pii";
 import { describe, expect, it } from "vitest";
 import {
   CHEAP_MODEL,
+  COMPLEX_CANDIDATE_MODEL,
   chooseModel,
   DEFAULT_MODEL,
   EXPECTED_OUTPUT_TOKENS,
@@ -19,12 +20,20 @@ import {
   REALTIME_PRICING,
   RESEARCH_FALLBACK_MODEL,
   RESEARCH_MODEL,
+  ROUTINE_CANDIDATE_MODEL,
   TRANSCRIPTION_PRICING,
   WEB_SEARCH_CALL_USD,
 } from "./cost";
 
 // SafeText only comes out of scanText — no cast, keeps the brand honest.
 const safe = unwrap(scanText("hello")).safeText;
+
+it("staged candidates have conservative priced routes without changing active pins", () => {
+  expect(unwrap(estimateCostUsd(ROUTINE_CANDIDATE_MODEL, 1_000_000, 1_000_000))).toBe(1.5);
+  expect(unwrap(estimateCostUsd(COMPLEX_CANDIDATE_MODEL, 1_000_000, 1_000_000))).toBe(12);
+  expect(DEFAULT_MODEL).toBe("or/openai/gpt-4o-mini");
+  expect(RESEARCH_MODEL).toBe("or/openai/gpt-5.6-luna");
+});
 
 describe("estimateTokens", () => {
   it("empty → 0", () => expect(estimateTokens("")).toBe(0));

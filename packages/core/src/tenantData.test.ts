@@ -54,10 +54,8 @@ describe("tenant table classification registry", () => {
     // + three foundation tables and expiring auth revocations = 67 with owned upload receipts.
     // + Buffer connections, transient OAuth, campaign posts and reports = 71.
     // + Zernio connection credentials and cached reports = 73.
-    // + presentation preview sidecars and media campaign manifests = 75.
-    // + native social credentials, OAuth states, posts and global webhook health = 79.
-    // Re-derived from the merged schema (79 unique tables), preserving both feature lanes.
-    expect(schemaTables).toHaveLength(80);
+    // Combined schema inventory includes media, native social and managed services.
+    expect(schemaTables).toHaveLength(85);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });

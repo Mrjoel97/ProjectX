@@ -1,8 +1,10 @@
 import { BUSINESS_BLUEPRINT_SKILL } from "@pikar/contracts/skill";
 import {
+  BLUEPRINT_FIELDS,
   type BlueprintDiffRow,
   type BusinessBlueprint,
   type BusinessProfile,
+  blueprintEntryIdentity,
   deserializeBlueprint,
   probesFor,
   SPINE_CHAR_CAP,
@@ -17,6 +19,7 @@ import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/comp
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { __collectGroundedSources } from "./blueprint";
+import { contentHash } from "./lib/hash";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -33,6 +36,347 @@ const makeTest = () => {
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   return t;
 };
+
+describe("native Blueprint field provenance", () => {
+  async function fixture() {
+    const t = makeTest();
+    await insertTenantProfile(t, "tenant_a");
+    const text = "Source supports a proposed water service.";
+    const sourceHash = await contentHash(text);
+    const sourceDocId = await t.run((ctx) =>
+      ctx.db.insert("vaultDocuments", {
+        tenantId: "tenant_a",
+        title: "source.md",
+        kind: "upload",
+        category: "business",
+        source: "agent",
+        mimeType: "text/markdown",
+        size: text.length,
+        contentHash: sourceHash,
+        text,
+        status: "ready",
+        createdAt: 10,
+      }),
+    );
+    const entry = {
+      values: ["Proposed water service"],
+      origin: "derived" as const,
+      source: "source.md",
+    };
+    const blueprint = { ...deserializeBlueprint(""), offering: entry };
+    const entryHash = await contentHash(blueprintEntryIdentity(entry));
+    const draftJson = JSON.stringify({
+      blueprint,
+      diff: [{ kind: "addition", field: "offering", derived: entry }],
+      sourceDocIds: [sourceDocId],
+    });
+    const sourceBindings = [{ field: "offering", entryHash, docId: sourceDocId, sourceHash }];
+    const write = () =>
+      t.mutation(internal.blueprint.writeDraft, {
+        tenantId: "tenant_a",
+        draftJson,
+        sourceBindings,
+      });
+    const user = t.withIdentity({ subject: "tenant_a" });
+    const confirm = () =>
+      user.mutation(api.blueprint.confirmBlueprint, { acceptedContradictions: [] });
+    const ledger = () => user.query(api.blueprint.businessLedger, {});
+    return {
+      t,
+      text,
+      sourceHash,
+      sourceDocId,
+      entry,
+      blueprint,
+      entryHash,
+      draftJson,
+      sourceBindings,
+      write,
+      user,
+      confirm,
+      ledger,
+    };
+  }
+  test("captures native source and review refs while retaining an agent inference and unknown observation time", async () => {
+    const f = await fixture();
+    await f.write();
+    await f.confirm();
+    const row = (await f.ledger()).fields[0];
+    expect(row).toMatchObject({
+      field: "offering",
+      origin: "derived",
+      sourceState: "current",
+      sourceDocId: f.sourceDocId,
+      sourceHash: f.sourceHash,
+      sourceCreatedAt: 10,
+      originalObservedAt: null,
+    });
+    if (!row?.reviewAuditId) throw new Error("Missing native review reference");
+    const audit = await f.t.run((ctx) => ctx.db.get(row.reviewAuditId as Id<"audit">));
+    expect(audit).toMatchObject({
+      tenantId: "tenant_a",
+      eventType: "blueprint.confirmed",
+      actor: "user",
+      ts: row?.reviewedAt,
+    });
+    expect(await f.t.query(internal.blueprint.spineForTenant, { tenantId: "tenant_a" })).toContain(
+      "Proposed water service",
+    );
+  });
+  test("preserves original recording and first review across a carried-forward confirmation", async () => {
+    const f = await fixture();
+    await f.write();
+    await f.confirm();
+    const before = (await f.ledger()).fields[0];
+    await f.write();
+    await f.confirm();
+    expect((await f.ledger()).fields[0]).toEqual(before);
+    expect(await blueprintConfirmedRows(f.t)).toHaveLength(2);
+  });
+  test("an explicitly rebuilt source version gets a new review without refreshing the original recording or inventing observation", async () => {
+    const f = await fixture();
+    await f.write();
+    await f.confirm();
+    const original = (await f.ledger()).fields[0];
+    const text = "Revised source describing the same proposal.";
+    const sourceHash = await contentHash(text);
+    await f.t.run((ctx) => ctx.db.patch(f.sourceDocId, { text, contentHash: sourceHash }));
+    await f.t.mutation(internal.blueprint.writeDraft, {
+      tenantId: "tenant_a",
+      draftJson: f.draftJson,
+      sourceBindings: [
+        { field: "offering", entryHash: f.entryHash, docId: f.sourceDocId, sourceHash },
+      ],
+    });
+    await f.confirm();
+    expect((await f.ledger()).fields[0]).toMatchObject({
+      sourceState: "current",
+      sourceHash,
+      firstRecordedAt: original?.firstRecordedAt,
+      originalObservedAt: null,
+    });
+    expect((await f.ledger()).fields[0]?.reviewAuditId).not.toBe(original?.reviewAuditId);
+  });
+  test("rejects a changed or withdrawn newly proposed source at confirmation without publishing", async () => {
+    for (const withdrawn of [false, true]) {
+      const f = await fixture();
+      await f.write();
+      await f.t.run(async (ctx) =>
+        withdrawn
+          ? ctx.db.delete(f.sourceDocId)
+          : ctx.db.patch(f.sourceDocId, {
+              text: "Changed",
+              contentHash: await contentHash("Changed"),
+            }),
+      );
+      await expect(f.confirm()).rejects.toThrow("BLUEPRINT_SOURCE_CHANGED");
+      expect((await f.ledger()).blueprintDocId).toBeNull();
+      expect(await blueprintConfirmedRows(f.t)).toHaveLength(0);
+    }
+  });
+  test("refuses stale pre-synthesis source bindings at draft write and never snapshots a foreign source", async () => {
+    for (const foreign of [false, true]) {
+      const f = await fixture();
+      await f.t.run(async (ctx) =>
+        ctx.db.patch(
+          f.sourceDocId,
+          foreign
+            ? { tenantId: "tenant_b" }
+            : { text: "After synthesis", contentHash: await contentHash("After synthesis") },
+        ),
+      );
+      await expect(f.write()).rejects.toThrow("BLUEPRINT_SOURCE_CHANGED");
+      expect(
+        await f.t.query(internal.blueprint.sourceSnapshotsForTenant, {
+          tenantId: "tenant_a",
+          docIds: [f.sourceDocId],
+        }),
+      ).toEqual(
+        foreign
+          ? []
+          : [{ docId: f.sourceDocId, hash: await contentHash("After synthesis"), createdAt: 10 }],
+      );
+      expect((await f.ledger()).fields).toEqual([]);
+    }
+  });
+  test("snapshot witnesses reject an earlier profile prefix or changed whole chunk instead of citing a new hash for old text", async () => {
+    const f = await fixture();
+    const original = "Original profile prefix\n\nFirst chunk\n\nSecond chunk";
+    await f.t.run(async (ctx) =>
+      ctx.db.patch(f.sourceDocId, { text: original, contentHash: await contentHash(original) }),
+    );
+    const inspect = (text: string, kind: "profile" | "chunks") =>
+      f.t.query(internal.blueprint.sourceSnapshotsForTenant, {
+        tenantId: "tenant_a",
+        docIds: [f.sourceDocId],
+        textWitnesses: [{ docId: f.sourceDocId, text, kind }],
+      });
+    expect(await inspect("Original profile prefix", "profile")).toHaveLength(1);
+    expect(await inspect("First chunk\n\nSecond chunk", "chunks")).toHaveLength(1);
+    // Both paragraphs still exist, but the actual original chunk does not: no paragraph splitting.
+    const changed =
+      "Changed profile prefix\n\nFirst chunk\n\nIntervening changed content\n\nSecond chunk";
+    await f.t.run(async (ctx) =>
+      ctx.db.patch(f.sourceDocId, { text: changed, contentHash: await contentHash(changed) }),
+    );
+    expect(await inspect("Original profile prefix", "profile")).toEqual([]);
+    expect(await inspect("First chunk\n\nSecond chunk", "chunks")).toEqual([]);
+    expect(await inspect("Changed profile prefix", "profile")).toEqual([
+      { docId: f.sourceDocId, hash: await contentHash(changed), createdAt: 10 },
+    ]);
+    await expect(
+      f.t.query(internal.blueprint.sourceSnapshotsForTenant, {
+        tenantId: "tenant_a",
+        docIds: [f.sourceDocId],
+        textWitnesses: [{ docId: f.sourceDocId, text: "x".repeat(256_001), kind: "chunks" }],
+      }),
+    ).rejects.toThrow("INVALID_BLUEPRINT_SOURCES");
+  });
+  test("invalidates changed, removed, foreign and non-ready sources in both ledger and standing context", async () => {
+    for (const change of ["changed", "deleted", "foreign", "processing"]) {
+      const f = await fixture();
+      await f.write();
+      await f.confirm();
+      const original = (await f.ledger()).fields[0];
+      await f.t.run(async (ctx) => {
+        if (change === "deleted") await ctx.db.delete(f.sourceDocId);
+        else if (change === "changed")
+          await ctx.db.patch(f.sourceDocId, {
+            text: "Changed",
+            contentHash: await contentHash("Changed"),
+          });
+        else if (change === "foreign") await ctx.db.patch(f.sourceDocId, { tenantId: "tenant_b" });
+        else await ctx.db.patch(f.sourceDocId, { status: "processing" });
+      });
+      expect((await f.ledger()).fields[0]).toMatchObject({
+        sourceState: change === "changed" ? "changed" : "withdrawn",
+        firstRecordedAt: original?.firstRecordedAt,
+        reviewedAt: original?.reviewedAt,
+      });
+      expect(
+        await f.t.query(internal.blueprint.spineForTenant, { tenantId: "tenant_a" }),
+      ).not.toContain("Proposed water service");
+    }
+  });
+  test("legacy and title-matching claims stay unverified; draft JSON cannot mint metadata", async () => {
+    const f = await fixture();
+    await f.t.mutation(internal.blueprint.writeDraft, {
+      tenantId: "tenant_a",
+      draftJson: JSON.stringify({
+        ...JSON.parse(f.draftJson),
+        fieldProvenance: JSON.stringify({
+          version: 1,
+          blueprintHash: await contentHash(serializeBlueprint(f.blueprint)),
+          fields: [
+            {
+              field: "offering",
+              entryHash: f.entryHash,
+              sourceDocId: f.sourceDocId,
+              sourceHash: f.sourceHash,
+              sourceCreatedAt: 10,
+              firstRecordedAt: 20,
+              reviewedAt: 30,
+              reviewAuditId: "invented",
+            },
+          ],
+        }),
+      }),
+    });
+    await f.confirm();
+    expect((await f.ledger()).fields[0]).toMatchObject({
+      sourceState: "unverified",
+      sourceDocId: null,
+      origin: "derived",
+    });
+  });
+  test("renamed source titles retain exact identity; changed blueprint bytes and foreign pointers cannot inherit metadata", async () => {
+    const f = await fixture();
+    await f.write();
+    const result = await f.confirm();
+    if (!result.ok) throw new Error("fixture");
+    await f.t.run((ctx) => ctx.db.patch(f.sourceDocId, { title: "renamed.md" }));
+    expect((await f.ledger()).fields[0]?.sourceState).toBe("current");
+    await insertTenantProfile(f.t, "tenant_b", { docId: result.docId });
+    expect(
+      await f.t.withIdentity({ subject: "tenant_b" }).query(api.blueprint.businessLedger, {}),
+    ).toEqual({ blueprintDocId: null, fields: [] });
+    const changed = serializeBlueprint({
+      ...f.blueprint,
+      offering: { ...f.entry, values: ["Unreviewed replacement"] },
+    });
+    await f.t.run((ctx) =>
+      ctx.db.patch(result.docId, { text: changed, contentHash: "f".repeat(64) }),
+    );
+    expect((await f.ledger()).fields[0]).toMatchObject({
+      values: ["Unreviewed replacement"],
+      sourceState: "unverified",
+      reviewedAt: null,
+    });
+    await f.t.run(async (ctx) => {
+      const profile = await ctx.db
+        .query("tenantProfiles")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", "tenant_a"))
+        .unique();
+      if (!profile?.blueprintFieldProvenance) throw new Error("Missing sidecar");
+      const copied = JSON.parse(profile.blueprintFieldProvenance);
+      copied.blueprintHash = await contentHash(changed);
+      copied.fields[0].entryHash = await contentHash(
+        blueprintEntryIdentity({ ...f.entry, values: ["Unreviewed replacement"] }),
+      );
+      await ctx.db.patch(profile._id, { blueprintFieldProvenance: JSON.stringify(copied) });
+    });
+    // A copied real audit ID does not certify different field content.
+    expect((await f.ledger()).fields[0]).toMatchObject({
+      sourceState: "unverified",
+      reviewedAt: null,
+    });
+  });
+  test("an audit that verifies another unchanged field cannot certify copied replacement content", async () => {
+    const f = await fixture();
+    const customer = {
+      values: ["Original audience"],
+      origin: "derived" as const,
+      source: "source.md",
+    };
+    const blueprint = { ...f.blueprint, targetCustomer: customer };
+    await f.t.mutation(internal.blueprint.writeDraft, {
+      tenantId: "tenant_a",
+      draftJson: JSON.stringify({ blueprint, diff: [], sourceDocIds: [f.sourceDocId] }),
+      sourceBindings: [
+        ...f.sourceBindings,
+        {
+          field: "targetCustomer",
+          entryHash: await contentHash(blueprintEntryIdentity(customer)),
+          docId: f.sourceDocId,
+          sourceHash: f.sourceHash,
+        },
+      ],
+    });
+    const result = await f.confirm();
+    if (!result.ok) throw new Error("fixture");
+    const changedEntry = { ...f.entry, values: ["Replacement never reviewed"] };
+    const changed = serializeBlueprint({ ...blueprint, offering: changedEntry });
+    await f.t.run(async (ctx) => {
+      const profile = await ctx.db
+        .query("tenantProfiles")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", "tenant_a"))
+        .unique();
+      if (!profile?.blueprintFieldProvenance) throw new Error("Missing sidecar");
+      const copied = JSON.parse(profile.blueprintFieldProvenance);
+      copied.blueprintHash = await contentHash(changed);
+      copied.fields.find((row: { field: string }) => row.field === "offering").entryHash =
+        await contentHash(blueprintEntryIdentity(changedEntry));
+      await ctx.db.patch(result.docId, { text: changed, contentHash: await contentHash(changed) });
+      await ctx.db.patch(profile._id, { blueprintFieldProvenance: JSON.stringify(copied) });
+    });
+    expect((await f.ledger()).fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: "offering", sourceState: "unverified", reviewedAt: null }),
+        expect.objectContaining({ field: "targetCustomer", sourceState: "current" }),
+      ]),
+    );
+  });
+});
 
 async function seedBlueprintSkill(t: ReturnType<typeof makeTest>): Promise<void> {
   await t.run(async (ctx) => {
@@ -84,7 +428,7 @@ async function insertVaultDocument(
       source: "blueprint",
       mimeType: "text/markdown",
       size: text?.length ?? 0,
-      contentHash: `${tenantId}-${kind}-${Date.now()}-${Math.random()}`,
+      contentHash: await contentHash(text ?? ""),
       ...(text === undefined ? {} : { text }),
       status,
       createdAt: Date.now(),
@@ -433,8 +777,8 @@ describe("blueprint top entities", () => {
   });
 });
 
-describe("golden-eval confirmed Blueprint seed", () => {
-  test("is eval-only, source-owned, one-shot, and renders a non-vacuous standing spine", async () => {
+describe("golden-eval Blueprint fixture seed", () => {
+  test("is eval-only, source-owned, one-shot, and never grants unreviewed claims assured context", async () => {
     const t = makeTest();
     const sourceDocId = await insertVaultDocument(t, {
       tenantId: "eval-1234abcd",
@@ -470,7 +814,10 @@ describe("golden-eval confirmed Blueprint seed", () => {
     });
     expect(seeded.sourceDocCount).toBe(1);
     expect(seeded.needle).toBe("evalblpr");
-    expect(spine).toContain("evalblpr");
+    expect(
+      (await t.query(internal.blueprint.liveForTenant, { tenantId: "eval-1234abcd" }))?.text,
+    ).toContain("evalblpr");
+    expect(spine).not.toContain("evalblpr"); // Internal fixture creation is not a human review.
     expect(spine).not.toContain("documents added since this was confirmed");
 
     await expect(
@@ -605,7 +952,7 @@ describe("blueprint spine and Stage-1 drift", () => {
     ).resolves.toBeNull();
   });
 
-  test("renders the marked spine within the dedicated character cap", async () => {
+  test("keeps legacy title-only claims out of assured context while retaining them in the ledger", async () => {
     const t = makeTest();
     await insertLiveBlueprint(t, "tenant_a");
 
@@ -613,8 +960,21 @@ describe("blueprint spine and Stage-1 drift", () => {
       tenantId: "tenant_a",
     });
 
-    expect(spine).toContain("[stated]");
-    expect(spine).toContain("[source: source-a.md]");
+    expect(spine).not.toContain("Acme");
+    expect(spine).not.toContain("[source: source-a.md]");
+    const ledger = await t
+      .withIdentity({ subject: "tenant_a" })
+      .query(api.blueprint.businessLedger, {});
+    expect(ledger.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "name",
+          values: ["Acme"],
+          sourceState: "unverified",
+          reviewedAt: null,
+        }),
+      ]),
+    );
     expect(spine?.length).toBeLessThanOrEqual(SPINE_CHAR_CAP);
   });
 
@@ -853,14 +1213,13 @@ describe("blueprint draft build", () => {
     );
 
     const firstDraft = firstRow?.blueprintDraft;
-    await t.run((ctx) =>
-      ctx.db.patch(profileDocId, {
-        text: serializeProfile({
-          ...TYPED_PROFILE,
-          oneLineDescription: "A one-line edit that must stay free.",
-        }),
-      }),
-    );
+    await t.run(async (ctx) => {
+      const text = serializeProfile({
+        ...TYPED_PROFILE,
+        oneLineDescription: "A one-line edit that must stay free.",
+      });
+      await ctx.db.patch(profileDocId, { text, contentHash: await contentHash(text) });
+    });
     await t.withIdentity({ subject: "tenant_a" }).action(api.blueprint.buildBlueprintDraft, {});
 
     const [secondRow] = await tenantRows(t, "tenant_a");
@@ -909,6 +1268,7 @@ describe("blueprint draft build", () => {
       docId: "shared-doc",
       title: "Shared source",
       text: "First stable passage",
+      passages: ["First stable passage"],
     });
   });
 });
@@ -1087,14 +1447,28 @@ describe("blueprint confirmation audit", () => {
       "contradictionsAccepted",
       "docId",
       "fieldCount",
+      "fieldRefs",
       "sourceDocCount",
     ]);
+    const liveDoc = await t.run((ctx) => ctx.db.get(confirmed.docId));
+    const confirmedFields = deserializeBlueprint(liveDoc?.text ?? "");
+    const fieldRefs = (
+      await Promise.all(
+        BLUEPRINT_FIELDS.flatMap((field) => {
+          const entry = confirmedFields[field];
+          return entry
+            ? [contentHash(blueprintEntryIdentity(entry)).then((hash) => `${field}:${hash}`)]
+            : [];
+        }),
+      )
+    ).sort();
     expect(payload).toEqual({
       docId: confirmed.docId,
       sourceDocCount: 2,
       fieldCount: 8,
       additionsApplied: 1,
       contradictionsAccepted: 1,
+      fieldRefs,
     });
     const payloadJson = JSON.stringify(payload);
     expect(payloadJson).toContain("docId");

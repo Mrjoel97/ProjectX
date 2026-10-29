@@ -42,6 +42,7 @@ type AgentContext = {
   threadId?: string;
   rootRequestId?: string;
   gmailEnabled?: boolean;
+  attendedServiceAccess?: boolean;
 };
 
 // THE one call site: the old positional option object mapped FAITHFULLY onto the Phase 38
@@ -67,6 +68,7 @@ function buildOld(o: {
       tenantSkillIds: o.tenantSkillIds,
       threadId: a.threadId,
       rootRequestId: a.rootRequestId,
+      attendedServiceAccess: a.attendedServiceAccess,
       evalRevenueFixtureId: a.evalRevenueFixtureId,
     },
     {
@@ -112,6 +114,7 @@ function specialistContext(
 }
 
 const EXECUTIVE: AgentContext = {
+  attendedServiceAccess: true,
   grantWebResearch: false,
   grantDispatch: true,
   grantSkillAuthoring: true,
@@ -244,6 +247,7 @@ test("executive via runAgentLoop, lineage present", () => {
     "readFinance",
     "readSocialAccounts",
     "readSocialContent",
+    "readSocialService",
     "readZernioEngagement",
     "recordScorecardAnswer",
     "regenerateAttachment",
@@ -252,6 +256,7 @@ test("executive via runAgentLoop, lineage present", () => {
     "replyToMessage",
     "resetPlan",
     "resolveContacts",
+    "saveSocialServiceAnswer",
     "searchVault",
     "setMode",
     "setRecipients",
@@ -262,6 +267,7 @@ test("executive via runAgentLoop, lineage present", () => {
     "stageFinanceWrite",
     "stageInvoiceReminder",
     "stageSocialPost",
+    "startSocialService",
   ]);
 });
 
@@ -333,6 +339,7 @@ test("executive continue turn (omitRecipientEdits)", () => {
     "readFinance",
     "readSocialAccounts",
     "readSocialContent",
+    "readSocialService",
     "readZernioEngagement",
     "recordScorecardAnswer",
     "regenerateAttachment",
@@ -340,6 +347,7 @@ test("executive continue turn (omitRecipientEdits)", () => {
     "replyToMessage",
     "resetPlan",
     "resolveContacts",
+    "saveSocialServiceAnswer",
     "searchVault",
     "setMode",
     "setSendTime",
@@ -349,6 +357,7 @@ test("executive continue turn (omitRecipientEdits)", () => {
     "stageFinanceWrite",
     "stageInvoiceReminder",
     "stageSocialPost",
+    "startSocialService",
   ]);
 });
 
@@ -375,14 +384,17 @@ test("executive, gmail disabled", () => {
     "readFinance",
     "readSocialAccounts",
     "readSocialContent",
+    "readSocialService",
     "readZernioEngagement",
     "recordScorecardAnswer",
+    "saveSocialServiceAnswer",
     "searchVault",
     "stageBufferPost",
     "stageCrmWrite",
     "stageFinanceWrite",
     "stageInvoiceReminder",
     "stageSocialPost",
+    "startSocialService",
   ]);
 });
 

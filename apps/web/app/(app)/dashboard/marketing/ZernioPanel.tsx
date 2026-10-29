@@ -2,6 +2,7 @@
 
 import { api } from "@pikar/backend/api";
 import type { ZernioChannel, ZernioReport } from "@pikar/core/zernio";
+import { buildZernioNarrative } from "@pikar/core/zernioNarrative";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { type CSSProperties, useState } from "react";
 
@@ -398,6 +399,15 @@ export function ZernioReportView({
 }) {
   return (
     <>
+      <section
+        aria-label="Engagement summary"
+        style={{ maxWidth: "72ch", fontSize: 16, lineHeight: 1.6 }}
+      >
+        <h3>What your engagement data tells us</h3>
+        {buildZernioNarrative(report, Date.now()).map((paragraph) => (
+          <p key={paragraph}>{paragraph}</p>
+        ))}
+      </section>
       <p>
         Posts published {report.fromDate} to {report.toDate}, inclusive UTC dates.
       </p>

@@ -1362,3 +1362,7 @@ grounding failure. It was not. `pnpm start` serves a **frozen production build**
 bundle had been compiled 4h14m BEFORE the first Phase-14 commit, so no picker, no `?doc=`, no
 `docId` at the mint, and therefore no document scope. **Rebuild (`pnpm build`) before any voice
 UAT, and check the build timestamp against `git log` before believing a UI-level symptom.**
+
+### Last verified: 2026-10-23 — Native reviewed test fixtures
+
+Older positive context fixtures now use a shared test-only helper that creates an actual synthetic source/hash and calls native draft writing plus authenticated public confirmation. It obtains real offline audit/field references rather than inserting pretend review metadata. Positive cockpit/evaluation/search/voice context assertions remain; legacy exclusion and the exact ADR063 absence exception remain explicit. This is simulated native test-user behavior, not live owner approval or golden evidence. Production source behavior and corpus cases are unchanged by the fixture correction.

@@ -25,6 +25,8 @@
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { COMPLEX_CANDIDATE_MODEL, ROUTINE_CANDIDATE_MODEL } from "@pikar/cost";
+import { generateText, jsonSchema, stepCountIs, tool } from "ai";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { missingEnv } from "./env";
 import {
@@ -49,6 +51,99 @@ const resolved = (id: string) => {
   if (typeof model === "string") throw new Error(`resolveModel(${id}) returned a bare id`);
   return model;
 };
+
+test.each([
+  [ROUTINE_CANDIDATE_MODEL, 0.3, 1.2, "none"],
+  [COMPLEX_CANDIDATE_MODEL, 2, 10, "low"],
+] as const)("staged %s enforces wire price/settings and preserves tool-loop reasoning", async (id, prompt, completion, effort) => {
+  const bodies: Array<{
+    model: string;
+    provider: unknown;
+    reasoning: { effort: string; enabled?: boolean; exclude?: boolean };
+    messages: Array<{
+      role: string;
+      reasoning_details?: unknown;
+      tool_calls?: Array<{ id: string }>;
+    }>;
+  }> = [];
+  const details = [
+    { type: "reasoning.text", text: "Synthetic tool choice", format: "unknown", index: 0 },
+  ];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_url: unknown, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      const first = bodies.length === 1;
+      return new Response(
+        JSON.stringify({
+          id: "synthetic-response",
+          object: "chat.completion",
+          created: 1,
+          model: id.slice(3),
+          choices: [
+            {
+              index: 0,
+              finish_reason: first ? "tool_calls" : "stop",
+              message: first
+                ? {
+                    role: "assistant",
+                    content: null,
+                    reasoning_details: details,
+                    tool_calls: [
+                      {
+                        id: "read-one",
+                        type: "function",
+                        function: { name: "read", arguments: "{}" },
+                      },
+                    ],
+                  }
+                : { role: "assistant", content: "Done" },
+            },
+          ],
+          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        }),
+        { headers: { "content-type": "application/json" } },
+      );
+    }),
+  );
+  try {
+    const result = await generateText({
+      model: resolveModel(id),
+      prompt: "Use the synthetic read tool.",
+      maxRetries: 0,
+      stopWhen: stepCountIs(2),
+      tools: {
+        read: tool({
+          inputSchema: jsonSchema<Record<string, never>>({
+            type: "object",
+            properties: {},
+            additionalProperties: false,
+          }),
+          execute: async () => ({ found: true }),
+        }),
+      },
+    });
+    expect(result.text).toBe("Done");
+    expect(bodies).toHaveLength(2);
+    for (const body of bodies) {
+      expect(body.model).toBe(id.slice(3));
+      expect(body.provider).toMatchObject({
+        require_parameters: true,
+        max_price: { prompt, completion },
+      });
+      expect(body.reasoning.effort).toBe(effort);
+    }
+    if (id === ROUTINE_CANDIDATE_MODEL) expect(bodies[0]?.reasoning.enabled).toBe(false);
+    else expect(bodies[0]?.reasoning.exclude).toBe(false);
+    const assistant = bodies[1]?.messages.find(
+      (message: { role: string }) => message.role === "assistant",
+    );
+    expect(assistant?.reasoning_details).toEqual(details);
+    expect(assistant?.tool_calls?.[0]?.id).toBe("read-one");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
 
 describe("resolveModel routes an id to the provider that id names", () => {
   test("an `or/` id goes to OpenRouter with the ROUTE PREFIX STRIPPED", () => {

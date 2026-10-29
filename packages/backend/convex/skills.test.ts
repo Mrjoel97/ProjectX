@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   AGENT_AUTHORABLE_SKILLS,
@@ -1176,6 +1177,15 @@ describe("no hardcoded agent prompts in convex/", () => {
    *  checked below. A THIRD should be resisted: the pattern is "a harvested ffmpeg pass", and a
    *  file that is not that does not belong here. */
   const BURN_MIRROR = "/render/burnCapsScript.ts";
+  // One exact provider protocol document, not model instructions. Keep its meaningful operation
+  // name and all authoritative publication-receipt fields. Neither the rest of this file nor
+  // arbitrary GraphQL/prose is exempt: a changed document must be reviewed here explicitly.
+  const BUFFER_CREATE_POST_PROTOCOL =
+    "mutation PikarCreatePost($input:CreatePostInput!){createPost(input:$input){__typename ... on PostActionSuccess{post{id channelId channelService status externalLink sentAt schedulingType text channel{id service serviceId}}}}}";
+  const BUFFER_PROTOCOL_FILE = fileURLToPath(new URL("./bufferActions.ts", import.meta.url));
+  const isBufferProtocol = (file: string, literal: string) =>
+    resolve(file) === resolve(BUFFER_PROTOCOL_FILE) &&
+    literal === JSON.stringify(BUFFER_CREATE_POST_PROTOCOL);
 
   test("the assembler-mirror exemption is REAL and still guarded elsewhere", () => {
     // Anti-vacuity. A skip keyed on a path becomes a silent hole the moment that path moves, and
@@ -1230,8 +1240,9 @@ describe("no hardcoded agent prompts in convex/", () => {
     const stripComments = (s: string) =>
       s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
 
-    const scan = (text: string) =>
+    const scan = (text: string, file = "") =>
       [...stripComments(text).matchAll(stringLiteral)]
+        .filter((match) => !isBufferProtocol(file, match[0]))
         .map((m) => m[0].length - 2)
         .filter((n) => n > MAX_INLINE_STRING);
 
@@ -1242,10 +1253,32 @@ describe("no hardcoded agent prompts in convex/", () => {
     expect(scan(`const prompt = \`${long}\`;`)).toHaveLength(1); // 1. a REAL hardcoded prompt, still caught
     expect(scan(`/** doc: \`${long}\` and \`more\` */\nconst a = 1;`)).toHaveLength(0); // 2. prose, correctly ignored
     expect(scan(`const u = "https://ex.com/${long}";`)).toHaveLength(1); // 3. `://` is not a comment
+    const protocolSource = `const query = ${JSON.stringify(BUFFER_CREATE_POST_PROTOCOL)};`;
+    expect(scan(protocolSource, BUFFER_PROTOCOL_FILE)).toHaveLength(0);
+    expect(scan(protocolSource, "/otherActions.ts")).toHaveLength(1);
+    expect(
+      scan(protocolSource, fileURLToPath(new URL("./nested/bufferActions.ts", import.meta.url))),
+    ).toHaveLength(1);
+    expect(
+      scan(
+        `const query = ${JSON.stringify(`${BUFFER_CREATE_POST_PROTOCOL} ${long}`)};`,
+        BUFFER_PROTOCOL_FILE,
+      ),
+    ).toHaveLength(1);
+    expect(scan(`const prompt = ${JSON.stringify(long)};`, BUFFER_PROTOCOL_FILE)).toHaveLength(1);
+    const bufferSource = readFileSync(
+      fileURLToPath(new URL("./bufferActions.ts", import.meta.url)),
+      "utf8",
+    );
+    expect(
+      [...stripComments(bufferSource).matchAll(stringLiteral)].filter((match) =>
+        isBufferProtocol(BUFFER_PROTOCOL_FILE, match[0]),
+      ),
+    ).toHaveLength(1);
 
     const offenders: string[] = [];
     for (const file of sourceFiles) {
-      for (const length of scan(readFileSync(file, "utf8"))) {
+      for (const length of scan(readFileSync(file, "utf8"), file)) {
         offenders.push(`${file}: ${length}-char inline string`);
       }
     }

@@ -22,6 +22,8 @@ import {
 } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { reviewBlueprintFixture } from "../__fixtures__/reviewedBlueprint";
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { internal } from "./_generated/api";
 import schema from "./schema";
 
@@ -35,7 +37,15 @@ const NOW = 1_700_000_000_000;
 const PER_DOC_CHAR_CAP = 1500;
 const TOTAL_CHAR_CAP = 8000;
 
-const harness = () => convexTest(schema, modules);
+const harness = () => {
+  const t = convexTest(schema, modules);
+  t.registerComponent(
+    "auditCounts",
+    aggregateSchema,
+    import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts"),
+  );
+  return t;
+};
 type T = ReturnType<typeof harness>;
 
 test("reviewed foundation kinds have owner authority, but agent-origin content cannot impersonate them", async () => {
@@ -108,7 +118,7 @@ const BLUEPRINT_TEXT = serializeBlueprint({
   entities: null,
 } satisfies BusinessBlueprint);
 
-async function seedConfirmedBlueprint(t: T, tenantId = TENANT): Promise<string> {
+async function seedConfirmedBlueprint(t: T, tenantId = TENANT) {
   const docId = await seedDoc(
     t,
     {
@@ -133,7 +143,7 @@ async function seedConfirmedBlueprint(t: T, tenantId = TENANT): Promise<string> 
       blueprintConfirmedAt: NOW,
     }),
   );
-  return docId;
+  return reviewBlueprintFixture(t, tenantId, docId);
 }
 
 const searchVault = (t: T, query: string, tenantId = TENANT) =>
@@ -326,7 +336,7 @@ describe("the vault adapter returns cited, bounded, tenant-owned evidence", () =
 describe("the Business Blueprint spine never becomes a search hit or a citation", () => {
   test("the spine is discarded from evidence AND from the count, while it really is present", async () => {
     const t = harness();
-    await seedConfirmedBlueprint(t);
+    const reviewed = await seedConfirmedBlueprint(t);
     const docA = await seedDoc(t, { title: "Playbook A", text: "The margin is 40 percent." });
 
     // POSITIVE CONTROL — without this the assertions below pass on a run where there was no spine
@@ -345,6 +355,12 @@ describe("the Business Blueprint spine never becomes a search hit or a citation"
       expect(e.text).not.toContain("Acme");
       expect(e.sourceRef).toBe(docA);
     }
+    // The reviewed source is a real document, unlike the always-on spine. When explicitly
+    // queried it contributes one legitimate hit; the spine never becomes an additional third hit.
+    const withSource = await searchVault(t, `SMOKE::${docA},${reviewed.sourceDocId}`);
+    expect(withSource.state).toEqual({ status: "available", source: "vault", returned: 2 });
+    expect(withSource.evidence.map((e) => e.sourceRef)).toEqual([docA, reviewed.sourceDocId]);
+    expect(withSource.evidence.map((e) => e.sourceRef)).not.toContain(reviewed.blueprintDocId);
   });
 });
 

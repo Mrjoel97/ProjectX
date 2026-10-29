@@ -1,3 +1,5 @@
+> Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social and recurring-service changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
+
 > Last verified: 2026-10-26 — Media finishing labels accept absent and null cue fields from the tenant query. Timing text renders only for numeric start/end values, avoiding a fabricated zero interval for legacy scenes. The compile-time Block contract matches the full reactive projection.
 
 > Last verified: 2026-10-26 — Scene review displays animated title timing, fade selection and the optional decorative3D ring before generation. These fields and the approved brand revision are bound into native review hashes.
@@ -27,6 +29,14 @@
 > Last verified: 2026-10-21 — Phase 53 adds explicit presentation creation/attachment formats, rich XLSX writers and proposal-only media campaigns in the isolated offline lane. Local artifact/campaign checks exist; registry/hosted/Office/paid quality acceptance remains open.
 
 > Last verified: 2026-10-22 — Direct social connections now expose tenant-scoped readSocialAccounts, readSocialContent and stageSocialPost agent tools. Agents cannot connect, select assets, grant scopes, approve or publish. Expanded test grants, selected-account reads and one approved private YouTube test are verified; all publication gates are off again. [social-connections.md](social-connections.md) owns current provider configuration, acceptance evidence and external review gates. Earlier no-tool/pending-configuration notes describe the initial checkpoint only.
+
+> Last verified: 2026-10-24 — Executive turns receive bounded, scoped user-confirmed service statements as a separate reference-data block after the Blueprint and Finance context. This must never be appended to `blueprint.spineForTenant`: that string is also scanned by evaluation grounding for financial numbers. Delimiter characters inside the JSON are escaped. Ordinary turns degrade gracefully if optional enrichment cannot load; managed service turns fail closed. `readSocialService` returns the next contextual business question; `saveSocialServiceAnswer` only stages a reviewable answer through the authenticated conversation API. The workspace displays the same durable review surface beside existing voice/file input, without adding a second composer or automatically sending a transcription.
+
+Three explicit tool snapshots now include the draft-answer tool only for attended Executive turns with lineage. The existing specialist, evaluation and managed-run absence snapshots remain unchanged. Actual prompt assembly and the native integration shim both keep service information separate from Blueprint grounding and retain the final user turn.
+
+> Last verified: 2026-10-23 — The attended service reuses the existing cockpitAgent and ensureThreadAndPlan, a single non-retrying Workflow action and native conversation storage. The ordinary authenticated Executive can read/start the saved social service through the same public start seam as the UI. Scoped service runs intersect Executive tools with approved operations and check native scope before each model step/tool; leaf/eval/smoke contexts receive no service-start grants. Local scripted SDK tests pass through the real component workflow, draft write and Agent reply store, without provider egress.
+
+> Last verified: 2026-10-22 — Workflow-pack browser preparation now has six synthetic fixtures and an explicit obligation matrix, validated by ten offline checks. The pilot disables trace/video/screenshot recording of qualification traffic. No actual browser journey or new evidence writer is implemented; the existing evidence refusal remains. See workflow-packs.md. The workspace runtime and composer are unchanged.
 
 > Last verified: 2026-10-20 — The deterministic email router now recognizes a leading imperative email command with one unquoted lowercase/malformed recipient token, an about clause, and explicit Subject/Body fields. This keeps the unchanged bounce-and-correct fixture on the email rail so existing recipient validation can reject the address. Incomplete, non-imperative, quoted and product-topic variants do not gain this fallback; existing grant/approval boundaries and registry bodies are unchanged. Focused offline routing tests do not establish a paid suite pass or close the separate unexpected-operation oracle gap.
 
@@ -2511,6 +2521,8 @@
 > Last verified: 2026-10-24 — New native films use one Picture & sound stage,30/45/60s choices and exact reviewed-content/cost generation and retry guards. Native stock/still downgrade controls are omitted; older projects retain their readers. Over-daily-limit batch approvals appear in the conversation even when outputs live in workspace tabs, naming the exact task-only increase. No artifact browsing can approve or reserve generation. Shared deployment capacity remains independent; see ADR-065/066 and media.md for verification and qualification limits.
 
 # Playbook: Email Chat Cockpit
+
+> Last verified: 2026-10-26 — DeepSeek V4.1 Flash and Kimi K3.1 Pro are staged model candidates through the existing OpenRouter resolver, not active production lane defaults. Flash uses non-thinking routine mode; Kimi uses explicit low reasoning with details retained. The installed provider sends required-parameter routing and maximum prompt/completion prices matching conservative admission rates. Mocked transport tests execute a two-step tool loop and verify unchanged `reasoning_details` on the second request. This proves SDK serialization, not live model access or task quality; the small real integration remains outstanding. Existing OpenAI primary/fallback pins remain unchanged.
 
 > **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this
 > subsystem's files to clear a CI `Lint` red that had been blocking the `Test` and `Build`
@@ -6779,3 +6791,7 @@ Verification: focused workbook (23+6), presentation (23+5) and campaign (4+7) la
 
 
 > Last verified: 2026-10-24 — Native media supports a 15-second option and explicit selection of up to three owned product images. Saving references requires fresh review before generation. Local browser checks cover output tabs, batch items, clean PDF pages and exact original downloads; hosted acceptance remains outstanding.
+
+# Scheduled social execution update
+
+> Last verified: 2026-10-24 — The Executive forwards only its trusted managed-service run reference to native preCall. A standing run must resolve its owned occurrence, immutable approval and whole-cap reservation before its prepaid allowance can bypass the ordinary unreserved-window check. The existing scoped tool record and native configuration/account/skill/control fences still apply; this adds no model-chosen grant, publication authority or parallel model pipeline. Unknown provider outcomes retain their cost hold and do not retry. A known provider breach stops further execution and suspends the current cadence; closing a fully billed interruption preserves the breach and does not restart the run or its schedule. Offline evidence is distinct from staging or production acceptance.

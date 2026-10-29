@@ -8,6 +8,8 @@ requirements-completed: []
 
 # 48-03 — Browser protocol preparation and evidence guard repair
 
+2026-10-22 free preparation: six synthetic fixtures now specify the real source/output/edit needs and all required obligation/viewport cells as data. One matrix-integrity check plus nine negative fixture checks pass; the two selected files discover 23 cases including 13 pre-existing cases. No browser journey is implemented by these fixture checks. Both evidence writers remain fail-closed. This is partial Task 1 preparation only; it does not close any browser qualification, owner decision or readiness seal.
+
 Free preparation ran in parallel with48-02 recovery; dependent live journeys have not started.
 `48-BROWSER-PREPARATION.md` maps each required matrix cell to current coverage, explicit missing
 behavior, synthetic fixture needs and isolated execution order. All cells in48-PACK-ACCEPTANCE

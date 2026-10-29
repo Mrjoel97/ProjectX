@@ -20,6 +20,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BlueprintCanvas } from "./BlueprintCanvas";
 import { BlueprintDiff } from "./BlueprintDiff";
+import { BusinessLedgerPanel } from "./BusinessLedgerPanel";
 import { AskSpecialist, SegmentAnatomy } from "./SegmentAnatomy";
 import { joinPhrases, SEGMENT_COPY } from "./segmentCopy";
 import { card, label, primaryButton } from "./styles";
@@ -170,6 +171,7 @@ export function BlueprintPanel() {
         </p>
       )}
       {goalStatus === "LoadingMore" && <p>Loading older goals…</p>}
+      <BusinessLedgerPanel />
       {!!foundationDocs?.length && (
         <section aria-label="Foundational references">
           <h3 style={{ ...label, marginBottom: "0.5rem" }}>Foundational references</h3>

@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 import { internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { assertTenantWritable, internalMutation } from "./lib/tenantLifecycle";
+import { captureServiceObservation } from "./serviceOutcomes";
 
 export const zernioChannelValue = v.object({
   id: v.string(),
@@ -23,6 +24,7 @@ export const zernioReportValue = v.object({
       posts: v.array(
         v.object({
           postId: v.string(),
+          nativePostUrl: v.optional(v.string()),
           source: v.union(v.literal("external"), v.literal("zernio")),
           updatedAt: v.union(v.string(), v.null()),
           metrics: v.object({
@@ -233,6 +235,8 @@ export const selectAccounts = tenantMutation({
       dailyReports: a.dailyReports,
       nextReportAt: Date.now(),
       revision: row.revision + 1,
+      // Scheduling edits cancel old workers without changing the configured account scope.
+      grantRevision: (row.grantRevision ?? row.revision) + (changed ? 1 : 0),
       lease: undefined,
       leaseUntil: undefined,
       updatedAt: Date.now(),
@@ -337,6 +341,7 @@ export const finishReport = internalMutation({
       const snapshot = { tenantId: a.tenantId, connectionId: a.connectionId, report: a.report };
       if (previous) await ctx.db.replace(previous._id, snapshot);
       else await ctx.db.insert("zernioReports", snapshot);
+      await captureServiceObservation(ctx, row, a.report);
     }
     await ctx.db.patch(row._id, {
       lease: undefined,

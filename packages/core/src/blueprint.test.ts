@@ -5,10 +5,13 @@ import {
   type BlueprintEntry,
   type BlueprintField,
   type BusinessBlueprint,
+  blueprintEntryIdentity,
   deserializeBlueprint,
   FIELD_SPEC,
   mergeBlueprint,
+  parseBlueprintProvenance,
   probesFor,
+  projectBlueprintLedger,
   renderSpine,
   SPINE_CHAR_CAP,
   serializeBlueprint,
@@ -38,6 +41,85 @@ const blueprint = (over: Partial<Record<BlueprintField, BlueprintEntry>> = {}): 
   Object.fromEntries(
     BLUEPRINT_FIELDS.map((f) => [f, over[f] ?? null]),
   ) as unknown as BusinessBlueprint;
+
+describe("Blueprint source and review authority", () => {
+  const hash = "a".repeat(64),
+    entryHash = "b".repeat(64),
+    sourceHash = "c".repeat(64);
+  const row = {
+    field: "offering",
+    entryHash,
+    sourceDocId: "doc_a",
+    sourceHash,
+    sourceCreatedAt: 10,
+    firstRecordedAt: 20,
+    reviewedAt: 30,
+    reviewAuditId: "audit_a",
+  };
+  const metadata = JSON.stringify({ version: 1, blueprintHash: hash, fields: [row] });
+  const project = (over: Partial<Parameters<typeof projectBlueprintLedger>[0]> = {}) =>
+    projectBlueprintLedger({
+      blueprint: blueprint({
+        offering: { values: ["Agent proposal"], origin: "derived", source: "renamed.md" },
+      }),
+      blueprintHash: hash,
+      provenance: metadata,
+      entryHashes: { offering: entryHash },
+      sources: [{ docId: "doc_a", hash: sourceHash, available: true }],
+      reviewRefs: [`offering:${entryHash}:audit_a`],
+      ...over,
+    })[0];
+  it("keeps origin and separate clocks without inventing observation or confirmation of truth", () => {
+    expect(project()).toMatchObject({
+      origin: "derived",
+      sourceState: "current",
+      originalObservedAt: null,
+      firstRecordedAt: 20,
+      reviewedAt: 30,
+      sourceCreatedAt: 10,
+    });
+    expect(blueprintEntryIdentity(entry("A"))).not.toBe(
+      blueprintEntryIdentity({ ...entry("A"), origin: "derived", source: "A" }),
+    );
+  });
+  it("does not resolve legacy titles or trust metadata for different content/review", () => {
+    for (const over of [
+      { provenance: undefined },
+      { blueprintHash: "d".repeat(64) },
+      { entryHashes: {} },
+      { reviewRefs: [] },
+    ])
+      expect(project(over)).toMatchObject({
+        sourceState: "unverified",
+        sourceDocId: null,
+        reviewedAt: null,
+      });
+  });
+  it("invalidates changed and withdrawn sources without advancing original clocks", () => {
+    expect(
+      project({ sources: [{ docId: "doc_a", hash: "d".repeat(64), available: true }] }),
+    ).toMatchObject({ sourceState: "changed", firstRecordedAt: 20, reviewedAt: 30 });
+    expect(project({ sources: [] })).toMatchObject({
+      sourceState: "withdrawn",
+      sourceHash,
+      firstRecordedAt: 20,
+      reviewedAt: 30,
+    });
+  });
+  it("rejects malformed, oversized, duplicate, future-version and invented metadata", () => {
+    expect(parseBlueprintProvenance(metadata)).not.toBeNull();
+    for (const raw of [
+      "{",
+      "x".repeat(32001),
+      JSON.stringify({ version: 2, blueprintHash: hash, fields: [row] }),
+      JSON.stringify({ version: 1, blueprintHash: hash, fields: [row, row] }),
+      JSON.stringify({ version: 1, blueprintHash: hash, fields: [{ ...row, confirmed: true }] }),
+      JSON.stringify({ version: 1, blueprintHash: hash, fields: [{ ...row, sourceHash: null }] }),
+      JSON.stringify({ version: 1, blueprintHash: hash, fields: [{ ...row, reviewedAt: 19 }] }),
+    ])
+      expect(parseBlueprintProvenance(raw)).toBeNull();
+  });
+});
 
 describe("the closed field set and its totality table", () => {
   it("FIELD_SPEC covers every blueprint field and nothing else (item 6, runtime half)", () => {
@@ -548,7 +630,10 @@ describe("renderSpine — origin markers (item 26)", () => {
   it("a stated field carries [stated] and NEVER a [source: …] marker", () => {
     expect(spineLine(spine, "name")).toBe("- Name: Acme Ltd [stated]");
     expect(spineLine(spine, "stage")).toContain("[stated]");
-    // What lets the agent treat a stated fact as settled: it is not attributed to a document.
+    // Extraction markers retain their format without granting a new author or truth status.
+    expect(spine).toContain("[stated] marks a document statement");
+    expect(spine).toContain("not independent fact verification");
+    expect(spine).not.toContain("settled, do not second-guess");
     for (const f of ["name", "stage", "tier", "primaryGoals"] as const) {
       expect({ f, cited: spineLine(spine, f)?.includes("[source:") }).toEqual({ f, cited: false });
     }
