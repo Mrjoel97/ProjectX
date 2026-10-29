@@ -172,3 +172,63 @@ test("complete synthetic desktop/mobile/reduced reports bind exact bytes for pub
     presencePublicationReady({ ...version, artifacts: [{ pageSlug: "home", html: "edited" }] }),
   ).toBe(false);
 });
+
+test("separate trusted visual contrast evidence can resolve only unknown photographic contrast", async () => {
+  const { t, args, ready } = await fixture();
+  const unknown = reports().map((report) => ({
+    ...report,
+    textContrast: { ...report.textContrast, unknown: 1 },
+  }));
+  const visualContrast = { passed: true, evidenceHash: "2".repeat(64) };
+  expect(await t.mutation(complete, { ...args, reports: unknown, visualContrast })).toMatchObject({
+    status: "passed",
+    assessment: { status: "needs_review" },
+  });
+  expect(await ready()).toBe(true);
+  const first = await t.run((ctx) => ctx.db.get(args.versionId));
+  await t.mutation(complete, {
+    ...args,
+    reports: unknown,
+    visualContrast: { ...visualContrast, evidenceHash: "3".repeat(64) },
+  });
+  const second = await t.run((ctx) => ctx.db.get(args.versionId));
+  expect(second?.browserReview?.reportHash).not.toBe(first?.browserReview?.reportHash);
+  expect(
+    await t.mutation(complete, {
+      ...args,
+      reports: unknown,
+      visualContrast,
+      fidelity: { ...args.fidelity, matched: false },
+    }),
+  ).toMatchObject({ status: "failed" });
+  expect(await ready()).toBe(false);
+});
+
+test("visual contrast evidence never overrides failed measurements or an adverse visual finding", async () => {
+  const { t, args, ready } = await fixture();
+  const visualContrast = { passed: true, evidenceHash: "2".repeat(64) };
+  const failed = reports().map((report) => ({
+    ...report,
+    documentWidth: report.viewportWidth + 40,
+    textContrast: { ...report.textContrast, unknown: 1 },
+  }));
+  expect(await t.mutation(complete, { ...args, reports: failed, visualContrast })).toMatchObject({
+    status: "failed",
+    assessment: { status: "fail" },
+  });
+  expect(await ready()).toBe(false);
+  expect(
+    await t.mutation(complete, { ...args, visualContrast: { ...visualContrast, passed: false } }),
+  ).toMatchObject({ status: "failed" });
+  expect(await ready()).toBe(false);
+});
+
+test("malformed visual contrast evidence cannot write a passing receipt", async () => {
+  const { t, args, ready } = await fixture();
+  for (const evidenceHash of ["", "not-a-hash", "z".repeat(64), "2".repeat(63)]) {
+    await expect(
+      t.mutation(complete, { ...args, visualContrast: { passed: true, evidenceHash } }),
+    ).rejects.toThrow("REVIEW_INVALID");
+  }
+  expect(await ready()).toBe(false);
+});

@@ -44,6 +44,8 @@ export const complete = internalMutation({
     artifactHashes: v.array(v.object({ pageSlug: v.string(), contentHash: v.string() })),
     reports: v.any(),
     fidelity: v.object({ matched: v.boolean(), evidenceHash: v.string() }),
+    // Separate trusted screenshot review for backgrounds that computed CSS cannot measure.
+    visualContrast: v.optional(v.object({ passed: v.boolean(), evidenceHash: v.string() })),
   },
   handler: async (ctx, args) => {
     const version = await ctx.db.get(args.versionId);
@@ -65,20 +67,37 @@ export const complete = internalMutation({
     if (
       !Array.isArray(args.reports) ||
       args.reports.length > 150 ||
-      !/^[a-f0-9]{64}$/.test(args.fidelity.evidenceHash)
+      !/^[a-f0-9]{64}$/.test(args.fidelity.evidenceHash) ||
+      (args.visualContrast !== undefined &&
+        !/^[a-f0-9]{64}$/.test(args.visualContrast.evidenceHash))
     )
       throw Error("PRESENCE_REVIEW_INVALID");
     const assessment = assessWebBrowserQuality({
       pageSlugs: hashes.map((page) => page.pageSlug),
       reports: args.reports as WebBrowserPageReport[],
     });
+    const visualContrastResolved =
+      assessment.status === "needs_review" &&
+      assessment.issues.length > 0 &&
+      assessment.issues.every(
+        (issue) =>
+          issue.code === "contrast_needs_visual_review" && issue.severity === "needs_review",
+      ) &&
+      args.visualContrast?.passed === true;
     const status =
-      assessment.status === "pass" && args.fidelity.matched
+      (assessment.status === "pass" || visualContrastResolved) &&
+      args.fidelity.matched &&
+      args.visualContrast?.passed !== false
         ? ("passed" as const)
         : ("failed" as const);
     const reportHash = sha256Bytes(
       new TextEncoder().encode(
-        JSON.stringify({ reports: args.reports, fidelity: args.fidelity, assessment }),
+        JSON.stringify({
+          reports: args.reports,
+          fidelity: args.fidelity,
+          visualContrast: args.visualContrast,
+          assessment,
+        }),
       ),
     );
     await ctx.db.patch(version._id, {
