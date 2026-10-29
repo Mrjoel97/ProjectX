@@ -1,4 +1,6 @@
+import { inspectWebAssetBytes } from "@pikar/core/webAssets";
 import type { WebBrowserPageReport } from "@pikar/core/webBrowserQuality";
+import { materializeWebRecipeWithProvenance } from "@pikar/core/webRecipes";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
@@ -231,4 +233,126 @@ test("malformed visual contrast evidence cannot write a passing receipt", async 
     ).rejects.toThrow("REVIEW_INVALID");
   }
   expect(await ready()).toBe(false);
+});
+
+test("runtime asset inputs expose the raw verified digest matching the immutable asset path", async () => {
+  const { t, args } = await fixture();
+  const imageBytes = new Uint8Array(
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwHwQBEPgD/U6VwW8AAAAASUVORK5CYII=",
+      "base64",
+    ),
+  );
+  const raster = inspectWebAssetBytes(imageBytes, "image/png");
+  const seeded = await t.run(async (ctx) => {
+    const version = await ctx.db.get(args.versionId);
+    if (!version) throw Error("Offline fixture missing");
+    const storageId = await ctx.storage.store(new Blob([imageBytes], { type: "image/png" }));
+    const vaultDocumentId = await ctx.db.insert("vaultDocuments", {
+      tenantId: args.tenantId,
+      title: "Owned image",
+      kind: "upload",
+      category: "media",
+      source: "upload",
+      mimeType: "image/png",
+      storageId,
+      contentHash: raster.contentHash,
+      size: imageBytes.length,
+      status: "ready",
+      createdAt: 1,
+    });
+    const assetId = await ctx.db.insert("webAssets", {
+      tenantId: args.tenantId,
+      vaultDocumentId,
+      storageId,
+      sourceRevision: "fixture-v1",
+      ...raster,
+      title: "Owned image",
+      createdAt: 1,
+    });
+    const assetRef = `webasset:${assetId}:${raster.contentHash.slice(7)}`;
+    const materialized = materializeWebRecipeWithProvenance("business-site", {
+      brandName: "Fixture",
+      headline: "Owned image",
+      summary: "A fixture",
+      services: ["Design"],
+      about: "A fixture business",
+      contactConsent: "I agree to hear from the publisher.",
+    });
+    await ctx.db.patch(version._id, {
+      document: {
+        ...materialized.document,
+        pages: [
+          {
+            ...materialized.document.pages[0],
+            nodes: [
+              { kind: "media", storageRef: assetRef, alt: "Owned test image", placement: "hero" },
+            ],
+          },
+        ],
+      },
+      recipeRef: {
+        name: "web-recipe-business-site",
+        version: 1,
+        skillId: "fixture",
+        bodyHash: "a".repeat(64),
+        definitionHash: "b".repeat(64),
+        inputHash: materialized.inputHash,
+        designProfile: {
+          ...materialized.designProfile,
+          layoutPlan: {
+            version: 1,
+            hero: "overlay-left",
+            sectionLayout: "stacked",
+            services: "rows",
+            gallery: "grid",
+            spacing: "relaxed",
+            headingScale: "balanced",
+            motion: "subtle",
+          },
+        },
+      },
+    });
+    await ctx.db.patch(version.projectId, { draftVersion: 1 });
+    const planId = await ctx.db.insert("plans", {
+      tenantId: args.tenantId,
+      threadId: "asset-review",
+      status: "collecting",
+      createdAt: 1,
+    });
+    await ctx.db.insert("onlinePresenceSessions", {
+      tenantId: args.tenantId,
+      planId,
+      threadId: "asset-review",
+      revision: 1,
+      humanMessages: [],
+      status: "awaiting_review",
+      projectId: version.projectId,
+      projectVersion: 1,
+      projectContentHash: version.contentHash,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    return { projectId: version.projectId, assetId };
+  });
+  const result = await t.query(
+    makeFunctionReference<"query">("presenceBrowserReview:runtimeInputs"),
+    { tenantId: args.tenantId, projectId: seeded.projectId, version: 1 },
+  );
+  expect(result?.assets).toHaveLength(1);
+  expect(result.assets[0]).toMatchObject({
+    sha256: raster.contentHash.slice(7),
+    path: `/p/fixture/assets/${seeded.assetId}/${raster.contentHash.slice(7)}`,
+    mimeType: "image/png",
+  });
+  expect(result.assets[0].sha256).toMatch(/^[a-f0-9]{64}$/);
+  expect(result.assets[0].url).toBeTruthy();
+  await t.run((ctx) => ctx.db.patch(seeded.assetId, { tenantId: "other" }));
+  await expect(
+    t.query(makeFunctionReference<"query">("presenceBrowserReview:runtimeInputs"), {
+      tenantId: args.tenantId,
+      projectId: seeded.projectId,
+      version: 1,
+    }),
+  ).rejects.toThrow("WEB_ASSET_UNAVAILABLE");
 });

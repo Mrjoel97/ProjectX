@@ -51,8 +51,9 @@ export const runtimeInputs = internalQuery({
           throw Error("PRESENCE_REVIEW_ASSET_UNAVAILABLE");
         const url = await ctx.storage.getUrl(row.storageId);
         const path = webAssetPath(asset.assetRef, project.slug);
-        if (!url || !path) throw Error("PRESENCE_REVIEW_ASSET_UNAVAILABLE");
-        return { path, url, sha256: asset.contentHash, mimeType: asset.mimeType };
+        const digest = /^sha256:([a-f0-9]{64})$/.exec(asset.contentHash)?.[1];
+        if (!url || !path || !digest) throw Error("PRESENCE_REVIEW_ASSET_UNAVAILABLE");
+        return { path, url, sha256: digest, mimeType: asset.mimeType };
       }),
     );
     return {

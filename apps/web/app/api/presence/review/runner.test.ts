@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { describe, expect, test, vi } from "vitest";
 import { handlePresenceReviewRequest, validatePresenceReviewInput, type PresenceReviewInput } from "./runner";
 import { presenceBrowserWorkerScript } from "./worker";
@@ -19,6 +20,21 @@ function fixture() {
   return { source, output, sandbox, deps, request };
 }
 describe("trusted presence browser runner", () => {
+  test("exempts only the exact worker endpoint from session login and still requires its bearer before any VM", async () => {
+    const proxy = readFileSync(new URL("../../../../proxy.ts", import.meta.url), "utf8");
+    const publicList = proxy.match(/const isPublic = createRouteMatcher\(\[([\s\S]*?)\]\)/)?.[1];
+    expect(publicList).toBeDefined();
+    const routes = Array.from(publicList!.matchAll(/"([^"\n]+)"/g), (match) => match[1]!);
+    expect(routes.filter((route) => route.startsWith("/api"))).toEqual(["/api/media/render", "/api/presence/review"]);
+    expect(routes).not.toContain("/(.*)");
+    expect(proxy).toContain("!isPublic(request)");
+    expect(proxy).toContain("await convexAuth.isAuthenticated()");
+    const f = fixture();
+    const request = new Request("https://staging.example/api/presence/review", { method: "POST", body: JSON.stringify(f.source) });
+    expect((await handlePresenceReviewRequest(request, f.deps)).status).toBe(401);
+    expect(f.deps.createSandbox).not.toHaveBeenCalled();
+    expect(f.deps.fetch).not.toHaveBeenCalled();
+  });
   test("refuses missing credentials/configuration before allocating a VM", async () => {
     const f = fixture();
     expect((await handlePresenceReviewRequest(f.request(undefined, "Bearer wrong"), f.deps)).status).toBe(401);
