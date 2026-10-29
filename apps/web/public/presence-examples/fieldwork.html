@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'"><meta name="robots" content="noindex,nofollow">
+  <meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'self'; form-action 'none'; base-uri 'none'"><meta name="robots" content="noindex,nofollow">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Visual website design proposal for Fieldwork Design Studio, offering brand identity and web design for independent businesses.">
   <title>Fieldwork Design Studio — Visual Design Proposal</title>
@@ -334,6 +334,13 @@ h2,h3{text-wrap:balance}.section-heading{grid-template-columns:minmax(150px,1fr)
 @media(max-width:760px){.hero{min-height:640px}.hero-content{padding:2rem 1.5rem;gap:1.5rem}.hero h1{font-size:clamp(2.6rem,10.8vw,4rem);max-width:16ch}.hero-bottom{padding-top:0}.section-heading{grid-template-columns:1fr}.about-grid{margin-left:0}.material-track{grid-auto-columns:88%;gap:16px}.section{padding:64px 6vw}.contact h2{font-size:clamp(2.5rem,10vw,4rem)}}
 @media(prefers-reduced-motion:reduce){html,.material-track{scroll-behavior:auto}.hero-image,.hero-content,.section-heading,.material-track{animation:none!important}.button{transition:none}}
 
+
+/* Consistent reading columns and a compact, automatically advancing gallery. */
+.section{padding-block:clamp(64px,7vw,104px)}.section-heading{display:block;margin-bottom:36px}.section-heading .eyebrow{margin-bottom:20px}.section-heading h2{max-width:26ch;font-size:clamp(2.3rem,4.2vw,4rem);line-height:1.12;letter-spacing:-.025em;text-wrap:balance}.about-grid{margin-left:0;gap:48px;grid-template-columns:1fr 1fr;max-width:1000px}.about-grid p{max-width:48ch}.principles{margin-top:40px}
+.service-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:64px;border:0}.service{display:block;padding:32px 0 0;border-bottom:0;border-top:1px solid rgba(243,240,232,.25)}.service-number,.service .tags{display:none}.service h3{font-size:clamp(1.8rem,2.8vw,2.6rem);line-height:1.15;letter-spacing:-.02em;max-width:22ch}.service p{margin:20px 0 0;max-width:46ch;font-size:1.05rem;line-height:1.7;color:var(--paper)}
+.material-gallery{max-width:1000px}.material-viewport{overflow-x:auto;touch-action:pan-y}.is-ready .material-viewport{overflow:hidden}.material-track{display:flex;gap:24px;overflow:visible;padding:0;animation:none!important;scroll-snap-type:none;will-change:transform}.material-track figure{flex:0 0 calc((100% - 24px)/2);min-width:0;scroll-margin-top:110px}.material-track img{width:100%;height:260px;aspect-ratio:auto;object-fit:cover}.material-track figcaption{padding-top:14px;font-size:15px;line-height:1.5}.material-controls{display:none;align-items:center;justify-content:space-between;gap:24px;margin-top:24px}.is-ready .material-controls{display:flex}.material-controls p{font-size:14px;color:var(--muted);margin:0;max-width:45ch}.material-controls>div{display:flex;gap:12px;flex-shrink:0}.material-controls button{width:48px;height:48px;border:1px solid var(--moss);border-radius:50%;background:transparent;color:var(--ink);font-size:24px;cursor:pointer;transition:background 180ms ease,color 180ms ease}.material-controls button:hover{background:var(--ink);color:var(--paper)}.material-controls button:focus-visible,.material-viewport:focus-visible{outline:3px solid var(--clay);outline-offset:4px}.material-note{margin-top:18px}
+@media(max-width:760px){.about-grid,.service-list{grid-template-columns:1fr;gap:32px}.section-heading{margin-bottom:28px}.section-heading h2{font-size:clamp(2.1rem,8vw,3rem)}.service{padding-top:24px}.service h3{font-size:1.9rem}.service p{font-size:1rem;margin-top:16px}.material-track figure{flex-basis:100%}.material-track img{height:220px}.material-controls{align-items:flex-start;gap:16px}.material-controls p{max-width:22ch;font-size:13px}.material-track figcaption{font-size:14px}.material-controls button{width:44px;height:44px}}
+
 </style>
 </head>
 <body>
@@ -390,7 +397,7 @@ h2,h3{text-wrap:balance}.section-heading{grid-template-columns:minmax(150px,1fr)
       </div>
     </section>
 
-    <section class="section materials" id="materials" aria-labelledby="materials-title"><div class="section-heading"><p class="eyebrow">Material studies</p><h2 id="materials-title">Light, texture<br>and everyday form.</h2></div><p class="material-intro">A visual study of warmth, proportion and natural colour. Explore the details at your own pace.</p><div class="material-track" tabindex="0" role="region" aria-label="Material studies; use arrow keys to scroll"><figure id="material-1"><img src="/presence-examples/homeware.webp" alt="Generated illustrative homeware material study" width="1200" height="900" loading="lazy"><figcaption>Warmth in a shared palette</figcaption></figure><figure id="material-2"><img src="/presence-examples/bowl.webp" alt="Generated illustrative bowl material study" width="1200" height="900" loading="lazy"><figcaption>Soft colour, sculptural form</figcaption></figure><figure id="material-3"><img src="/presence-examples/vase.webp" alt="Generated illustrative vase material study" width="1200" height="900" loading="lazy"><figcaption>Quiet details, considered proportions</figcaption></figure></div><nav class="material-nav" aria-label="Choose a material study"><a href="#material-1">Study 1</a><a href="#material-2">Study 2</a><a href="#material-3">Study 3</a></nav><p class="material-note">Generated concept illustrations, not client projects or products.</p></section>
+    <section class="section materials" id="materials" aria-labelledby="materials-title"><div class="section-heading"><p class="eyebrow">Material studies</p><h2 id="materials-title">Light, texture<br>and everyday form.</h2></div><p class="material-intro">A visual study of warmth, proportion and natural colour. Explore the details at your own pace.</p><div class="material-gallery"><div class="material-viewport" tabindex="0" role="region" aria-roledescription="carousel" aria-label="Material studies" aria-describedby="gallery-help"><div class="material-track"><figure id="material-1"><img src="/presence-examples/homeware.webp" alt="Generated illustrative homeware material study" width="1200" height="900" loading="lazy"><figcaption>Warmth in a shared palette</figcaption></figure><figure id="material-2"><img src="/presence-examples/bowl.webp" alt="Generated illustrative bowl material study" width="1200" height="900" loading="lazy"><figcaption>Soft colour, sculptural form</figcaption></figure><figure id="material-3"><img src="/presence-examples/vase.webp" alt="Generated illustrative vase material study" width="1200" height="900" loading="lazy"><figcaption>Quiet details, considered proportions</figcaption></figure></div></div><div class="material-controls"><p id="gallery-help">Moves gently on its own. Hover or focus to pause; use the arrows to explore.</p><div><button type="button" data-gallery-previous aria-label="Previous image">←</button><button type="button" data-gallery-next aria-label="Next image">→</button></div></div></div><p class="material-note">Generated concept illustrations, not client projects or products.</p></section>
 <section class="section services" id="services" aria-labelledby="services-title">
       <div class="section-heading">
         <p class="eyebrow">02 / Services</p>
@@ -438,6 +445,7 @@ h2,h3{text-wrap:balance}.section-heading{grid-template-columns:minmax(150px,1fr)
     <span>Brand identity · Web design</span>
     <span>For independent businesses</span>
   </footer>
+<script src="/presence-examples/fieldwork-carousel.js" defer></script>
 </body>
 </html>
 

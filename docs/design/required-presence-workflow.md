@@ -26,6 +26,10 @@ Before making the mandatory pipeline live for users:
 
 No customer activation, autonomous browser repair, payment qualification or production deployment is claimed here. These explicit remaining tasks prevent a polished preview from being mistaken for a completed customer workflow.
 
+### Preview carousel refinement
+
+The owner subsequently requested automatic movement, smaller images and exactly two directional controls. The fictional Fieldwork preview now uses a reviewed, same-origin `fieldwork-carousel.js` controller: 4.2-second advances, 750ms transitions, seamless looping, hover/focus/background-tab pause, keyboard/swipe navigation and no autoplay with reduced motion. Images are 260px tall on desktop and 220px on phones. Services use matching columns on desktop and stacked heading/description groups on phones. Only this code-owned preview permits its same-origin script through CSP; native generated project artifacts remain script-free. Real-browser checks observed automatic movement, arrow navigation and no document overflow at 390px.
+
 ## Validation
 
 Renderer/recipe tests: 36 passed. Example UI tests: 4 passed. Historical publication tests: 7 passed. Deterministic quality tests: 6 passed. All four package typechecks passed. Additional provider/control/coordinator tests are recorded in the change report. Native gallery browser inspection loaded all four images, moved to the chosen slide, and measured no document overflow at 390px. The refined provider preview also loaded all four images without overflow at 390px. Browser captures are local review evidence, not issued qualification receipts. No paid provider call was made in this change.
