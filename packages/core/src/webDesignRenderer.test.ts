@@ -61,6 +61,7 @@ describe("closed recipe design renderer", () => {
     expect(html).toContain(".gallery-carousel .gallery-track{scroll-behavior:auto;scroll-snap-type:none}");
     expect(html.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(/<script|aria-hidden="true"/);
     expect(html).toContain('loading="lazy"');
+    expect(html).toContain("*:not(.gallery-track),*:before,*:after{transform:none!important}");
   });
 
   test("small galleries remain readable grids and gallery labels are escaped", () => {
@@ -260,7 +261,7 @@ describe("closed recipe design renderer", () => {
     expect(html).toContain("transition:transform 0ms ease");
     expect(html).toContain("a:hover,button:hover{transform:none}");
     expect(html).toContain(
-      "@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;transform:none!important",
+      "@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important",
     );
     expect(html).toContain("overflow-wrap:anywhere");
     expect(html).toContain("main>*{min-width:0}");
@@ -363,7 +364,7 @@ describe("closed recipe design renderer", () => {
       expect(frame[2]).toBe("transform:none");
     }
     expect(css).toContain(
-      "@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;transform:none!important;scroll-behavior:auto!important}",
+      "@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}",
     );
   });
 

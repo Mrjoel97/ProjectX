@@ -74,6 +74,10 @@ Native galleries now carry one immutable first-party carousel runtime, covered b
 
 Visual review now receives a bounded canonical content inventory and binds it into evidence. It must assess the reference's visual direction without requiring invented business facts, and judge contrast separately from composition. Focused checks passed: final core renderer/runtime 25, web preview/runtime/worker 23, v2 layout 4, provider 8 and vision/browser 27. Fresh deployment, exact-source recipe qualification and real v2-provider visual acceptance remain required before calling this milestone complete.
 
+### Reduced-motion carousel correction — renderer v12
+
+The first hosted carousel test exposed a real defect: the universal reduced-motion `transform: none !important` reset prevented manual image changes. Renderer v12 exempts only the gallery track from that reset; automatic movement and transition durations remain disabled. Real Chrome checks observed desktop and phone autoplay plus both arrows, and reduced-motion images stayed stationary until each arrow switched them instantly. The regression and 25 renderer/runtime unit checks passed. A fresh authenticated hosted capture then passed desktop, phone and reduced-motion interaction checks, loaded all six original/cloned images, and showed no horizontal overflow. This fixture deliberately repeats one owned image and is not customer-design qualification. Runtime script bytes and worker are unchanged. Fresh v12 source qualification remains required.
+
 ## Earlier validation milestone
 
 Renderer/recipe tests: 36 passed. Example UI tests: 4 passed. Historical publication tests: 7 passed. Deterministic quality tests: 6 passed. All four package typechecks passed. Additional provider/control/coordinator tests are recorded in the change report. Native gallery browser inspection loaded all four images, moved to the chosen slide, and measured no document overflow at 390px. The refined provider preview also loaded all four images without overflow at 390px. Browser captures are local review evidence, not issued qualification receipts. No paid provider call was made in this change.

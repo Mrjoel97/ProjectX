@@ -5,6 +5,26 @@ import { renderDesignedWebDocument } from "@pikar/core/webDesignRenderer";
 import { materializeWebRecipeWithProvenance } from "@pikar/core/webRecipes";
 import { expect, test } from "@playwright/test";
 
+test("reduced-motion gallery arrows move instantly despite the global motion reset", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 390, height: 900 });
+  const result = materializeWebRecipeWithProvenance("campaign-landing", {
+    brandName: "Gallery fixture", headline: "Three image studies", formConsent: "Fixture only.",
+    media: { gallery: [1, 2, 3].map(index => ({ storageRef: `webasset:fixture:${"a".repeat(64)}`, alt: `Study ${index}` })) },
+    design: { variance: 5, density: 5, motion: 6 },
+  });
+  await page.setContent(renderDesignedWebDocument(result.document, result.designProfile, { slug: "fixture", page: "campaign" }));
+  await expect(page.locator(".gallery-carousel")).toHaveClass(/is-ready/);
+  const track = page.locator(".gallery-track");
+  const position = () => track.evaluate(element => getComputedStyle(element).transform);
+  const initial = await position();
+  await page.getByRole("button", { name: "Next image" }).click();
+  await expect.poll(position).not.toBe(initial);
+  expect(await track.evaluate(element => getComputedStyle(element).transitionDuration)).toBe("0s");
+  await page.getByRole("button", { name: "Previous image" }).click();
+  await expect.poll(position).toBe(initial);
+});
+
 // Fictional business briefs for presentation checks, never customer facts or live qualification.
 const contact = {
   pageMode: "multi-page",
