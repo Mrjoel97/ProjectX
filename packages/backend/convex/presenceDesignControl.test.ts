@@ -1,3 +1,4 @@
+import { sha256Bytes } from "@pikar/core/webRuntime";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
@@ -35,6 +36,96 @@ async function setup() {
   return { t, args: { tenantId, planId, revision: 1, runRef: "a".repeat(16) } };
 }
 afterEach(() => vi.unstubAllEnvs());
+
+async function recoverySetup(
+  options: {
+    project?: boolean;
+    uncertain?: boolean;
+    duplicateGeneration?: boolean;
+    workflow?: boolean;
+  } = {},
+) {
+  const { t, args } = await setup();
+  const sourceFingerprint = sha256Bytes(
+    new TextEncoder().encode(JSON.stringify([{ ref: "source", revision: "source-v1" }])),
+  );
+  await t.mutation(fn("claim"), { ...args, workflow: options.workflow ?? true, sourceFingerprint });
+  const attempt = (payload: Record<string, string | number | boolean>) =>
+    t.mutation(fn("attempt"), { ...args, payload });
+  if (options.project !== false) await attempt({ projectRef: "projects/owned_project" });
+  await attempt({ provider: "stitch", operation: "generate_screen_from_text" });
+  if (options.duplicateGeneration)
+    await attempt({ provider: "stitch", operation: "generate_screen_from_text" });
+  await attempt({
+    provider: "stitch",
+    operation: "generate_screen_from_text",
+    outcome: "complete",
+  });
+  await attempt({
+    stopped: true,
+    reconciliationRequired: options.uncertain ?? true,
+    phase: "claimed",
+  });
+  return { t, args, attempt };
+}
+
+test("Stitch recovery returns null before any run and grants one owned read-only recovery", async () => {
+  const fresh = await setup();
+  expect(await fresh.t.mutation(fn("claimStitchRecovery"), fresh.args)).toBeNull();
+  const { t, args } = await recoverySetup();
+  expect(await t.mutation(fn("claimStitchRecovery"), args)).toEqual({
+    projectName: "projects/owned_project",
+  });
+  const audits = await t.run((ctx) => ctx.db.query("audit").collect());
+  expect(audits.filter((row) => row.payload.recoveryClaimed === true)).toHaveLength(1);
+  await expect(t.mutation(fn("claimStitchRecovery"), args)).rejects.toThrow("RECOVERY_UNAVAILABLE");
+  expect(await t.run((ctx) => ctx.db.query("spendEvents").collect())).toEqual([]);
+});
+
+test.each([
+  { project: false },
+  { uncertain: false },
+  { duplicateGeneration: true },
+  { workflow: false },
+])("Stitch recovery rejects an unproven provider history: %j", async (options) => {
+  const { t, args } = await recoverySetup(options);
+  await expect(t.mutation(fn("claimStitchRecovery"), args)).rejects.toThrow("RECOVERY_UNAVAILABLE");
+  const audits = await t.run((ctx) => ctx.db.query("audit").collect());
+  expect(audits.some((row) => row.payload.recoveryClaimed === true)).toBe(false);
+});
+
+test("Stitch recovery rejects foreign tenants, stale revision and changed sources", async () => {
+  const { t, args } = await recoverySetup();
+  await expect(
+    t.mutation(fn("claimStitchRecovery"), { ...args, tenantId: "foreign" }),
+  ).rejects.toThrow("UNAVAILABLE");
+  await expect(t.mutation(fn("claimStitchRecovery"), { ...args, revision: 2 })).rejects.toThrow(
+    "CONTEXT_CHANGED",
+  );
+  await t.run(async (ctx) => {
+    const session = await ctx.db.query("onlinePresenceSessions").first();
+    await ctx.db.patch(session!._id, { sourceSnapshots: [{ ref: "source", revision: "changed" }] });
+  });
+  await expect(t.mutation(fn("claimStitchRecovery"), args)).rejects.toThrow("RECOVERY_UNAVAILABLE");
+});
+
+test("Stitch recovery refuses competing projects and completed provider phases", async () => {
+  const competing = await recoverySetup();
+  await competing.attempt({ projectRef: "projects/other_project" });
+  await competing.attempt({ stopped: true, reconciliationRequired: true, phase: "claimed" });
+  await expect(competing.t.mutation(fn("claimStitchRecovery"), competing.args)).rejects.toThrow(
+    "RECOVERY_UNAVAILABLE",
+  );
+  const advanced = await recoverySetup();
+  await advanced.t.mutation(fn("advance"), {
+    ...advanced.args,
+    phase: "stitch_complete",
+    designHash: "b".repeat(64),
+  });
+  await expect(advanced.t.mutation(fn("claimStitchRecovery"), advanced.args)).rejects.toThrow(
+    "RECOVERY_UNAVAILABLE",
+  );
+});
 test("durable claim is owned and one-use; both provider stages required", async () => {
   const { t, args } = await setup();
   await expect(t.mutation(fn("claim"), { ...args, tenantId: "other" })).rejects.toThrow(

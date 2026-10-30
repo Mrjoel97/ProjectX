@@ -1,9 +1,11 @@
 // @vitest-environment node
 import { deflateSync } from "node:zlib";
+import { sha256Bytes } from "@pikar/core/webRuntime";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   generateStitchDesignEvidence,
   preflightStitchDesign,
+  recoverStitchDesignEvidence,
   stitchConfigurationSummary,
   STITCH_MCP_ENDPOINT,
   type StitchDesignRequest,
@@ -99,7 +101,10 @@ function fixture(options: Options = {}) {
   const fetcher: typeof fetch = vi.fn(async (input, init = {}) => {
     const url = String(input);
     if (url !== STITCH_MCP_ENDPOINT) {
-      const operation = url.endsWith("screen.png") ? "download_screenshot" : "download_html";
+      const operation =
+        url.endsWith("screen.png") || url.endsWith("image_file:download")
+          ? "download_screenshot"
+          : "download_html";
       calls.push({ url, init, operation });
       const supplied = options.response?.(operation, { method: "GET" }, {});
       if (supplied) return supplied;
@@ -134,7 +139,20 @@ function fixture(options: Options = {}) {
       result = {
         structuredContent: { name: "projects/project_owned", title, visibility: "PRIVATE" },
       };
-    } else if (operation === "generate_screen_from_text")
+    } else if (operation === "get_project")
+      result = {
+        structuredContent: {
+          name: "projects/project_owned",
+          title: `pikar-compare-${sha256Bytes(new TextEncoder().encode(JSON.stringify(request().scope))).slice(0, 24)}`,
+          visibility: "PRIVATE",
+          deviceType: "DESKTOP",
+        },
+      };
+    else if (operation === "list_screens")
+      result = {
+        structuredContent: { screens: [{ name: "projects/project_owned/screens/screen_owned" }] },
+      };
+    else if (operation === "generate_screen_from_text")
       result = {
         structuredContent: {
           projectId: "project_owned",
@@ -189,6 +207,277 @@ afterEach(() => {
 });
 
 describe("bounded Stitch comparison adapter", () => {
+  test("canonical owned API downloads unwrap bounded HTML and base64 image envelopes with scoped auth", async () => {
+    const f = fixture({
+      change: (operation, result) =>
+        operation === "get_screen"
+          ? {
+              structuredContent: {
+                ...(result.structuredContent as Record<string, unknown>),
+                htmlCode: {
+                  name: "projects/project_owned/files/html_file",
+                  downloadUrl:
+                    "https://stitch.googleapis.com/v1/projects/project_owned/files/html_file:download",
+                },
+                screenshot: {
+                  name: "projects/project_owned/files/image_file",
+                  downloadUrl:
+                    "https://stitch.googleapis.com/v1/projects/project_owned/files/image_file:download",
+                },
+              },
+            }
+          : result,
+      response: (operation) =>
+        operation === "download_html"
+          ? Response.json({ dataString: "<!doctype html><html><h1>Owned recovery</h1></html>" })
+          : operation === "download_screenshot"
+            ? Response.json({
+                imageMetadata: { mimeType: "png" },
+                dataString: png().toString("base64"),
+              })
+            : undefined,
+    });
+    const result = await recoverStitchDesignEvidence(request(), f.services, {
+      projectName: "projects/project_owned",
+    });
+    expect(result.status).toBe("complete");
+    if (result.status !== "complete") throw Error(result.reason);
+    expect(result.html.text).toContain("Owned recovery");
+    expect(result.screenshot.bytes).toEqual(new Uint8Array(png()));
+    for (const call of f.calls.filter((c) => c.operation.startsWith("download_"))) {
+      const headers = new Headers(call.init.headers);
+      expect(headers.get("X-Goog-Api-Key")).toBe("synthetic_stitch_key");
+      expect(headers.has("Mcp-Session-Id")).toBe(false);
+      expect(call.init.redirect).toBe("error");
+    }
+  });
+  test("API download URLs cannot escape the exact owned file or smuggle credential destinations", async () => {
+    for (const attack of [
+      {
+        name: "projects/foreign/files/html_file",
+        downloadUrl: "https://stitch.googleapis.com/v1/projects/foreign/files/html_file:download",
+      },
+      {
+        name: "projects/project_owned/files/html_file",
+        downloadUrl: "https://stitch.googleapis.com/v1/projects/project_owned/files/other:download",
+      },
+      {
+        name: "projects/project_owned/files/html_file",
+        downloadUrl:
+          "https://stitch.googleapis.com/v1/projects/project_owned/files/html_file:download?next=evil",
+      },
+      {
+        name: "projects/project_owned/files/html_file",
+        downloadUrl: "https://stitch.googleapis.com/mcp",
+      },
+      {
+        name: "projects/project_owned/files/html_file",
+        downloadUrl:
+          "https://stitch.googleapis.com.evil.test/v1/projects/project_owned/files/html_file:download",
+      },
+    ]) {
+      const f = fixture({
+        change: (operation, result) =>
+          operation === "get_screen"
+            ? {
+                structuredContent: {
+                  ...(result.structuredContent as Record<string, unknown>),
+                  htmlCode: attack,
+                },
+              }
+            : result,
+      });
+      expect((await generateStitchDesignEvidence(request(), f.services)).status).not.toBe(
+        "complete",
+      );
+      expect(f.calls.some((c) => c.operation.startsWith("download_"))).toBe(false);
+    }
+  });
+  test("API envelopes reject noncanonical base64, wrong media metadata and unexpected HTML fields", async () => {
+    for (const failure of ["base64", "mime", "html"]) {
+      const f = fixture({
+        change: (operation, result) =>
+          operation === "get_screen"
+            ? {
+                structuredContent: {
+                  ...(result.structuredContent as Record<string, unknown>),
+                  htmlCode: {
+                    name: "projects/project_owned/files/html_file",
+                    downloadUrl:
+                      "https://stitch.googleapis.com/v1/projects/project_owned/files/html_file:download",
+                  },
+                  screenshot: {
+                    name: "projects/project_owned/files/image_file",
+                    downloadUrl:
+                      "https://stitch.googleapis.com/v1/projects/project_owned/files/image_file:download",
+                  },
+                },
+              }
+            : result,
+        response: (operation) =>
+          operation === "download_html"
+            ? Response.json(
+                failure === "html"
+                  ? { dataString: "<html></html>", extra: true }
+                  : { dataString: "<html></html>" },
+              )
+            : operation === "download_screenshot"
+              ? Response.json({
+                  imageMetadata: { mimeType: failure === "mime" ? "jpeg" : "png" },
+                  dataString: png().toString("base64") + (failure === "base64" ? "\n" : ""),
+                })
+              : undefined,
+      });
+      expect((await generateStitchDesignEvidence(request(), f.services)).status).not.toBe(
+        "complete",
+      );
+    }
+  });
+  test("read-only recovery retrieves the exact scoped project without creation or generation", async () => {
+    const f = fixture();
+    const result = await recoverStitchDesignEvidence(request(), f.services, {
+      projectName: "projects/project_owned",
+    });
+    expect(result.status).toBe("complete");
+    expect(f.calls.map((c) => c.operation)).toEqual([
+      "initialize",
+      "initialized",
+      "get_project",
+      "list_screens",
+      "get_screen",
+      "download_html",
+      "download_screenshot",
+    ]);
+    expect(
+      vi
+        .mocked(f.services.beforeAttempt)
+        .mock.calls.every(([attempt]) => !attempt.potentiallyGenerative),
+    ).toBe(true);
+  });
+  test("recovery refuses foreign project identity and paginated or empty screen sets", async () => {
+    for (const failure of ["name", "title", "visibility", "empty", "paginated"]) {
+      const f = fixture({
+        change: (operation, result) => {
+          const content = result.structuredContent as Record<string, unknown>;
+          if (operation === "get_project" && ["name", "title", "visibility"].includes(failure))
+            return { structuredContent: { ...content, [failure]: "foreign" } };
+          if (operation === "list_screens" && failure === "empty") return { structuredContent: {} };
+          if (operation === "list_screens" && failure === "paginated")
+            return { structuredContent: { ...content, nextPageToken: "more" } };
+          return result;
+        },
+      });
+      expect(
+        (
+          await recoverStitchDesignEvidence(request(), f.services, {
+            projectName: "projects/project_owned",
+          })
+        ).status,
+      ).not.toBe("complete");
+      expect(
+        f.calls.some((c) =>
+          ["create_project", "generate_screen_from_text", "download_html"].includes(c.operation),
+        ),
+      ).toBe(false);
+    }
+  });
+  test("generated auxiliary rasters do not hide or compete with the unique owned UI screen", async () => {
+    for (const mode of ["generate", "recover"] as const) {
+      const f = fixture({
+        change: (operation, result) => {
+          const screens = [
+            { name: "projects/project_owned/screens/image_owned" },
+            { name: "projects/project_owned/screens/screen_owned" },
+          ];
+          if (operation === "generate_screen_from_text")
+            return {
+              structuredContent: {
+                projectId: "project_owned",
+                outputComponents: [{ design: { screens } }],
+              },
+            };
+          if (operation === "list_screens") return { structuredContent: { screens } };
+          return result;
+        },
+        response: (operation, wire) =>
+          operation === "get_screen" &&
+          wire.params?.arguments?.name === "projects/project_owned/screens/image_owned"
+            ? Response.json({
+                jsonrpc: "2.0",
+                id: wire.id,
+                result: {
+                  structuredContent: {
+                    name: "projects/project_owned/screens/image_owned",
+                    htmlCode: {},
+                    screenshot: { downloadUrl: "https://lh3.googleusercontent.com/aux.png" },
+                  },
+                },
+              })
+            : undefined,
+      });
+      const result =
+        mode === "generate"
+          ? await generateStitchDesignEvidence(request(), f.services)
+          : await recoverStitchDesignEvidence(request(), f.services, {
+              projectName: "projects/project_owned",
+            });
+      expect(result.status).toBe("complete");
+      expect(result.evidence.screenName).toBe("projects/project_owned/screens/screen_owned");
+      expect(f.calls.some((c) => c.url.endsWith("aux.png"))).toBe(false);
+    }
+  });
+  test("multiple UIs, malformed UI artifacts, foreign and duplicate candidates are never silently selected", async () => {
+    for (const kind of ["multiple", "malformed", "foreign", "duplicate", "too_many"]) {
+      const f = fixture({
+        change: (operation, result) => {
+          if (operation !== "list_screens") return result;
+          const name = "projects/project_owned/screens/screen_owned";
+          return {
+            structuredContent: {
+              screens:
+                kind === "too_many"
+                  ? Array.from({ length: 5 }, (_, i) => ({
+                      name: `projects/project_owned/screens/screen_${i}`,
+                    }))
+                  : [
+                      { name },
+                      {
+                        name:
+                          kind === "duplicate"
+                            ? name
+                            : kind === "foreign"
+                              ? "projects/foreign/screens/screen_other"
+                              : "projects/project_owned/screens/screen_other",
+                      },
+                    ],
+            },
+          };
+        },
+        response: (operation, wire, result) => {
+          if (operation !== "get_screen") return undefined;
+          const screen: Record<string, unknown> = {
+            ...(result.structuredContent as Record<string, unknown>),
+            name: wire.params?.arguments?.name,
+          };
+          if (kind === "malformed" && String(screen.name).endsWith("screen_other"))
+            screen.htmlCode = {};
+          return Response.json({
+            jsonrpc: "2.0",
+            id: wire.id,
+            result: { structuredContent: screen },
+          });
+        },
+      });
+      expect(
+        (
+          await recoverStitchDesignEvidence(request(), f.services, {
+            projectName: "projects/project_owned",
+          })
+        ).status,
+      ).not.toBe("complete");
+      expect(f.calls.some((c) => c.operation.startsWith("download_"))).toBe(false);
+    }
+  });
   test("read-only preflight discovers only the three required schemas and creates nothing", async () => {
     const f = fixture(),
       result = await preflightStitchDesign(request(), f.services);

@@ -16,7 +16,10 @@ import type { Id } from "./_generated/dataModel";
 import { resolveModel } from "./lib/models";
 import { paidBudgetModel } from "./lib/paidBudgetModel";
 import type { PresenceProviderReceipt } from "./lib/presencePublication";
-import { generateStitchDesignEvidence } from "./lib/stitchDesignClient";
+import {
+  generateStitchDesignEvidence,
+  recoverStitchDesignEvidence,
+} from "./lib/stitchDesignClient";
 import { internalAction, lifecycleActionContext } from "./lib/tenantLifecycle";
 import type { OnlinePresenceArtifactReceipt } from "./onlinePresence";
 import type { RecipeRef } from "./webProjects";
@@ -25,6 +28,44 @@ const digest = (value: unknown) => sha256Bytes(new TextEncoder().encode(JSON.str
 const bytesHash = (value: string) => sha256Bytes(new TextEncoder().encode(value));
 const control = (name: string) =>
   makeFunctionReference<"mutation">(`presenceDesignControl:${name}`);
+// Adapter-owned codes only: never persist provider messages, prompts, URLs or credentials.
+const stitchFailureCodes = new Set([
+  "STITCH_ADMISSION_REQUIRED",
+  "STITCH_ARTIFACT_URL_REFUSED",
+  "STITCH_BUDGET_ADMISSION_REFUSED",
+  "STITCH_BUDGET_RECONCILIATION_REQUIRED",
+  "STITCH_CHECKPOINT_REQUIRED",
+  "STITCH_CONFIGURATION_REQUIRED",
+  "STITCH_DISCOVERY_INVALID",
+  "STITCH_HTML_CONTENT_TYPE_INVALID",
+  "STITCH_HTML_INVALID",
+  "STITCH_HTTP_FAILURE",
+  "STITCH_INITIALIZATION_INVALID",
+  "STITCH_NETWORK_OR_PROTOCOL_FAILURE",
+  "STITCH_PROJECT_IDENTITY_INVALID",
+  "STITCH_PROTOCOL_UNSUPPORTED",
+  "STITCH_PROVIDER_RESULT_INVALID",
+  "STITCH_REQUIRED_TOOL_UNAVAILABLE",
+  "STITCH_RESOURCE_IDENTITY_INVALID",
+  "STITCH_RESPONSE_INVALID",
+  "STITCH_RESPONSE_TOO_LARGE",
+  "STITCH_RPC_CONTENT_TYPE_INVALID",
+  "STITCH_RPC_EVENT_BOUND_EXCEEDED",
+  "STITCH_RPC_IDENTITY_INVALID",
+  "STITCH_RPC_REFUSED",
+  "STITCH_RPC_SERVER_REQUEST_UNSUPPORTED",
+  "STITCH_RPC_STREAM_INCOMPLETE",
+  "STITCH_SCOPE_REFUSED",
+  "STITCH_SCREEN_IDENTITY_INVALID",
+  "STITCH_SCREENSHOT_INVALID",
+  "STITCH_SESSION_INVALID",
+  "STITCH_SINGLE_DESIGN_REQUIRED",
+  "STITCH_TIMEOUT_CONFIG_INVALID",
+  "STITCH_TIMEOUT",
+  "STITCH_TOOL_REFUSED",
+  "STITCH_TOOL_RESPONSE_INVALID",
+  "STITCH_TOOL_SCHEMA_INCOMPATIBLE",
+]);
 type Snapshot =
   | {
       ok: true;
@@ -96,6 +137,7 @@ export const build = internalAction({
       uncertain = false;
     let modelAttempted = false,
       modelSettled = false;
+    let stitchFailure: Record<string, string> = {};
     const check = async () => {
       const current = await read();
       if (
@@ -118,11 +160,15 @@ export const build = internalAction({
           revision: args.expectedRevision,
           reason: "design_budget_or_service_paused",
         };
-      await ctx.runMutation(control("claim"), {
-        ...identity,
-        workflow: true,
-        sourceFingerprint: snapshot.sourceFingerprint,
-      });
+      const recovery = (await ctx.runMutation(control("claimStitchRecovery"), identity)) as {
+        projectName: string;
+      } | null;
+      if (!recovery)
+        await ctx.runMutation(control("claim"), {
+          ...identity,
+          workflow: true,
+          sourceFingerprint: snapshot.sourceFingerprint,
+        });
       claimed = true;
       const prompt = JSON.stringify({
         business: snapshot.brief,
@@ -138,7 +184,10 @@ export const build = internalAction({
       };
       let attempts = 0,
         generationStarted = false;
-      const stitch = await generateStitchDesignEvidence(
+      const stitchOperation: typeof generateStitchDesignEvidence = recovery
+        ? (request, services) => recoverStitchDesignEvidence(request, services, recovery)
+        : generateStitchDesignEvidence;
+      const stitch = await stitchOperation(
         { scope, prompt, deviceType: "DESKTOP" },
         {
           authorize: async (request) => {
@@ -151,7 +200,7 @@ export const build = internalAction({
           },
           beforeAttempt: async (attempt) => {
             await check();
-            if (uncertain || ++attempts > 8) throw Error("PRESENCE_ATTEMPT_LIMIT");
+            if (uncertain || ++attempts > 12) throw Error("PRESENCE_ATTEMPT_LIMIT");
             if (attempt.operation === "generate_screen_from_text") {
               if (generationStarted) throw Error("PRESENCE_NO_REPEAT_GENERATION");
               const gate = await ctx.runMutation(internal.guardrails.preCall, {
@@ -189,6 +238,17 @@ export const build = internalAction({
         },
       );
       if (stitch.status !== "complete") {
+        stitchFailure = {
+          provider: "stitch",
+          failureReason: stitchFailureCodes.has(stitch.reason)
+            ? stitch.reason
+            : "STITCH_PROVIDER_RESULT_INVALID",
+          providerGeneration: ["not_started", "attempted", "completed"].includes(
+            stitch.evidence.providerGeneration,
+          )
+            ? stitch.evidence.providerGeneration
+            : "unknown",
+        };
         uncertain ||= stitch.reconciliationRequired;
         throw Error("PRESENCE_STITCH_UNAVAILABLE");
       }
@@ -315,7 +375,12 @@ export const build = internalAction({
     } catch {
       uncertain ||= modelAttempted && !modelSettled;
       if (claimed) {
-        await journal({ stopped: true, reconciliationRequired: uncertain, phase });
+        await journal({
+          stopped: true,
+          reconciliationRequired: uncertain,
+          phase,
+          ...stitchFailure,
+        });
         if (phase !== "kimi_complete" && !uncertain)
           await ctx.runMutation(control("advance"), { ...identity, phase: "stopped" });
       }

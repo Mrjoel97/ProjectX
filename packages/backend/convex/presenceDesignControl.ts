@@ -162,6 +162,76 @@ export const recoverCompletion = internalMutation({
   },
 });
 
+/** Claim a single read-only Stitch recovery; never reset a provider or spending journal. */
+export const claimStitchRecovery = internalMutation({
+  args: scopeArgs,
+  handler: async (ctx, args): Promise<{ projectName: string } | null> => {
+    const hashes = await ownedContext(ctx, args.tenantId, args.planId, args.revision);
+    const correlationId = correlation(args.planId, args.runRef);
+    const stages = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .take(6);
+    if (!stages.length) return null;
+    const claim = stages[0];
+    if (
+      !claim ||
+      stages.length !== 1 ||
+      claim.eventType !== "presence_design.claimed" ||
+      claim.tenantId !== args.tenantId ||
+      claim.actor !== "presence-design-control" ||
+      claim.payload.workflow !== true ||
+      claim.payload.revision !== args.revision ||
+      claim.payload.briefHash !== hashes.briefHash ||
+      claim.payload.sourceHash !== hashes.sourceHash
+    )
+      throw Error("PRESENCE_RECOVERY_UNAVAILABLE");
+    const attempts = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId + ":attempts"))
+      .take(51);
+    const last = attempts.at(-1)?.payload;
+    const projects = [
+      ...new Set(
+        attempts
+          .map((r) => r.payload.projectRef)
+          .filter((value): value is string => typeof value === "string"),
+      ),
+    ];
+    const generationStarts = attempts.filter(
+      (r) =>
+        r.payload.operation === "generate_screen_from_text" &&
+        r.payload.provider === "stitch" &&
+        r.payload.outcome === undefined,
+    );
+    const projectName = projects[0];
+    if (
+      attempts.length > 50 ||
+      attempts.some(
+        (r) =>
+          r.tenantId !== args.tenantId ||
+          r.actor !== "presence-design-control" ||
+          r.payload.recoveryClaimed === true,
+      ) ||
+      last?.stopped !== true ||
+      last.reconciliationRequired !== true ||
+      last.phase !== "claimed" ||
+      projects.length !== 1 ||
+      !projectName || !/^projects\/[A-Za-z0-9_-]{1,96}$/.test(projectName) ||
+      generationStarts.length !== 1
+    )
+      throw Error("PRESENCE_RECOVERY_UNAVAILABLE");
+    await appendAudit(ctx, {
+      tenantId: args.tenantId,
+      actor: "presence-design-control",
+      correlationId: correlationId + ":attempts",
+      eventType: "presence_design.attempt",
+      payload: { recoveryClaimed: true, projectRef: projectName, revision: args.revision },
+    });
+    return { projectName };
+  },
+});
+
 export const advance = internalMutation({
   args: {
     ...scopeArgs,

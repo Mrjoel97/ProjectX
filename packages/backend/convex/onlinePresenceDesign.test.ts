@@ -11,7 +11,10 @@ import limiterSchema from "../node_modules/@convex-dev/rate-limiter/src/componen
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
-import { generateStitchDesignEvidence } from "./lib/stitchDesignClient";
+import {
+  generateStitchDesignEvidence,
+  recoverStitchDesignEvidence,
+} from "./lib/stitchDesignClient";
 import schema from "./schema";
 
 // Boundary test: provider transport and already-validated source snapshot are synthetic.
@@ -44,7 +47,10 @@ vi.mock("./onlinePresence", async () => {
 vi.mock("ai", () => ({ generateText: vi.fn() }));
 vi.mock("./lib/models", () => ({ resolveModel: (modelId: string) => ({ modelId }) }));
 vi.mock("./lib/paidBudgetModel", () => ({ paidBudgetModel: (args: unknown) => args }));
-vi.mock("./lib/stitchDesignClient", () => ({ generateStitchDesignEvidence: vi.fn() }));
+vi.mock("./lib/stitchDesignClient", () => ({
+  generateStitchDesignEvidence: vi.fn(),
+  recoverStitchDesignEvidence: vi.fn(),
+}));
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const aggregates = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
@@ -73,6 +79,7 @@ beforeEach(() => {
   vi.stubEnv("OPENROUTER_API_KEY", "synthetic");
   vi.stubEnv("PRESENCE_STITCH_BILLING", "included_free_no_overage");
   vi.mocked(generateStitchDesignEvidence).mockReset();
+  vi.mocked(recoverStitchDesignEvidence).mockReset();
   vi.mocked(generateText).mockReset();
   vi.mocked(generateStitchDesignEvidence).mockImplementation(async () => {
     calls.push("stitch");
@@ -197,6 +204,49 @@ test("completion recovery finalizes without repeating either provider after conn
   expect(calls).toEqual(["stitch", "kimi"]);
   expect(state.finalizations).toBe(2);
 });
+
+test("an uncertain owned Stitch run resumes by reading its existing project without regenerating", async () => {
+  const { t, args } = await setup();
+  vi.mocked(generateStitchDesignEvidence).mockImplementationOnce(async (_request, services) => {
+    calls.push("stitch");
+    await services.checkpoint({
+      scopeHash: "sha256:" + "a".repeat(64),
+      projectName: "projects/owned_project",
+    });
+    await services.beforeAttempt({
+      provider: "stitch",
+      operation: "generate_screen_from_text",
+      scopeHash: "sha256:" + "a".repeat(64),
+      requestHash: "sha256:" + "b".repeat(64),
+      potentiallyGenerative: true,
+    });
+    return {
+      status: "unknown",
+      reason: "STITCH_SINGLE_DESIGN_REQUIRED",
+      evidence: { providerGeneration: "attempted" },
+      reconciliationRequired: true,
+    } as never;
+  });
+  expect((await t.action(run, args)).ok).toBe(false);
+  vi.mocked(recoverStitchDesignEvidence).mockImplementationOnce(
+    async (_request, _services, recovery) => {
+      calls.push("stitch-recovery");
+      expect(recovery).toEqual({ projectName: "projects/owned_project" });
+      return {
+        status: "complete",
+        html: { text: "recovered reference" },
+        screenshot: { bytes: new Uint8Array([1, 2, 3]), mimeType: "image/png" },
+      } as never;
+    },
+  );
+  expect((await t.action(run, args)).ok).toBe(true);
+  expect(calls).toEqual(["stitch", "stitch-recovery", "kimi"]);
+  expect(generateStitchDesignEvidence).toHaveBeenCalledTimes(1);
+  expect(recoverStitchDesignEvidence).toHaveBeenCalledTimes(1);
+  const audits = await t.run((ctx) => ctx.db.query("audit").collect());
+  expect(audits.filter((row) => row.eventType === "presence_design.claimed")).toHaveLength(1);
+  expect(audits.filter((row) => row.payload.recoveryClaimed === true)).toHaveLength(1);
+});
 test("failed Kimi attempt retains tenant-owned generated blob receipts for cleanup", async () => {
   const { t, args } = await setup();
   vi.mocked(generateText).mockImplementation(async (options) => {
@@ -244,4 +294,50 @@ test("unconfigured billing and repeated failed claims cannot silently use old re
   expect(generateStitchDesignEvidence).toHaveBeenCalledTimes(1);
   expect(generateText).not.toHaveBeenCalled();
   expect(state.finalizations).toBe(0);
+});
+
+test.each([
+  { status: "failed", reason: "STITCH_TOOL_REFUSED", generation: "not_started", uncertain: false },
+  {
+    status: "unknown",
+    reason: "STITCH_SINGLE_DESIGN_REQUIRED",
+    generation: "attempted",
+    uncertain: true,
+  },
+  {
+    status: "unknown",
+    reason: "https://provider.invalid/private?key=secret",
+    generation: "secret",
+    uncertain: true,
+  },
+])("Stitch $status stores bounded diagnostics without repeating generation", async ({
+  status,
+  reason,
+  generation,
+  uncertain,
+}) => {
+  const { t, args } = await setup();
+  vi.mocked(generateStitchDesignEvidence).mockResolvedValue({
+    status,
+    reason,
+    evidence: { providerGeneration: generation },
+    reconciliationRequired: uncertain,
+  } as never);
+  expect((await t.action(run, args)).ok).toBe(false);
+  const audits = await t.run((ctx) => ctx.db.query("audit").collect());
+  const stopped = audits.find((row) => row.payload.stopped === true);
+  expect(stopped?.payload).toMatchObject({
+    stopped: true,
+    provider: "stitch",
+    failureReason: reason.startsWith("STITCH_") ? reason : "STITCH_PROVIDER_RESULT_INVALID",
+    providerGeneration: generation === "secret" ? "unknown" : generation,
+    reconciliationRequired: uncertain,
+    phase: "claimed",
+  });
+  expect(JSON.stringify(audits)).not.toContain("secret");
+  expect((await t.action(run, args)).reason).toBe("design_already_running_or_needs_reconciliation");
+  expect(generateStitchDesignEvidence).toHaveBeenCalledTimes(1);
+  expect(generateText).not.toHaveBeenCalled();
+  expect(state.finalizations).toBe(0);
+  expect(await t.run((ctx) => ctx.db.query("spendEvents").collect())).toEqual([]);
 });

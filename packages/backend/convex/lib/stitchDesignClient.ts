@@ -4,7 +4,7 @@ import { sha256Bytes } from "@pikar/core/webRuntime";
 /** Server-only comparison adapter. This is not an agent tool or a renderer/import path.
  * Protocol/shape references: google-labs-code/stitch-sdk packages/sdk/{src/client.ts,
  * generated/src/project.ts,generated/src/responses.generated.ts}; MCP 2025-06-18 transports.
- * ponytail: only the three required tools, no SDK/catalogue dependency or automatic retry. */
+ * ponytail: three generation tools plus two read-only recovery tools; no SDK dependency or retry. */
 export const STITCH_MCP_ENDPOINT = "https://stitch.googleapis.com/mcp";
 export const STITCH_DESIGN_CLIENT_VERSION = "stitch-design-evidence-v1";
 const PROTOCOL = "2025-06-18";
@@ -22,6 +22,8 @@ export type StitchOperation =
   | "initialized"
   | "tools_list"
   | (typeof TOOLS)[number]
+  | "get_project"
+  | "list_screens"
   | "download_html"
   | "download_screenshot";
 export type StitchDesignRequest = {
@@ -138,7 +140,7 @@ function validRequest(value: StitchDesignRequest): boolean {
     ["DESKTOP", "MOBILE", "TABLET"].includes(String(row.deviceType))
   );
 }
-function artifactUrl(value: unknown): string {
+function artifactUrl(value: unknown, fileName?: unknown, projectId?: string): string {
   if (typeof value !== "string" || value.length > 8192 || /[\u0000-\u0020\u007f\\]/.test(value))
     throw new BoundaryError("STITCH_ARTIFACT_URL_REFUSED");
   let url: URL;
@@ -149,15 +151,28 @@ function artifactUrl(value: unknown): string {
   }
   if (
     url.protocol !== "https:" ||
-    !ARTIFACT_HOSTS.has(url.hostname) ||
+    (!ARTIFACT_HOSTS.has(url.hostname) && url.hostname !== "stitch.googleapis.com") ||
     url.port ||
     url.username ||
     url.password ||
     url.hash
   )
     throw new BoundaryError("STITCH_ARTIFACT_URL_REFUSED");
+  if (
+    url.hostname === "stitch.googleapis.com" &&
+    (typeof fileName !== "string" ||
+      !projectId ||
+      !new RegExp(`^projects/${projectId}/files/[A-Za-z0-9_-]{1,96}$`).test(fileName) ||
+      url.pathname !== `/v1/${fileName}:download` ||
+      url.search !== "")
+  )
+    throw new BoundaryError("STITCH_ARTIFACT_URL_REFUSED");
   return url.href;
 }
+const artifactFile = (value: unknown, projectId: string) => {
+  const file = record(value);
+  return artifactUrl(file?.downloadUrl, file?.name, projectId);
+};
 function resource(value: unknown, project?: string): string {
   if (
     typeof value !== "string" ||
@@ -311,6 +326,14 @@ export function generateStitchDesignEvidence(
 ): Promise<StitchDesignResult> {
   return runStitch(request, services, "generate");
 }
+/** Read-only recovery of the exact previously journaled project; never generates or creates. */
+export function recoverStitchDesignEvidence(
+  request: StitchDesignRequest,
+  services: StitchDesignServices,
+  recovery: { projectName: string },
+): Promise<StitchDesignResult> {
+  return runStitch(request, services, "recover", recovery);
+}
 /** Read-only protocol/tool discovery. No create_project or generation operation is reachable. */
 export function preflightStitchDesign(
   request: StitchDesignRequest,
@@ -318,6 +341,12 @@ export function preflightStitchDesign(
 ): Promise<StitchPreflightResult> {
   return runStitch(request, services, "preflight");
 }
+async function runStitch(
+  request: StitchDesignRequest,
+  services: StitchDesignServices,
+  mode: "recover",
+  recovery: { projectName: string },
+): Promise<StitchDesignResult>;
 async function runStitch(
   request: StitchDesignRequest,
   services: StitchDesignServices,
@@ -331,7 +360,8 @@ async function runStitch(
 async function runStitch(
   request: StitchDesignRequest,
   services: StitchDesignServices,
-  mode: "generate" | "preflight",
+  mode: "generate" | "preflight" | "recover",
+  recovery?: { projectName: string },
 ): Promise<StitchDesignResult | StitchPreflightResult> {
   const evidence: StitchDesignEvidence = {
     provider: "stitch",
@@ -361,6 +391,11 @@ async function runStitch(
     });
     evidence.scopeHash = digest(JSON.stringify(request.scope));
     evidence.promptHash = digest(request.prompt);
+    if (mode === "recover") {
+      if (!record(recovery) || Object.keys(recovery!).join() !== "projectName")
+        throw new BoundaryError("STITCH_RESOURCE_IDENTITY_INVALID", true);
+      evidence.projectName = resource(recovery!.projectName);
+    }
     try {
       await services.authorize(request, evidence.promptHash);
     } catch {
@@ -550,74 +585,138 @@ async function runStitch(
       };
     }
     const title = `pikar-compare-${evidence.scopeHash.slice(7, 31)}`;
-    const created = toolPayload(
-      await rpc("create_project", "tools/call", { name: "create_project", arguments: { title } }),
-    );
-    evidence.projectName = resource(created.name);
-    if (created.title !== title || created.visibility !== "PRIVATE")
-      throw new BoundaryError("STITCH_PROJECT_IDENTITY_INVALID", true);
-    try {
-      await services.checkpoint({
-        scopeHash: evidence.scopeHash,
-        projectName: evidence.projectName,
-      });
-    } catch {
-      throw new BoundaryError("STITCH_CHECKPOINT_REQUIRED", true);
+    let candidates: unknown[];
+    if (mode === "recover") {
+      const project = toolPayload(
+        await rpc("get_project", "tools/call", {
+          name: "get_project",
+          arguments: { name: evidence.projectName },
+        }),
+      );
+      if (
+        project.name !== evidence.projectName ||
+        project.title !== title ||
+        project.visibility !== "PRIVATE" ||
+        (project.deviceType !== undefined && project.deviceType !== request.deviceType)
+      )
+        throw new BoundaryError("STITCH_PROJECT_IDENTITY_INVALID", true);
+      const listed = toolPayload(
+        await rpc("list_screens", "tools/call", {
+          name: "list_screens",
+          arguments: { projectId: evidence.projectName!.split("/")[1] },
+        }),
+      );
+      if (
+        (listed.nextPageToken !== undefined && listed.nextPageToken !== "") ||
+        (listed.nextCursor !== undefined && listed.nextCursor !== "")
+      )
+        throw new BoundaryError("STITCH_SINGLE_DESIGN_REQUIRED", true);
+      candidates = Array.isArray(listed.screens) ? listed.screens : [];
+    } else {
+      const created = toolPayload(
+        await rpc("create_project", "tools/call", { name: "create_project", arguments: { title } }),
+      );
+      evidence.projectName = resource(created.name);
+      if (created.title !== title || created.visibility !== "PRIVATE")
+        throw new BoundaryError("STITCH_PROJECT_IDENTITY_INVALID", true);
+      try {
+        await services.checkpoint({
+          scopeHash: evidence.scopeHash,
+          projectName: evidence.projectName,
+        });
+      } catch {
+        throw new BoundaryError("STITCH_CHECKPOINT_REQUIRED", true);
+      }
+      const projectId = evidence.projectName.split("/")[1]!;
+      const generated = toolPayload(
+        await rpc("generate_screen_from_text", "tools/call", {
+          name: "generate_screen_from_text",
+          arguments: { projectId, prompt: request.prompt, deviceType: request.deviceType },
+        }),
+      );
+      if (generated.projectId !== undefined && generated.projectId !== projectId)
+        throw new BoundaryError("STITCH_PROJECT_IDENTITY_INVALID", true);
+      candidates = Array.isArray(generated.outputComponents)
+        ? generated.outputComponents.flatMap((component) => {
+            const design = record(record(component)?.design);
+            return Array.isArray(design?.screens) ? design.screens : [];
+          })
+        : [];
     }
-    const projectId = evidence.projectName.split("/")[1]!;
-    const generated = toolPayload(
-      await rpc("generate_screen_from_text", "tools/call", {
-        name: "generate_screen_from_text",
-        arguments: { projectId, prompt: request.prompt, deviceType: request.deviceType },
-      }),
-    );
-    if (generated.projectId !== undefined && generated.projectId !== projectId)
-      throw new BoundaryError("STITCH_PROJECT_IDENTITY_INVALID", true);
-    const screens = Array.isArray(generated.outputComponents)
-      ? generated.outputComponents.flatMap((component) => {
-          const design = record(record(component)?.design);
-          return Array.isArray(design?.screens) ? design.screens : [];
-        })
-      : [];
-    if (screens.length !== 1) throw new BoundaryError("STITCH_SINGLE_DESIGN_REQUIRED", true);
-    const first = record(screens[0]);
-    if (!first) throw new BoundaryError("STITCH_TOOL_RESPONSE_INVALID", true);
-    if (first.id !== undefined && !opaque(first.id, 96))
-      throw new BoundaryError("STITCH_RESOURCE_IDENTITY_INVALID", true);
-    evidence.screenName = resource(
-      first.name ?? (first.id ? `projects/${projectId}/screens/${first.id}` : undefined),
-      projectId,
-    );
-    if (first.id !== undefined && evidence.screenName.split("/")[3] !== first.id)
-      throw new BoundaryError("STITCH_RESOURCE_IDENTITY_INVALID", true);
+    // Raster studies can accompany the UI. Inspect exact owned resources, never guess
+    // by title or ordering; an incomplete/malformed UI is not an auxiliary image.
+    if (candidates.length < 1 || candidates.length > 4)
+      throw new BoundaryError("STITCH_SINGLE_DESIGN_REQUIRED", true);
+    const projectId = evidence.projectName!.split("/")[1]!;
+    const seen = new Set<string>();
+    const uiScreens: Record<string, unknown>[] = [];
+    for (const candidate of candidates) {
+      const item = record(candidate);
+      if (!item || (item.id !== undefined && !opaque(item.id, 96)))
+        throw new BoundaryError("STITCH_RESOURCE_IDENTITY_INVALID", true);
+      const name = resource(
+        item.name ?? (item.id ? `projects/${projectId}/screens/${item.id}` : undefined),
+        projectId,
+      );
+      if ((item.id !== undefined && name.split("/")[3] !== item.id) || seen.has(name))
+        throw new BoundaryError("STITCH_RESOURCE_IDENTITY_INVALID", true);
+      seen.add(name);
+      const screen = toolPayload(
+        await rpc("get_screen", "tools/call", { name: "get_screen", arguments: { name } }),
+      );
+      if (screen.name !== name) throw new BoundaryError("STITCH_SCREEN_IDENTITY_INVALID", true);
+      const html = record(screen.htmlCode);
+      if (screen.deviceType === undefined && html && Object.keys(html).length === 0) {
+        artifactFile(screen.screenshot, projectId);
+        continue;
+      }
+      if (screen.deviceType !== request.deviceType)
+        throw new BoundaryError("STITCH_SCREEN_IDENTITY_INVALID", true);
+      artifactFile(html, projectId);
+      artifactFile(screen.screenshot, projectId);
+      uiScreens.push(screen);
+    }
+    if (uiScreens.length !== 1) throw new BoundaryError("STITCH_SINGLE_DESIGN_REQUIRED", true);
+    const screen = uiScreens[0]!;
+    evidence.screenName = String(screen.name);
     evidence.providerGeneration = "completed";
     try {
       await services.checkpoint({
         scopeHash: evidence.scopeHash,
-        projectName: evidence.projectName,
+        projectName: evidence.projectName!,
         screenName: evidence.screenName,
       });
     } catch {
       throw new BoundaryError("STITCH_CHECKPOINT_REQUIRED", true);
     }
-    const screen = toolPayload(
-      await rpc("get_screen", "tools/call", {
-        name: "get_screen",
-        arguments: { name: evidence.screenName },
-      }),
-    );
-    if (
-      screen.name !== evidence.screenName ||
-      (screen.deviceType !== undefined && screen.deviceType !== request.deviceType)
-    )
-      throw new BoundaryError("STITCH_SCREEN_IDENTITY_INVALID", true);
-    const htmlUrl = artifactUrl(record(screen.htmlCode)?.downloadUrl),
-      screenshotUrl = artifactUrl(record(screen.screenshot)?.downloadUrl);
+    const htmlUrl = artifactFile(screen.htmlCode, projectId),
+      screenshotUrl = artifactFile(screen.screenshot, projectId);
+    // New API downloads are authenticated only after exact owned file/path validation.
+    // CDN downloads never receive credentials and all redirects remain disabled.
+    const downloadHeaders = (url: string, accept: string) => ({
+      Accept: accept,
+      ...(new URL(url).hostname === "stitch.googleapis.com" ? { "X-Goog-Api-Key": key! } : {}),
+    });
     const htmlBytes = await attempt(
       "download_html",
       htmlUrl,
-      { method: "GET", headers: { Accept: "text/html" } },
+      { method: "GET", headers: downloadHeaders(htmlUrl, "text/html") },
       async (response, signal) => {
+        if (new URL(htmlUrl).hostname === "stitch.googleapis.com") {
+          if (response.headers.get("Content-Type")?.split(";")[0]?.trim() !== "application/json")
+            throw new BoundaryError("STITCH_HTML_CONTENT_TYPE_INVALID");
+          const payload = record(parse(decode(await bytes(response, MAX_HTML_BYTES * 2, signal))));
+          if (
+            !payload ||
+            Object.keys(payload).join() !== "dataString" ||
+            typeof payload.dataString !== "string"
+          )
+            throw new BoundaryError("STITCH_HTML_INVALID");
+          const data = new TextEncoder().encode(payload.dataString);
+          if (data.byteLength > MAX_HTML_BYTES)
+            throw new BoundaryError("STITCH_RESPONSE_TOO_LARGE");
+          return data;
+        }
         if (response.headers.get("Content-Type")?.split(";")[0]?.trim() !== "text/html")
           throw new BoundaryError("STITCH_HTML_CONTENT_TYPE_INVALID");
         return bytes(response, MAX_HTML_BYTES, signal);
@@ -629,15 +728,41 @@ async function runStitch(
     const image = await attempt(
       "download_screenshot",
       screenshotUrl,
-      { method: "GET", headers: { Accept: "image/png,image/jpeg,image/webp" } },
+      { method: "GET", headers: downloadHeaders(screenshotUrl, "image/png,image/jpeg,image/webp") },
       async (response, signal) => {
-        const data = await bytes(response, MAX_IMAGE_BYTES, signal);
+        let data: Uint8Array;
+        let declaredMime = response.headers.get("Content-Type")?.split(";")[0]?.trim() ?? "";
+        if (new URL(screenshotUrl).hostname === "stitch.googleapis.com") {
+          if (declaredMime !== "application/json")
+            throw new BoundaryError("STITCH_SCREENSHOT_INVALID");
+          const payload = record(
+            parse(
+              decode(await bytes(response, Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 1024, signal)),
+            ),
+          );
+          const metadata = record(payload?.imageMetadata);
+          if (
+            !payload ||
+            Object.keys(payload).sort().join() !== "dataString,imageMetadata" ||
+            typeof payload.dataString !== "string" ||
+            !metadata ||
+            !["png", "jpeg", "webp"].includes(String(metadata.mimeType)) ||
+            payload.dataString.length > Math.ceil(MAX_IMAGE_BYTES / 3) * 4
+          )
+            throw new BoundaryError("STITCH_SCREENSHOT_INVALID");
+          try {
+            const binary = atob(payload.dataString);
+            if (btoa(binary) !== payload.dataString || binary.length > MAX_IMAGE_BYTES)
+              throw Error();
+            data = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+          } catch {
+            throw new BoundaryError("STITCH_SCREENSHOT_INVALID");
+          }
+          declaredMime = `image/${metadata.mimeType}`;
+        } else data = await bytes(response, MAX_IMAGE_BYTES, signal);
         let raster;
         try {
-          raster = inspectWebAssetBytes(
-            data,
-            response.headers.get("Content-Type")?.split(";")[0]?.trim() ?? "",
-          );
+          raster = inspectWebAssetBytes(data, declaredMime);
         } catch {
           throw new BoundaryError("STITCH_SCREENSHOT_INVALID");
         }
