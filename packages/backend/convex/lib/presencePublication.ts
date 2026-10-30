@@ -30,6 +30,13 @@ export type PresenceProviderReceipt = {
   stitchHtmlStorageId?: Id<"_storage">;
   stitchImageStorageId?: Id<"_storage">;
   repair?: { priorVersion: number; visionEvidenceHash: string; attempt: 1 };
+  rendererRevision?: {
+    priorVersion: number;
+    priorContentHash: string;
+    priorProviderReceiptHash: string;
+    rendererVersion: string;
+    requestedBy: string;
+  };
   rendererRepair?: {
     priorVersion: number;
     browserEvidenceHash: string;
@@ -75,6 +82,13 @@ export function validateProviderReceipt(
             receipt.rendererRepair.priorVersion !== 2)) ||
         !hash.test(receipt.rendererRepair.browserEvidenceHash) ||
         !/^web-design-renderer-v[0-9]+$/.test(receipt.rendererRepair.rendererVersion))) ||
+    (receipt.rendererRevision !== undefined &&
+      (!Number.isSafeInteger(receipt.rendererRevision.priorVersion) ||
+        receipt.rendererRevision.priorVersion < 1 ||
+        !hash.test(receipt.rendererRevision.priorContentHash) ||
+        !hash.test(receipt.rendererRevision.priorProviderReceiptHash) ||
+        !/^web-design-renderer-v[0-9]+$/.test(receipt.rendererRevision.rendererVersion) ||
+        !receipt.rendererRevision.requestedBy)) ||
     (receipt.repair !== undefined && receipt.rendererRepair !== undefined) ||
     canonicalArtifactHashes(receipt.artifactHashes) !==
       canonicalArtifactHashes(artifactHashes(artifacts))
@@ -110,6 +124,15 @@ export const providerReceiptHash = (receipt: PresenceProviderReceipt) =>
               priorVersion: receipt.repair.priorVersion,
               visionEvidenceHash: receipt.repair.visionEvidenceHash,
               attempt: receipt.repair.attempt,
+            }
+          : undefined,
+        rendererRevision: receipt.rendererRevision
+          ? {
+              priorVersion: receipt.rendererRevision.priorVersion,
+              priorContentHash: receipt.rendererRevision.priorContentHash,
+              priorProviderReceiptHash: receipt.rendererRevision.priorProviderReceiptHash,
+              rendererVersion: receipt.rendererRevision.rendererVersion,
+              requestedBy: receipt.rendererRevision.requestedBy,
             }
           : undefined,
         rendererRepair: receipt.rendererRepair

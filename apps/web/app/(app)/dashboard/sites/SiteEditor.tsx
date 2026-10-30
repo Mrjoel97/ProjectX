@@ -1,6 +1,7 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
+import { WEB_DESIGN_RENDERER_VERSION } from "@pikar/core/webDesignRenderer";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import Link from "next/link";
@@ -38,6 +39,7 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
   const update = useMutation(api.webProjects.updateVersion);
   const unpublish = useMutation(api.webProjects.unpublish);
   const rollback = useMutation(api.webProjects.rollback);
+  const refineLayout = useMutation(api.presenceVisualRevision.request);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const previewPin = `${id}:${selected?.version}:${selected?.contentHash}`;
@@ -163,6 +165,24 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
                   ? "Pikar is checking this version on desktop and mobile, including reduced motion. Approval and publication remain unavailable until review succeeds."
                   : "This version is waiting for desktop, mobile and reduced-motion checks. Approval and publication become available only when its saved design passes review."}
           </p>
+          {latest && reviewNeedsRefinement && selected.browserReviewJob?.state === "completed" &&
+            typeof selected.rendererVersion === "string" && selected.rendererVersion !== WEB_DESIGN_RENDERER_VERSION &&
+            session && Number.isSafeInteger(session.revision) && (
+              <button
+                type="button"
+                style={button}
+                disabled={busy || !sourceReady}
+                onClick={() => void run(() => refineLayout({
+                  projectId: id,
+                  expectedProjectRevision: project.revision,
+                  expectedSessionRevision: session.revision,
+                  expectedVersion: selected.version,
+                  expectedContentHash: selected.contentHash,
+                }), "A refined draft is ready for fresh visual checks. Open the newest draft above to follow its review.")}
+              >
+                Refine layout
+              </button>
+            )}
         </aside>
       )}
       {reviewReady && (session?.sourceWarnings?.length ?? 0) > 0 && (

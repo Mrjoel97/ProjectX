@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
     contentHash: string;
     document: { pages: { slug: string }[] };
     assetSnapshots?: { assetRef: string }[];
+    rendererVersion?: string;
     requiresProviderReview?: boolean;
     providerReceipt?: { runRef: string };
     browserQualityReady?: boolean;
@@ -41,6 +42,7 @@ vi.mock("convex/react", () => ({
       return exact
         ? {
             threadId: "website conversation",
+            revision: 5,
             version: exact.version,
             contentHash: exact.contentHash,
             sourceWarnings: state.warningsByVersion[exact.version] ?? [],
@@ -338,6 +340,24 @@ describe("human website review controls", () => {
     await mount(42);
     expect(container.textContent).toContain("This website version is unavailable");
     expect(container.querySelector('[data-testid="exact-preview"]')).toBeNull();
+  });
+
+  test("requests a fresh layout revision with exact project and source bindings", async () => {
+    Object.assign(state.versions[0], {
+      rendererVersion: "web-design-renderer-v14",
+      requiresProviderReview: true,
+      browserReview: { status: "failed" },
+      browserReviewJob: { state: "completed" },
+    });
+    await mount(3);
+    await click("Refine layout");
+    expect(state.calls).toEqual([{ name: "presenceVisualRevision:request", args: {
+      projectId: "project-one", expectedProjectRevision: 7, expectedSessionRevision: 5,
+      expectedVersion: 3, expectedContentHash: hash(3),
+    } }]);
+    expect(button("Approve this version").disabled).toBe(true);
+    await mount(2);
+    expect(container.textContent).not.toContain("Refine layout");
   });
 
   test("reviews immutable warnings for the selected version instead of borrowing a newer brief", async () => {

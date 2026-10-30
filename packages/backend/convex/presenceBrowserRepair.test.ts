@@ -677,6 +677,16 @@ async function splitRepairFixture() {
 test("known v12 split defect rerenders from owned failed vision without a model plan, preserving content", async () => {
   const f = await splitRepairFixture();
   expect(f.vision).not.toHaveProperty("repairPlan");
+  if (
+    !["web-design-renderer-v13", "web-design-renderer-v14"].includes(
+      String(WEB_DESIGN_RENDERER_VERSION),
+    )
+  ) {
+    expect(
+      await f.t.action(makeFunctionReference<"action">("presenceBrowserRepair:run"), f.runArgs),
+    ).toEqual({ status: "stopped" });
+    return;
+  }
   expect(
     await f.t.action(makeFunctionReference<"action">("presenceBrowserRepair:run"), f.runArgs),
   ).toEqual({ status: "repaired", version: 2 });
@@ -698,9 +708,15 @@ test("known v12 split defect rerenders from owned failed vision without a model 
 });
 test("split upgrade rejects stale, unowned, current renderer and mismatched actual evidence", async () => {
   const f = await splitRepairFixture();
-  expect(
-    verifySplitRendererRepairEvidence(f.version, f.vision, f.capture).browserEvidenceHash,
-  ).toBe(f.version.browserReview?.reportHash);
+  if (
+    ["web-design-renderer-v13", "web-design-renderer-v14"].includes(
+      String(WEB_DESIGN_RENDERER_VERSION),
+    )
+  )
+    expect(
+      verifySplitRendererRepairEvidence(f.version, f.vision, f.capture).browserEvidenceHash,
+    ).toBe(f.version.browserReview?.reportHash);
+  else expect(() => verifySplitRendererRepairEvidence(f.version, f.vision, f.capture)).toThrow();
   for (const vision of [
     { ...f.vision, fidelity: { ...f.vision.fidelity, matched: true } },
     { ...f.vision, contentHash: "bad" },
@@ -771,6 +787,10 @@ async function footerFollowupFixture() {
 test("one v13 footer follow-up appends v3 with attempt2 and leaves the previous draft immutable", async () => {
   const f = await footerFollowupFixture();
   const run = makeFunctionReference<"action">("presenceBrowserRepair:run");
+  if (String(WEB_DESIGN_RENDERER_VERSION) !== "web-design-renderer-v14") {
+    expect(await f.t.action(run, f.runArgs)).toEqual({ status: "stopped" });
+    return;
+  }
   expect(await f.t.action(run, f.runArgs)).toEqual({ status: "repaired", version: 3 });
   const rows = await f.t.run((ctx) => ctx.db.query("webProjectVersions").collect());
   const old = rows.find((v) => v.version === 2)!,
@@ -815,4 +835,83 @@ test("footer follow-up rejects other lineages, additional attempts and unrelated
   expect(await f.t.action(run, { ...f.runArgs, tenantId: "foreign" })).toEqual({
     status: "stopped",
   });
+});
+
+async function visualRevisionFixture() {
+  const f = await repairFixture(true);
+  await f.t.run((ctx) => ctx.db.patch(f.tenantId, { emailVerificationTime: 1 }));
+  await f.t.run((ctx) =>
+    ctx.db.patch(f.version._id, {
+      rendererVersion: "web-design-renderer-v14",
+      recipeRef: { ...f.version.recipeRef!, rendererVersion: "web-design-renderer-v14" },
+    }),
+  );
+  const project = await f.t.run((ctx) => ctx.db.get(f.version.projectId));
+  const session = await f.t.run((ctx) => ctx.db.query("onlinePresenceSessions").first());
+  return {
+    ...f,
+    user: f.t.withIdentity({ subject: f.tenantId }),
+    requestArgs: {
+      projectId: f.version.projectId,
+      expectedProjectRevision: project!.revision,
+      expectedSessionRevision: session!.revision,
+      expectedVersion: 1,
+      expectedContentHash: f.version.contentHash,
+    },
+  };
+}
+test("explicit authenticated visual revision preserves design provenance and appends a pending new draft", async () => {
+  const f = await visualRevisionFixture();
+  const request = makeFunctionReference<"mutation">("presenceVisualRevision:request");
+  const result = await f.user.mutation(request, f.requestArgs);
+  expect(result.version).toBe(2);
+  const rows = await f.t.run((ctx) => ctx.db.query("webProjectVersions").collect());
+  const old = rows.find((v) => v.version === 1)!,
+    next = rows.find((v) => v.version === 2)!;
+  expect(next.document).toEqual(old.document);
+  expect(next.recipeRef).toEqual(old.recipeRef);
+  expect(next.providerReceipt?.layoutHash).toBe(old.providerReceipt?.layoutHash);
+  expect(next.providerReceipt?.rendererRevision).toEqual({
+    priorVersion: 1,
+    priorContentHash: old.contentHash,
+    priorProviderReceiptHash: providerReceiptHash(old.providerReceipt!),
+    rendererVersion: WEB_DESIGN_RENDERER_VERSION,
+    requestedBy: f.tenantId,
+  });
+  expect(next.browserReview).toBeUndefined();
+  expect(presencePublicationReady(next)).toBe(false);
+  await expect(f.user.mutation(request, f.requestArgs)).rejects.toThrow("PRESENCE_REVISION_STALE");
+});
+test("visual revision rejects unauthenticated, foreign, stale, malformed lineage and changed sources", async () => {
+  const f = await visualRevisionFixture();
+  const request = makeFunctionReference<"mutation">("presenceVisualRevision:request");
+  await expect(f.t.mutation(request, f.requestArgs)).rejects.toThrow("UNAUTHENTICATED");
+  const other = await f.t.run((ctx) => ctx.db.insert("users", { emailVerificationTime: 1 }));
+  await expect(
+    f.t.withIdentity({ subject: other }).mutation(request, f.requestArgs),
+  ).rejects.toThrow("PRESENCE_REVISION_UNAVAILABLE");
+  for (const change of [
+    { expectedContentHash: "wrong" },
+    { expectedSessionRevision: 99 },
+    { expectedProjectRevision: 99 },
+  ])
+    await expect(f.user.mutation(request, { ...f.requestArgs, ...change })).rejects.toThrow(
+      "PRESENCE_REVISION_STALE",
+    );
+  await f.t.run((ctx) =>
+    ctx.db.patch(f.version._id, {
+      providerReceipt: { ...f.version.providerReceipt!, layoutHash: "a".repeat(64) },
+    }),
+  );
+  await expect(f.user.mutation(request, f.requestArgs)).rejects.toThrow(
+    "PRESENCE_REVISION_PROFILE_INVALID",
+  );
+  await f.t.run(async (ctx) => {
+    await ctx.db.patch(f.version._id, { providerReceipt: f.version.providerReceipt });
+    const session = await ctx.db.query("onlinePresenceSessions").first();
+    await ctx.db.patch(session!._id, { sourceSnapshots: [{ ref: "bad", revision: "changed" }] });
+  });
+  await expect(f.user.mutation(request, f.requestArgs)).rejects.toThrow(
+    "PRESENCE_REVISION_SOURCES_CHANGED",
+  );
 });

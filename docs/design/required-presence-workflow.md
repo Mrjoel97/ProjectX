@@ -92,6 +92,12 @@ The v13 private repair version passed layout corrections but stopped before paid
 
 The only second renderer repair permitted is v13 version 2 with the existing attempt-1/v13 lineage, no model repair or vision record, and exact owned touch-target-only evidence. It creates immutable version 3 with attempt-2/v14/prior-version-2 lineage; further repeats are refused. The original v12 split correction can apply directly to v14 as a first repair. Seventeen repair/publication tests and backend typecheck passed. Final paid visual acceptance and current-source recipe qualification remain pending at this checkpoint.
 
+### Source-preserving visual revision — renderer v15
+
+The v14 review passed all twelve DOM views and visual contrast; the homepage had no reported visual issues. Fidelity still failed on the desktop About, Services and Contact pages because sparse content was spread across the layout without sufficient grouping. This review cost $0.06794, bringing cumulative spending to $0.49259531; original switches and limits were restored. The failed version remains private.
+
+Renderer v15 groups inner-page content and form surfaces without adding business claims or changing the homepage. An explicit authenticated owner request creates a new immutable layout revision with prior content/provider hashes, preserves automatic-repair history, checks current source and session bindings, and schedules fresh review. It does not expand the automatic repair allowance or inherit publication approval. The Sites review offers this action only for a failed latest draft with an older renderer. Final v15 review and source qualification remain pending.
+
 ## Earlier validation milestone
 
 Renderer/recipe tests: 36 passed. Example UI tests: 4 passed. Historical publication tests: 7 passed. Deterministic quality tests: 6 passed. All four package typechecks passed. Additional provider/control/coordinator tests are recorded in the change report. Native gallery browser inspection loaded all four images, moved to the chosen slide, and measured no document overflow at 390px. The refined provider preview also loaded all four images without overflow at 390px. Browser captures are local review evidence, not issued qualification receipts. No paid provider call was made in this change.

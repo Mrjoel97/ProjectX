@@ -987,6 +987,7 @@ export const sessionForProject = tenantQuery({
     args,
   ): Promise<{
     threadId: string;
+    revision: number;
     projectId: Id<"webProjects">;
     version: number;
     contentHash: string;
@@ -1014,6 +1015,7 @@ export const sessionForProject = tenantQuery({
     if (!version) return null;
     return {
       threadId: session.threadId,
+      revision: session.revision,
       projectId: project._id,
       version: version.version,
       contentHash: version.contentHash,

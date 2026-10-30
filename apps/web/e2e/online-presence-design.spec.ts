@@ -61,6 +61,20 @@ test("split hero keeps dark text on light paper and editorial sections do not cr
     expect(await page.locator(".hero-composition").evaluate(el => getComputedStyle(el).minHeight)).toBe("0px");
     if (saved.slug === "home") expect(await page.locator("#about").evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(280);
     expect(await page.locator(".footer-brand").evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeLessThanOrEqual(36);
+    if (saved.slug === "home") {
+      expect(await page.locator("body").getAttribute("data-inner-page")).toBeNull();
+    } else {
+      expect(await page.locator(".site-footer").evaluate(el => getComputedStyle(el).borderTopWidth)).toBe("1px");
+      if (saved.slug === "about") expect(await page.locator(".node-text").evaluate(el => parseFloat(getComputedStyle(el).paddingTop))).toBeGreaterThanOrEqual(24);
+      if (saved.slug === "services") {
+        await expect(page.locator(".hero-rail #services")).toHaveCount(0);
+        for (const item of await page.locator("#services>p").all()) expect(await item.evaluate(el => parseFloat(getComputedStyle(el).paddingTop))).toBeGreaterThanOrEqual(24);
+      }
+      if (saved.slug === "contact") {
+        expect(await page.locator(".hero-rail").evaluate(el => getComputedStyle(el).borderTopWidth)).toBe("1px");
+        expect(await page.locator("label:has(input[type=checkbox])").evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+      }
+    }
     if (saved.slug === "home" || saved.slug === "services") expect(await page.locator("#services>p").allTextContents()).toEqual(["Brand identity", "Website design"]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }

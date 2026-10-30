@@ -4546,6 +4546,15 @@ export default defineSchema({
             attempt: v.literal(1),
           }),
         ),
+        rendererRevision: v.optional(
+          v.object({
+            priorVersion: v.number(),
+            priorContentHash: v.string(),
+            priorProviderReceiptHash: v.string(),
+            rendererVersion: v.string(),
+            requestedBy: v.string(),
+          }),
+        ),
         rendererRepair: v.optional(
           v.object({
             priorVersion: v.number(),

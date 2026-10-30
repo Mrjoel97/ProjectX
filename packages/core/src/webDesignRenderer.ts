@@ -22,7 +22,7 @@ import {
   sha256Bytes,
 } from "./webRuntime";
 
-export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v14" as const;
+export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v15" as const;
 const encoder = new TextEncoder();
 
 /** The renderer depends on the selected records, not merely the bundle's role labels. */
@@ -133,6 +133,7 @@ export function renderDesignedWebDocument(
   const surfaceStyle = profile.surfaceStyle ?? "minimal";
   const layoutPlan = profile.layoutPlan;
   const designTokens = layoutPlan?.version === 2 ? layoutPlan.designTokens : undefined;
+  const innerPage = !!designTokens && parts.page.slug !== parts.document.pages[0]?.slug;
   const baseColors = designTokens ? { ...designTokens.colors, hero: designTokens.colors.paper, heroInk: designTokens.colors.ink } : PALETTES[direction];
   const colors =
     !designTokens && surfaceStyle === "glass"
@@ -180,7 +181,7 @@ export function renderDesignedWebDocument(
       : entry.node.kind === "form"
         ? designedInquiry(entry.node, parts.route)
         : entry.node.kind === "section"
-          ? (designedGallery(entry.node, parts.route, layoutPlan) ?? entry.html)
+          ? (designedGallery(entry.node, parts.route, layoutPlan) ?? (innerPage && entry.node.id === "services" && hero?.node.kind === "hero" && entry.node.heading === hero.node.heading ? entry.html.replace(`<h2>${escapeWebText(entry.node.heading)}</h2>`, "") : entry.html))
           : entry.html;
   const heroIndex = hero ? parts.nodes.indexOf(hero) : -1;
   const cta = hero
@@ -192,10 +193,10 @@ export function renderDesignedWebDocument(
           entry.node.kind === "media" && entry.node.placement === "hero" && entry.html.length > 0,
       ) ??
       parts.nodes.find((entry) => entry.node.kind === "form") ??
-      (direction === "studio"
+      (!innerPage && direction === "studio"
         ? parts.nodes.find((entry) => entry.node.kind === "section" && entry.node.id === "services")
         : undefined) ??
-      (direction === "technical"
+      (!innerPage && direction === "technical"
         ? parts.nodes.find((entry) => entry.node.kind === "section" && entry.node.id === "proof")
         : undefined))
     : undefined;
@@ -365,8 +366,18 @@ body[data-layout-services=columns] #services{gap:28px 40px}body[data-layout-serv
 body[data-layout-hero] .hero-composition.has-rail:not(.has-media){align-items:start;gap:clamp(24px,5vw,64px);padding-block:40px}body[data-layout-hero] .has-rail:not(.has-media) .hero-rail{padding:0;background:transparent}
 @media(max-width:767px){body[data-layout-services=columns] #services>p{margin:16px 0 0}body[data-layout-hero] .hero-composition.has-rail:not(.has-media){padding-block:24px}}
 ` : '';
+  const innerComposition = innerPage ? (inquiry ? "inquiry" : parts.nodes.some(entry => entry.node.kind === "section" && entry.node.id === "services") ? "services" : "editorial") : undefined;
+  const innerPageCss = innerPage ? `
+body[data-inner-page] main{padding-top:48px;padding-bottom:48px}body[data-inner-page]:not([data-inner-page=inquiry]) main{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:40px 64px;align-items:start}
+body[data-inner-page] .hero-composition,body[data-inner-page] .hero-composition.has-rail:not(.has-media){padding:0;margin:0;min-height:0;gap:48px;align-items:start}body[data-inner-page] .hero h1{font-size:clamp(2.5rem,4.8vw,4.5rem);line-height:1.1;max-width:18ch}body[data-inner-page] .hero-action{margin-top:28px}
+body[data-inner-page][data-layout-spacing] .content-block{padding:0}body[data-inner-page] .content-flow{gap:24px;min-width:0}body[data-inner-page=editorial][data-layout-spacing] .content-block.node-text{background:var(--card);border:1px solid var(--rule);padding:32px}body[data-inner-page=editorial] .node-text>p{font-size:clamp(1.2rem,2vw,1.6rem);line-height:1.65;margin:0;max-width:48ch}
+body[data-inner-page=services] #services{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}body[data-inner-page=services] #services>h2{grid-column:1/-1;font-size:1.35rem;margin:0 0 8px}body[data-inner-page=services] #services>p{background:var(--card);border:1px solid var(--rule);padding:28px;margin:0;min-width:0;font-size:1.3rem;line-height:1.5;font-weight:500;max-width:none}
+body[data-inner-page=inquiry] .hero-composition.has-rail{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:64px}body[data-inner-page=inquiry] .has-rail:not(.has-media) .hero-rail{background:var(--card);border:1px solid var(--rule);padding:36px}body[data-inner-page=inquiry] legend{font-size:1.5rem;margin-bottom:12px}body[data-inner-page=inquiry] form button{margin-top:12px}body[data-inner-page=inquiry] label:has(input[type=checkbox]){min-height:44px;align-items:center}
+body[data-inner-page] .site-footer{border-top:1px solid var(--rule);margin-top:8px;padding-top:28px;padding-bottom:28px;align-items:center}
+@media(max-width:767px){body[data-inner-page] main{padding-top:28px;padding-bottom:32px}body[data-inner-page]:not([data-inner-page=inquiry]) main,body[data-inner-page=inquiry] .hero-composition.has-rail{display:grid;grid-template-columns:minmax(0,1fr);gap:28px}body[data-inner-page=editorial][data-layout-spacing] .content-block.node-text{padding:24px}body[data-inner-page=services] #services{grid-template-columns:minmax(0,1fr)}body[data-inner-page=services] #services>p{padding:24px}body[data-inner-page=inquiry] .has-rail:not(.has-media) .hero-rail{padding:24px}}
+` : '';
   const description = parts.page.description ?? parts.document.description ?? parts.document.title;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${galleryCss}${layoutCss}${presentationCss}${motionCss}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"${layoutAttributes}><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer>${content.includes('class="designed-gallery gallery-carousel"') ? WEB_CAROUSEL_TAG : ""}</body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${galleryCss}${layoutCss}${presentationCss}${innerPageCss}${motionCss}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"${layoutAttributes}${innerComposition ? ` data-inner-page="${innerComposition}"` : ""}><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer>${content.includes('class="designed-gallery gallery-carousel"') ? WEB_CAROUSEL_TAG : ""}</body></html>`;
 }
 
 export function renderDesignedWebDocumentBytes(
