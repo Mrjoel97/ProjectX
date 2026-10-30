@@ -1,3 +1,5 @@
+> Last verified: 2026-10-30 — Active chat previews use compact document controls, reduced PDF gutters and a full-width reading surface. Styling is scoped to the active workspace; standalone Vault previews retain their existing layout. Original downloads, native PDF rendering and tenant authorization are unchanged.
+
 > Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social and recurring-service changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
 
 > Last verified: 2026-10-26 — Brand context adapters emit provenance and stored identity data only; behavioral direction remains in registry skills. Closed cross-tenant hydration assertions now explicitly require brandSpine:null, alongside empty citations and blueprint spine.

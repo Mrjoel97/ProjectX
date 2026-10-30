@@ -532,3 +532,30 @@
   user-select: none;
   cursor: default;
 }
+
+:global([data-workspace-active="true"]) .header {
+  min-height: 40px;
+  padding: 4px 12px;
+  gap: 8px;
+}
+:global([data-workspace-active="true"]) .typeLabel {
+  display: none;
+}
+:global([data-workspace-active="true"]) .identity h2 {
+  font-size: 0.8rem;
+  margin: 0;
+}
+:global([data-workspace-active="true"]) .controls {
+  min-height: 38px;
+  padding: 3px 10px;
+}
+:global([data-workspace-active="true"]) .reading {
+  max-width: none;
+  margin: 0;
+  min-height: 100%;
+  box-shadow: none;
+  padding: clamp(20px, 3vw, 40px);
+}
+:global([data-workspace-active="true"]) .pdfScroll {
+  padding: 12px;
+}
