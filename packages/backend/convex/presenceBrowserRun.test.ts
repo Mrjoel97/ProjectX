@@ -128,6 +128,19 @@ async function setup() {
       byteLength: 75,
     },
   ];
+  const document = {
+    kind: "site",
+    title: "Offline fixture",
+    brand: { name: "Fixture" },
+    navigation: [{ label: "Home", path: "/home" }],
+    pages: [
+      {
+        slug: "home",
+        title: "Home",
+        nodes: [{ kind: "hero", heading: "Only authoritative heading" }],
+      },
+    ],
+  };
   const referenceId = await t.run((ctx) =>
     ctx.storage.store(new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: "image/jpeg" })),
   );
@@ -162,7 +175,7 @@ async function setup() {
       tenantId,
       projectId,
       version: 1,
-      document: {},
+      document,
       contentHash: "f".repeat(64),
       rendererVersion: "offline-fixture",
       artifacts,
@@ -190,6 +203,7 @@ async function setup() {
   );
   state.source = {
     versionId,
+    document,
     contentHash: "f".repeat(64),
     providerReceiptHash: providerReceiptHash(receipt),
     providerReceipt: receipt,
@@ -284,6 +298,9 @@ test("bad DOM measurements persist owned evidence but skip vision spend and rema
 test("valid exact report plus billed vision passes with tenant-owned evidence", async () => {
   const { t, args, versionId } = await setup();
   expect((await t.action(run, args)).status).toBe("passed");
+  expect(vi.mocked(reviewPresenceScreenshots).mock.calls[0]![0].authoritativeDocument).toEqual(
+    state.source.document,
+  );
   const version = await t.run((ctx) => ctx.db.get(versionId));
   expect(version?.browserReviewJob?.state).toBe("completed");
   expect(presencePublicationReady(version!)).toBe(true);

@@ -220,6 +220,7 @@ export const run = internalAction({
           screenshots,
           pageSlugs: expectedHashes.map((page) => page.pageSlug),
           layoutPlan: source.layoutPlan,
+          authoritativeDocument: source.document,
         });
         fidelity = vision.fidelity;
         visualContrast = vision.visualContrast;

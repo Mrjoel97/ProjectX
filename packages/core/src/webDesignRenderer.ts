@@ -1,3 +1,4 @@
+import { WEB_CAROUSEL_TAG } from "./webCarouselRuntime";
 import type {
   WebCatalogueNode,
   WebDocument,
@@ -21,7 +22,7 @@ import {
   sha256Bytes,
 } from "./webRuntime";
 
-export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v10" as const;
+export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v11" as const;
 const encoder = new TextEncoder();
 
 /** The renderer depends on the selected records, not merely the bundle's role labels. */
@@ -106,16 +107,17 @@ function designedInquiry(node: WebFormNode, route: WebRouteContext): string {
   return `<form id="inquiry-${escapeWebText(node.id)}" method="post" action="/p/${route.slug}/${route.page}/forms/${node.id}"><fieldset><legend>${escapeWebText(node.heading ?? "Start a conversation")}</legend>${node.fields.map((field) => `<label>${labels[field]}<input name="${field}" type="${field === "email" ? "email" : "text"}" autocomplete="${field === "company" ? "organization" : field}"${field === "email" ? " required" : ""}></label>`).join("")}<label><input name="consent" type="checkbox" required> ${escapeWebText(node.consent)}</label><button type="submit">Send inquiry</button></fieldset></form>`;
 }
 
-/** A fixed, script-free carousel of approved media. No autoplay, remote assets or hidden slides. */
+/** Approved media with a single immutable first-party carousel runtime. */
 function designedGallery(node: WebSectionNode, route: WebRouteContext, plan?: WebLayoutPlan): string | undefined {
   if (node.id !== "gallery" || !node.children.every((child) => child.kind === "media"))
     return undefined;
   const images = node.children.filter((child) => child.kind === "media");
-  const carousel = images.length >= 3 && plan?.gallery !== "grid";
+  const carousel = images.length >= 3 && images.length <= 6 && plan?.gallery !== "grid";
   const label = node.heading ?? "Gallery";
   const slides = images.map((image, index) => `<li id="gallery-image-${index + 1}" class="gallery-slide" aria-label="Image ${index + 1} of ${images.length}">${renderWebMedia(image, route)}<p class="gallery-caption">${escapeWebText(image.alt)}</p></li>`).join("");
-  const links = carousel ? `<nav class="gallery-controls" aria-label="Choose gallery image">${images.map((_, index) => `<a href="#gallery-image-${index + 1}" aria-label="View image ${index + 1}">${index + 1}</a>`).join("")}</nav>` : "";
-  return `<section id="gallery" class="designed-gallery${carousel ? " gallery-carousel" : ""}" aria-labelledby="gallery-heading"><div class="gallery-heading"><h2 id="gallery-heading">${escapeWebText(label)}</h2>${carousel ? '<p>Explore the images. Swipe or choose an image below.</p>' : ""}</div><ul class="gallery-track"${carousel ? ' tabindex="0" aria-label="Gallery images; use arrow keys to scroll"' : ""}>${slides}</ul>${links}</section>`;
+  const controls = carousel ? '<div class="gallery-controls" aria-label="Gallery controls"><button type="button" data-gallery-previous aria-label="Previous image">←</button><button type="button" data-gallery-next aria-label="Next image">→</button></div>' : '';
+  return `<section id="gallery" class="designed-gallery${carousel ? " gallery-carousel" : ""}" aria-labelledby="gallery-heading"><div class="gallery-heading"><h2 id="gallery-heading">${escapeWebText(label)}</h2>${carousel ? '<p id="gallery-help">Images move automatically. Focus or hover to pause; press Space to pause or resume.</p>' : ""}</div><div class="gallery-viewport"${carousel ? ' tabindex="0" role="region" aria-roledescription="carousel" aria-label="Gallery images" aria-describedby="gallery-help"' : ''}><ul class="gallery-track">${slides}</ul></div>${controls}</section>`;
+
 }
 
 /** Closed Pikar-owned art direction, informed by reviewed Taste guidance. The pinned source
@@ -130,11 +132,12 @@ export function renderDesignedWebDocument(
   const direction = profile.artDirection ?? "editorial";
   const surfaceStyle = profile.surfaceStyle ?? "minimal";
   const layoutPlan = profile.layoutPlan;
-  const baseColors = PALETTES[direction];
+  const designTokens = layoutPlan?.version === 2 ? layoutPlan.designTokens : undefined;
+  const baseColors = designTokens ? { ...designTokens.colors, hero: designTokens.colors.paper, heroInk: designTokens.colors.ink } : PALETTES[direction];
   const colors =
-    surfaceStyle === "glass"
+    !designTokens && surfaceStyle === "glass"
       ? { ...baseColors, paper: "#f3f6f4", card: "#e7eeea", ink: "#163a34", muted: "#375b54" }
-      : surfaceStyle === "clay"
+      : !designTokens && surfaceStyle === "clay"
         ? { ...baseColors, paper: "#f8f4ee", card: "#efe8df", ink: "#303d36", muted: "#536458" }
         : baseColors;
   const accent = parts.document.brand.primaryColor ?? colors.accent;
@@ -152,13 +155,14 @@ export function renderDesignedWebDocument(
         ? "transparent"
         : colors.ink;
   const spacing = 36 - profile.dials.density * 2;
-  const width = 1180 + (profile.dials.variance - 5) * 18;
+  const width = designTokens?.spacing.contentWidth ?? (1180 + (profile.dials.variance - 5) * 18);
   const motion = profile.dials.motion <= 2 || layoutPlan?.motion === "none" ? 0 : profile.dials.motion * 12;
   const hoverTransform = motion === 0 ? "none" : "translateY(-2px)";
   const radius = surfaceStyle === "clay" ? 24 : 0;
   const copyMeasure = profile.patternId === "hero-features-cta" ? "700px" : "100%";
   const controlHeight = profile.formProfileId === "forms-first" ? 44 : 40;
-  const heading =
+  const tokenFonts = { "editorial-serif": 'Georgia,"Times New Roman",serif', "modern-serif": '"Palatino Linotype",Palatino,Georgia,serif', "humanist-sans": '"Segoe UI",Calibri,Arial,sans-serif', "geometric-sans": '"Century Gothic",Futura,Arial,sans-serif' };
+  const heading = designTokens ? tokenFonts[designTokens.typography.heading] :
     direction === "editorial"
       ? 'Georgia,"Times New Roman",serif'
       : direction === "studio"
@@ -296,8 +300,8 @@ body[data-surface-style=clay] .footer-brand{font-family:Georgia,"Times New Roman
   const galleryCss = `
 h2,h3{text-wrap:balance}p{text-wrap:pretty}.hero p:not(.eyebrow){max-width:48ch}
 #gallery.designed-gallery{display:block}.gallery-heading{display:flex;align-items:baseline;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:28px}.gallery-heading h2{margin:0;max-width:24ch}.gallery-heading p{margin:0;max-width:40ch}
-.gallery-track{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;min-width:0}.gallery-slide{min-width:0;scroll-margin-block:24px}.gallery-caption{margin:16px 0 0;font-size:1rem;line-height:1.5;max-width:52ch}.gallery-carousel .gallery-track{display:flex;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x proximity;scroll-behavior:smooth;gap:28px;padding-bottom:16px;scrollbar-width:thin}.gallery-carousel .gallery-slide{flex:0 0 68%;scroll-snap-align:start;scroll-snap-stop:normal}.gallery-track .web-media{aspect-ratio:4/3!important}.gallery-controls{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}.gallery-controls a{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;background:var(--card);color:var(--ink);text-decoration:none;border:1px solid currentColor}.gallery-controls a:hover,.gallery-controls a:focus-visible{background:var(--ink);color:var(--paper)}
-@media(max-width:767px){.gallery-track{grid-template-columns:1fr;gap:24px}.gallery-carousel .gallery-slide{flex-basis:88%}.gallery-carousel .gallery-track{gap:16px}.gallery-heading{gap:12px}.gallery-heading p{font-size:1rem}}
+.gallery-track{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;min-width:0}.gallery-slide{min-width:0;scroll-margin-block:24px}.gallery-caption{margin:16px 0 0;font-size:1rem;line-height:1.5;max-width:52ch}.gallery-carousel .gallery-track{display:flex;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x proximity;scroll-behavior:smooth;gap:28px;padding-bottom:16px;scrollbar-width:thin}.gallery-carousel .gallery-slide{flex:0 0 calc((100% - 28px)/2);scroll-snap-align:start;scroll-snap-stop:normal}.gallery-track .web-media{aspect-ratio:4/3!important}.gallery-carousel .web-media{height:260px;aspect-ratio:auto!important}.gallery-carousel .web-media img{height:100%;width:100%;object-fit:cover}.gallery-viewport{min-width:0}.gallery-carousel.is-ready .gallery-viewport{overflow:hidden}.gallery-carousel.is-ready .gallery-track{overflow:visible;scroll-snap-type:none;will-change:transform}.gallery-controls{visibility:hidden}.gallery-carousel.is-ready .gallery-controls{visibility:visible}.gallery-controls{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}.gallery-controls button{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;background:var(--card);color:var(--ink);text-decoration:none;border:1px solid currentColor}.gallery-controls button:hover,.gallery-controls button:focus-visible{background:var(--ink);color:var(--paper)}
+@media(max-width:767px){.gallery-carousel .web-media{height:220px}.gallery-track{grid-template-columns:1fr;gap:24px}.gallery-carousel .gallery-slide{flex-basis:100%}.gallery-carousel .gallery-track{gap:16px}.gallery-heading{gap:12px}.gallery-heading p{font-size:1rem}}
 @media(prefers-reduced-motion:reduce){.gallery-carousel .gallery-track{scroll-behavior:auto;scroll-snap-type:none}}
 `;
   const layoutCss = layoutPlan ? `
@@ -354,8 +358,9 @@ button,.cta{transition:transform var(--motion-feedback) var(--motion-ease)}
   const footerNavigation = navigationLinks
     ? `<nav aria-label="Footer"><ul>${navigationLinks}</ul></nav>`
     : "";
+  const presentationCss = designTokens ? `body{font-family:${tokenFonts[designTokens.typography.body]}}body[data-layout-hero] .site-footer{background:${designTokens.footer === "light" ? colors.paper : colors.ink};color:${designTokens.footer === "light" ? colors.ink : colors.paper};border-color:${colors.rule}}body[data-layout-hero] .site-footer a,body[data-layout-hero] .site-footer p{color:inherit}body[data-layout-hero] .hero-composition.has-media{min-height:${designTokens.spacing.heroMinHeight}px}body[data-layout-hero] .hero h1{font-weight:${designTokens.typography.heading.endsWith("serif") ? 400 : 600}}@media(max-width:767px){body[data-layout-hero] .hero-composition.has-media{min-height:${Math.min(480, designTokens.spacing.heroMinHeight)}px}}body[data-layout-spacing] .content-block{padding-block:clamp(28px,6vw,${designTokens.spacing.sectionGap}px)}.content-flow p,.hero p:not(.eyebrow){max-width:${designTokens.spacing.copyMeasure}ch}body[data-layout-services=columns] #services>p{max-width:${designTokens.spacing.copyMeasure}ch}` : '';
   const description = parts.page.description ?? parts.document.description ?? parts.document.title;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${galleryCss}${layoutCss}${motionCss}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"${layoutAttributes}><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${galleryCss}${layoutCss}${presentationCss}${motionCss}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"${layoutAttributes}><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer>${content.includes('class="designed-gallery gallery-carousel"') ? WEB_CAROUSEL_TAG : ""}</body></html>`;
 }
 
 export function renderDesignedWebDocumentBytes(

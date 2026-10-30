@@ -1,3 +1,4 @@
+import { hasUnsafeWebMarkup, WEB_CAROUSEL_SCRIPT_POLICY } from "@pikar/core/webCarouselRuntime";
 import type { WebDocument } from "@pikar/contracts/webRuntime";
 import { renderDesignedWebDocument } from "@pikar/core/webDesignRenderer";
 import { materializeWebRecipeWithProvenance } from "@pikar/core/webRecipes";
@@ -188,6 +189,7 @@ export function examplePresentationHtml(
   images: readonly { ref: string; path: string }[],
   origin: string,
 ): string {
+  if (hasUnsafeWebMarkup(html)) throw new Error("UNSAFE_EXAMPLE_ARTIFACT");
   const host = new URL(origin).origin;
   const doc = new DOMParser().parseFromString(html, "text/html");
   for (const image of doc.querySelectorAll("img")) {
@@ -200,7 +202,7 @@ export function examplePresentationHtml(
   }
   const policy = doc.createElement("meta");
   policy.httpEquiv = "Content-Security-Policy";
-  policy.content = `default-src 'none'; img-src ${host}; style-src 'unsafe-inline'; form-action 'none'`;
+  policy.content = `default-src 'none'; img-src ${host}; style-src 'unsafe-inline'; ${WEB_CAROUSEL_SCRIPT_POLICY}; connect-src 'none'; form-action 'none'`;
   const base = doc.createElement("base");
   base.target = "_blank";
   doc.head.prepend(policy, base);

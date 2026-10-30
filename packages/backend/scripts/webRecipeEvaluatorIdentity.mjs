@@ -11,6 +11,9 @@ const declaration = /(export const WEB_RECIPE_EVAL_IMPLEMENTATION_HASH =\s*)"([a
 export const WEB_RECIPE_EVALUATOR_FILES = [
   // Merchant checkout, native package authority and its owner review are part of the public gate.
   "apps/web/app/(app)/dashboard/sites/SiteEditor.tsx",
+  "apps/web/app/(app)/dashboard/sites/preview/PreviewCanvas.tsx",
+  "apps/web/app/(app)/dashboard/sites/PresenceExampleViewer.tsx",
+  "apps/web/app/(app)/dashboard/sites/examples.ts",
   "apps/web/app/(app)/dashboard/sites/MerchantWorkspace.tsx",
   "apps/web/app/(app)/dashboard/sites/ShopSetupReview.tsx",
   "apps/web/app/(app)/dashboard/sites/merchantPresentation.ts",
@@ -77,6 +80,7 @@ export const WEB_RECIPE_EVALUATOR_FILES = [
   "packages/core/src/webRecipes.ts",
   "packages/core/src/webRecipeFixtures.ts",
   "packages/core/src/webDesignRenderer.ts",
+  "packages/core/src/webCarouselRuntime.ts",
   "packages/core/src/webRuntime.ts",
   "packages/core/src/webAssets.ts",
   "packages/core/src/designKnowledge.ts",

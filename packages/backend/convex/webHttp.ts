@@ -1,3 +1,4 @@
+import { WEB_CAROUSEL_SCRIPT_POLICY } from "@pikar/core/webCarouselRuntime";
 import type { WebCtaNode, WebDocument, WebNode } from "@pikar/contracts/webRuntime";
 import type { HttpRouter } from "convex/server";
 import { internal } from "./_generated/api";
@@ -14,7 +15,7 @@ export function registerPublicWebRoutes(router: HttpRouter): void {
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
     "Content-Security-Policy":
-      "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      `default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; ${WEB_CAROUSEL_SCRIPT_POLICY}; connect-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`,
   };
   const runtimeHeaders = (declaration: { hosting: string; source: string }) => ({
     ...publicHeaders,

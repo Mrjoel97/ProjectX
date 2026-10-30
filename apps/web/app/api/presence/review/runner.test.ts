@@ -1,3 +1,4 @@
+import { WEB_CAROUSEL_TAG, WEB_CAROUSEL_SCRIPT_POLICY } from "@pikar/core/webCarouselRuntime";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, test, vi } from "vitest";
@@ -41,6 +42,15 @@ describe("trusted presence browser runner", () => {
     expect((await handlePresenceReviewRequest(f.request(), { ...f.deps, snapshotId: undefined })).status).toBe(503);
     expect(f.deps.createSandbox).not.toHaveBeenCalled();
   });
+  test("only the immutable carousel runtime is executable", () => {
+    for (const script of [WEB_CAROUSEL_TAG, WEB_CAROUSEL_TAG + WEB_CAROUSEL_TAG, WEB_CAROUSEL_TAG.replace('4200', '4201'), '<script src="/owned.js"></script>']) {
+      const value = input(); const page = html.replace('</body>', script + '</body>');
+      value.artifacts[0] = { pageSlug: 'home', html: page, contentHash: digest(page) };
+      expect(validatePresenceReviewInput(value, deploymentUrl)).toBe(script === WEB_CAROUSEL_TAG);
+    }
+    expect(presenceBrowserWorkerScript()).toContain(WEB_CAROUSEL_SCRIPT_POLICY);
+    expect(presenceBrowserWorkerScript()).toContain('javaScriptEnabled:true');
+  });
   test("binds exact HTML and rejects injected content, wrong deployments, traversal and duplicates", () => {
     expect(validatePresenceReviewInput(input(), deploymentUrl)).toBe(true);
     for (const badHtml of [html + "changed", '<!doctype html><html><script>bad()</script></html>', '<!doctype html><html><body onload="bad()"></body></html>']) {
@@ -78,7 +88,7 @@ describe("trusted presence browser runner", () => {
   test("worker has no runtime installation, external navigation or injected executable payload", () => {
     const script = presenceBrowserWorkerScript();
     expect(script).toContain("playwright/package.json"); expect(script).toContain("1.61.1");
-    expect(script).toContain("javaScriptEnabled:false"); expect(script).toContain("serviceWorkers:'block'");
+    expect(script).toContain("javaScriptEnabled:true"); expect(script).toContain("serviceWorkers:'block'");
     expect(script).toContain("https://presence-review.invalid"); expect(script).toContain("mimeType:'image/jpeg'");
     expect(script).not.toMatch(/npm install|npx|eval\(input|new Function/);
   });

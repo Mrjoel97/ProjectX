@@ -61,7 +61,20 @@ const limiters = import.meta.glob(
 const run = makeFunctionReference<"action">("onlinePresenceDesign:build");
 const hash = (v: unknown) => sha256Bytes(new TextEncoder().encode(JSON.stringify(v)));
 const layoutPlan = {
-  version: 1,
+  version: 2,
+  designTokens: {
+    colors: {
+      paper: "#fffaf0",
+      card: "#ffffff",
+      ink: "#211e19",
+      muted: "#665e50",
+      accent: "#712b30",
+      rule: "#ded6c9",
+    },
+    typography: { heading: "editorial-serif", body: "humanist-sans" },
+    spacing: { contentWidth: 1200, sectionGap: 64, copyMeasure: 62, heroMinHeight: 480 },
+    footer: "light",
+  },
   hero: "overlay-left",
   sectionLayout: "editorial-columns",
   services: "rows",
@@ -85,7 +98,7 @@ beforeEach(() => {
     calls.push("stitch");
     return {
       status: "complete",
-      html: { text: "reference" },
+      html: { text: "reference".repeat(2000) + "END_OF_COMPLETE_REFERENCE" },
       screenshot: { bytes: new Uint8Array([1, 2, 3]), mimeType: "image/png" },
     } as never;
   });
@@ -101,6 +114,16 @@ beforeEach(() => {
     };
     expect(model.modelId).toBe("or/moonshotai/kimi-k3.1-pro");
     expect(options.maxRetries).toBe(0);
+    expect(options.messages?.[0]).toMatchObject({
+      role: "user",
+      content: [{ type: "text" }, { type: "file", mediaType: "image/png" }],
+    });
+    const content = options.messages?.[0].content as Array<{ type: string; text?: string }>;
+    const input = JSON.parse(String(content[0].text));
+    expect(input.layoutPlan.version).toBe(2);
+    expect(input.untrustedStitchReference).toBeTruthy();
+    if (input.untrustedStitchReference.startsWith("reference"))
+      expect(input.untrustedStitchReference.endsWith("END_OF_COMPLETE_REFERENCE")).toBe(true);
     await model.beforeCall();
     const reservationId = await model.ctx.runMutation(internal.guardrails.reservePaidCall, {
       tenantId: model.tenantId,

@@ -106,7 +106,7 @@ export function PresenceExampleViewer({ exampleId }: { exampleId: PresenceExampl
           <iframe
             title={`${example.title} ${page.title} example`}
             srcDoc={html}
-            sandbox=""
+            sandbox="allow-scripts"
             referrerPolicy="no-referrer"
             style={{ maxWidth: width === "phone" ? 390 : width === "tablet" ? 768 : "100%" }}
           />

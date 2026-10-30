@@ -4625,20 +4625,62 @@ export default defineSchema({
         rendererVersion: v.optional(v.string()),
         designProfile: v.object({
           layoutPlan: v.optional(
-            v.object({
-              version: v.literal(1),
-              hero: v.union(
-                v.literal("overlay-left"),
-                v.literal("overlay-centered"),
-                v.literal("split"),
-              ),
-              sectionLayout: v.union(v.literal("editorial-columns"), v.literal("stacked")),
-              services: v.union(v.literal("rows"), v.literal("columns")),
-              gallery: v.union(v.literal("grid"), v.literal("carousel")),
-              spacing: v.union(v.literal("relaxed"), v.literal("compact")),
-              headingScale: v.union(v.literal("balanced"), v.literal("display")),
-              motion: v.union(v.literal("none"), v.literal("subtle")),
-            }),
+            v.union(
+              v.object({
+                version: v.literal(1),
+                hero: v.union(
+                  v.literal("overlay-left"),
+                  v.literal("overlay-centered"),
+                  v.literal("split"),
+                ),
+                sectionLayout: v.union(v.literal("editorial-columns"), v.literal("stacked")),
+                services: v.union(v.literal("rows"), v.literal("columns")),
+                gallery: v.union(v.literal("grid"), v.literal("carousel")),
+                spacing: v.union(v.literal("relaxed"), v.literal("compact")),
+                headingScale: v.union(v.literal("balanced"), v.literal("display")),
+                motion: v.union(v.literal("none"), v.literal("subtle")),
+              }),
+              v.object({
+                version: v.literal(2),
+                designTokens: v.object({
+                  colors: v.object({
+                    paper: v.string(),
+                    card: v.string(),
+                    ink: v.string(),
+                    muted: v.string(),
+                    accent: v.string(),
+                    rule: v.string(),
+                  }),
+                  typography: v.object({
+                    heading: v.union(
+                      v.literal("editorial-serif"),
+                      v.literal("modern-serif"),
+                      v.literal("humanist-sans"),
+                      v.literal("geometric-sans"),
+                    ),
+                    body: v.union(v.literal("humanist-sans"), v.literal("geometric-sans")),
+                  }),
+                  spacing: v.object({
+                    contentWidth: v.number(),
+                    sectionGap: v.number(),
+                    copyMeasure: v.number(),
+                    heroMinHeight: v.number(),
+                  }),
+                  footer: v.union(v.literal("light"), v.literal("dark")),
+                }),
+                hero: v.union(
+                  v.literal("overlay-left"),
+                  v.literal("overlay-centered"),
+                  v.literal("split"),
+                ),
+                sectionLayout: v.union(v.literal("editorial-columns"), v.literal("stacked")),
+                services: v.union(v.literal("rows"), v.literal("columns")),
+                gallery: v.union(v.literal("grid"), v.literal("carousel")),
+                spacing: v.union(v.literal("relaxed"), v.literal("compact")),
+                headingScale: v.union(v.literal("balanced"), v.literal("display")),
+                motion: v.union(v.literal("none"), v.literal("subtle")),
+              }),
+            ),
           ),
           artDirection: v.optional(
             v.union(v.literal("editorial"), v.literal("studio"), v.literal("technical")),

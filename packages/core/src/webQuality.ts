@@ -1,3 +1,4 @@
+import { hasUnsafeWebMarkup } from "./webCarouselRuntime";
 import type { WebDocument, WebNode } from "@pikar/contracts/webRuntime";
 import { escapeWebText, sha256Bytes, validateWebDocument } from "./webRuntime";
 
@@ -56,7 +57,7 @@ export function assessWebQuality(input: {
     const html = artifact.html;
     if (!/^<!doctype html>/i.test(html.trim()) || !/<\/html>\s*$/i.test(html))
       add("incomplete_artifact", "Produce a complete native HTML document.", page.slug);
-    if (/<(?:script|iframe|object|embed|base)\b|\son[a-z]+\s*=/i.test(html))
+    if (hasUnsafeWebMarkup(html))
       add("executable_artifact", "Render only approved code-owned components.", page.slug);
     if ((html.match(/<h1(?:\s|>)/gi) ?? []).length !== 1)
       add("page_heading", "Give each page exactly one clear primary heading.", page.slug);

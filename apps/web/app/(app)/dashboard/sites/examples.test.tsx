@@ -1,3 +1,5 @@
+import { hasUnsafeWebMarkup } from "@pikar/core/webCarouselRuntime";
+import { WEB_DESIGN_RENDERER_VERSION } from "@pikar/core/webDesignRenderer";
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -62,7 +64,7 @@ describe("real renderer examples", () => {
       for (const page of example.pages) {
         const rendered = new DOMParser().parseFromString(page.html, "text/html");
         expect(rendered.querySelector('meta[name="generator"]')?.getAttribute("content")).toBe(
-          "web-design-renderer-v8",
+          WEB_DESIGN_RENDERER_VERSION,
         );
         expect(rendered.querySelector("style")?.textContent).toContain(
           ".hero h1{animation:pikar-copy-arrive var(--motion-enter)",
@@ -71,7 +73,7 @@ describe("real renderer examples", () => {
           "@media(prefers-reduced-motion:no-preference)",
         );
         expect(rendered.querySelector("h1")).not.toBeNull();
-        expect(rendered.querySelector("script")).toBeNull();
+        expect(hasUnsafeWebMarkup(page.html)).toBe(false);
         expect(rendered.querySelector("footer")?.textContent).toContain("Fictional design example");
       }
     expect(isPresenceExampleId("unowned-path")).toBe(false);
@@ -109,7 +111,7 @@ describe("real renderer examples", () => {
     ).toThrow("EXAMPLE_ASSET_MISMATCH");
   });
 
-  it("lets the reader inspect all website pages and phone width inside an empty sandbox", async () => {
+  it("lets the reader inspect all website pages and phone width inside a restricted sandbox", async () => {
     const host = await mount("studio");
     const page = host.querySelector('select[aria-label="Example page"]') as HTMLSelectElement;
     expect(page.options).toHaveLength(4);
@@ -123,7 +125,7 @@ describe("real renderer examples", () => {
       width.dispatchEvent(new Event("change", { bubbles: true }));
     });
     const frame = host.querySelector("iframe")!;
-    expect(frame.getAttribute("sandbox")).toBe("");
+    expect(frame.getAttribute("sandbox")).toBe("allow-scripts");
     expect(frame.style.maxWidth).toBe("390px");
     expect(frame.srcdoc).toContain('data-page="contact"');
     expect(frame.srcdoc).toContain("/p/example-studio/contact/forms/contact");

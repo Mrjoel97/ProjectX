@@ -1,3 +1,4 @@
+import { hasUnsafeWebMarkup } from "@pikar/core/webCarouselRuntime";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { buildSandboxOptions, type SandboxLike, type SandboxOptions } from "@pikar/core/render";
 import { presenceBrowserWorkerScript } from "./worker";
@@ -58,7 +59,7 @@ export function validatePresenceReviewInput(
       hash(artifact.html) !== artifact.contentHash ||
       !/^<!doctype html>/i.test(artifact.html.trim()) ||
       !/<\/html>\s*$/i.test(artifact.html) ||
-      /<(?:script|iframe|object|embed|base)\b|\son[a-z]+\s*=|http-equiv\s*=/i.test(artifact.html)
+      hasUnsafeWebMarkup(artifact.html)
     )
       return false;
     pages.add(artifact.pageSlug);

@@ -1,3 +1,4 @@
+import { WEB_CAROUSEL_SCRIPT } from "@pikar/core/webCarouselRuntime";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { renderDesignedWebDocument } from "@pikar/core/webDesignRenderer";
@@ -299,7 +300,10 @@ for (const fixture of fixtures) {
           await expect(consent).not.toBeChecked();
           await expect(consent).toHaveAttribute("required", "");
         }
-        expect(await page.locator("script,iframe").count()).toBe(0);
+        expect(await page.locator("iframe").count()).toBe(0);
+        const scripts = await page.locator("script").allTextContents();
+        expect(scripts.length).toBeLessThanOrEqual(1);
+        if (scripts.length) expect(scripts[0]).toBe(WEB_CAROUSEL_SCRIPT);
         await page.screenshot({
           path: testInfo.outputPath(`${savedPage.slug}-${width}.png`),
           fullPage: true,

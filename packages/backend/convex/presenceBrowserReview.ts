@@ -58,6 +58,7 @@ export const runtimeInputs = internalQuery({
     );
     return {
       versionId: version._id,
+      document: version.document,
       contentHash: version.contentHash,
       providerReceiptHash: providerReceiptHash(version.providerReceipt),
       providerReceipt: version.providerReceipt,

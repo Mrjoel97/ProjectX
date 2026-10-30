@@ -1,3 +1,4 @@
+import { WEB_CAROUSEL_TAG, hasUnsafeWebMarkup } from "./webCarouselRuntime";
 import { describe, expect, test } from "vitest";
 import { verifiedDesignKnowledgeBundle } from "./designKnowledge";
 import {
@@ -20,7 +21,24 @@ describe("closed recipe design renderer", () => {
     ctaPath: "/learn",
   };
 
-  test("approved galleries become keyboard-accessible script-free carousels with real asset routes", () => {
+  test("v2 presentation preserves validated palette, typography, spacing and light footer without replacing content", () => {
+    const { document, designProfile } = materializeWebRecipeWithProvenance("campaign-landing", base);
+    const html = renderDesignedWebDocument(document, { ...designProfile, layoutPlan: {
+      version: 2, hero: "split", sectionLayout: "stacked", services: "rows", gallery: "grid", spacing: "compact", headingScale: "balanced", motion: "subtle",
+      designTokens: { colors: { paper: "#faf8f2", card: "#ffffff", ink: "#222222", muted: "#555555", accent: "#224433", rule: "#cccccc" }, typography: { heading: "modern-serif", body: "humanist-sans" }, spacing: { contentWidth: 1100, sectionGap: 60, copyMeasure: 48, heroMinHeight: 440 }, footer: "light" },
+    } });
+    expect(html).toContain("--paper:#faf8f2");
+    expect(html).toContain("--measure:1100px");
+    expect(html).toContain('--heading:"Palatino Linotype",Palatino,Georgia,serif');
+    expect(html).toContain("padding-block:clamp(28px,6vw,60px)");
+    expect(html).toContain("max-width:48ch");
+    expect(html).toContain(".site-footer{background:#faf8f2;color:#222222;border-color:#cccccc}");
+    expect(html).toContain(base.headline);
+    expect(html).toContain(base.formConsent);
+    expect(hasUnsafeWebMarkup(html)).toBe(false);
+  });
+
+  test("approved galleries become keyboard-accessible first-party carousels with real asset routes", () => {
     const gallery = ["Workspace", "Material detail", "Design process"].map((alt, index) => ({
       storageRef: `webasset:photo${index}:${String(index + 1).repeat(64)}`,
       alt,
@@ -30,15 +48,18 @@ describe("closed recipe design renderer", () => {
     });
     const html = renderDesignedWebDocument(document, designProfile, { slug: "gallery", page: "campaign" });
     expect(html).toContain('class="designed-gallery gallery-carousel"');
-    expect(html).toContain('tabindex="0" aria-label="Gallery images; use arrow keys to scroll"');
+    expect(html).toContain('aria-roledescription="carousel"');
+    expect(html.match(/data-gallery-(?:previous|next) aria-label/g)).toHaveLength(2);
+    expect(html).toContain(WEB_CAROUSEL_TAG);
+    expect(hasUnsafeWebMarkup(html)).toBe(false);
     for (let index = 1; index <= 3; index += 1) {
-      expect(html).toContain(`href="#gallery-image-${index}"`);
+
       expect(html).toContain(`id="gallery-image-${index}"`);
       expect(html).toContain(`/p/gallery/assets/photo${index - 1}/${String(index).repeat(64)}`);
     }
     expect(html).toContain("scroll-snap-type:x proximity");
     expect(html).toContain(".gallery-carousel .gallery-track{scroll-behavior:auto;scroll-snap-type:none}");
-    expect(html).not.toMatch(/<script|autoplay|aria-hidden="true"/);
+    expect(html.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(/<script|aria-hidden="true"/);
     expect(html).toContain('loading="lazy"');
   });
 
@@ -118,7 +139,7 @@ describe("closed recipe design renderer", () => {
       expect(html).toContain('action="/p/owned/campaign/cta/primary"');
       expect(html).toContain(`/p/owned/assets/source/${"a".repeat(64)}`);
       expect(html).toContain("I agree to hear from this publisher.");
-      expect(html).not.toMatch(/<script|onload=|https:\/\/fonts/);
+      expect(html.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(/<script|onload=|https:\/\/fonts/);
     }
     const { document, designProfile } = outputs[0]!;
     expect(() =>
@@ -179,7 +200,7 @@ describe("closed recipe design renderer", () => {
       "<details><summary>View details</summary><p>A supplied product description.</p></details>",
     );
     expect(html).toContain("Ordering is unavailable");
-    expect(html).not.toMatch(/<form|buy now|add to cart|payment|checkout/i);
+    expect(html.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(/<form|buy now|add to cart|payment|checkout/i);
     expect(() =>
       materializeWebRecipeWithProvenance("storefront-catalogue", {
         brandName: "Ceramics",
@@ -276,7 +297,7 @@ describe("closed recipe design renderer", () => {
       expect(movingHtml).toContain('action="/p/owned-campaign/campaign/cta/primary"');
       expect(movingHtml).toContain('action="/p/owned-campaign/campaign/forms/signup"');
       expect(movingHtml).toContain("I agree to hear from this publisher.");
-      expect(movingHtml).not.toMatch(/<script|onload=|animationend|<canvas/);
+      expect(movingHtml.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(/<script|onload=|animationend|<canvas/);
       expect(designedWebDocumentHash(still.document, still.designProfile, route)).not.toBe(
         designedWebDocumentHash(moving.document, moving.designProfile, route),
       );
@@ -546,7 +567,7 @@ test("image composition respects owned crop and navigation retains exact per-pag
   expect(html).toContain('class="hero-composition has-rail has-media"');
   expect(html).toContain("aspect-ratio:16 / 10");
   expect(html).toContain("object-position:35% 60%");
-  expect(html).not.toMatch(/min-height:(320|220)px/);
+  expect(html.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(/min-height:(320|220)px/);
   expect(html).toContain(".web-media img{position:absolute;inset:0");
   expect(html).toContain(
     '<nav aria-label="Primary"><ul><li><a href="/p/owned-business/home" aria-current="page">Home</a>',
@@ -554,7 +575,7 @@ test("image composition respects owned crop and navigation retains exact per-pag
   expect(html).toContain('<nav aria-label="Footer">');
   expect(html).toContain('<a class="footer-brand" href="/p/owned-business/home">A business</a>');
   expect(html.split('action="/p/owned-business/home/cta/primary"')).toHaveLength(2);
-  expect(html).not.toMatch(/<script|onload=|testimonials|guaranteed/);
+  expect(html.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(/<script|onload=|testimonials|guaranteed/);
 });
 
 test("the selected landing pattern changes a consumed copy measure on the same document", () => {
@@ -675,5 +696,5 @@ test("clay shop heroes overlay real copy and collection action while preserving 
   expect(html).toContain('.hero-copy:before{content:"";position:absolute;inset:-64px -50vw -100px');
   expect(html).toContain("rgba(0,0,0,.68) calc(100% - 100px)");
   expect(webColorContrast("#ffffff", "#6e6e6e")).toBeGreaterThanOrEqual(4.5);
-  expect(html).not.toMatch(/<script|<form|buy now|add to cart|background-image:/i);
+  expect(html.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(/<script|<form|buy now|add to cart|background-image:/i);
 });

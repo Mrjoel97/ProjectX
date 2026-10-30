@@ -56,6 +56,24 @@ A one-use recovery claim verifies the unchanged tenant, plan, revision, source h
 
 The browser snapshot still expires after its finite 30-day lifetime. Merchant checkout qualification remains pending; these milestones do not establish a completed operational shop.
 
+### Native renderer repair and visual result — 2026-10-30
+
+The recovered Stitch run completed Kimi layout selection and created private project `vx79sm9wd9xv6vr7dsnp6s6rqn8h8zkz`. Version 1 failed only the hard touch-target check. Renderer v10 gives header/footer links a 44px minimum width as well as height. A bounded renderer repair verifies owned browser evidence, retains the original source/recipe/provider provenance and appends immutable version 2 with a distinct `rendererRepair` receipt. Renderer tests passed 23/23, repair tests 7/7 and publication tests 5/5.
+
+Version 2 passed hard DOM checks in all twelve captures (four pages at desktop, phone and reduced motion). Real Kimi vision rejected design fidelity: the native preset renderer lost the reference's editorial composition, typography, palette and section detail. Its proposed layout plan was identical to the existing plan, so replaying that repair cannot improve the output. The contrast verdict was also unapproved but listed no specific measured contrast defect. Publication remains blocked; no completed design-quality qualification is claimed.
+
+Cumulative model cost is $0.32247531 of the original $5 allowance. Both spending switches and original 200c/100c limits were restored. Backend and frontend at commit `4e4a1939` were deployed only to the isolated staging environment; frontend deployment is `dpl_Aw5uuwsT6x8ybSxbyqNEYXnqZwxf`. All four package typechecks and the frontend build passed. Source identity changed, so earlier recipe evidence must not be reused as current qualification.
+
+The next implementation must preserve substantially more of Stitch's visual direction and extend the native gallery behavior; the Fieldwork preview alone does not establish these capabilities for generated customer sites. Unsourced contact details, hours or other facts in a design reference must not be copied into a customer's website.
+
+### Presentation and native motion implementation — 2026-10-30
+
+Renderer v11 adds bounded presentation tokens for six colours, closed font stacks, page width, section spacing, copy measure, hero height and light/dark footer. New Kimi generations must return the v2 contract and receive both the Stitch screenshot and complete HTML within a hard input bound; stored v1 profiles remain readable. Business facts, destinations, forms and owned assets remain canonical customer content. This improves the representable visual direction but is not arbitrary Stitch HTML import or proof of visual fidelity.
+
+Native galleries now carry one immutable first-party carousel runtime, covered by artifact hashes and an exact SHA-256 CSP allowance. Altered, duplicate, external or provider-authored scripts remain rejected. Preview frames permit that script without same-origin access, forms or network connections. The worker exercises autoplay, both arrows and reduced-motion behaviour before capturing screenshots. Images use 260px/220px heights, two arrows and 4.2-second/750ms motion with hover/focus/background/reduced-motion pauses. The browser snapshot does not need rebuilding because the reviewed worker script is supplied per execution.
+
+Visual review now receives a bounded canonical content inventory and binds it into evidence. It must assess the reference's visual direction without requiring invented business facts, and judge contrast separately from composition. Focused checks passed: final core renderer/runtime 25, web preview/runtime/worker 23, v2 layout 4, provider 8 and vision/browser 27. Fresh deployment, exact-source recipe qualification and real v2-provider visual acceptance remain required before calling this milestone complete.
+
 ## Earlier validation milestone
 
 Renderer/recipe tests: 36 passed. Example UI tests: 4 passed. Historical publication tests: 7 passed. Deterministic quality tests: 6 passed. All four package typechecks passed. Additional provider/control/coordinator tests are recorded in the change report. Native gallery browser inspection loaded all four images, moved to the chosen slide, and measured no document overflow at 390px. The refined provider preview also loaded all four images without overflow at 390px. Browser captures are local review evidence, not issued qualification receipts. No paid provider call was made in this change.
