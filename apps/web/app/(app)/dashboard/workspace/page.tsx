@@ -321,6 +321,9 @@ function WorkspacePageContent({ storageKey }: { storageKey: string }) {
   // first turn is in flight" (sendCockpitMessage hasn't resolved the threadId yet — the trace MUST
   // show, the first-turn trap). ChatPane owns the send, so it toggles this via onSending.
   const [sending, setSending] = useState(false);
+  // Switch immediately on send, before the first response mints its thread id.
+  // A new chat (or the synthetic weekly review) keeps the welcome presentation.
+  const workspaceActive = sending || Boolean(threadId && threadId !== REVIEW_THREAD_ID);
 
   // First send on a fresh chat mints the thread — register its tab, labeled by the message.
   const registerThread = (id: string, firstText: string) => {
@@ -664,12 +667,20 @@ function WorkspacePageContent({ storageKey }: { storageKey: string }) {
         right={
           <section
             data-testid="workspace-pane"
+            aria-label="Workspace"
+            data-workspace-active={workspaceActive}
             className="pane-canvas"
-            style={{ ...panel, padding: "0.85rem 1rem", overflow: "hidden" }}
+            style={{
+              ...panel,
+              padding: workspaceActive ? 0 : "0.85rem 1rem",
+              gap: workspaceActive ? 0 : panel.gap,
+              overflow: "hidden",
+            }}
           >
             <header
+              hidden={workspaceActive}
               style={{
-                display: "flex",
+                display: workspaceActive ? "none" : "flex",
                 alignItems: "flex-start",
                 flexWrap: "wrap",
                 gap: "1rem",

@@ -9,6 +9,10 @@
   background: var(--card);
   overflow: hidden;
 }
+:global([data-workspace-active="true"]) .workspace {
+  border: 0;
+  border-radius: 0;
+}
 .tabBar {
   display: flex;
   flex-shrink: 0;
@@ -16,6 +20,13 @@
   border-bottom: 1px solid var(--rule);
   background: var(--canvas);
   min-width: 0;
+}
+.tabBar :global(.artifact-expand) {
+  min-height: 34px;
+  padding: 4px 10px;
+  border: 0;
+  border-left: 1px solid var(--rule);
+  border-radius: 0;
 }
 .tabs {
   display: flex;
@@ -31,21 +42,21 @@
   align-items: center;
   border-right: 1px solid var(--rule);
   position: relative;
-  max-width: 240px;
+  max-width: 200px;
   color: var(--ink-soft);
 }
 .tab button {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 46px;
+  gap: 6px;
+  min-height: 34px;
   background: none;
   border: 0;
   color: inherit;
   font: inherit;
   font-size: 13px;
   cursor: pointer;
-  padding: 0 12px;
+  padding: 0 9px;
   min-width: 0;
 }
 .tab button[role="tab"] {
@@ -53,8 +64,8 @@
 }
 .tab .close {
   flex: none;
-  width: 34px;
-  min-height: 44px;
+  width: 28px;
+  min-height: 34px;
   padding: 0;
   justify-content: center;
 }
@@ -62,7 +73,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 170px;
+  max-width: 140px;
 }
 .active {
   background: var(--card);
@@ -92,11 +103,11 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 46px;
+  min-height: 34px;
   flex: none;
   border: 0;
   border-left: 1px solid var(--rule);
-  padding: 0 14px;
+  padding: 0 10px;
   background: var(--card);
   color: var(--ink);
   font: inherit;
@@ -150,7 +161,7 @@
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px 16px;
-  padding: 14px 20px;
+  padding: 6px 12px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--rule);
 }
@@ -342,6 +353,17 @@
     width: 44px;
   }
   .libraryHeading button {
+    width: 44px;
+  }
+}
+@media (pointer: coarse) {
+  .tab button,
+  .tab .close,
+  .browseButton,
+  .tabBar :global(.artifact-expand) {
+    min-height: 44px;
+  }
+  .tab .close {
     width: 44px;
   }
 }
