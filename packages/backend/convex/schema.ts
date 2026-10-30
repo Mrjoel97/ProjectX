@@ -4509,6 +4509,10 @@ export default defineSchema({
         ),
         startedAt: v.number(),
         reason: v.optional(v.string()),
+        preProviderRetry: v.optional(v.object({
+          attempt: v.literal(1), priorRunRef: v.string(), priorStartedAt: v.number(),
+          priorReason: v.string(), retriedAt: v.number(),
+        })),
       }),
     ),
     browserReviewReportStorageId: v.optional(v.id("_storage")),

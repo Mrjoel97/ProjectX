@@ -70,12 +70,15 @@ export const runtimeInputs = internalQuery({
       layoutPlan: version.recipeRef.designProfile.layoutPlan,
       job: version.browserReviewJob,
       review: version.browserReview,
+      reportStorageId: version.browserReviewReportStorageId,
     };
   },
 });
 
 export const claim = internalMutation({
-  args: { ...scope, runRef: v.string(), contentHash: v.string(), providerReceiptHash: v.string() },
+  args: { ...scope, runRef: v.string(), contentHash: v.string(), providerReceiptHash: v.string(),
+    retryEvidence: v.optional(v.object({ reportStorageId: v.id("_storage"), capture: v.any() })),
+  },
   handler: async (ctx, args) => {
     const version = await ctx.db.get(args.versionId);
     if (
@@ -86,9 +89,48 @@ export const claim = internalMutation({
       providerReceiptHash(version.providerReceipt) !== args.providerReceiptHash
     )
       throw Error("PRESENCE_REVIEW_STALE");
-    if (version.browserReviewJob) return false;
+    const prior = version.browserReviewJob;
+    let preProviderRetry;
+    if (prior) {
+      const now = Date.now();
+      if (prior.state !== "failed" || prior.reason !== "browser_review_incomplete" ||
+        prior.preProviderRetry || !Number.isFinite(prior.startedAt) || prior.startedAt <= 0 || prior.startedAt > now ||
+        version.browserReview || version.browserReviewVisionStorageId || !version.artifacts ||
+        !version.browserReviewReportStorageId || !args.retryEvidence ||
+        args.retryEvidence.reportStorageId !== version.browserReviewReportStorageId ||
+        args.runRef !== prior.runRef + "-pre-provider-retry-1") return false;
+      validateProviderReceipt(version.providerReceipt, version.artifacts);
+      const hashes = artifactHashes(version.artifacts);
+      const capture = args.retryEvidence.capture;
+      const screenshots = version.browserReviewScreenshots;
+      if (!capture || capture.status !== "captured" || capture.contentHash !== version.contentHash ||
+        capture.providerReceiptHash !== args.providerReceiptHash || !Array.isArray(capture.artifactHashes) ||
+        canonicalArtifactHashes(capture.artifactHashes) !== canonicalArtifactHashes(hashes) ||
+        !Array.isArray(capture.reports) || !Array.isArray(capture.screenshots) ||
+        !screenshots || screenshots.length !== hashes.length * 3 || screenshots.length > 24 ||
+        capture.screenshots.length !== screenshots.length ||
+        assessWebBrowserQuality({pageSlugs: hashes.map(h => h.pageSlug), reports: capture.reports}).issues.some(issue => issue.severity === "fail")) return false;
+      const modes = new Set<string>();
+      for (const image of screenshots) {
+        const key = `${image.pageSlug}:${image.viewportWidth}:${image.reducedMotion}`;
+        if (modes.has(key) || !hashes.some(h => h.pageSlug === image.pageSlug) ||
+          !((image.viewportWidth === 1440 && image.reducedMotion === false) || image.viewportWidth === 390) ||
+          image.mimeType !== "image/jpeg" || !/^[a-f0-9]{64}$/.test(image.sha256) ||
+          capture.screenshots.filter((candidate: typeof image) => candidate.pageSlug === image.pageSlug && candidate.viewportWidth === image.viewportWidth && candidate.reducedMotion === image.reducedMotion && candidate.sha256 === image.sha256 && candidate.mimeType === image.mimeType).length !== 1) return false;
+        modes.add(key);
+      }
+      for (const storageId of [version.browserReviewReportStorageId, ...screenshots.map(image => image.storageId)]) {
+        const owned = await ctx.db.query("uploadReceipts").withIndex("by_storage", q => q.eq("storageId", storageId)).unique();
+        if (owned?.tenantId !== args.tenantId || owned.state !== "complete") return false;
+      }
+      // Paid correlation IDs are random, so absence at one guessed correlation cannot prove
+      // non-egress. Conservatively reject every tenant movement since the original job start.
+      const events = await ctx.db.query("spendEvents").withIndex("by_tenant_createdAt", q => q.eq("tenantId", args.tenantId).gte("createdAt", prior.startedAt)).take(5001);
+      if (events.length > 0) return false;
+      preProviderRetry = { attempt: 1 as const, priorRunRef: prior.runRef, priorStartedAt: prior.startedAt, priorReason: prior.reason, retriedAt: now };
+    } else if (args.retryEvidence) return false;
     await ctx.db.patch(version._id, {
-      browserReviewJob: { runRef: args.runRef, state: "running", startedAt: Date.now() },
+      browserReviewJob: { runRef: args.runRef, state: "running", startedAt: Date.now(), ...(preProviderRetry ? {preProviderRetry} : {}) },
     });
     return true;
   },

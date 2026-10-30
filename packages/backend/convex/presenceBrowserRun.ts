@@ -69,11 +69,29 @@ export const run = internalAction({
     if (source.review?.status === "passed") return { status: "passed" };
     if (!(await ctx.runMutation(internal.guardrails.preCall, { tenantId: args.tenantId })).ok)
       return { status: "pending", reason: "review_budget_or_service_paused" };
-    const runRef = digest({
+    const baseRunRef = digest({
       versionId: source.versionId,
       contentHash: source.contentHash,
       receipt: source.providerReceiptHash,
     }).slice(0, 16);
+    const retrying = source.job?.state === "failed" && !source.job.preProviderRetry;
+    const runRef = retrying ? source.job!.runRef + "-pre-provider-retry-1" : baseRunRef;
+    let retryEvidence;
+    if (retrying) {
+      // Read only the existing owned capture; claim atomically validates its identity,
+      // ownership, hard checks and conservative no-spend proof before a new attempt.
+      if (!source.reportStorageId) return { status: "pending", reason: "retry_capture_unavailable" };
+      try {
+        const blob = await ctx.storage.get(source.reportStorageId);
+        if (!blob || blob.size > 3_000_000) return { status: "pending", reason: "retry_capture_unavailable" };
+        const capture = JSON.parse(await blob.text());
+        retryEvidence = { reportStorageId: source.reportStorageId, capture: {
+          status: capture.status, contentHash: capture.contentHash, providerReceiptHash: capture.providerReceiptHash,
+          artifactHashes: capture.artifactHashes, reports: capture.reports,
+          screenshots: Array.isArray(capture.screenshots) ? capture.screenshots.map(({pageSlug,viewportWidth,reducedMotion,sha256,mimeType}: Capture) => ({pageSlug,viewportWidth,reducedMotion,sha256,mimeType})) : null,
+        } };
+      } catch { return { status: "pending", reason: "retry_capture_unavailable" }; }
+    }
     const scope = { tenantId: args.tenantId, versionId: source.versionId, runRef };
     const beforeCall = async () => {
       const current = await read();
@@ -103,6 +121,7 @@ export const run = internalAction({
         ...scope,
         contentHash: source.contentHash,
         providerReceiptHash: source.providerReceiptHash,
+        ...(retryEvidence ? { retryEvidence } : {}),
       }))
     )
       return { status: "pending", reason: "review_already_attempted" };

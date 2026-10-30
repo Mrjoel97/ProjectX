@@ -98,6 +98,12 @@ The v14 review passed all twelve DOM views and visual contrast; the homepage had
 
 Renderer v15 groups inner-page content and form surfaces without adding business claims or changing the homepage. An explicit authenticated owner request creates a new immutable layout revision with prior content/provider hashes, preserves automatic-repair history, checks current source and session bindings, and schedules fresh review. It does not expand the automatic repair allowance or inherit publication approval. The Sites review offers this action only for a failed latest draft with an older renderer. Final v15 review and source qualification remain pending.
 
+### Captured review admission recovery
+
+The authenticated owner revision produced version 4 and all twelve hosted DOM captures passed. Its visual review stopped before any model spend: the test window allowed 400 cents while the configured worst-case Kimi reservation is 428 cents. Cumulative cost stayed $0.49259531. The persisted generic error does not identify the original exception; the reservation mismatch is independently established by the model-cost calculation.
+
+A single pre-provider retry now requires a failed incomplete job, exact owned capture and screenshot evidence, no completed vision/review, and no tenant spend events since the original attempt. The atomic claim retains the original failure in a one-use history marker that survives capture and completion. It reuses the same immutable version, performs fresh capture/source checks, and does not reset design-repair limits. Ambiguous, paid, concurrent and repeated attempts remain blocked. Final acceptance is recorded separately below when available.
+
 ## Earlier validation milestone
 
 Renderer/recipe tests: 36 passed. Example UI tests: 4 passed. Historical publication tests: 7 passed. Deterministic quality tests: 6 passed. All four package typechecks passed. Additional provider/control/coordinator tests are recorded in the change report. Native gallery browser inspection loaded all four images, moved to the chosen slide, and measured no document overflow at 390px. The refined provider preview also loaded all four images without overflow at 390px. Browser captures are local review evidence, not issued qualification receipts. No paid provider call was made in this change.
