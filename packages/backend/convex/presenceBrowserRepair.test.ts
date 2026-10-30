@@ -33,7 +33,11 @@ import {
   presencePublicationReady,
   providerReceiptHash,
 } from "./lib/presencePublication";
-import { verifyRepairEvidence, verifyRendererRepairEvidence } from "./presenceBrowserRepair";
+import {
+  verifyRepairEvidence,
+  verifyRendererRepairEvidence,
+  verifySplitRendererRepairEvidence,
+} from "./presenceBrowserRepair";
 import schema from "./schema";
 import { evaluateWebRecipeCandidate } from "./webRecipeEvals";
 
@@ -76,10 +80,12 @@ async function offlineProviderBuild(
     tenantId: string;
     planId: Id<"plans">;
     expectedRevision: number;
+    split?: boolean;
   },
 ) {
-  const snapshot = await t.mutation(internal.onlinePresence.designSnapshot, args);
-  if (!("document" in snapshot)) return t.mutation(internal.onlinePresence.buildProject, args);
+  const { split, ...buildArgs } = args;
+  const snapshot = await t.mutation(internal.onlinePresence.designSnapshot, buildArgs);
+  if (!("document" in snapshot)) return t.mutation(internal.onlinePresence.buildProject, buildArgs);
   const digest = (value: unknown) => sha256Bytes(new TextEncoder().encode(JSON.stringify(value)));
   const layoutPlan = canonicalWebLayoutPlan({
     version: 1,
@@ -91,7 +97,29 @@ async function offlineProviderBuild(
     headingScale: "balanced",
     motion: "subtle",
   });
-  const profile = { ...snapshot.recipeRef.designProfile, layoutPlan };
+  const profile = {
+    ...snapshot.recipeRef.designProfile,
+    layoutPlan: split
+      ? canonicalWebLayoutPlan({
+          ...layoutPlan,
+          version: 2,
+          hero: "split",
+          designTokens: {
+            colors: {
+              paper: "#ffffff",
+              card: "#ffffff",
+              ink: "#111111",
+              muted: "#555555",
+              accent: "#552233",
+              rule: "#dddddd",
+            },
+            typography: { heading: "editorial-serif", body: "humanist-sans" },
+            spacing: { contentWidth: 1100, sectionGap: 64, copyMeasure: 60, heroMinHeight: 440 },
+            footer: "light",
+          },
+        })
+      : layoutPlan,
+  };
   if (!validateDesignProfileRef(profile)) throw Error("Invalid offline profile fixture");
   const runRef = crypto.randomUUID().replaceAll("-", "").slice(0, 16);
   const identity = {
@@ -130,7 +158,7 @@ async function offlineProviderBuild(
     artifactsHash: digest(hashes),
   });
   return t.mutation(internal.onlinePresence.buildProject, {
-    ...args,
+    ...buildArgs,
     designCompletion: {
       profile,
       providerReceipt: {
@@ -140,7 +168,7 @@ async function offlineProviderBuild(
         kimiHash,
         sourceFingerprint: snapshot.sourceFingerprint,
         briefHash: snapshot.briefHash,
-        layoutHash: digest(layoutPlan),
+        layoutHash: digest(profile.layoutPlan),
         artifactHashes: hashes,
         pendingBrowser: true,
       },
@@ -223,7 +251,7 @@ async function activeRecipe(t: Stack["t"]) {
 
 const repairApply = makeFunctionReference<"mutation">("presenceBrowserRepair:apply");
 const digest = (value: unknown) => sha256Bytes(new TextEncoder().encode(JSON.stringify(value)));
-async function repairFixture() {
+async function repairFixture(split = false) {
   const f = await setup();
   await activeRecipe(f.t);
   const saved = await f.t.mutation(internal.onlinePresence.saveBrief, {
@@ -236,6 +264,7 @@ async function repairFixture() {
     tenantId: f.tenantId,
     planId: f.planId,
     expectedRevision: saved.revision,
+    split,
   });
   const version = await f.t.run(
     async (ctx) => (await ctx.db.query("webProjectVersions").collect())[0]!,
@@ -437,8 +466,8 @@ test("action uses actual completed report and owned stored vision despite object
   ).toEqual({ status: "repaired", version: 2 });
 });
 
-async function rendererRepairFixture() {
-  const f = await repairFixture();
+async function rendererRepairFixture(split = false) {
+  const f = await repairFixture(split);
   const reports: WebBrowserPageReport[] = f.version.providerReceipt!.artifactHashes.flatMap(
     ({ pageSlug }) =>
       [
@@ -456,7 +485,7 @@ async function rendererRepairFixture() {
         readyState: "complete",
         images: { total: 1, loaded: 1, missingAlt: 0 },
         headings: { h1: 1, empty: 0, clipped: 0 },
-          links: { total: 1, brokenAnchors: [], hrefs: [`/p/fixture/${pageSlug}`] },
+        links: { total: 1, brokenAnchors: [], hrefs: [`/p/fixture/${pageSlug}`] },
         touchTargets: { total: 1, tooSmall: 1 },
         textContrast: { checked: 2, failed: 0, unknown: 1, minimumRatio: 7 },
         motion: { activeAnimations: 0, nontrivialDurations: 0, smoothScroll: false },
@@ -601,4 +630,105 @@ test("renderer repair requires owned reports and unchanged authoritative sources
   });
   await expect(f.t.action(run, f.runArgs)).rejects.toThrow("PRESENCE_REPAIR_SOURCES_CHANGED");
   expect(await f.t.run((ctx) => ctx.db.query("webProjectVersions").collect())).toHaveLength(1);
+});
+
+async function splitRepairFixture() {
+  const f = await rendererRepairFixture(true);
+  const reports = f.capture.reports.map((r) => ({ ...r, touchTargets: { total: 1, tooSmall: 0 } }));
+  const capture = { ...f.capture, reports };
+  const vision = {
+    contentHash: f.version.contentHash,
+    providerReceiptHash: capture.providerReceiptHash,
+    screenshotHashes: capture.screenshots.map((s) => s.sha256),
+    fidelity: { matched: false, evidenceHash: "e".repeat(64) },
+    visualContrast: { passed: false, evidenceHash: "e".repeat(64) },
+    issues: ["home: white split heading and excessive section gap"],
+  };
+  const ids = await f.t.run(async (ctx) => ({
+    capture: await ctx.storage.store(new Blob([JSON.stringify(capture)])),
+    vision: await ctx.storage.store(new Blob([JSON.stringify(vision)])),
+  }));
+  for (const storageId of Object.values(ids))
+    await f.t.mutation(internal.lib.tenantLifecycle.ownGeneratedStorage, {
+      tenantId: f.tenantId,
+      storageId,
+    });
+  await f.t.mutation(makeFunctionReference<"mutation">("presenceBrowserReview:complete"), {
+    tenantId: f.tenantId,
+    versionId: f.version._id,
+    contentHash: f.version.contentHash,
+    providerReceiptHash: capture.providerReceiptHash,
+    artifactHashes: capture.artifactHashes,
+    reports,
+    fidelity: vision.fidelity,
+    visualContrast: vision.visualContrast,
+  });
+  await f.t.run((ctx) =>
+    ctx.db.patch(f.version._id, {
+      rendererVersion: "web-design-renderer-v12",
+      recipeRef: { ...f.version.recipeRef!, rendererVersion: "web-design-renderer-v12" },
+      browserReviewReportStorageId: ids.capture,
+      browserReviewVisionStorageId: ids.vision,
+    }),
+  );
+  const version = await f.t.run((ctx) => ctx.db.get(f.version._id));
+  return { ...f, version: version!, capture, vision, ids };
+}
+test("known v12 split defect rerenders from owned failed vision without a model plan, preserving content", async () => {
+  const f = await splitRepairFixture();
+  expect(f.vision).not.toHaveProperty("repairPlan");
+  expect(
+    await f.t.action(makeFunctionReference<"action">("presenceBrowserRepair:run"), f.runArgs),
+  ).toEqual({ status: "repaired", version: 2 });
+  const rows = await f.t.run((ctx) => ctx.db.query("webProjectVersions").collect());
+  const old = rows.find((v) => v.version === 1)!,
+    next = rows.find((v) => v.version === 2)!;
+  expect(old).toEqual(f.version);
+  expect(next.document).toEqual(old.document);
+  expect(next.recipeRef).toEqual(old.recipeRef);
+  expect(next.providerReceipt?.layoutHash).toBe(old.providerReceipt?.layoutHash);
+  expect(next.providerReceipt?.rendererRepair?.browserEvidenceHash).toBe(
+    old.browserReview?.reportHash,
+  );
+  expect(next.browserReview).toBeUndefined();
+  expect(presencePublicationReady(next)).toBe(false);
+  expect(
+    await f.t.action(makeFunctionReference<"action">("presenceBrowserRepair:run"), f.runArgs),
+  ).toEqual({ status: "stopped" });
+});
+test("split upgrade rejects stale, unowned, current renderer and mismatched actual evidence", async () => {
+  const f = await splitRepairFixture();
+  expect(
+    verifySplitRendererRepairEvidence(f.version, f.vision, f.capture).browserEvidenceHash,
+  ).toBe(f.version.browserReview?.reportHash);
+  for (const vision of [
+    { ...f.vision, fidelity: { ...f.vision.fidelity, matched: true } },
+    { ...f.vision, contentHash: "bad" },
+    { ...f.vision, screenshotHashes: [] },
+    { ...f.vision, issues: [] },
+  ])
+    expect(() => verifySplitRendererRepairEvidence(f.version, vision, f.capture)).toThrow();
+  for (const capture of [
+    { ...f.capture, artifactHashes: [] },
+    { ...f.capture, screenshots: [] },
+    { ...f.capture, reports: f.capture.reports.map((r) => ({ ...r, documentWidth: 2000 })) },
+  ])
+    expect(() => verifySplitRendererRepairEvidence(f.version, f.vision, capture)).toThrow();
+  expect(() =>
+    verifySplitRendererRepairEvidence(
+      { ...f.version, rendererVersion: WEB_DESIGN_RENDERER_VERSION },
+      f.vision,
+      f.capture,
+    ),
+  ).toThrow();
+  await f.t.run(async (ctx) => {
+    const receipt = await ctx.db
+      .query("uploadReceipts")
+      .withIndex("by_storage", (q) => q.eq("storageId", f.ids.vision))
+      .unique();
+    await ctx.db.patch(receipt!._id, { tenantId: "foreign" });
+  });
+  expect(
+    await f.t.action(makeFunctionReference<"action">("presenceBrowserRepair:run"), f.runArgs),
+  ).toEqual({ status: "stopped" });
 });

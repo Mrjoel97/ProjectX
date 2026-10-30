@@ -26,6 +26,33 @@ test("reduced-motion gallery arrows move instantly despite the global motion res
 });
 
 // Fictional business briefs for presentation checks, never customer facts or live qualification.
+test("split hero keeps dark text on light paper and editorial sections do not create phantom rows", async ({ page }) => {
+  const result = materializeWebRecipeWithProvenance("business-site", {
+    brandName: "Studio fixture", headline: "Thoughtful identities for independent businesses",
+    summary: "Brand and website design.", about: "A small independent design studio.",
+    services: ["Brand identity", "Website design"], artDirection: "studio",
+    media: { hero: { storageRef: `webasset:fixture:${"a".repeat(64)}`, alt: "Studio material study" } },
+  });
+  const profile = { ...result.designProfile, layoutPlan: {
+    version: 2, hero: "split", sectionLayout: "editorial-columns", services: "columns", gallery: "grid", spacing: "compact", headingScale: "balanced", motion: "subtle",
+    designTokens: { colors: { paper: "#F6FBF5", card: "#F0F5F0", ink: "#181D1A", muted: "#414846", accent: "#32534A", rule: "#C1C8C4" }, typography: { heading: "editorial-serif", body: "humanist-sans" }, spacing: { contentWidth: 1280, copyMeasure: 62, heroMinHeight: 560, sectionGap: 64 }, footer: "light" },
+  } as const };
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setContent(renderDesignedWebDocument(result.document, profile));
+    expect(await page.locator("h1").evaluate(el => getComputedStyle(el).color)).toBe("rgb(24, 29, 26)");
+    expect(await page.locator("body").evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgb(246, 251, 245)");
+    expect(await page.locator(".hero-composition").evaluate(el => getComputedStyle(el).minHeight)).toBe("0px");
+    expect(await page.locator("#about").evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(280);
+    expect(await page.locator(".footer-brand").evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeLessThanOrEqual(36);
+    expect(await page.locator("#services>p").allTextContents()).toEqual(["Brand identity", "Website design"]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
+  await page.setContent(renderDesignedWebDocument(result.document, { ...profile, layoutPlan: { ...profile.layoutPlan, hero: "overlay-left" } }));
+  expect(await page.locator("h1").evaluate(el => getComputedStyle(el).color)).toBe("rgb(255, 255, 255)");
+});
+
 const contact = {
   pageMode: "multi-page",
   projectSlug: "design-fixture",

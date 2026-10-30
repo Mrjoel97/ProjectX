@@ -112,6 +112,64 @@ export function verifyRendererRepairEvidence(
   return version.browserReview.reportHash;
 }
 
+/** One known renderer defect: v12 split headings and nested grid spacing. Content is unchanged. */
+function isSplitRendererUpgrade(version: any) {
+  const plan = version.recipeRef?.designProfile?.layoutPlan;
+  return (
+    version.rendererVersion === "web-design-renderer-v12" &&
+    WEB_DESIGN_RENDERER_VERSION === "web-design-renderer-v13" &&
+    validateWebLayoutPlan(plan) &&
+    plan.version === 2 &&
+    plan.hero === "split"
+  );
+}
+export function verifySplitRendererRepairEvidence(version: any, vision: any, capture: any) {
+  if (
+    !isSplitRendererUpgrade(version) ||
+    capture?.status !== "captured" ||
+    capture.contentHash !== version.contentHash ||
+    capture.providerReceiptHash !== providerReceiptHash(version.providerReceipt) ||
+    !Array.isArray(capture.artifactHashes) ||
+    canonicalArtifactHashes(capture.artifactHashes) !==
+      canonicalArtifactHashes(version.providerReceipt.artifactHashes) ||
+    !Array.isArray(capture.screenshots) ||
+    JSON.stringify(capture.screenshots.map((s: any) => s.sha256)) !==
+      JSON.stringify(version.browserReviewScreenshots?.map((s: any) => s.sha256)) ||
+    !vision ||
+    vision.fidelity?.matched !== false ||
+    typeof vision.visualContrast?.passed !== "boolean" ||
+    !/^[a-f0-9]{64}$/.test(vision.fidelity?.evidenceHash) ||
+    vision.visualContrast.evidenceHash !== vision.fidelity.evidenceHash ||
+    vision.contentHash !== version.contentHash ||
+    vision.providerReceiptHash !== providerReceiptHash(version.providerReceipt) ||
+    !Array.isArray(vision.issues) ||
+    !vision.issues.length ||
+    JSON.stringify(vision.screenshotHashes) !==
+      JSON.stringify(version.browserReviewScreenshots?.map((s: any) => s.sha256)) ||
+    !Array.isArray(capture.reports)
+  )
+    throw Error("PRESENCE_RENDERER_REPAIR_EVIDENCE_INVALID");
+  const assessment = assessWebBrowserQuality({
+    pageSlugs: version.providerReceipt.artifactHashes.map((p: any) => p.pageSlug),
+    reports: capture.reports,
+  });
+  if (
+    assessment.status === "fail" ||
+    assessment.issues.some((issue) => issue.code !== "contrast_needs_visual_review") ||
+    canonicalEvidenceHash({
+      reports: capture.reports,
+      fidelity: vision.fidelity,
+      visualContrast: vision.visualContrast,
+      assessment,
+    }) !== version.browserReview.reportHash
+  )
+    throw Error("PRESENCE_RENDERER_REPAIR_EVIDENCE_INVALID");
+  return {
+    browserEvidenceHash: version.browserReview.reportHash,
+    visionEvidenceHash: vision.fidelity.evidenceHash,
+  };
+}
+
 /** Reconstruct the exact completed review before trusting a stored repair proposal. */
 export function verifyRepairEvidence(
   version: {
@@ -182,6 +240,18 @@ export const run = internalAction({
     const visionBlob = await ctx.storage.get(version.browserReviewVisionStorageId);
     if (!visionBlob || visionBlob.size > 100000) return { status: "stopped" };
     const vision = JSON.parse(await visionBlob.text());
+    if (isSplitRendererUpgrade(version)) {
+      const evidence = verifySplitRendererRepairEvidence(version, vision, capture);
+      return ctx.runMutation(applyRef, {
+        ...args,
+        ...evidence,
+        repairKind: "renderer",
+        layoutPlan: version.recipeRef.designProfile.layoutPlan,
+        visionStorageId: version.browserReviewVisionStorageId,
+        reportStorageId: version.browserReviewReportStorageId,
+        reportHash: version.browserReview.reportHash,
+      });
+    }
     if (!vision?.repairPlan) return { status: "stopped" };
     const evidence = verifyRepairEvidence(version, vision, capture);
     return ctx.runMutation(applyRef, {
@@ -234,9 +304,11 @@ export const apply = internalMutation({
       version.browserReview.reportHash !== args.reportHash ||
       !validateWebLayoutPlan(args.layoutPlan) ||
       (args.repairKind === "renderer"
-        ? version.browserReviewVisionStorageId !== undefined ||
-          args.visionStorageId !== undefined ||
-          args.visionEvidenceHash !== undefined ||
+        ? (version.browserReviewVisionStorageId !== undefined
+            ? !isSplitRendererUpgrade(version) ||
+              args.visionStorageId !== version.browserReviewVisionStorageId ||
+              !/^[a-f0-9]{64}$/.test(args.visionEvidenceHash ?? "")
+            : args.visionStorageId !== undefined || args.visionEvidenceHash !== undefined) ||
           version.rendererVersion === WEB_DESIGN_RENDERER_VERSION ||
           args.reportStorageId !== version.browserReviewReportStorageId ||
           !args.reportStorageId ||
@@ -250,6 +322,20 @@ export const apply = internalMutation({
           args.reportStorageId !== undefined)
     )
       throw Error("PRESENCE_REPAIR_UNAVAILABLE");
+    if (args.repairKind === "renderer") {
+      for (const storageId of [
+        args.reportStorageId,
+        ...(args.visionStorageId ? [args.visionStorageId] : []),
+      ]) {
+        if (!storageId) throw Error("PRESENCE_REPAIR_UNAVAILABLE");
+        const owned = await ctx.db
+          .query("uploadReceipts")
+          .withIndex("by_storage", (q) => q.eq("storageId", storageId))
+          .unique();
+        if (owned?.tenantId !== args.tenantId || owned.state !== "complete")
+          throw Error("PRESENCE_REPAIR_UNAVAILABLE");
+      }
+    }
     const snapshot = await prepareRequiredDesign(ctx, {
       tenantId: args.tenantId,
       planId: session.planId,
