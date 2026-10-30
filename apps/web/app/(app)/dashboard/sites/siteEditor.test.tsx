@@ -343,7 +343,7 @@ describe("human website review controls", () => {
   });
 
   test("requests a fresh layout revision with exact project and source bindings", async () => {
-    Object.assign(state.versions[0], {
+    Object.assign(state.versions[0]!, {
       rendererVersion: "web-design-renderer-v14",
       requiresProviderReview: true,
       browserReview: { status: "failed" },
