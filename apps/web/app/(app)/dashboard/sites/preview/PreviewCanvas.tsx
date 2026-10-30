@@ -1,10 +1,9 @@
 "use client";
 
-import { hasUnsafeWebMarkup, WEB_CAROUSEL_SCRIPT_POLICY } from "@pikar/core/webCarouselRuntime";
-
 import { api } from "@pikar/backend/api";
 import type { WebDocument } from "@pikar/contracts/webRuntime";
 import { collectWebAssetRefs, parseWebAssetRef } from "@pikar/core/webAssets";
+import { hasUnsafeWebMarkup, WEB_CAROUSEL_SCRIPT_POLICY } from "@pikar/core/webCarouselRuntime";
 import { useAction, useQuery } from "convex/react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import Link from "next/link";
@@ -36,9 +35,9 @@ const card = {
 /** The source artifact stays immutable. A preview-only base makes every code-owned anchor
  * request a popup, which the restricted iframe sandbox blocks. Scrolling remains available. */
 export function inertPreviewHtml(html: string, assets?: readonly PreviewAsset[]): string | null {
-  if (hasUnsafeWebMarkup(html) || !html.includes('<head>')) return null;
+  if (hasUnsafeWebMarkup(html) || !html.includes("<head>")) return null;
   const policy = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; ${WEB_CAROUSEL_SCRIPT_POLICY}; connect-src 'none'; form-action 'none'">`;
-  html = html.replace('<head>', '<head>' + policy);
+  html = html.replace("<head>", "<head>" + policy);
   if (assets !== undefined) {
     if (typeof DOMParser === "undefined" || !html.includes("<head>")) return null;
     const mappings = new Map<string, string>();
@@ -48,10 +47,7 @@ export function inertPreviewHtml(html: string, assets?: readonly PreviewAsset[])
     }
     // Presentation-only data URLs keep private bytes off anonymous public routes. A restrictive
     // preview policy also prevents any original src from making a background network request.
-    const parsed = new DOMParser().parseFromString(
-      html,
-      "text/html",
-    );
+    const parsed = new DOMParser().parseFromString(html, "text/html");
     for (const image of parsed.querySelectorAll("img")) {
       const ref = image.getAttribute("data-asset-ref");
       const dataUrl = ref ? mappings.get(ref) : undefined;

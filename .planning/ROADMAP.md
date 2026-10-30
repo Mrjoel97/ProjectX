@@ -122,8 +122,8 @@ The current execution priority is the five-stage sequence below. [Programme scop
 
 **Goal:** One tenant-scoped service boundary reuses existing governed execution and gives users setup and supervision instead of manual orchestration.
 **Requirements:** MSVC-03, MSVC-04, MSVC-05, MSVC-06.
-**Depends on:** Phase 48 readiness seal. No general recurrence is enabled here.
-**Plans:** 0/5 executed; 5/5 authored. Not executed.
+**Depends on:** Phase 48 readiness seal for release/live admission. The October22 execution correction permits independent reversible offline development; no general recurrence is enabled here.
+**Plans:** 0/5 completed; 5/5 authored. Local policy/setup, attended execution, scoped tools and supervision are implemented and tested; arbitrary composition and hosted release acceptance remain open.
 
 - [ ] 49-01-PLAN.md — Define service ownership and policy
 - [ ] 49-02-PLAN.md — Persist tenant setup and bounded service views
@@ -166,6 +166,26 @@ The current execution priority is the five-stage sequence below. [Programme scop
 - [ ] 52-02-PLAN.md — Prepare, review and schedule exact approved content
 - [ ] 52-03-PLAN.md — Measure repeated cycles and seal the pilot
 
+
+## Parallel artifact-production lane — owner-approved 2026-10-21
+
+### Phase 53: Media and document production
+
+**Goal:** Deliver real rich Excel and editable PowerPoint artifacts, reliable image/video campaigns, and evidence-backed media quality through the existing Executive/Vault/media architecture.
+**Requirements:** ARTF-01, ARTF-02, ARTF-03, ARTF-04.
+**Depends on:** Existing Phase 18/20/40 creation/storage/approval rails. Owner-approved parallel offline implementation after discovery; this does not reorder the current Phase 48 → 49 → 50 → 51 → 52 managed-service admission or release gates.
+**Plans:** 0/3 complete; 3/3 authored. Offline implementation partial. Local native Office observations, five authenticated local browser cases across two focused runs and fixed paid comparisons ($0.9213768 known reported total) narrow the evidence gaps. Hosted flows, registry qualification, generated-motion quality, final audio/creative review and owner artifact acceptance remain open; the original stopped STT gate and hold remain preserved.
+**Success Criteria:**
+  1. Actual downloadable XLSX files preserve typed values and source metadata, deterministic supported calculations and professional report layouts; reopen and visually inspect populated sheets/print regions.
+  2. Actual PPTX files contain editable native objects/charts and source notes, with an honestly labelled optional layout preview; open/edit in presentation software and inspect every rendered slide.
+  3. Image/video/mixed campaigns enforce exact reviewed content, aggregate ceilings, bounded jobs, partial recovery, selected paid retries and owned downloads without publication authority.
+  4. Representative image sets and B-roll reels pass measured technical and owner visual checks; provider quality claims require actual outputs, not preset names or frontend-design guidance.
+
+- [ ] 53-01-PLAN.md — Parallel offline artifact implementation, bounded campaigns and explicit remaining quality gates (partial evidence in 53-01-SUMMARY.md)
+- [ ] 53-02-PLAN.md — Per-chat artifact tabs, local PDF reader, collections and native/quality qualification (partial evidence in 53-02-SUMMARY.md)
+- [ ] 53-03-PLAN.md — Actual local authenticated workspace checks and owner-budgeted media comparison (partial)
+
+October23 continuation: [quality follow-up](phases/53-media-and-document-production/53-QUALITY-POLISH-2026-10-23.md) records free caption/audio/workspace repairs and their separate evidence. Phase53 remains0/3; no new paid request or hosted release is implied.
 
 ## Post-Beta Knowledge-Work Expansion (Phases 27-30)
 
@@ -1663,10 +1683,11 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 48. Readiness and qualification closure | 1/4 | In progress — inventory reconciled; original Phase 23 and Phase 27 qualification gates remain open | - |
-| 49. Shared managed-service boundary | 0/5 | Not started — sequential programme dependency | - |
+| 49. Shared managed-service boundary | 0/5 | In progress — attended runtime/UI built locally; acceptance open | - |
 | 50. Recurring read-and-prepare services | 0/4 | Not started — sequential programme dependency | - |
 | 51. Brain and service outcomes | 0/4 | Not started — sequential programme dependency | - |
 | 52. Social marketing service pilot | 0/3 | Not started — sequential programme dependency | - |
+| 53. Media and document production | 0/3 | Partial — owner-approved parallel offline implementation; qualification and release remain open | - |
 | 1. Foundation & Governance Substrate | 8/9 | Partial — open: 01-09 | - |
 | 2. Thin End-to-End Slice | 7/9 | Complete — spine live since 2026-07; 02-08, 02-09 superseded by Phase 3.1 (the cockpit replaced the UI slice) | 2026-07-11 |
 | 3. Guardrails | 5/5 | Complete (VERIFICATION present) | 2026-07-12 |
@@ -1758,6 +1779,18 @@ Plans:
 - [x] 25.1-06-PLAN.md — Hygiene: env manifest, dead fal removal, Sora-cutover ADR, DLQ listing (D12-D14) — done 2026-08-21, commits 483d0ed/e8dc04f/c21b0f9/f5a032e/2abbfc5/d1ae47e
 - [x] 25.1-07-PLAN.md — CHECKPOINT: owner-adjudicated live reel end-to-end — **PARTIAL PASS** 2026-08-21. The reel half is proven in PRODUCTION by data, not assertion: `renderStatus:"rendered"`, all TEN assembler gates incl. `full_decode` (the decoded-frame proof MEDIA-01 said was never obtained), and a `kind:"reel"` vault doc carrying `video/mp4` bytes, created 30.6 min AFTER the deploy. The other five checkpoint items (D5/D8 image vault, D9 approve feedback, D11 memo card, D13 DLQ page) were NOT exercised and are recorded as un-attested, not assumed — see 25.1-07-SUMMARY.md.
 
+## Source delivery progress, 2026-10-23
+
+Phase49 now includes native interruption reconciliation: only authoritative workflow completion and a clean settled ledger can close an uncertain run. It never retries or invents success. Phase50 has the pure closed policy and named disabled native construction under ADR063; historical defer and elapsed/live evidence remain open. Phase51 includes tenant-owned goal links, actual accepted Zernio snapshot history, user usefulness feedback and a cited source/freshness brain read. Phase52 includes run-bound Buffer draft lineage and a responsive outcome panel; cross-provider publication attribution is explicitly unverified without an authoritative mapping. New partial execution summaries preserve these distinctions and do not complete requirements or phases. PR85's9e81dc4 baseline passed full CI39948634205; current follow-up evidence belongs to its own source/PR. The qualification checkout and historical paid attempts remain unchanged.
+
+### 2026-10-23 integration continuation
+
+ADR066 replaces the blanket placeholder admission with the existing attended built-in social draft/report slice, using actual native registry/account/budget/control readiness. The ordinary loader's already-active global authority includes supported bootstrap/rollback versions; no new evaluation is required merely to wrap an unchanged live body. Candidate activation and all authored/pack/vertical gates remain unchanged. Exact one-global-cockpit scope, current pins and no overlay are still required. This is independent capability delivery rather than a Phase48 composite qualification stamp. Current-source CI, joined native public-start proof and authenticated release checks remain required before release. The recurring adapter remains disabled.
+
+The same continuation adds a field-level Business Ledger and shared standing context under ADR065, with exact native source/review binding, source-race refusal and legacy/withdrawn exclusion from assured context. Phases and requirements are not marked complete by these local source changes.
+### 2026-10-24 integrated social-service and conversation continuation
+
+ADR067 admits the named opt-in recurring social release candidate, with whole-run provider accounting, durable scheduled dispatch and pause/recovery fences. Draft editing/rejection/known-failure replacement and authoritative provider-permalink reporting links are implemented locally. The owner-approved ADR068 extension adds contextual business questions, exact reviewed Foundation statement confirmation and continuation through the same service executor. See [current execution and hosted acceptance](phases/50-recurring-read-and-prepare-services/50-EXECUTION-2026-10-24.md) and [the Phase51/52 conversation amendment](design/conversational-business-operations.md). Prior inert/absent-mapping descriptions refer to earlier source. These source changes do not complete current-source CI, actual hosted/provider cycles or phase requirements, and production remains unchanged.
 
 ### Phase 53: Agentic online presence — isolated selective recovery
 

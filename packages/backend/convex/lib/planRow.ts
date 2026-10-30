@@ -49,9 +49,10 @@ import { MAX_FAN_OUT } from "./dispatchShared";
  */
 export const ROOT_SCAN = 2 * (MAX_FAN_OUT + 1);
 
-/** A row with NO `parentPlanId` is a ROOT: its own artifact, its own approval card. A row WITH one
- *  is a fan-out child and is never the answer to "what is the plan for this thread". */
-export const isRoot = (p: Doc<"plans">): boolean => p.parentPlanId === undefined;
+/** A root owns its ordinary approval card. Campaign private items use their campaign approval
+ * instead, even though exact-plan review retains the original thread. */
+export const isRoot = (p: Doc<"plans">): boolean =>
+  p.parentPlanId === undefined && p.mediaCampaignId === undefined;
 
 /** Does this row hold composition work the USER would lose to a reset? The five slots a person
  *  actually fills; `candidates`/`pendingValid` are transient lookup state, not authored content.
@@ -83,7 +84,9 @@ export const hasDraftContent = (p: Doc<"plans">): boolean =>
 export const holdsWork = (p: Doc<"plans">): boolean => p.kind !== undefined || hasDraftContent(p);
 
 /**
- * The thread's newest roots, newest first, bounded by `ROOT_SCAN`. Callers that need to reason
+ * The thread's newest ordinary roots, newest first, bounded by `ROOT_SCAN`. The index excludes
+ * campaign children BEFORE the bound: repeated campaigns cannot hide an older normal root.
+ * Callers that need to reason
  * about CONCURRENCY (is any reel still rendering on this thread?) need the whole window, not just
  * the newest row — under ADR-037 a live root can sit behind a newer one.
  */
@@ -94,7 +97,9 @@ export async function threadRoots(
 ): Promise<Doc<"plans">[]> {
   const rows = await ctx.db
     .query("plans")
-    .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+    .withIndex("by_thread_campaign", (q) =>
+      q.eq("tenantId", tenantId).eq("threadId", threadId).eq("mediaCampaignId", undefined),
+    )
     .order("desc")
     .take(ROOT_SCAN);
   return rows.filter(isRoot);

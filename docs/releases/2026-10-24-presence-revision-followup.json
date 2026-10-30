@@ -59,21 +59,10 @@
   },
   "nativeLifecycle": {
     "privateReview": {
-      "versions": [
-        3,
-        4
-      ],
-      "pages": [
-        "home",
-        "about",
-        "services",
-        "contact"
-      ],
+      "versions": [3, 4],
+      "pages": ["home", "about", "services", "contact"],
       "observationsPerVersion": 8,
-      "modes": [
-        "desktop",
-        "phone"
-      ],
+      "modes": ["desktop", "phone"],
       "ownedHeroObserved": true
     },
     "version3": {
@@ -82,12 +71,7 @@
       "ownedAssetCount": 1,
       "authenticatedOwnerUiExactVersionApprovalObserved": true,
       "publicationObserved": true,
-      "publicRoutesObserved": [
-        "home",
-        "about",
-        "services",
-        "contact"
-      ]
+      "publicRoutesObserved": ["home", "about", "services", "contact"]
     },
     "consentedInquiry": {
       "uncheckedNativeRequiredAndValueMissingObserved": true,
@@ -108,10 +92,7 @@
       "contentHash": "4f2c377699e351281071f311805be802e9cde82f2c84e15b1832646318c4e556",
       "pageCount": 4,
       "ownedAssetCount": 1,
-      "changedDocumentPaths": [
-        "document.pages.0.nodes.0.heading",
-        "document.pages.0.title"
-      ],
+      "changedDocumentPaths": ["document.pages.0.nodes.0.heading", "document.pages.0.title"],
       "headlineAndDerivedHomeTitleOnly": true,
       "assetSnapshotsExactlyPreserved": true,
       "sourceRefsExactlyPreserved": true,

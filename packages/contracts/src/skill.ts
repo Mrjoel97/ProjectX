@@ -79,6 +79,7 @@ export const CONTENT_DRAFTER_SKILL = "content-drafter" as const;
  * row instead of an edit to `document-drafter` (that one IS gated).
  */
 export const SPREADSHEET_DRAFTER_SKILL = "spreadsheet-drafter" as const;
+export const PRESENTATION_DRAFTER_SKILL = "presentation-drafter" as const;
 
 /** The three shapes a drafted document can take. `createDocument` and `createVariants` share it. */
 export const DOCUMENT_FORMS = ["short", "long", "sheet"] as const;
@@ -195,6 +196,9 @@ export const RESEARCH_SPECIALIST_SKILL = "research-specialist" as const;
  * untrusted third-party content — only the tenant's own profile, blueprint and vault.
  */
 export const MEDIA_DIRECTOR_SKILL = "media-director" as const;
+
+/** Draft-only brand proposal; activation and Vault writes require human approval in code. */
+export const BRAND_KIT_DESIGNER_SKILL = "brand-kit-designer" as const;
 
 /** Registry name of the read-only connector-backed revenue specialist (Phase 28, REVN-04/05/06). */
 export const REVENUE_SPECIALIST_SKILL = "revenue-specialist" as const;
@@ -734,7 +738,7 @@ export function hasPassingTenantEvidence(
  */
 export const AGENT_EVAL_SUITE = {
   revision:
-    "2026-09-11.budgeted-evaluator.c50c4e02eee9534a6a27b08c3ae71661acfc80088a135208c70341c51a2b74f5",
+    "2026-09-11.budgeted-evaluator.9561962fda32fc5b74e39c398cbd9290e213a442f47a15c1e1e33f3138f90573",
   casesHash: "5dbe6fdbd447ab2a152ccf928d195ed404ca3bf431f5240397f6be3b627e55fd",
   caseCount: 46,
 } as const;

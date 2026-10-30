@@ -1,0 +1,69 @@
+{
+  "schema": "phase23-handoff-refresh-observation.v1",
+  "predecessorHandoffPath": ".planning/phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json",
+  "interruptedEvalObservationPath": ".planning/phases/23-agent-authored-skills/23-07-PARTIAL-2026-10-21.json",
+  "interruptedEvalObservationSha256": "64a1edc5b7843212673e119679da0eba1bc7993fe6343ce712fb821534399062",
+  "stagingReleaseObservationPath": ".planning/phases/48-readiness-and-qualification-closure/48-STAGING-PR81-RELEASE-2026-10-21.json",
+  "stagingReleaseObservationSha256": "499a08b00c0bf5e64927351782fb4bc1b982afcb0c6b629768850dadaba19f73",
+  "mergedSha": "821c3206e47eb4cec0ebcf3d99cf943358f2910a",
+  "refresh": {
+    "observedAt": "2026-10-21T15:09:37.814Z",
+    "path": ".planning/phases/23-agent-authored-skills/handoffs/2026-10-21-pr81/23-LIVE-HANDOFF.json",
+    "sha256": "39dfb14558a96cdbede3ca7d0641ee33ed09edaec0526510950528a19a48a930",
+    "predecessorHandoffSha256": "ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61",
+    "historicalHandoffsPreserved": [
+      {
+        "path": ".planning/phases/23-agent-authored-skills/23-LIVE-HANDOFF.json",
+        "sha256": "112ce2643ae15d4b2c39961b09506223bf0d6fe9978993dfe9536cee2dcbdc45"
+      },
+      {
+        "path": ".planning/phases/23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json",
+        "sha256": "ce31e352302bab168ba81bc564fbec90e76b2ab3eeafac402bbfa65792857d61"
+      }
+    ],
+    "sourceSha": "cafde7c6c7d65924b7a48433cf4938983d91707c",
+    "ciRunId": 39615369973,
+    "releaseRunId": 39618889468,
+    "releaseAuthorizationSha256": "03f5acec88477108003f5d452ac1f7e47627634f0180c5a97d4ad9696d3ef9da",
+    "exactCurrentStateMatch": true,
+    "matchingReads": 6,
+    "nativeAuthVerified": true,
+    "actualResponsiveViewports": [
+      {
+        "width": 1280,
+        "height": 720,
+        "surface": "direct native signed-in review"
+      },
+      {
+        "width": 390,
+        "height": 900,
+        "surface": "read-only embedded review"
+      }
+    ],
+    "keyboardWitnessScope": "direct native signed-in review only; embedded controls not exercised",
+    "authoringWitnessScope": "original source-thread authoring and refusal remain historical; no new agent turn",
+    "viewportWitnessScope": "measured browser dimensions; viewport override had no effect; no touch or physical-device claim",
+    "existingOwnerAtStart": true,
+    "privateNeedleScanPassed": true,
+    "paidReady": false,
+    "paidAuthorized": false,
+    "activationAuthorized": false,
+    "productionDeploymentAuthorized": false,
+    "privateSourceHashes": {
+      "staging-release-authorization-pr81.json": "03f5acec88477108003f5d452ac1f7e47627634f0180c5a97d4ad9696d3ef9da",
+      "release-observation-pr81.json": "6be10594d998065e4f42d57dae05be88a31a0fa36e1b2f431d32796c424e79ba",
+      "release-post-ui-readiness-pr81.json": "fd351594195ad4a1dd05354700f86868de93a697f42bc001159da69a717420be",
+      "release-native-identities-pr81.json": "1b904bc0bef9938b677663fc8c8b459be48c1bb01547c9fde2333db210d46964",
+      "release-native-review-pr81.json": "4115fc5ca1a9e33ab254e7fce86b3e4f6698af3e64f3fa158f92307212acff67",
+      "release-desktop-review-witness-pr81.json": "aab1187ac13253e4f7ff4c74fd4c1bd253e53bd3059b1b13733cba9f01cb805f",
+      "release-mobile-review-witness-pr81.json": "dfabd1402977ac7523744fd067c456cedb94d3e817fdc5cf44c8b1a8465b0ceb"
+    }
+  },
+  "sourceVariancePreserved": "Historical owner-ratified cockpit baseline remains unchanged; no registry repair or source-body alignment was performed.",
+  "fixturesRemainSynthetic": true,
+  "currentPaidEvaluationRecorded": false,
+  "currentPublicNonOwnerMutationAttempted": false,
+  "noTouchOrPhysicalDeviceTestingClaim": true,
+  "localReviewConfiguration": "One temporary exact loopback development-origin allowlist was restored after native browser witnesses; source configuration matches the reviewed commit.",
+  "authorizationProvenance": "Exact user answer i approve and preceding PR81 exact-source staging scope are retained. The local approval record reconstructs the question wording from the session handoff rather than an independent verbatim transcript."
+}

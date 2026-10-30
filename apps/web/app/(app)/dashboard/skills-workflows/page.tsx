@@ -25,7 +25,8 @@ export default function SkillsAndWorkflowsPage() {
 
 function SkillsAndWorkflowsLibrary() {
   const router = useRouter();
-  const [section, setSection] = useState<"workflows" | "skills">("workflows");
+  const tabs = ["workflows", "skills"] as const;
+  const [section, setSection] = useState<(typeof tabs)[number]>("workflows");
   const [sending, setSending] = useState(false);
   const openThread = (threadId: string, label: string) => {
     router.push(
@@ -146,8 +147,7 @@ function SkillsAndWorkflowsLibrary() {
         </p>
         <h1 style={{ margin: "0.25rem 0", color: "var(--ink)" }}>Skills and Workflows</h1>
         <p style={{ margin: 0, color: "var(--ink-soft)" }}>
-          Choose a guided workflow or review the skills you and Pikar have drafted for your
-          business.
+          Start a guided workflow or review your business skills.
         </p>
       </header>
       <section
@@ -186,7 +186,7 @@ function SkillsAndWorkflowsLibrary() {
         aria-label="Skills and workflows"
         style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
       >
-        {(["workflows", "skills"] as const).map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab}
             id={`${tab}-tab`}
@@ -199,13 +199,14 @@ function SkillsAndWorkflowsLibrary() {
               if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
               event.preventDefault();
               const next =
-                event.key === "Home"
-                  ? "workflows"
-                  : event.key === "End"
-                    ? "skills"
-                    : tab === "skills"
-                      ? "workflows"
-                      : "skills";
+                tabs[
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? tabs.length - 1
+                      : (tabs.indexOf(tab) + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) %
+                        tabs.length
+                ] ?? "workflows";
               setSection(next);
               event.currentTarget.parentElement
                 ?.querySelector<HTMLButtonElement>(`#${next}-tab`)

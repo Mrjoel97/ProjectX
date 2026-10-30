@@ -68,7 +68,8 @@
 #     a deck simply using more silent scenes.
 #   * LEVEL LAW: voice is always 1.0; the clips' own diegetic SFX sit under it at 0.12
 #     (--sfx-vol, hard-clamped ≤ 0.20); the music bed is pinned at MUSIC_TP (below, NOT settable
-#     by the caller); final two-pass LINEAR loudnorm at -16 LUFS.
+#     by the caller); final loudnorm targets -16 LUFS, preferring linear gain when feasible.
+#     The sidecar reports the actual normalization mode and final 48 kHz audio rate.
 #   * An assembly.json SIDECAR is written last. A final video without one was hand-assembled.
 #
 # ── THE MUSIC BED (--music SLUG) ──────────────────────────────────────────────────────────────
@@ -162,8 +163,9 @@
 # Requires: ffmpeg, ffprobe, awk. A `card` scene additionally needs a TrueType font in the image.
 set -euo pipefail
 
-IN_DIR="in"; OUT="out/final.mp4"; CLIP=10; SFXVOL="0.12"; BLOCKS=""; TARGET=""
+IN_DIR="in"; OUT="out/final.mp4"; CLIP=10; SFXVOL="0.12"; BLOCKS=""; TARGET=""; NATIVE_AUDIO=0
 KINDS=(); SECS=()
+FINISH=(); TRANSITIONS=(); OVERLAYS=(); OVERLAY_START=(); OVERLAY_END=(); GRAPHICS=()
 MUSIC=""            # the requested mood slug, "" for a reel with no bed
 MUSIC_FILE=""       # 33.1-06: a track already in in/ (fetched from a public library); beats the library lookup
 MUSIC_USED="none"   # what actually made it into the mix — the sidecar reports THIS, not the ask
@@ -191,6 +193,8 @@ while [[ $# -gt 0 ]]; do
     # The DECLARED reel length, off the deck header. Asserted twice: the scenes must sum to it
     # before any work, and the finished file must land within 0.5s of it.
     --target-seconds) TARGET="$2"; shift 2 ;;
+    --native-audio) NATIVE_AUDIO=1; shift ;;
+    --finish) FINISH+=("$2"); shift 2 ;;
     # KIND:SECONDS, one per scene, IN ORDER. Order is the reel's order and the index, which is the
     # same rule the deck parser follows — the display `#` column is never read as a position.
     --scene)
@@ -211,6 +215,11 @@ while [[ $# -gt 0 ]]; do
     *) echo "ERROR: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+
+# The native soundtrack is the approved audio source, never an SFX bed under a second narrator.
+if [[ "$NATIVE_AUDIO" == 1 ]]; then
+  [[ -z "$MUSIC" && -z "$MUSIC_FILE" ]] || { echo "ERROR: native audio cannot add a music bed." >&2; exit 1; }
+fi
 
 # ONE of the two shapes, never both — a run that says both is a caller that does not know which
 # contract it is on, and guessing would pick a length nobody priced.
@@ -235,6 +244,16 @@ SCENES=${#KINDS[@]}
 for ((i=0;i<SCENES;i++)); do
   case "${KINDS[i]}" in video|image|card) ;; *) echo "ERROR: unknown scene kind: ${KINDS[i]} (want video, image or card)" >&2; exit 2 ;; esac
   awk -v s="${SECS[i]}" 'BEGIN{exit (s+0>=1 && s+0==int(s+0))?0:1}' || { echo "ERROR: scene $((i+1)) length must be a positive whole number of seconds, got: ${SECS[i]}" >&2; exit 1; }
+done
+
+# Finishing cues never retime clips or overlap native speech.
+for cue in "${FINISH[@]}"; do
+  [[ "$NATIVE_AUDIO" == 1 && "$cue" =~ ^[0-9]+:(cut|fade):[01]:[0-9]+:[0-9]+(:[01])?$ ]] || { echo "ERROR: invalid native finishing cue" >&2; exit 2; }
+  IFS=: read -r idx transition overlay os oe graphic <<< "$cue"
+  idx=$((10#$idx)); os=$((10#$os)); oe=$((10#$oe))
+  [[ "$idx" -lt "$SCENES" && -z "${TRANSITIONS[idx]:-}" && "$os" -lt "$oe" && "$oe" -le $((${SECS[idx]} * 1000)) && $((oe-os)) -ge 500 ]] || { echo "ERROR: finishing timing/index invalid" >&2; exit 2; }
+  TRANSITIONS[idx]="$transition"; OVERLAYS[idx]="$overlay"; OVERLAY_START[idx]="$os"; OVERLAY_END[idx]="$oe"
+  GRAPHICS[idx]="${graphic:-0}"
 done
 
 # LEVEL LAW: voice is ALWAYS 1.0; SFX is clamped at 0.20 so no caller can bury the narration.
@@ -263,7 +282,7 @@ PBJSON=()   # per-scene sidecar entries
 # base images — and a card whose text failed to draw is a black rectangle the render still calls
 # a success. Probe, then hard-error naming the fix.
 FONT=""
-if printf '%s\n' "${KINDS[@]}" | grep -qx card; then
+if [[ ${#FINISH[@]} -gt 0 ]] || printf '%s\n' "${KINDS[@]}" | grep -qx card; then
   # The libass precedent from `burn_caps.sh`: REFUSE a build that cannot draw rather than produce
   # a black rectangle with exit 0. drawtext is a --enable-libfreetype filter and is absent from
   # minimal builds.
@@ -286,21 +305,10 @@ if printf '%s\n' "${KINDS[@]}" | grep -qx card; then
   [[ -n "$FONT" ]] || { echo "ERROR: a 'card' scene needs a TrueType font and none was found — install dejavu-sans-fonts in the image or set ASSEMBLE_FONT." >&2; exit 1; }
 fi
 
-# GEOMETRY comes from the first VIDEO scene, because that is the only kind whose size we do not
-# choose. A deck of stills and cards has no such reference, so it takes the portrait tier the
-# price table pins. Named here rather than passed as a flag: a caller that could set it could set
-# a size nobody priced the encode time for.
+# The priced portrait export profile is code-owned. Inheriting the first stock/uploaded clip
+# made one landscape or low-resolution source change every scene's canvas and frame rate.
+# Native source detail still limits quality; a fixed container cannot invent missing detail.
 W=720; H=1280; FPS=30
-for ((i=0;i<SCENES;i++)); do
-  [[ "${KINDS[i]}" == "video" ]] || continue
-  c0="$IN_DIR/$(printf 'block%02d.mp4' $((i+1)))"
-  [[ -f "$c0" ]] || { echo "ERROR: clip not found: $c0" >&2; exit 1; }
-  DIMS="$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$c0")"
-  W="${DIMS%%,*}"; H="${DIMS##*,}"
-  FPS_RAW="$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of csv=p=0 "$c0")"
-  FPS="$(awk -F/ '{ if(NF==2 && $2>0) printf "%.4f",$1/$2; else print $1 }' <<< "$FPS_RAW")"; [ -z "$FPS" ] && FPS=30
-  break
-done
 
 TOT=0; for ((i=0;i<SCENES;i++)); do TOT=$((TOT + ${SECS[i]})); done
 
@@ -370,10 +378,43 @@ START=0
 for ((i=0;i<SCENES;i++)); do
   n=$((i+1)); SEC="${SECS[i]}"; KIND="${KINDS[i]}"
   voice="$IN_DIR/$(printf 'voice%02d.wav' "$n")"
+  if [[ "$NATIVE_AUDIO" == 1 ]]; then
+    [[ "$KIND" == video && ! -f "$voice" ]] || { echo "ERROR: native audio requires videos without separate voice takes." >&2; exit 1; }
+  fi
   # NORMALISE THE PICTURE FIRST, to exactly SEC seconds at W×H@FPS. Every kind lands in the same
   # shape, so the audio placement below does not care which kind it came from.
   pic="$TMP/p_$(printf '%03d' "$i").mp4"
   NORM="fps=${FPS},format=yuv420p,setsar=1"
+  # Fade through the background without changing timeline length or audio offsets.
+  if [[ "$i" -gt 0 && "${TRANSITIONS[i-1]:-cut}" == fade ]]; then
+    NORM="${NORM},fade=t=in:st=0:d=0.2:color=${CARD_BG}"
+  fi
+  if [[ "${TRANSITIONS[i]:-cut}" == fade && "$i" -lt $((SCENES-1)) ]]; then
+    fend="$(awk -v s="$SEC" 'BEGIN{printf "%.3f",s-0.2}')"
+    NORM="${NORM},fade=t=out:st=${fend}:d=0.2:color=${CARD_BG}"
+  fi
+  if [[ "${GRAPHICS[i]:-0}" == 1 ]]; then
+    graphic="$IN_DIR/$(printf 'motion%02d.ass' "$n")"
+    [[ -s "$graphic" && $(wc -c < "$graphic") -le 5242880 ]] || { echo "ERROR: motion graphic missing or oversized" >&2; exit 2; }
+    NORM="${NORM},ass='${graphic}'"
+  fi
+  if [[ "${OVERLAYS[i]:-0}" == 1 ]]; then
+    txt="$IN_DIR/$(printf 'overlay%02d.txt' "$n")"
+    [[ -s "$txt" && $(wc -c < "$txt") -le 320 && $(wc -w < "$txt") -le 12 ]] || { echo "ERROR: overlay text missing or oversized" >&2; exit 2; }
+    wrapped="$IN_DIR/$(printf 'overlay%02d' "$n").wrapped.txt"
+    awk '{ for(j=1;j<=NF;j++) { if(length(line)+length($j)+1>25 && line!="") {print line; line=""}; line=line (line==""?"":" ") $j } } END { if(line!="") print line }' "$txt" > "$wrapped"
+    os="$(awk -v t="${OVERLAY_START[i]}" 'BEGIN{printf "%.3f",t/1000}')"
+    oe="$(awk -v t="${OVERLAY_END[i]}" 'BEGIN{printf "%.3f",t/1000}')"
+    k=0
+    while IFS= read -r ln || [[ -n "$ln" ]]; do
+      lf="$IN_DIR/$(printf 'overlay%02d' "$n").l$k.txt"
+      printf '%s' "$ln" > "$lf"
+      # Fixed profile: 400ms cubic ease-out rise, 120ms text fade at either edge, then a
+      # still readable hold. Expressions contain only validated numeric timing, never copy.
+      NORM="${NORM},drawtext=fontfile='${FONT}':textfile='${lf}':expansion=none:fontcolor=white:fontsize=$((H/27)):box=1:boxcolor=black@0.65:boxborderw=12:x=(w-text_w)/2:y='h*0.16+${k}*$((H/22))+h*0.025*pow(1-min(1,max(0,(t-${os})/0.4)),3)':alpha='max(0,min(1,min((t-${os})/0.12,(${oe}-t)/0.12)))':enable='gte(t,${os})*lt(t,${oe})'"
+      k=$((k+1))
+    done < "$wrapped"
+  fi
   case "$KIND" in
     video)
       clip="$IN_DIR/$(printf 'block%02d.mp4' "$n")"
@@ -387,8 +428,8 @@ for ((i=0;i<SCENES;i++)); do
       FRZT="$(ffmpeg -v info -sseof -2 -i "$clip" -vf "freezedetect=n=-60dB:d=1.2" -an -f null - 2>&1 | grep -c freeze_start || true)"
       [[ "$FRZT" != "0" ]] && echo "WARN: clip $n ends on ~static frames (frozen tail) — consider regenerating." >&2
       ffmpeg -y -loglevel error -i "$clip" \
-        -vf "scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,${NORM},tpad=stop_mode=clone:stop_duration=${SEC}" \
-        -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 "$pic"
+        -vf "scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,${NORM},tpad=stop_mode=clone:stop_duration=${SEC}" \
+        -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 -video_track_timescale 15360 "$pic"
       ;;
     image)
       still=""
@@ -405,8 +446,8 @@ for ((i=0;i<SCENES;i++)); do
       # the push does not reset to 1.0 every frame. Pinning zoompan's own fps keeps that state
       # advance deterministic instead of inheriting the filter's 25fps default.
       ffmpeg -y -loglevel error -loop 1 -framerate "$FPS" -t "$SEC" -i "$still" \
-        -vf "scale=${W}*4:${H}*4:force_original_aspect_ratio=increase,crop=${W}*4:${H}*4,zoompan=z='min(pzoom+0.0012,1.20)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${W}x${H}:fps=${FPS},${NORM}" \
-        -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 "$pic"
+        -vf "scale=${W}*4:${H}*4:force_original_aspect_ratio=increase:flags=lanczos,crop=${W}*4:${H}*4,zoompan=z='min(pzoom+0.0012,1.20)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${W}x${H}:fps=${FPS},${NORM}" \
+        -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 -video_track_timescale 15360 "$pic"
       ;;
     card)
       txt="$IN_DIR/$(printf 'card%02d.txt' "$n")"
@@ -452,7 +493,7 @@ for ((i=0;i<SCENES;i++)); do
       done < "$wrapped"
       ffmpeg -y -loglevel error -f lavfi -t "$SEC" -i "color=c=${CARD_BG}:s=${W}x${H}:r=${FPS}" \
         -vf "${DT}fade=t=in:st=0:d=${CFADE},${NORM}" \
-        -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 "$pic"
+        -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 -video_track_timescale 15360 "$pic"
       ;;
   esac
 
@@ -473,7 +514,15 @@ for ((i=0;i<SCENES;i++)); do
       dieg="$TMP/d_$(printf '%03d' "$i").wav"
       if ffmpeg -y -loglevel error -i "$src" -vn -t "$SEC" -ar 48000 -ac 2 "$dieg" 2>/dev/null; then
         DIEG_FILE+=("$dieg"); DIEG_PAD+=($((START * 1000)))
+        if [[ "$NATIVE_AUDIO" == 1 ]]; then
+          NATIVE_DUR="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$dieg")"
+          awk -v d="$NATIVE_DUR" -v s="$SEC" 'BEGIN{exit (d>=s-0.05)?0:1}' || { echo "ERROR: native audio does not cover its scene." >&2; exit 1; }
+        fi
+      elif [[ "$NATIVE_AUDIO" == 1 ]]; then
+        echo "ERROR: native audio could not decode." >&2; exit 1
       fi
+    elif [[ "$NATIVE_AUDIO" == 1 ]]; then
+      echo "ERROR: native video has no audio stream." >&2; exit 1
     fi
   fi
 
@@ -611,7 +660,9 @@ done
 
 VOSIL="$TMP/silent.mp4"
 echo "[2/4] concat -> single silent picture track" >&2
-ffmpeg -y -loglevel error -f concat -safe 0 -i "$LIST" -an -c:v libx264 -preset veryfast -crf 20 "$VOSIL"
+# Every scene has already been encoded to the same H.264/pixel-format/profile, dimensions,
+# frame rate and MP4 track timescale. Copy that normalized stream: another encode loses detail.
+ffmpeg -y -loglevel error -f concat -safe 0 -i "$LIST" -an -c:v copy "$VOSIL"
 
 # ── THE SINGLE MIX ────────────────────────────────────────────────────────────────────────────
 # Input 0 is the picture. Input 1 is a silence bed spanning the WHOLE reel — it costs nothing at
@@ -628,9 +679,11 @@ for ((k=0;k<NTAKE;k++)); do
   LBLS="${LBLS}[t${k}]"; NMIX=$((NMIX+1)); IDX=$((IDX+1))
 done
 NDIEG=${#DIEG_FILE[@]}
+DIEG_GAIN="$SFXVOL"
+[[ "$NATIVE_AUDIO" == 1 ]] && DIEG_GAIN=1
 for ((k=0;k<NDIEG;k++)); do
   MIXARGS+=(-i "${DIEG_FILE[k]}")
-  FC="${FC}[${IDX}:a]${AFMT},volume=${SFXVOL},adelay=${DIEG_PAD[k]}:all=1[s${k}];"
+  FC="${FC}[${IDX}:a]${AFMT},volume=${DIEG_GAIN},adelay=${DIEG_PAD[k]}:all=1[s${k}];"
   LBLS="${LBLS}[s${k}]"; NMIX=$((NMIX+1)); IDX=$((IDX+1))
 done
 # THE MUSIC BED, into the SAME single amix — not a second mix, not a second pass over the output.
@@ -683,21 +736,53 @@ if [[ "$NTAKE" -gt 0 ]]; then
 fi
 
 echo "[4/4] finalize -> $OUT" >&2
-# Two-pass LINEAR loudnorm: ONE constant gain for the whole file, so the voice/SFX ratio set above
-# is PRESERVED. Single-pass dynamic loudnorm pumps quiet SFX-only stretches up toward the voice.
+# Prefer two-pass LINEAR gain to preserve the voice/SFX ratio. FFmpeg can still select dynamic
+# normalization when peak/range constraints prevent linear gain, even with linear=true. Read its
+# actual second-pass statistics rather than claiming the requested mode ran. Dynamic loudnorm
+# upsamples internally; pin the encoded AAC rate so that cannot select a different delivery rate.
 ln2_args() {
   ffmpeg -hide_banner -i "$1" -af "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json" -f null - 2>&1 \
   | awk '/"input_i"/{i=$3}/"input_tp"/{t=$3}/"input_lra"/{l=$3}/"input_thresh"/{h=$3}/"target_offset"/{o=$3}
          {gsub(/[",]/,"",i);gsub(/[",]/,"",t);gsub(/[",]/,"",l);gsub(/[",]/,"",h);gsub(/[",]/,"",o)}
          END{printf "measured_I=%s:measured_TP=%s:measured_LRA=%s:measured_thresh=%s:offset=%s", i,t,l,h,o}'
 }
-LNARGS="$(ln2_args "$VOTRACK")"
-if [[ "$LNARGS" == *measured_I=-* ]]; then
-  ffmpeg -y -loglevel error -i "$VOTRACK" -af "loudnorm=I=-16:TP=-1.5:LRA=11:${LNARGS}:linear=true" -c:v copy -c:a aac -b:a 192k "$OUT"
+NORMALIZATION_MODE="none"
+NORMALIZATION_GATE="silent_audio_no_normalization"
+if [[ "$NTAKE" -eq 0 && "$NDIEG" -eq 0 && -z "$MUSICWAV" ]]; then
+  # Deliberate silence has no loudness to normalize. Keep its full-length track, without
+  # inventing a linear/dynamic mode from nonfinite loudness measurements.
+  ffmpeg -y -loglevel error -i "$VOTRACK" -c:v copy -c:a aac -b:a 192k -ar 48000 "$OUT"
 else
-  echo "WARN: loudness measurement failed — falling back to single-pass loudnorm." >&2
-  ffmpeg -y -loglevel error -i "$VOTRACK" -af "loudnorm=I=-16:TP=-1.5:LRA=11" -c:v copy -c:a aac -b:a 192k "$OUT"
+  LNARGS="$(ln2_args "$VOTRACK")" || LNARGS=""
+  if [[ "$LNARGS" == *measured_I=-* && "$LNARGS" != *inf* && "$LNARGS" != *nan* ]]; then
+    LN_FILTER="loudnorm=I=-16:TP=-1.5:LRA=11:${LNARGS}:linear=true"
+  else
+    echo "WARN: loudness measurement failed — falling back to single-pass loudnorm." >&2
+    LN_FILTER="loudnorm=I=-16:TP=-1.5:LRA=11"
+  fi
+  LN_STATS="$TMP/final-loudnorm.log"
+  # Dynamic loudnorm can emit an end-buffer PTS jump despite unchanged samples. Count the
+  # consumed samples to stamp a continuous audio clock; do not insert/drop/stretch any sample.
+  if ! ffmpeg -y -hide_banner -nostats -loglevel info -i "$VOTRACK" \
+    -af "${LN_FILTER}:print_format=json,asetpts=N/SR/TB" -c:v copy -c:a aac -b:a 192k -ar 48000 "$OUT" 2>"$LN_STATS"; then
+    cat "$LN_STATS" >&2; exit 1
+  fi
+  # Input/container metadata also reaches stderr. Only the filter's own terminal JSON object
+  # can certify its mode; require exactly one object/verdict, never a matching metadata line.
+  NORMALIZATION_MODE="$(awk '
+    /^\[Parsed_loudnorm_[0-9]+ @ [^]]+\][[:space:]]*$/ { tag=1; next }
+    tag && /^[[:space:]]*\{[[:space:]]*$/ { active=1; tag=0; next }
+    active && /"normalization_type"/ { mode=$3; gsub(/[",]/,"",mode); verdicts++ }
+    active && /^[[:space:]]*\}/ { objects++; active=0 }
+    !active { tag=0 }
+    END { if(objects==1 && verdicts==1) print mode }' "$LN_STATS")"
+  case "$NORMALIZATION_MODE" in
+    linear|dynamic) NORMALIZATION_GATE="${NORMALIZATION_MODE}_loudnorm_-16" ;;
+    *) echo "ERROR: final loudness statistics missing or invalid — do NOT deliver." >&2; exit 1 ;;
+  esac
 fi
+AUDIO_RATE="$(ffprobe -v error -select_streams a:0 -show_entries stream=sample_rate -of csv=p=0 "$OUT" | head -1)"
+[[ "$AUDIO_RATE" == "48000" ]] || { echo "ERROR: final audio rate is not 48000 Hz — do NOT deliver." >&2; exit 1; }
 
 # The fixed-length guarantee, asserted on the OUTPUT against the DECLARED TARGET: 0.5s, not 1s.
 # The old tolerance was sized for clips whose length was whatever the provider returned. Every
@@ -716,6 +801,12 @@ awk -v a="$ADUR" -v d="$FDUR" 'BEGIN{x=a-d; if(x<0)x=-x; exit (x<=1.5)?0:1}' || 
 DERR="$( (ffmpeg -v error -xerror -i "$OUT" -f null - ) 2>&1 | head -3 || true)"
 [[ -n "$DERR" ]] && { echo "ERROR: final failed decode validation — corrupted stream; do NOT deliver:" >&2; echo "$DERR" >&2; exit 1; }
 
+# Reuse this assembly sandbox for the one native STT source. It is decoded from the exact final,
+# begins at timeline zero and contains the entire soundtrack; MP4 bytes are never called WAV.
+if [[ "$NATIVE_AUDIO" == 1 ]]; then
+  ffmpeg -y -loglevel error -i "$OUT" -vn -t "$TOT" -ar 24000 -ac 1 -c:a pcm_s16le "${OUT}.native.wav"
+fi
+
 # The assembly sidecar: machine-readable proof this final went through this script, gates included.
 # A final video without one was hand-assembled. `packages/core/src/assembly.ts` is the validator and
 # the source of truth for these field names; a render whose sidecar fails it is NOT published.
@@ -726,13 +817,19 @@ DERR="$( (ffmpeg -v error -xerror -i "$OUT" -f null - ) 2>&1 | head -3 || true)"
 # a sidecar that still has either field, by name — so a stale runner fails loudly instead of
 # publishing a reel whose sidecar means something different from what the validator reads.
 SIDE="${OUT}.assembly.json"
+if [[ "$NATIVE_AUDIO" == 1 ]]; then
+  AUDIO_GATES='"native_audio_at_scene_start","native_audio_covers_window"'
+else
+  AUDIO_GATES='"speech_fits_the_reel","no_overlapping_lines","speech_centred","narration_every_narrated_span"'
+fi
 {
   # `music` is the mood that ACTUALLY reached the mix, never the one that was asked for — a reel
   # whose bed was missing from the snapshot says "none" here, which is the whole reason the
   # degrade path is not silent. No new entry in `gates`: the bed is not separately asserted, and
   # claiming a gate this script does not run is the one thing a proof plane must never do.
-  printf '{"script":"assemble_final.sh","out":"%s","scene_count":%d,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"music":"%s","card_bg":"%s","gates":["speech_fits_the_reel","no_overlapping_lines","clip_covers_window","speech_centred","no_time_stretch","narration_every_narrated_span","master_audio_timeline","linear_loudnorm_-16","duration_within_0.5s","full_decode"],"scenes":[' \
-    "$(basename "$OUT")" "$SCENES" "$TARGET" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$SFXVOL" "$MUSIC_USED" "$CARD_BG"
+  printf '{"finishing_version":2,"finishing_cue_count":%d,' "${#FINISH[@]}"
+  printf '"script":"assemble_final.sh","out":"%s","scene_count":%d,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"music":"%s","card_bg":"%s","audio_sample_rate_hz":%s,"normalization_mode":"%s","native_audio":%s,"gates":["clip_covers_window",%s,"no_time_stretch","master_audio_timeline","%s","duration_within_0.5s","full_decode"],"scenes":[' \
+    "$(basename "$OUT")" "$SCENES" "$TARGET" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$DIEG_GAIN" "$MUSIC_USED" "$CARD_BG" "$AUDIO_RATE" "$NORMALIZATION_MODE" "$([[ "$NATIVE_AUDIO" == 1 ]] && echo true || echo false)" "$AUDIO_GATES" "$NORMALIZATION_GATE"
   for ((i=0;i<SCENES;i++)); do printf '%s%s' "${PBJSON[i]}" "$([[ $i -lt $((SCENES-1)) ]] && echo ,)"; done
   printf '],"ts":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$SIDE"

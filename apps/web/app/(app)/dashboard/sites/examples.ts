@@ -1,5 +1,5 @@
-import { hasUnsafeWebMarkup, WEB_CAROUSEL_SCRIPT_POLICY } from "@pikar/core/webCarouselRuntime";
 import type { WebDocument } from "@pikar/contracts/webRuntime";
+import { hasUnsafeWebMarkup, WEB_CAROUSEL_SCRIPT_POLICY } from "@pikar/core/webCarouselRuntime";
 import { renderDesignedWebDocument } from "@pikar/core/webDesignRenderer";
 import { materializeWebRecipeWithProvenance } from "@pikar/core/webRecipes";
 import provenance from "../../../../public/presence-examples/provenance.json";

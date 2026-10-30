@@ -1,88 +1,193 @@
-import { WEB_CAROUSEL_SCRIPT } from "@pikar/core/webCarouselRuntime";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import {
+  assessWebBrowserQuality,
+  inspectRenderedPage,
+  type WebBrowserPageReport,
+} from "@pikar/core/webBrowserQuality";
+import { WEB_CAROUSEL_SCRIPT } from "@pikar/core/webCarouselRuntime";
 import { renderDesignedWebDocument } from "@pikar/core/webDesignRenderer";
 import { materializeWebRecipeWithProvenance } from "@pikar/core/webRecipes";
 import { expect, test } from "@playwright/test";
-import { assessWebBrowserQuality, inspectRenderedPage, type WebBrowserPageReport } from "@pikar/core/webBrowserQuality";
 
-test("reduced-motion gallery arrows move instantly despite the global motion reset", async ({ page }) => {
+test("reduced-motion gallery arrows move instantly despite the global motion reset", async ({
+  page,
+}) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 390, height: 900 });
   const result = materializeWebRecipeWithProvenance("campaign-landing", {
-    brandName: "Gallery fixture", headline: "Three image studies", formConsent: "Fixture only.",
-    media: { gallery: [1, 2, 3].map(index => ({ storageRef: `webasset:fixture:${"a".repeat(64)}`, alt: `Study ${index}` })) },
+    brandName: "Gallery fixture",
+    headline: "Three image studies",
+    formConsent: "Fixture only.",
+    media: {
+      gallery: [1, 2, 3].map((index) => ({
+        storageRef: `webasset:fixture:${"a".repeat(64)}`,
+        alt: `Study ${index}`,
+      })),
+    },
     design: { variance: 5, density: 5, motion: 6 },
   });
-  await page.setContent(renderDesignedWebDocument(result.document, result.designProfile, { slug: "fixture", page: "campaign" }));
+  await page.setContent(
+    renderDesignedWebDocument(result.document, result.designProfile, {
+      slug: "fixture",
+      page: "campaign",
+    }),
+  );
   await expect(page.locator(".gallery-carousel")).toHaveClass(/is-ready/);
   const track = page.locator(".gallery-track");
-  const position = () => track.evaluate(element => getComputedStyle(element).transform);
+  const position = () => track.evaluate((element) => getComputedStyle(element).transform);
   const initial = await position();
   await page.getByRole("button", { name: "Next image" }).click();
   await expect.poll(position).not.toBe(initial);
-  expect(await track.evaluate(element => getComputedStyle(element).transitionDuration)).toBe("0s");
+  expect(await track.evaluate((element) => getComputedStyle(element).transitionDuration)).toBe(
+    "0s",
+  );
   await page.getByRole("button", { name: "Previous image" }).click();
   await expect.poll(position).toBe(initial);
 });
 
 // Fictional business briefs for presentation checks, never customer facts or live qualification.
-test("split hero keeps dark text on light paper and editorial sections do not create phantom rows", async ({ page }) => {
+test("split hero keeps dark text on light paper and editorial sections do not create phantom rows", async ({
+  page,
+}) => {
   test.setTimeout(60000);
   const image = readFileSync(new URL("../public/presence-examples/studio.webp", import.meta.url));
   const imageHash = createHash("sha256").update(image).digest("hex");
   const result = materializeWebRecipeWithProvenance("business-site", {
     ...contact,
-    brandName: "Studio fixture", headline: "Thoughtful identities for independent businesses",
-    summary: "Brand and website design.", about: "A small independent design studio.",
-    services: ["Brand identity", "Website design"], artDirection: "studio",
+    brandName: "Studio fixture",
+    headline: "Thoughtful identities for independent businesses",
+    summary: "Brand and website design.",
+    about: "A small independent design studio.",
+    services: ["Brand identity", "Website design"],
+    artDirection: "studio",
     media: { hero: { storageRef: `webasset:fixture:${imageHash}`, alt: "Studio material study" } },
   });
-  const profile = { ...result.designProfile, layoutPlan: {
-    version: 2, hero: "split", sectionLayout: "editorial-columns", services: "columns", gallery: "grid", spacing: "compact", headingScale: "balanced", motion: "subtle",
-    designTokens: { colors: { paper: "#F6FBF5", card: "#F0F5F0", ink: "#181D1A", muted: "#414846", accent: "#32534A", rule: "#C1C8C4" }, typography: { heading: "editorial-serif", body: "humanist-sans" }, spacing: { contentWidth: 1280, copyMeasure: 62, heroMinHeight: 560, sectionGap: 64 }, footer: "light" },
-  } as const };
+  const profile = {
+    ...result.designProfile,
+    layoutPlan: {
+      version: 2,
+      hero: "split",
+      sectionLayout: "editorial-columns",
+      services: "columns",
+      gallery: "grid",
+      spacing: "compact",
+      headingScale: "balanced",
+      motion: "subtle",
+      designTokens: {
+        colors: {
+          paper: "#F6FBF5",
+          card: "#F0F5F0",
+          ink: "#181D1A",
+          muted: "#414846",
+          accent: "#32534A",
+          rule: "#C1C8C4",
+        },
+        typography: { heading: "editorial-serif", body: "humanist-sans" },
+        spacing: { contentWidth: 1280, copyMeasure: 62, heroMinHeight: 560, sectionGap: 64 },
+        footer: "light",
+      },
+    } as const,
+  };
   const reports: WebBrowserPageReport[] = [];
-  for (const { width, reduced } of [{ width: 1440, reduced: false }, { width: 390, reduced: false }, { width: 390, reduced: true }]) {
-   for (const saved of result.document.pages) {
-    await page.setViewportSize({ width, height: 1000 });
-    await page.emulateMedia({ reducedMotion: reduced ? "reduce" : "no-preference" });
-    const html = renderDesignedWebDocument(result.document, profile, { slug: "design-fixture", page: saved.slug });
-    await page.unrouteAll();
-    await page.route("**/*", route => new URL(route.request().url()).pathname.endsWith(imageHash)
-      ? route.fulfill({ contentType: "image/webp", body: image })
-      : route.fulfill({ contentType: "text/html", body: html }));
-    await page.goto(`https://presence-review.invalid/p/design-fixture/${saved.slug}`);
-    await page.waitForFunction(() => Array.from(document.images).every(image => image.complete));
-    await page.waitForTimeout(1300);
-    reports.push(await page.evaluate(inspectRenderedPage));
-    expect(await page.locator("h1").evaluate(el => getComputedStyle(el).color)).toBe("rgb(24, 29, 26)");
-    expect(await page.locator("body").evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgb(246, 251, 245)");
-    expect(await page.locator(".hero-composition").evaluate(el => getComputedStyle(el).minHeight)).toBe("0px");
-    if (saved.slug === "home") expect(await page.locator("#about").evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(280);
-    expect(await page.locator(".footer-brand").evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeLessThanOrEqual(36);
-    if (saved.slug === "home") {
-      expect(await page.locator("body").getAttribute("data-inner-page")).toBeNull();
-    } else {
-      expect(await page.locator(".site-footer").evaluate(el => getComputedStyle(el).borderTopWidth)).toBe("1px");
-      if (saved.slug === "about") expect(await page.locator(".node-text").evaluate(el => parseFloat(getComputedStyle(el).paddingTop))).toBeGreaterThanOrEqual(24);
-      if (saved.slug === "services") {
-        await expect(page.locator(".hero-rail #services")).toHaveCount(0);
-        for (const item of await page.locator("#services>p").all()) expect(await item.evaluate(el => parseFloat(getComputedStyle(el).paddingTop))).toBeGreaterThanOrEqual(24);
+  for (const { width, reduced } of [
+    { width: 1440, reduced: false },
+    { width: 390, reduced: false },
+    { width: 390, reduced: true },
+  ]) {
+    for (const saved of result.document.pages) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.emulateMedia({ reducedMotion: reduced ? "reduce" : "no-preference" });
+      const html = renderDesignedWebDocument(result.document, profile, {
+        slug: "design-fixture",
+        page: saved.slug,
+      });
+      await page.unrouteAll();
+      await page.route("**/*", (route) =>
+        new URL(route.request().url()).pathname.endsWith(imageHash)
+          ? route.fulfill({ contentType: "image/webp", body: image })
+          : route.fulfill({ contentType: "text/html", body: html }),
+      );
+      await page.goto(`https://presence-review.invalid/p/design-fixture/${saved.slug}`);
+      await page.waitForFunction(() =>
+        Array.from(document.images).every((image) => image.complete),
+      );
+      await page.waitForTimeout(1300);
+      reports.push(await page.evaluate(inspectRenderedPage));
+      expect(await page.locator("h1").evaluate((el) => getComputedStyle(el).color)).toBe(
+        "rgb(24, 29, 26)",
+      );
+      expect(
+        await page.locator("body").evaluate((el) => getComputedStyle(el).backgroundColor),
+      ).toBe("rgb(246, 251, 245)");
+      expect(
+        await page.locator(".hero-composition").evaluate((el) => getComputedStyle(el).minHeight),
+      ).toBe("0px");
+      if (saved.slug === "home")
+        expect(
+          await page.locator("#about").evaluate((el) => el.getBoundingClientRect().height),
+        ).toBeLessThan(280);
+      expect(
+        await page
+          .locator(".footer-brand")
+          .evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
+      ).toBeLessThanOrEqual(36);
+      if (saved.slug === "home") {
+        expect(await page.locator("body").getAttribute("data-inner-page")).toBeNull();
+      } else {
+        expect(
+          await page.locator(".site-footer").evaluate((el) => getComputedStyle(el).borderTopWidth),
+        ).toBe("1px");
+        if (saved.slug === "about")
+          expect(
+            await page
+              .locator(".node-text")
+              .evaluate((el) => parseFloat(getComputedStyle(el).paddingTop)),
+          ).toBeGreaterThanOrEqual(24);
+        if (saved.slug === "services") {
+          await expect(page.locator(".hero-rail #services")).toHaveCount(0);
+          for (const item of await page.locator("#services>p").all())
+            expect(
+              await item.evaluate((el) => parseFloat(getComputedStyle(el).paddingTop)),
+            ).toBeGreaterThanOrEqual(24);
+        }
+        if (saved.slug === "contact") {
+          expect(
+            await page.locator(".hero-rail").evaluate((el) => getComputedStyle(el).borderTopWidth),
+          ).toBe("1px");
+          expect(
+            await page
+              .locator("label:has(input[type=checkbox])")
+              .evaluate((el) => el.getBoundingClientRect().height),
+          ).toBeGreaterThanOrEqual(44);
+        }
       }
-      if (saved.slug === "contact") {
-        expect(await page.locator(".hero-rail").evaluate(el => getComputedStyle(el).borderTopWidth)).toBe("1px");
-        expect(await page.locator("label:has(input[type=checkbox])").evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
-      }
+      if (saved.slug === "home" || saved.slug === "services")
+        expect(await page.locator("#services>p").allTextContents()).toEqual([
+          "Brand identity",
+          "Website design",
+        ]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        width,
+      );
     }
-    if (saved.slug === "home" || saved.slug === "services") expect(await page.locator("#services>p").allTextContents()).toEqual(["Brand identity", "Website design"]);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-  }
   }
   expect(reports).toHaveLength(12);
-  expect(assessWebBrowserQuality({ pageSlugs: result.document.pages.map(page => page.slug), reports }).issues.filter(issue => issue.severity === "fail")).toEqual([]);
-  await page.setContent(renderDesignedWebDocument(result.document, { ...profile, layoutPlan: { ...profile.layoutPlan, hero: "overlay-left" } }));
-  expect(await page.locator("h1").evaluate(el => getComputedStyle(el).color)).toBe("rgb(255, 255, 255)");
+  expect(
+    assessWebBrowserQuality({
+      pageSlugs: result.document.pages.map((page) => page.slug),
+      reports,
+    }).issues.filter((issue) => issue.severity === "fail"),
+  ).toEqual([]);
+  await page.setContent(
+    renderDesignedWebDocument(result.document, {
+      ...profile,
+      layoutPlan: { ...profile.layoutPlan, hero: "overlay-left" },
+    }),
+  );
+  expect(await page.locator("h1").evaluate((el) => getComputedStyle(el).color)).toBe(
+    "rgb(255, 255, 255)",
+  );
 });
 
 const contact = {

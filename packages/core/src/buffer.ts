@@ -23,8 +23,122 @@ export type BufferChannel = {
   name: string;
   service: string;
   available: boolean;
+  nativeAccountId?: string;
   boards?: { id: string; name: string }[];
 };
+export type BufferPublicationReceipt = {
+  source: "buffer-status-v1";
+  bufferPostId: string;
+  channelId: string;
+  platform: "instagram" | "tiktok";
+  nativeAccountId: string;
+  nativePostId: string | null;
+  nativePostUrl: string;
+  sentAt: number;
+  observedAt: number;
+  draftRevision: number;
+  approvedAt: number;
+};
+
+/** Provider-returned permanent URLs only. No URL fetches, shortened links or shortcode→ID guesses. */
+export function nativeSocialPostReference(
+  platform: string,
+  value: unknown,
+): { url: string; postId: string | null } | null {
+  if (typeof value !== "string" || value.length > 512 || value.trim() !== value) return null;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.port ||
+    url.search ||
+    url.hash
+  )
+    return null;
+  if (platform === "instagram" && ["instagram.com", "www.instagram.com"].includes(url.hostname)) {
+    const match = /^\/(p|reel)\/([A-Za-z0-9_-]{5,64})\/?$/.exec(url.pathname);
+    return match
+      ? { url: `https://www.instagram.com/${match[1]}/${match[2]}/`, postId: null }
+      : null;
+  }
+  if (platform === "tiktok" && ["tiktok.com", "www.tiktok.com"].includes(url.hostname)) {
+    const match = /^\/@([A-Za-z0-9._]{1,32})\/video\/([0-9]{10,25})\/?$/.exec(url.pathname);
+    return match
+      ? { url: `https://www.tiktok.com/@${match[1]}/video/${match[2]}`, postId: match[2] ?? null }
+      : null;
+  }
+  return null;
+}
+
+/** This accepts only the exact known API-created post and its provider-owned channel response. */
+export function normalizeBufferPublicationReceipt(
+  value: unknown,
+  expected: {
+    bufferPostId: string;
+    channelId: string;
+    platform: string;
+    nativeAccountId?: string;
+    draftRevision: number;
+    approvedAt: number;
+    text: string;
+  },
+  observedAt: number,
+): BufferPublicationReceipt | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const post = bufferRecord(value);
+  if (!post.channel || typeof post.channel !== "object" || Array.isArray(post.channel)) return null;
+  const channel = bufferRecord(post.channel);
+  const native = nativeSocialPostReference(expected.platform, post.externalLink);
+  const sentAt =
+    typeof post.sentAt === "string" && /(?:Z|[+-]\d{2}:\d{2})$/.test(post.sentAt)
+      ? Date.parse(post.sentAt)
+      : NaN;
+  if (
+    !native ||
+    !BUFFER_ID.test(expected.bufferPostId) ||
+    !BUFFER_ID.test(expected.channelId) ||
+    (expected.platform !== "instagram" && expected.platform !== "tiktok") ||
+    post.id !== expected.bufferPostId ||
+    post.channelId !== expected.channelId ||
+    post.channelService !== expected.platform ||
+    post.status !== "sent" ||
+    post.schedulingType !== "automatic" ||
+    post.text !== expected.text ||
+    channel.id !== expected.channelId ||
+    channel.service !== expected.platform ||
+    typeof channel.serviceId !== "string" ||
+    !/^[A-Za-z0-9_-]{1,128}$/.test(channel.serviceId) ||
+    (expected.nativeAccountId !== undefined && expected.nativeAccountId !== channel.serviceId) ||
+    !Number.isSafeInteger(expected.draftRevision) ||
+    expected.draftRevision < 1 ||
+    !Number.isSafeInteger(expected.approvedAt) ||
+    expected.approvedAt < 0 ||
+    !Number.isSafeInteger(observedAt) ||
+    !Number.isSafeInteger(sentAt) ||
+    sentAt < expected.approvedAt ||
+    sentAt > observedAt
+  )
+    return null;
+  return {
+    source: "buffer-status-v1",
+    bufferPostId: expected.bufferPostId,
+    channelId: expected.channelId,
+    platform: expected.platform,
+    nativeAccountId: channel.serviceId,
+    nativePostId: native.postId,
+    nativePostUrl: native.url,
+    sentAt,
+    observedAt,
+    draftRevision: expected.draftRevision,
+    approvedAt: expected.approvedAt,
+  };
+}
 export type BufferDraft = {
   channelId: string;
   text: string;
@@ -128,6 +242,9 @@ export function normalizeBufferChannels(value: unknown): BufferChannel[] {
       name: channel.name.slice(0, 160),
       service: channel.service.slice(0, 40),
       available: !channel.isDisconnected && !channel.isLocked,
+      ...(typeof channel.serviceId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(channel.serviceId)
+        ? { nativeAccountId: channel.serviceId }
+        : {}),
       ...(boards.length ? { boards } : {}),
     };
   });
@@ -177,37 +294,59 @@ export function validateBufferDraft(draft: BufferDraft, now: number): void {
   }
 }
 
+const YOUTUBE_CATEGORY_IDS = [
+  "1",
+  "2",
+  "10",
+  "15",
+  "17",
+  "19",
+  "20",
+  "22",
+  "23",
+  "24",
+  "25",
+  "26",
+  "27",
+  "28",
+  "29",
+];
+
+export type BufferDraftRequirement =
+  | "media_required"
+  | "video_required"
+  | "media_title_required"
+  | "youtube_category_required"
+  | "pinterest_board_required";
+
+/** Missing publishing details do not prevent saving a local, unapproved draft. */
+export function bufferDraftRequirements(
+  draft: BufferDraft,
+  service: string,
+): readonly BufferDraftRequirement[] {
+  const missing: BufferDraftRequirement[] = [];
+  if (["instagram", "tiktok", "pinterest"].includes(service) && !draft.imageUrl && !draft.videoUrl)
+    missing.push("media_required");
+  if (service === "youtube") {
+    if (!draft.videoUrl) missing.push("video_required");
+    if (!draft.mediaTitle?.trim()) missing.push("media_title_required");
+    if (!YOUTUBE_CATEGORY_IDS.includes(draft.categoryId ?? ""))
+      missing.push("youtube_category_required");
+  }
+  if (service === "pinterest" && !draft.boardId) missing.push("pinterest_board_required");
+  return missing;
+}
+
 /** Platform metadata is code-owned; the model cannot insert arbitrary vendor mutation fields. */
 export function bufferCreateArguments(
   draft: BufferDraft,
   service: string,
 ): Record<string, unknown> {
-  if (["instagram", "tiktok", "pinterest"].includes(service) && !draft.imageUrl && !draft.videoUrl)
-    throw new Error("BUFFER_MEDIA_REQUIRED");
-  if (
-    service === "youtube" &&
-    (!draft.videoUrl ||
-      !draft.mediaTitle ||
-      ![
-        "1",
-        "2",
-        "10",
-        "15",
-        "17",
-        "19",
-        "20",
-        "22",
-        "23",
-        "24",
-        "25",
-        "26",
-        "27",
-        "28",
-        "29",
-      ].includes(draft.categoryId ?? ""))
-  )
-    throw new Error("BUFFER_YOUTUBE_DETAILS_REQUIRED");
-  if (service === "pinterest" && !draft.boardId) throw new Error("BUFFER_PINTEREST_BOARD_REQUIRED");
+  const missing = bufferDraftRequirements(draft, service);
+  if (missing.includes("media_required")) throw new Error("BUFFER_MEDIA_REQUIRED");
+  if (service === "youtube" && missing.length) throw new Error("BUFFER_YOUTUBE_DETAILS_REQUIRED");
+  if (missing.includes("pinterest_board_required"))
+    throw new Error("BUFFER_PINTEREST_BOARD_REQUIRED");
   const disclosure =
     draft.isAiGenerated === undefined ? {} : { isAiGenerated: draft.isAiGenerated };
   return {

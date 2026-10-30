@@ -1,10 +1,13 @@
 import { exportableTables } from "@pikar/core/tenantData";
+import { sha256Bytes } from "@pikar/core/webRuntime";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
-import schema from "./schema";
 import { makeMerchantCapability } from "./lib/merchantProviderClient";
+import { configureAutomationForTenant, merchantProductConfigRef } from "./merchantCommerce";
+import { bindDigitalDeliveryForTenant } from "./merchantOperations";
+import schema from "./schema";
 import { createProductForTenant } from "./tenantCatalogue";
 import {
   configurePolicyForTenant,
@@ -12,9 +15,7 @@ import {
   mapProductForTenant,
   placeOrderForTenant,
 } from "./tenantOrders";
-import { configureAutomationForTenant, merchantProductConfigRef } from "./merchantCommerce";
-import { bindDigitalDeliveryForTenant } from "./merchantOperations";
-import { sha256Bytes } from "@pikar/core/webRuntime";
+
 const modules = import.meta.glob("./**/*.*s"),
   aggregateModules = import.meta.glob(
     "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",

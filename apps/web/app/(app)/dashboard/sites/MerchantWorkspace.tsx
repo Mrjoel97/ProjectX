@@ -5,9 +5,9 @@ import { useAction, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ShopSetupReview } from "./ShopSetupReview";
-import { formatMerchantMoney } from "./merchantPresentation";
 import styles from "./merchant.module.css";
+import { formatMerchantMoney } from "./merchantPresentation";
+import { ShopSetupReview } from "./ShopSetupReview";
 
 export { formatMerchantMoney } from "./merchantPresentation";
 

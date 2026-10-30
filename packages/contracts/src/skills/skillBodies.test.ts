@@ -13,6 +13,7 @@ import {
   MEDIA_DIRECTOR_SKILL,
 } from "../skill";
 import { bmcSkillBody } from "./bmc";
+import { brandKitDesignerBody } from "./brandKitDesigner";
 import { businessBlueprintSkillBody } from "./businessBlueprint";
 import { cockpitAgentSkillBody } from "./cockpitAgent";
 import { documentAnalystSkillBody } from "./documentAnalyst";
@@ -261,6 +262,7 @@ const bodies: [string, string][] = [
   // carries a WORKED EXAMPLE that storyboard.test.ts parses — a stale .ts would ship a body whose
   // example no longer matches the parser the round-trip test certified.
   ["media-director", mediaDirectorSkillBody],
+  ["brand-kit-designer", brandKitDesignerBody],
   // 15.1-05 (design §7): the three UNGATED behaviour-preset style overlays. Same mirror, same
   // reason — the `.md` is what a human edits, the `.ts` is what the Convex runtime ships, and a
   // half-applied mirror would silently seed a stale overlay.

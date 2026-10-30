@@ -54,9 +54,9 @@ describe("tenant table classification registry", () => {
     // + three foundation tables and expiring auth revocations = 67 with owned upload receipts.
     // + Buffer connections, transient OAuth, campaign posts and reports = 71.
     // + Zernio connection credentials and cached reports = 73.
-    // + site projects/versions, form coordination, metrics and presence sessions and copied web assets = 79.
-    // + eight local commerce and five merchant provider/operations tables = 92.
-    expect(schemaTables).toHaveLength(92);
+    // Combined presence/commerce, media, native social and managed-service schema inventory.
+    expect(schemaTables).toHaveLength(104);
+
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -77,6 +77,8 @@ describe("tenant table classification registry", () => {
       "connectorOAuthStates",
       "gmailTokens",
       "microsoftCalendarTokens",
+      "socialConnections",
+      "socialOAuthStates",
       "zernioConnections",
     ]);
   });
@@ -191,6 +193,7 @@ describe("tenant table classification registry", () => {
       "pendingTimeouts",
       "providerGates",
       "skills",
+      "socialWebhookReceipts",
     ]);
 
     // POSITIVE CONTROL: the filter really reads the map, so the three assertions above cannot be
@@ -230,18 +233,38 @@ describe("tenant table classification registry", () => {
 // attachments carried no bytes.
 describe("storageIdsIn — every byte reachable from one row", () => {
   test("site versions include owned Stitch artifacts nested in provider receipts without following shared image snapshots", () => {
-    expect(storageIdsIn("webProjectVersions", {
-      artifactStorageId: "kg_native_artifact",
-      providerReceipt: {
-        stitchHtmlStorageId: "kg_stitch_html",
-        stitchImageStorageId: "kg_stitch_image",
-        stitchHash: "not_storage",
-      },
-      assetSnapshots: [{ storageId: "kg_shared_web_asset" }],
-    })).toEqual(["kg_native_artifact", "kg_stitch_html", "kg_stitch_image"]);
-    for (const providerReceipt of [undefined, null, "not_an_object", {}, { stitchHtmlStorageId: 7, stitchImageStorageId: "" }]) {
-      expect(storageIdsIn("webProjectVersions", { artifactStorageId: "kg_native_artifact", providerReceipt })).toEqual(["kg_native_artifact"]);
+    expect(
+      storageIdsIn("webProjectVersions", {
+        artifactStorageId: "kg_native_artifact",
+        providerReceipt: {
+          stitchHtmlStorageId: "kg_stitch_html",
+          stitchImageStorageId: "kg_stitch_image",
+          stitchHash: "not_storage",
+        },
+        assetSnapshots: [{ storageId: "kg_shared_web_asset" }],
+      }),
+    ).toEqual(["kg_native_artifact", "kg_stitch_html", "kg_stitch_image"]);
+    for (const providerReceipt of [
+      undefined,
+      null,
+      "not_an_object",
+      {},
+      { stitchHtmlStorageId: 7, stitchImageStorageId: "" },
+    ]) {
+      expect(
+        storageIdsIn("webProjectVersions", {
+          artifactStorageId: "kg_native_artifact",
+          providerReceipt,
+        }),
+      ).toEqual(["kg_native_artifact"]);
     }
+  });
+  test("explicit product references remain reachable for export and tenant erasure", () => {
+    expect(
+      storageIdsIn("plans", {
+        mediaProductReferences: [{ storageId: "product_front" }, { storageId: "product_side" }],
+      }),
+    ).toEqual(["product_front", "product_side"]);
   });
   // MUTATION: drop the `attachments[].storageId` entry from STORAGE_ID_FIELDS → red. That entry is
   // the single largest class of generated file in the product, and it is the one a top-level-fields
@@ -251,9 +274,18 @@ describe("storageIdsIn — every byte reachable from one row", () => {
       storageIdsIn("plans", {
         renderStorageId: "kg_reel",
         sidecarStorageId: "kg_sidecar",
+        nativeCaptionAudioStorageId: "kg_native_audio",
+        nativeCaptionRenderStorageId: "kg_native_render",
         attachments: [{ storageId: "kg_pdf_a" }, { storageId: "kg_pdf_b" }],
       }),
-    ).toEqual(["kg_reel", "kg_sidecar", "kg_pdf_a", "kg_pdf_b"]);
+    ).toEqual([
+      "kg_reel",
+      "kg_sidecar",
+      "kg_native_audio",
+      "kg_native_render",
+      "kg_pdf_a",
+      "kg_pdf_b",
+    ]);
   });
 
   // FAIL-SAFE, and it is the difference between a bad row and a user who cannot delete their
@@ -304,7 +336,9 @@ describe("STORAGE_ID_FIELDS covers every _storage field in schema.ts", () => {
     for (const line of schemaSource.split("\n")) {
       const opened = /^ {2}([A-Za-z][A-Za-z0-9]*): defineTable\(/.exec(line);
       if (opened?.[1] !== undefined) table = opened[1];
-      const fields = line.matchAll(/([A-Za-z][A-Za-z0-9]*):\s*v\.(?:optional\(\s*)?v?\.?id\("_storage"\)/g);
+      const fields = line.matchAll(
+        /([A-Za-z][A-Za-z0-9]*):\s*v\.(?:optional\(\s*)?v?\.?id\("_storage"\)/g,
+      );
       for (const field of fields)
         if (field[1] !== undefined && table !== null) out.push({ table, field: field[1] });
     }

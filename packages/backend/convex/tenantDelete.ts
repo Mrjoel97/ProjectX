@@ -1,5 +1,5 @@
-import { commerceDeletionBlocker } from "@pikar/core/tenantCommercePrivacy";
 import type { EntryId } from "@convex-dev/rag";
+import { commerceDeletionBlocker } from "@pikar/core/tenantCommercePrivacy";
 import {
   type DeletableTenantTable,
   deletableTables,
@@ -38,7 +38,11 @@ type ProviderDeletionResult = {
     | "stripe"
     | "paypal"
     | "buffer"
-    | "zernio";
+    | "zernio"
+    | "x"
+    | "meta"
+    | "tiktok"
+    | "youtube";
   localRowDeleted: boolean;
   revokedAtProvider: boolean;
   failure: boolean;
@@ -90,6 +94,10 @@ const providerResultValidator = v.object({
     v.literal("paypal"),
     v.literal("buffer"),
     v.literal("zernio"),
+    v.literal("x"),
+    v.literal("meta"),
+    v.literal("tiktok"),
+    v.literal("youtube"),
   ),
   localRowDeleted: v.boolean(),
   revokedAtProvider: v.boolean(),
@@ -258,6 +266,12 @@ export const authorizeTenantDeletion = internalMutation({
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
       .unique();
     return {
+      socialProviders: (
+        await ctx.db
+          .query("socialConnections")
+          .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+          .take(4)
+      ).map((row) => row.provider),
       bufferHadRow: !!buffer,
       zernioHadRow: !!zernio,
       googleConnected: !!google,
@@ -496,6 +510,7 @@ const authorizeTenantDeletionRef = makeFunctionReference<
   { tenantId: string; userId: Id<"users"> },
   {
     googleConnected: boolean;
+    socialProviders: ("x" | "meta" | "tiktok" | "youtube")[];
     bufferHadRow: boolean;
     zernioHadRow: boolean;
     microsoftConnected: boolean;
@@ -601,6 +616,23 @@ export const deleteTenantData = tenantErasureAction({
         microsoftFailure = !result.deleted;
       } catch {
         microsoftFailure = true;
+      }
+    }
+
+    // Revoke the distinct direct-social YouTube grant before its encrypted row is erased.
+    // Google revocation covers all grants to this project for the consenting user.
+    let youtubeRevoked = false;
+    let youtubeFailure = false;
+    if (connected.socialProviders.includes("youtube")) {
+      try {
+        const outcome = await ctx.runAction(internal.socialActions.disconnectForTenant, {
+          tenantId: ctx.tenantId,
+          provider: "youtube",
+        });
+        youtubeRevoked = outcome.upstreamRevoked;
+        youtubeFailure = !outcome.upstreamRevoked;
+      } catch {
+        youtubeFailure = true;
       }
     }
 
@@ -722,6 +754,18 @@ export const deleteTenantData = tenantErasureAction({
           },
         ];
       }),
+      ...connected.socialProviders.map((provider) => ({
+        provider,
+        localRowDeleted: true,
+        revokedAtProvider: provider === "youtube" && youtubeRevoked,
+        failure: provider === "youtube" && youtubeFailure,
+        revokeUpstream:
+          provider === "youtube"
+            ? youtubeRevoked
+              ? ("confirmed" as const)
+              : ("attempted_failed" as const)
+            : ("unsupported" as const),
+      })),
       ...(connected.bufferHadRow
         ? [
             {

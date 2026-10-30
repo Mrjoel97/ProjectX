@@ -1,3 +1,31 @@
+> Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social, recurring-service and indexed watchdog changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
+
+> Last verified: 2026-10-26 — brandKits is classified as tenant-owned lifecycle data. Proposed identity content remains outside audit payloads; approved Vault snapshots retain tenant ownership and hash verification. Tenant table inventory and brand lifecycle tests pass locally.
+
+> Last verified: 2026-10-29 — The watchdog cron comment now names indexed candidate ranges. Its cadence and arming gate are unchanged; recovery retains the existing notifications and insert-only audit paths. No audit payload, retention or export behavior changed.
+
+> Last verified: 2026-10-24 — The audit viewer explicitly projects the real media task-budget approval event: campaign reference, selected count, approved extra cents, task maximum cents and daily-window timestamp only. Prompts and product/voice references stay excluded. The forward event inventory and privacy projection regression cover this read boundary; no audit writer or spending authority changed.
+
+> Combined-source checkpoint: 2026-10-24 — Retain media campaign/presentation ownership and native-audio file lifecycle controls alongside direct-social credential summaries, bounded metadata retention and truthful revocation results. Dated table counts and social rollout receipts below describe their original sources/deployments; they do not establish rollout of this merged media candidate.
+
+> Last verified: 2026-10-21 — Phase 53 classifies mediaCampaigns and vaultPresentations as tenant_owned data (75 schema tables total). Campaign briefs/specs/preview content stay outside insert-only refs/counts audit; lifecycle and hosted acceptance remain distinct.
+
+> 2026-10-24: Direct YouTube disconnect and tenant erasure attempt bounded, immediate programmatic Google token revocation before credential erasure, recording confirmed versus attempted_failed without logging grant material or scheduling stale-token retries. Local credentials/pending grants are removed and bounded old-connection metadata cleanup preserves original customer content. Google project-wide impact is disclosed. Backend social/export/erasure regressions pass 153 cases; no live owner grant was revoked.
+
+> Retention rollout verified: 2026-10-23 — The bounded read-only preview completed both pages: one YouTube connection, one saved post, two legacy metadata records and zero stale connections/posts. The current private-test receipt therefore remains inside its conservative retention bound. SOCIAL_YOUTUBE_METADATA_CLEANUP_ENABLED is now true on quixotic-basilisk-795 and was read back successfully; hourly bounded cleanup is enabled with a one-day margin before the metadata deadline. No live row deletion or elapsed scheduled sweep is claimed by enabling the schedule. All provider publication switches remain off. This supersedes earlier cleanup-gated notes.
+
+> Last verified: 2026-10-23 — Added explicit YouTube API metadata/consent clocks, conservative legacy bounds, stale UI/export projections, bounded provider-indexed cleanup and disconnect/failed-refresh cleanup fenced to the old connection. Customer-authored captions, titles, original uploads and disclosure choices are preserved. A real channels read refreshes connection metadata; cached discovery and token renewal do not. Saved post metadata expires independently. Automatic cleanup is now enabled after its read-only preview found zero stale rows; see the latest rollout receipt. YouTube agent account/content reads fail closed before backend calls; independently supplied content may still be staged for human review. This prevents new tool reads and does not erase preexisting derived chat/history or establish complete policy compliance. Verification and deployment receipts are recorded in social-connections.md.
+
+> Implementation update: 2026-10-20 — Native socialConnections/socialOAuthStates are tenant credentials with summary-only export and local erasure. Signed webhook health stores only the last provider/body digest/time globally. No content or tokens enter audit; upstream app permission removal remains manual. Offline/live validation status is tracked in social-connections.md.
+
+> Last verified: 2026-10-24 — Authenticated conversational setup appends the production `service.knowledge_confirmed` event. The viewer admits only the service reference, conversation revision, review hash and confirmed-field count. Canonical field references remain in the immutable native audit for confirmation checks; field references, exact user statements, documents and contact details do not appear in the viewer. The general reference-length and payload-shape filters are unchanged. Focused governance coverage (18), Executive tool snapshots (23) and audit projection (25) pass locally; hosted acceptance and release remain separate.
+
+> Last verified: 2026-10-23 — serviceOutcomeObservations is tenant-owned export/erasure data retaining only the existing native report metric scope and provenance, bounded to 30 observations per tenant. Goal linkage and user usefulness append only managed_service.goal_linked / managed_service.usefulness_recorded events. Closed audit projections admit native service/goal/run refs, revisions and the accepted/rejected enum; source bodies, goals, replies, provider payloads and copied spend do not enter those events. History retention deletes content-plane observations, never audit or spend rows. Focused native tests cover isolation, classification, retention and withdrawal; upstream key revocation remains separate.
+
+> Last verified: 2026-10-23 — managedServices and managedServiceRuns are tenant export/erasure data. Run metadata carries references, revisions, closed states and times; actual user goal/reply remain in the Agent conversation store and provider costs remain in append-only spendEvents. Existing audit projection accepts only closed service control metadata. Native tenant export/deletion and managed-service isolation tests pass locally; no retention or historical ledger rewrite occurred.
+
+> Last verified: 2026-10-22 — Managed service configuration is tenant-owned export/erasure data. Its pause/stop mutation atomically appends a `managed_service.control_changed` event containing only the service reference, setup/control revisions and closed state. The viewer's closed projection omits objectives, credential/body fields and unexpected content. Configuration persistence does not grant execution authority; no live service or provider cancellation is claimed.
+
 > Last verified: 2026-10-24 — Merchant products, mappings, stock/order/payment/operation records and digital copies participate in tenant privacy/export/erasure. Buyer data and digital expiry use bounded fixed cleanup; capabilities exclude erased tenants. Audit stores refs/hashes/counts/closed states, not buyer addresses, credentials or proposal source text. Prepared buyer notices do not mean an external message was sent; physical success records actual merchant handoff, not carrier delivery.
 
 > Last verified: 2026-10-22 — Website image copies and immutable asset snapshots join the explicit tenant export/erasure storage map as webAssets.storageId. Preparation returns bounded refs/metadata, never raw bytes or generation prompts in logs/audit. Native erasure preserves the other tenant and removes owned copied bytes; deletion of a source alone does not rewrite reviewed website bytes.
@@ -28,6 +56,8 @@
 > Last verified: 2026-10-15 — owner audit projection includes foundation publication (revision, document count, Blueprint reference) and manual delivery reconciliation (request reference and outcome). Neither event projects transcript, document body, or delivery content. Evidence: reportsGovernance 18 tests and auditProjection 22 tests pass.
 
 > Last verified: 2026-10-15 — erasure now retains a durable opaque identity fence (ADR-055) and blocks public admission, application writes and tenant-bound component writes during and after deletion. Append-only audit/global metadata and cleanup deletes remain permitted. Reset-session fences expire after issued JWT lifetime; erasure fences persist to deny delayed workers. No business content or credentials are retained in the fence.
+
+> Last verified: 2026-10-24 — Native caption PCM and source-film references are included in shared storage discovery for export/erasure. Media task-increase audit decisions contain campaign references, integer cents, window and counts only; no prompts, narration or product references enter the immutable audit payload. Existing append-only audit and financial history remain unchanged. Runtime/hosted qualification boundaries are recorded in ADR-065/066.
 
 # Playbook: Audit Log & Dead-Letter Pipeline
 
@@ -1356,3 +1386,20 @@ Independent review, 2026-09-10: synthetic eval teardown now deletes each unexpor
 ## Delivery receipt preservation — 2026-10-15
 
 Last verified: 2026-10-15 — workflow failure handling preserves confirmed delivery receipts and holds uncertain attempts instead of declaring them failed. Delivery reconciliation records user observation separately from provider receipt events and never reopens an attempt for sending.
+
+
+## Phase 53 — production metadata is tenant content
+
+TENANT_TABLE_CLASSIFICATION adds mediaCampaigns and vaultPresentations as tenant_owned; tenantData.test.ts now expects75 schema tables and exact registry coverage. Campaign item briefs, plan labels, source references, presentation specs/notes and workbook source metadata are content-plane data, never audit/dead-letter payloads. Existing generated-artifact audit events retain refs/hashes/counts/enums only. A new storage or sidecar field needs lifecycle and storage-registry coverage at its owning seam.
+
+Tenant export/erasure must traverse the added tables. Presentation preview sidecars must also retire with their document/replacement, while immutable audit remains insert-only. Preserve owned-byte receipt promotion, late-write erasure fences and replacement-before-deleting-good-bytes ordering. A JSON campaign manifest must not persist temporary download capabilities.
+
+Local registry and artifact/campaign tests do not prove hosted late-provider cleanup, Office export fidelity, physical erasure or WORM acceptance. No paid/provider or historical Phase23 retention receipt was changed by this lane. See Phase53 partial summary for exact remaining gates.
+
+
+> Last verified: 2026-10-24 — The tenant storage inventory includes plans.mediaProductReferences[].storageId so owned product references participate in existing export and erasure handling. Reference content stays outside audit payloads.
+> Last verified: 2026-10-24 — The bearer-URL inventory now admits exactly media.productReferencesForSubmit as an internalQuery capability seam for human-selected native product images. Focused source assertions require the job/plan tenant match, exact approved review, owned immutable image metadata and hashes, followed by actual byte/hash/signature checks before the provider input. The exception does not admit other internal readers, logs, agent/model surfaces, or arbitrary URLs. Runtime ownership and reference checks remain unchanged; the four product-reference regressions passed in CI before this inventory correction.
+
+### 2026-10-23 — Blueprint review identity
+
+blueprint.confirmed retains its reference/count payload and adds bounded fieldRefs containing only closed field identifiers and SHA-256 entry hashes. The existing append-only writer returns the actual review reference/time for the content-plane provenance sidecar. Ledger reads check owned user-review identity, document ID, exact review time and field/hash binding before presenting a reviewed source. The browser audit projection continues dropping non-primitive arrays; business values, text and private source contents never enter these audit payloads.

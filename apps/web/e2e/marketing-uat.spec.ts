@@ -110,7 +110,7 @@ async function checkLayout(page: Page, width: number) {
     .locator("article")
     .filter({ has: page.getByRole("heading", { name: "Gmail", exact: true }) });
   await expect(gmail).toContainText(/Connected|Connect Gmail|Google OAuth is not configured/);
-  for (const name of ["Meta/Instagram", "LinkedIn", "TikTok", "X", "YouTube"]) {
+  for (const name of ["LinkedIn"]) {
     const channel = page
       .locator("article")
       .filter({ has: page.getByRole("heading", { name, exact: true }) });
@@ -120,7 +120,13 @@ async function checkLayout(page: Page, width: number) {
     );
     await expect(channel.getByRole("button")).toHaveCount(0);
   }
-  await expect(page.getByText("Social publishing is unavailable.", { exact: false })).toBeVisible();
+  const direct = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Direct social accounts", exact: true }) });
+  for (const name of ["X", "Meta", "TikTok", "YouTube"]) await expect(direct).toContainText(name);
+  await expect(
+    page.getByRole("link", { name: "Manage direct social connections" }),
+  ).toHaveAttribute("href", "/connect-social");
   const title = page.getByLabel("Link title", { exact: true });
   await title.focus();
   await page.keyboard.press("Tab");

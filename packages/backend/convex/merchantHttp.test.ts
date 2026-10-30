@@ -1,7 +1,8 @@
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import schema from "./schema";
 import { boundedMerchantBody } from "./merchantHttp";
+import schema from "./schema";
+
 const modules = import.meta.glob("./**/*.*s");
 afterEach(() => {
   vi.unstubAllEnvs();

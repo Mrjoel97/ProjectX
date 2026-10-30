@@ -1,5 +1,4 @@
 export * from "./actionType";
-export * from "./webLayoutPlan";
 export * from "./agenda";
 export * from "./blueprint";
 export * from "./blueprintPulse";
@@ -45,6 +44,7 @@ export * from "./verticalPacks";
 export * from "./webAssets";
 export * from "./webDesignRenderer";
 export * from "./webForms";
+export * from "./webLayoutPlan";
 export * from "./webRecipeFixtures";
 
 export * from "./webRecipes";

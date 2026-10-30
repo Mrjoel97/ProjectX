@@ -26,6 +26,7 @@ const text = (value: string, max = 4000) =>
   typeof value === "string" &&
   value.trim().length > 0 &&
   value.length <= max &&
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: Reject control characters at the untrusted input boundary.
   !/[\u0000-\u001f\u007f]/.test(value);
 const amount = (value: number) => Number.isSafeInteger(value) && value > 0;
 const currency = (value: string) => /^[A-Z]{3}$/.test(value);

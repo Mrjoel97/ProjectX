@@ -6,15 +6,17 @@ import {
   ENTITY,
   ENTITY_ADDRESS,
   HAS_PLACEHOLDERS,
-  LEAD_AUTHORITY,
+  LEGAL_REVIEW_DEFERRED,
   OPERATING_COUNTRY,
+  OWNER_APPROVED_PUBLICATION,
+  OWNER_REVIEWED_DATE,
   SITE,
 } from "../legal";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Pikar AI",
   description:
-    "How Pikar AI collects, uses, stores, shares, and protects personal data, including Google user data obtained through the gmail.modify, calendar and drive.readonly scopes, Microsoft account data, and your rights under the GDPR.",
+    "How Pikar AI collects, uses, stores, shares, and protects personal data, including Google user data obtained through the gmail.modify, calendar and drive.readonly scopes, Microsoft and connected social account data, and your privacy controls.",
   alternates: { canonical: `${SITE}/privacy` },
 };
 
@@ -24,12 +26,13 @@ export default function Privacy() {
       <h1>Privacy Policy</h1>
       <p className="updated">Effective {EFFECTIVE}</p>
 
-      {HAS_PLACEHOLDERS && (
+      {HAS_PLACEHOLDERS || LEGAL_REVIEW_DEFERRED || !OWNER_APPROVED_PUBLICATION ? (
         <p className="notice">
-          <strong>Draft — not yet in force.</strong> This document has not been reviewed by a
-          qualified lawyer. The bracketed legal details below remain unconfirmed. Publication under
-          the existing review deferral does not complete legal review.
+          <strong>Draft — not yet in force.</strong> Publication approval is pending or deferred, or
+          identifying details remain unresolved.
         </p>
+      ) : (
+        <p className="updated">Published with owner approval on {OWNER_REVIEWED_DATE}.</p>
       )}
 
       <h2>1. Who we are</h2>
@@ -44,8 +47,8 @@ export default function Privacy() {
         us about anything in this policy at <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
       </p>
       <p>
-        We have not appointed a Data Protection Officer, as we are not required to under Article 37
-        GDPR. Enquiries go to the address above.
+        We have not appointed a Data Protection Officer. Privacy enquiries can be sent to{" "}
+        <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
       </p>
 
       <h2>2. What data we collect</h2>
@@ -98,7 +101,7 @@ export default function Privacy() {
           — performance of a contract (Art. 6(1)(b)).
         </li>
         <li>
-          <strong>To connect your Google or Microsoft account</strong> — performance of a contract
+          <strong>To connect the external accounts you choose</strong> — performance of a contract
           (Art. 6(1)(b)). You authorise each connection through that provider&rsquo;s own consent
           screen and may withdraw it at any time (section 10).
         </li>
@@ -121,7 +124,9 @@ export default function Privacy() {
 
       <h2>4. Google user data, and Microsoft account data</h2>
       <p>
-        If you choose to connect a Google account, Pikar requests four scopes in a single consent:
+        For the Google mailbox, calendar and Drive connection, Pikar requests these four scopes in a
+        single consent. Signing in or separately connecting YouTube does not grant these mailbox
+        permissions:
       </p>
       <ul>
         <li>
@@ -178,9 +183,10 @@ export default function Privacy() {
           use it.
         </li>
         <li>
-          <strong>You approve the automation before it runs.</strong> Pikar presents a plan of what
-          it intends to do. Work begins only after you approve that plan, and you are notified as it
-          proceeds. You can stop it.
+          <strong>You approve actions that require approval.</strong> Pikar may plan, read
+          authorised context and prepare drafts before asking you to approve a plan. Sending an
+          email from your connected mailbox requires approval of the saved plan. You are notified as
+          approved work proceeds and can stop a running automation.
         </li>
         <li>
           <strong>What we do with message content.</strong> We read messages to understand context,
@@ -189,8 +195,10 @@ export default function Privacy() {
         </li>
         <li>
           <strong>It reaches our AI providers.</strong> To draft, summarise, or search your vault,
-          content is sent to the large-language-model and embedding providers named in section 7 —
-          OpenAI and Google — under contractual terms that forbid retaining it or training on it.
+          content may be sent to the model and embedding services selected by the configured route,
+          including OpenRouter and its upstream providers. Section 7 describes these services.
+          Retention and training controls depend on the selected route and approved account
+          settings; API access alone does not establish those controls.
         </li>
         <li>
           <strong>It never reaches our audit log.</strong> The append-only log records references,
@@ -222,6 +230,97 @@ export default function Privacy() {
         of our own.
       </p>
 
+      <h2 id="social-accounts">4a. Direct social account connections</h2>
+      <p>
+        You choose whether to connect Facebook Pages, linked professional Instagram accounts, TikTok
+        or YouTube. These connections are separate from Google mailbox, calendar and Drive access.
+        Each customer connects their own accounts; another customer does not receive your
+        connection. You also select which available accounts your workspace may use.
+      </p>
+      <ul>
+        <li>
+          <strong>Meta.</strong> Basic Facebook identity, a list of authorised Pages and their
+          linked professional Instagram accounts, and recent content from selected accounts.
+          Publishing additionally needs Page-post or Instagram-publishing permission.
+        </li>
+        <li>
+          <strong>TikTok.</strong> Basic profile information identifies the connected creator.
+          Reading recent public videos needs additional video-list permission. Direct posting needs
+          separate publishing permission.
+        </li>
+        <li>
+          <strong>YouTube.</strong> Read-only access identifies your channel and reads recent video
+          information through YouTube API Services. Uploading needs an additional upload permission.
+          Offline access allows token renewal without asking you to sign in for each action.
+        </li>
+      </ul>
+      <p>
+        The connection screen shows available capabilities and any additional permission needed. A
+        connected account does not mean publishing is enabled: availability depends on platform
+        qualification and the features enabled for your workspace. For direct publishing, you review
+        and approve the saved post, destination, media and visibility before submission. The agent
+        can prepare drafts; a general automation approval does not replace this post approval. These
+        direct connections do not provide messaging, advertising or ad spending.
+      </p>
+      <p>
+        We store encrypted access and refresh grants, account identifiers and names, your account
+        selection, and saved post drafts, uploaded media and publication status in our backend,
+        scoped to your workspace. Credentials are used by server-side integrations rather than
+        supplied to the agent as conversation text. Recent-content reads do not keep a separate
+        cached feed. YouTube API-derived account and video reads are currently unavailable to
+        agents. Other connected content used in an agent conversation, and original content you
+        provide or save, can remain in workspace history under section 9.
+      </p>
+      <p>
+        We use this information to show your accounts and recent content, prepare the work you
+        request and submit the posts you approve. Information needed for an agent task may be sent
+        to the AI providers described in section 7. An approved publication sends its media and
+        metadata to the selected social platform, where your visibility choice and that
+        platform&rsquo;s rules apply. We do not sell social account data or use it to train
+        generalised AI models.
+      </p>
+      <p>
+        <strong>Disconnecting removes Pikar access.</strong> Disconnect removes Pikar&rsquo;s stored
+        credentials and pending connection grants. For YouTube, Pikar also immediately requests
+        revocation from Google and schedules removal of API-derived account and post metadata.
+        Google revocation affects the permissions granted by your Google account to all clients in
+        the same Google project, so other Google integrations may need reconnection. The screen asks
+        you to confirm this effect and reports whether Google confirmed revocation. If confirmation
+        fails, Pikar access stays removed and the screen links to Google&rsquo;s manual revocation
+        controls. Other providers require the separate revocation controls below. Disconnect does
+        not remove published posts or your original drafts and uploads. Use data export and account
+        erasure, or contact us under section 10, for retained Pikar data; section 9 explains
+        audit-record limits.
+      </p>
+      <ul>
+        <li>
+          Revoke YouTube access in your{" "}
+          <a href="https://myaccount.google.com/permissions" rel="noopener noreferrer">
+            Google Account connections
+          </a>
+          . Google&rsquo;s handling of data is described in its{" "}
+          <a href="https://policies.google.com/privacy" rel="noopener noreferrer">
+            Privacy Policy
+          </a>
+          .
+        </li>
+        <li>
+          Remove the Meta connection in Facebook&rsquo;s{" "}
+          <a href="https://www.facebook.com/settings?tab=business_tools" rel="noopener noreferrer">
+            Business integrations settings
+          </a>
+          .
+        </li>
+        <li>
+          In TikTok, open Settings and privacy, then Security &amp; permissions, Manage app
+          permissions, select Pikar and remove access. See{" "}
+          <a href="https://support.tiktok.com/en/" rel="noopener noreferrer">
+            TikTok Support
+          </a>{" "}
+          if the menu names differ for your app version.
+        </li>
+      </ul>
+
       <h2>5. Limited Use</h2>
       <p>
         Pikar AI&rsquo;s use of information received from Google APIs adheres to the{" "}
@@ -241,10 +340,11 @@ export default function Privacy() {
         precisely where the human sits.
       </p>
       <p>
-        <strong>You approve the plan before it runs.</strong> Pikar shows you what it intends to do.
-        Nothing executes until you approve, you are notified as each stage completes, and you can
-        halt a running automation at any time. Individual steps within an approved plan are carried
-        out automatically — that is what you approved.
+        <strong>Approval applies to the actions you are asked to review.</strong> Planning,
+        authorised context reads and draft preparation can happen before final approval. Sending
+        email on your behalf and publishing a saved social post require their explicit approvals.
+        Individual steps within an approved plan can then run automatically under the applicable
+        guardrails. You are notified as approved work proceeds and can halt a running automation.
       </p>
       <p>
         Pikar does not make decisions producing legal or similarly significant effects about you by
@@ -256,8 +356,9 @@ export default function Privacy() {
 
       <h2>7. Who we share data with</h2>
       <p>
-        We share personal data only with service providers who process it on our instructions as
-        processors under Article 28 GDPR:
+        We use external services to operate the features described below. The data sent depends on
+        the feature and configured provider route. Applicable processor terms and data controls
+        require verification for each enabled service.
       </p>
       <ul>
         <li>
@@ -274,21 +375,22 @@ export default function Privacy() {
         <li>
           <strong>Google</strong> — in two distinct roles. As your connected account provider:
           reading, organising and sending mail, reading your calendar and creating events, and
-          reading Drive files, via Google&rsquo;s APIs. Separately, as an{" "}
-          <strong>AI provider</strong>: Google&rsquo;s Gemini models generate content and produce
-          the embeddings that make your vault searchable, and receive the content processed for
-          those purposes.
+          reading Drive files, via Google&rsquo;s APIs; and YouTube channel reading or approved
+          uploads when separately connected. Separately, as an <strong>AI provider</strong>: Google
+          models can receive content when a Google AI route is selected. The current vault embedding
+          route uses the OpenAI model described below through OpenRouter.
         </li>
         <li>
           <strong>Microsoft</strong> — reading and writing your Outlook calendar, via the Microsoft
           Graph API, if you connect a Microsoft account.
         </li>
         <li>
-          <strong>OpenAI</strong> — generation of plans, summaries, and drafts, and embeddings for
-          vault search. OpenAI receives the content of messages and documents our agents read in
-          order to produce them. API data is not used for training by default. Retention depends on
-          the endpoint and approved account controls; API access alone does not establish Zero Data
-          Retention. See OpenAI&rsquo;s{" "}
+          <strong>OpenAI</strong> — generation of plans, summaries and drafts when an OpenAI model
+          route is selected. The current vault embedding route selects OpenAI&rsquo;s
+          text-embedding-3-small through OpenRouter. These requests can include the content of
+          messages and documents needed for the task. API data is not used for training by default.
+          Retention depends on the endpoint and approved account controls; API access alone does not
+          establish Zero Data Retention. See OpenAI&rsquo;s{" "}
           <a href="https://developers.openai.com/api/docs/guides/your-data">
             data controls documentation
           </a>
@@ -297,20 +399,19 @@ export default function Privacy() {
         </li>
         <li>
           <strong>OpenRouter</strong> — routing model and embedding requests to selected providers.
-          It receives the prompts and content needed for those requests. Its terms and the selected
-          upstream provider&rsquo;s controls require separate review.
+          The current application also sends new image, video, speech-generation and
+          file-transcription requests through OpenRouter. It receives the prompts and source content
+          needed for those requests. Its terms and the selected upstream provider&rsquo;s controls
+          require separate review.
         </li>
         <li>
           <strong>Resend</strong> — delivering account verification and password recovery emails,
           including the destination email address and one-time code.
         </li>
         <li>
-          <strong>fal.ai</strong> — image, video, and speech generation. It receives the prompts and
-          any source images or audio for media you ask us to create.
-        </li>
-        <li>
-          <strong>Alibaba Cloud (Model Studio)</strong> — image and video generation using the WAN
-          models. It receives the prompts and source assets for that media. See section 8.
+          <strong>Alibaba Cloud (Model Studio)</strong> — a retained WAN integration can check and
+          retrieve results for previously submitted jobs. It does not submit new generation
+          requests. See section 8.
         </li>
         <li>
           <strong>Tavily</strong> — web search, when an agent needs current information. It receives
@@ -327,20 +428,26 @@ export default function Privacy() {
         may disclose data where required by law, or to establish or defend legal claims.
       </p>
 
+      <p>
+        Meta and TikTok also receive connection requests and, when you approve a publication, the
+        content needed to publish to your selected account. These platforms and YouTube apply their
+        own terms and privacy policies to information they receive.
+      </p>
+
       <h2>8. International transfers</h2>
       <p>
-        Most of our providers are established in, or process data in, the United States.{" "}
-        <strong>One is not:</strong> media generation on the WAN models is routed to Alibaba Cloud
-        Model Studio in <strong>Singapore</strong> (region <code>ap-southeast-1</code>). This
-        applies only if you ask Pikar to generate images or video; if you never do, no data reaches
-        it.
+        Processing locations depend on the enabled service, provider route and account
+        configuration. New media-generation requests currently use OpenRouter. The retained Alibaba
+        Cloud WAN integration only checks and retrieves results for older jobs, using its configured
+        endpoint. Applicable processing regions and transfer arrangements remain subject to
+        confirmation.
       </p>
       <p>
-        Where personal data is transferred outside the UK or European Economic Area, we rely on the
-        European Commission&rsquo;s Standard Contractual Clauses, the UK International Data Transfer
-        Addendum, or an adequacy decision, as applicable to each provider. You may request a copy of
-        the safeguards in place, including the specific region a provider processes in, by writing
-        to <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
+        We have not confirmed the contractual transfer safeguards for every enabled provider route.
+        The applicable terms and any Standard Contractual Clauses, UK International Data Transfer
+        Addendum or adequacy basis require verification for the specific service and processing
+        location. You can request the information currently available by writing to{" "}
+        <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
       </p>
 
       <h2>9. Retention, and the immutable audit archive</h2>
@@ -348,6 +455,37 @@ export default function Privacy() {
         We keep account data and your submitted content for as long as your account is active. You
         may request deletion at any time (section 10); we will action it within one month, as
         required by Article 12(3) GDPR.
+      </p>
+      <p>
+        <strong>YouTube-specific limits override the general retention periods.</strong> YouTube
+        API-derived channel and video metadata must be refreshed or deleted within 30 calendar days.
+        We retain authorisation tokens only while needed for the access you consented to. General
+        account or audit retention does not extend these limits to YouTube API data in histories or
+        other retained records.
+      </p>
+      <p>
+        When you disconnect YouTube in Pikar, we immediately request token revocation from Google.
+        Data obtained under that consent must be deleted as soon as possible and within 7 calendar
+        days. The same 7-calendar-day deadline applies when you request deletion of stored YouTube
+        data by contacting us, or erase your Pikar account. If you revoke through Google Account
+        connections instead, related YouTube API data must be deleted as soon as possible and within
+        30 calendar days; authorisation must be periodically checked and data deleted when the token
+        cannot be refreshed. These deadlines take precedence over the one-month response period in
+        section 10.
+      </p>
+      <p>
+        These limits concern data obtained through YouTube APIs, rather than original drafts or
+        media you supplied independently. Removing Pikar data does not delete videos on YouTube;
+        manage those in YouTube. YouTube API-derived data remains unavailable to agents, and new
+        connections and publishing remain restricted pending platform and retention checks. We have
+        not verified removal of every historical copy from conversations or other retained records.
+        A disconnect or account-closed message alone does not confirm that verification; contact us
+        for the status of your deletion request.
+      </p>
+      <p>
+        Account access ends during erasure. Removal of search copies can continue in the background
+        after the account-closed message appears. That message does not confirm that background
+        removal has finished; contact us for confirmation of completion.
       </p>
       <p>
         Audit records are retained as an immutable compliance log.{" "}
@@ -404,12 +542,15 @@ export default function Privacy() {
         excessive.
       </p>
       <p>
-        You can disconnect your Google account at any time from within the application, or revoke
+        You can disconnect your Google mailbox connection from within the application, or revoke
         access directly at{" "}
         <a href="https://myaccount.google.com/permissions" rel="noopener noreferrer">
           myaccount.google.com/permissions
         </a>
-        . Revoking access invalidates our tokens immediately.
+        . For requests made through Pikar, removing the stored token and revoking access at Google
+        are distinct outcomes. Follow the app&rsquo;s status message. If Google revocation is not
+        confirmed or the request fails, check the connection status and use Google&rsquo;s account
+        controls to complete revocation.
       </p>
       <p>
         You can disconnect your Microsoft account at any time from within the application. That
@@ -435,8 +576,12 @@ export default function Privacy() {
       </p>
       <p>
         If you are unhappy with how we handle your data, you may complain to your local supervisory
-        authority. Our lead supervisory authority is {LEAD_AUTHORITY}. In the UK, this is the
-        Information Commissioner&rsquo;s Office (<code>ico.org.uk</code>).
+        authority. Where the GDPR applies, you may lodge a complaint under{" "}
+        <a href="https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679">
+          Article 77
+        </a>
+        , including with an authority in the Member State where you usually live or work, or where
+        the alleged infringement occurred.
       </p>
 
       <h2>11. Security</h2>

@@ -1,11 +1,12 @@
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import schema from "./schema";
 import {
   assertPresenceDesignStage,
   STITCH_INCLUDED_CREDITS_DECLARATION,
 } from "./presenceDesignProbe";
+import schema from "./schema";
+
 const modules = import.meta.glob("./**/*.*s");
 afterEach(() => {
   vi.unstubAllEnvs();

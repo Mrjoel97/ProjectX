@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   merchantClient,
+  paypalPaymentReceipt,
+  safeMerchantUrl,
   stripeCapability,
   stripePaymentReceipt,
-  safeMerchantUrl,
-  paypalPaymentReceipt,
 } from "./merchantProviderClient";
+
 afterEach(() => vi.unstubAllEnvs());
 const attempt = {
   tenantId: "tenant",

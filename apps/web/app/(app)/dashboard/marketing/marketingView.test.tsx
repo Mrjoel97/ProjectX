@@ -19,6 +19,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock("convex/react", () => ({
   useQuery: (api: unknown) => {
     const name = getFunctionName(api as never);
+    if (name === "social:status")
+      return ["x", "meta", "tiktok", "youtube"].map((provider) => ({
+        provider,
+        configured: false,
+        connected: false,
+        status: "disconnected",
+      }));
     if (name === "buffer:status")
       return {
         configured: true,
@@ -49,6 +56,17 @@ vi.mock("convex/react", () => ({
         : mocks.record;
   },
 }));
+vi.mock("../skills-workflows/ManagedServicesPanel", () => ({
+  ManagedServicesPanel: () => (
+    <label>
+      Service goal
+      <input aria-label="Service goal" />
+    </label>
+  ),
+}));
+async function openSection(id: string) {
+  await act(async () => host.querySelector<HTMLButtonElement>(`#marketing-${id}-tab`)!.click());
+}
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
@@ -65,6 +83,28 @@ afterEach(async () => {
   host.remove();
 });
 describe("Marketing surface", () => {
+  it("opens services, loads other sections on demand and retains drafts when navigating by keyboard", async () => {
+    await act(async () => root.render(<MarketingView />));
+    expect(host.querySelector('input[name="email"]')).toBeNull();
+    expect(host.querySelector("#marketing-services-tab")?.getAttribute("aria-selected")).toBe(
+      "true",
+    );
+    const goal = host.querySelector<HTMLInputElement>('input[aria-label="Service goal"]')!;
+    goal.value = "Keep my draft";
+    await act(async () =>
+      host
+        .querySelector("#marketing-services-tab")
+        ?.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })),
+    );
+    expect(host.querySelector("#marketing-accounts-panel")?.hasAttribute("hidden")).toBe(false);
+    expect(document.activeElement?.id).toBe("marketing-accounts-tab");
+    await openSection("services");
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="Service goal"]')?.value).toBe(
+      "Keep my draft",
+    );
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.record).not.toHaveBeenCalled();
+  });
   it("exposes one approved Marketing entry through desktop and compact navigation", () => {
     const layout = readFileSync("app/(app)/layout.tsx", "utf8");
     const nav = layout.slice(layout.indexOf("const NAV:"), layout.indexOf("const RAIL_KEY"));
@@ -101,6 +141,7 @@ describe("Marketing surface", () => {
       },
     });
     await act(async () => root.render(<MarketingView />));
+    await openSection("leads");
     const select = host.querySelector("select")!;
     await act(async () => {
       select.value = "doc";
@@ -138,13 +179,12 @@ describe("Marketing surface", () => {
     expect(host.querySelectorAll("input[readonly]")).toHaveLength(0);
     expect(host.innerHTML).not.toContain("synthetic-secret");
   });
-  it("renders all channels and explicit social gates without fake connections", () => {
+  it("renders Gmail and the remaining LinkedIn gate without duplicating native social cards", () => {
     const html = renderToStaticMarkup(<ChannelsView connected={false} configured={true} />);
-    for (const name of ["Gmail", "Meta/Instagram", "LinkedIn", "TikTok", "X", "YouTube"])
-      expect(html).toContain(name);
-    expect(html.match(/legal entity is not formed/g)).toHaveLength(5);
+    for (const name of ["Gmail", "LinkedIn"]) expect(html).toContain(name);
+    expect(html.match(/legal entity is not formed/g)).toHaveLength(1);
     expect(html.match(/provider suitability and permissions review has not started/g)).toHaveLength(
-      5,
+      1,
     );
     expect(html).toContain("/connect-gmail");
     expect(html).toContain("intent=marketing");
@@ -180,6 +220,7 @@ describe("Marketing surface", () => {
   });
   it("allows paging past an empty filtered artifact page and does not submit", async () => {
     await act(async () => root.render(<MarketingView />));
+    await openSection("leads");
     const button = [...host.querySelectorAll("button")].find(
       (button) => button.textContent === "Load more files",
     )!;
@@ -190,6 +231,7 @@ describe("Marketing surface", () => {
   it("captures without implied consent and truthfully displays suppression", async () => {
     mocks.record.mockResolvedValue({ reason: "suppressed" });
     await act(async () => root.render(<MarketingView />));
+    await openSection("leads");
     const email = host.querySelector<HTMLInputElement>('input[name="email"]')!;
     email.value = "synthetic@example.test";
     expect(host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(false);
@@ -208,8 +250,10 @@ describe("Marketing surface", () => {
     mocks.queryFailure = true;
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     await act(async () => root.render(<MarketingView />));
+    await openSection("leads");
     expect(host.textContent).toContain("This section could not load");
     expect(host.querySelector('input[name="email"]')).not.toBeNull();
+    await openSection("accounts");
     expect(host.textContent).toContain("TikTok");
     log.mockRestore();
   });

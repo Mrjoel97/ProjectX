@@ -1,6 +1,45 @@
 # Phase 23 execution preparation — 2026-09-11
 
-## Current continuation — 2026-10-19
+## Current continuation — PR82 released handoff, 2026-10-22
+
+Use [the current PR82 handoff](handoffs/2026-10-21-pr82/23-LIVE-HANDOFF.json), SHA256
+`e7ee9d75acf644ab20d8e72e708b92941649b20b026b8778738b3f371ebf4b62`, after source `821b097ceae440730bc51988af0425fb878687fb` passed
+CI `39663077579` and staging release `39668142870`. [The refresh](handoffs/2026-10-21-pr82/23-HANDOFF-REFRESH.json),
+SHA256 `f94d17cf0457952c3c035755d23683f55374bfbf682f7dd9677afd98fb62f59c`, records fresh native/UI and final six matching
+reads. The released suite is 825ef/5dbe, 46 cases; candidate and both historical bills remain
+unchanged. Follow the current 23-07/08/09 contexts and PR82 sibling artifact directory. No
+paid checkpoint/consent or evaluation result exists. Revalidate exact admission before a
+separate paid checkpoint; do not replay authoring/bootstrap or the consumed PR81 attempt.
+Phase 23 stays 6/9, Phase 48 partial and Phase 49 not started.
+
+## Historical PR81 terminal startup, 2026-10-21
+
+23-06 is complete; do not rerun authoring/bootstrap from older setup instructions.
+[The separate immutable startup observation](23-07-STARTUP-2026-10-21-PR81.json) (SHA256 `8815857b7e559e24c4daf42a2092f0e0ae7b163d329ea0c12b67e3abb851bb2c`) records the latest attempt.
+The separately approved PR81 attempt consumed authorization SHA256
+`c663e7a1b3dbe2f6060a41d2beb152de4578b0e12a86839419a456041ce2de1d` when its exclusive once record
+was written and the runner started at`2026-10-21T17:11:44.900Z`. It stopped at startup
+with`skills:inspectTenantSkill` reporting`TypeError: fetch failed`, before budget opening,
+fixture writes or provider work; zero cases were judged. The earlier wrapper admission-only
+exit had no once record or runner start and is not a second full attempt. A complete bounded
+native creation-time window, including a two-minute pre-attempt margin through server
+observation, returned zero spend rows, zero new envelopes and zero evaluation movements.
+Both historical closed budgets and bills are unchanged. No new budget, run/root identity,
+evidence, public B mutation, activation, cleanup or production change was observed.
+The consumed once record is not reset; native zero-work reconciliation permits no replay.
+
+The narrow helper repair is offline only: golden revision
+`2026-09-11.budgeted-evaluator.825ef5cab4634d8560249094e8e6db1ad841732d72545bcf8fa57214f5965b51`
+and vertical revision`01d6d6908bd0eecac14bc30b1f90a88edb0db8f14c4cc46fc8fa2f036a724425`
+retain the unchanged 46-case golden and 40-case vertical corpora. The deployed source remains
+`cafde7c6c7d65924b7a48433cf4938983d91707c` with 5867/5dbe suite and immutable 39df
+handoff; that chain does not qualify the new helper source. Exact-source CI, reviewed staging
+release, a new versioned handoff and fresh paid approval must precede another attempt.
+No evaluation or source-deployment retry is authorized by the consumed approval.
+
+The existing native owner/non-owner and public-refusal boundaries remain; no paid gate or owner action is completed by this repair. Phase 23 stays 6/9, Phase 48 partial and49 not started.
+
+## Historical continuation — 2026-10-19
 
 Phase48's signed-in production read-only recovery supersedes the historical setup assumptions
 below: A is already owner, B is non-owner, the recovered thread has zero candidates/tool calls,

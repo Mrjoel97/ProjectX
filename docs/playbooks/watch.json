@@ -1,4 +1,23 @@
 {
+  "managed-services.md": [
+    "packages/core/src/serviceKnowledge",
+    "packages/backend/convex/serviceConversations",
+    "packages/backend/__fixtures__/serviceKnowledge",
+    "apps/web/app/(app)/dashboard/skills-workflows/ServiceKnowledgeConversation",
+    "apps/web/app/(app)/dashboard/skills-workflows/serviceKnowledgeConversation",
+    "packages/backend/__fixtures__/reviewedBlueprint",
+    "packages/core/src/managedService",
+    "packages/core/src/serviceOutcomes",
+    "packages/core/src/socialServiceOutcome",
+    "packages/backend/convex/serviceOutcomes",
+    "apps/web/app/(app)/dashboard/skills-workflows/ServiceOutcomesPanel",
+    "apps/web/app/(app)/dashboard/skills-workflows/ServiceRecurrencePanel",
+    "apps/web/app/(app)/dashboard/skills-workflows/serviceRecurrencePanel",
+    "apps/web/e2e/managed-social-service.spec.ts",
+    "packages/backend/convex/managedService",
+    "packages/backend/convex/lib/managedServiceBudget",
+    "apps/web/app/(app)/dashboard/skills-workflows/ManagedServicesPanel"
+  ],
   "zernio.md": [
     "packages/core/src/zernio",
     "packages/backend/scripts/zernioPilot",
@@ -15,10 +34,7 @@
     "apps/web/app/(app)/dashboard/marketing/BufferPanel.tsx",
     "apps/web/app/(app)/dashboard/marketing/bufferPanel.test.tsx"
   ],
-  "_unassigned": [
-    "packages/backend/vitest.diag.setup.ts",
-    "packages/backend/convex/schema.ts"
-  ],
+  "_unassigned": ["packages/backend/vitest.diag.setup.ts", "packages/backend/convex/schema.ts"],
   "marketing.md": [
     "apps/web/e2e/marketing-uat.spec.ts",
     "packages/core/src/marketing",
@@ -79,7 +95,9 @@
     "packages/backend/convex/importGuard.test.ts",
     "apps/web/app/(app)/ops/",
     "packages/backend/convex/authRevocations",
-    "packages/core/src/authLifetime.ts"
+    "packages/core/src/authLifetime.ts",
+    "packages/backend/convex/mediaCampaign",
+    "packages/backend/convex/vaultPresentations"
   ],
   "growth-diagnostic.md": [
     "packages/core/src/researchEvidence",
@@ -135,6 +153,7 @@
     "packages/backend/scripts/run-eval-golden.mjs",
     "packages/backend/scripts/goldenPaidAttempt.mjs",
     "packages/backend/scripts/goldenEvaluatorIdentity",
+    "packages/backend/scripts/smokeRun",
     "packages/backend/scripts/eval-cases/",
     "packages/backend/scripts/run-probe-websearch.mjs",
     "packages/backend/scripts/launch-detached.ps1",
@@ -212,6 +231,9 @@
     "apps/web/app/(app)/dashboard/sites/"
   ],
   "cockpit.md": [
+    "apps/web/lib/workspaceArtifactFixtures.test.ts",
+    "packages/core/src/workspaceArtifacts",
+    "packages/backend/convex/workspaceArtifacts",
     "scripts/check-phase23-probe-controls",
     "scripts/check-phase23-mutation-proofs.mjs",
     "apps/web/app/(app)/dashboard/workspace/",
@@ -289,7 +311,11 @@
     "packages/backend/convex/requests.ts",
     "packages/backend/convex/lib/webResearchTools.ts",
     "packages/backend/convex/lib/markdownPdf.ts",
-    "packages/backend/convex/retrievalBounds.test.ts"
+    "packages/backend/convex/retrievalBounds.test.ts",
+    "packages/core/src/presentation",
+    "packages/backend/convex/lib/presentationPptx",
+    "packages/backend/convex/productionArtifacts.test.ts",
+    "apps/web/e2e/workspace-artifacts"
   ],
   "audit-dead-letter.md": [
     "packages/backend/convex/ragErasure",
@@ -363,6 +389,8 @@
     "apps/web/app/lib/normalizeAudio.ts"
   ],
   "vault.md": [
+    "apps/web/app/(app)/dashboard/artifacts/",
+    "apps/web/scripts/sync-pdf-assets.mjs",
     "packages/vault/",
     "packages/backend/convex/vault.ts",
     "packages/backend/convex/vaultExtract.ts",
@@ -389,9 +417,18 @@
     "apps/web/e2e/vault.spec.ts",
     "packages/backend/scripts/run-smoke-vault.mjs",
     "packages/backend/convex/vaultRag.test.ts",
-    "apps/web/app/lib/uploadTranscriptionAudio.ts"
+    "apps/web/app/lib/uploadTranscriptionAudio.ts",
+    "packages/core/src/workbookReport",
+    "packages/core/src/presentation",
+    "packages/backend/convex/vaultPresentations",
+    "packages/core/src/brandKit",
+    "packages/backend/convex/brandKits"
   ],
   "media.md": [
+    "packages/core/src/mediaBudget",
+    "packages/core/src/nativeMedia",
+    "packages/core/src/mediaProviderContract",
+    "packages/core/src/productionQuality",
     "packages/backend/convex/reliabilitySweep.ts",
     "packages/backend/convex/reliabilitySweep.test.ts",
     "packages/cost/src/media.ts",
@@ -399,7 +436,7 @@
     "packages/core/src/assembly.ts",
     "packages/core/src/render.ts",
     "packages/core/src/captions.ts",
-    "packages/core/src/stockSelection.ts",
+    "packages/core/src/stockSelection",
     "packages/backend/convex/media.ts",
     "packages/backend/convex/media.test.ts",
     "packages/backend/convex/mediaComplete.ts",
@@ -411,7 +448,18 @@
     "apps/web/scripts/music/",
     "packages/backend/scripts/run-storyboard-bakeoff.mjs",
     "packages/backend/scripts/storyboard-briefs.json",
-    "packages/backend/convex/lib/mediaRead.ts"
+    "packages/backend/convex/lib/mediaRead.ts",
+    "packages/core/src/mediaCampaign",
+    "packages/backend/convex/mediaCampaign",
+    "apps/web/app/(app)/dashboard/workspace/MediaCampaign",
+    "packages/backend/scripts/run-image-quality-qualification",
+    "packages/backend/scripts/run-reel-quality-qualification",
+    "packages/backend/scripts/run-seedance-quality-qualification",
+    "packages/core/src/mediaFinishing",
+    "packages/core/src/orbitRing",
+    "packages/backend/scripts/prepare-director-comparison.mjs",
+    "packages/backend/scripts/evaluate-director-comparison",
+    "packages/core/src/stockSelection.ts"
   ],
   "contacts-crm.md": [
     "packages/core/src/marketingLead",
@@ -424,8 +472,6 @@
     "apps/web/app/(app)/dashboard/pipeline/"
   ],
   "guardrails.md": [
-    "packages/backend/convex/presenceComparison",
-    "packages/core/src/presenceComparison",
     "packages/backend/convex/authoringProbe",
     "packages/backend/convex/goldenBudget.test.ts",
     "packages/backend/convex/guardrails.ts",
@@ -439,7 +485,11 @@
     "packages/cost/src/cost.ts",
     "packages/core/src/fallback.ts",
     "packages/core/src/fallback.test.ts",
-    "packages/backend/convex/scaleConstants.test.ts"
+    "packages/backend/convex/scaleConstants.test.ts",
+    "packages/backend/convex/mediaCampaign",
+    "packages/core/src/mediaCampaign",
+    "packages/backend/convex/presenceComparison",
+    "packages/core/src/presenceComparison"
   ],
   "proposals.md": [
     "packages/core/src/proposal.ts",
@@ -453,9 +503,13 @@
     "packages/backend/convex/fixtureSeam.test.ts",
     "packages/backend/convex/ops.ts",
     ".github/workflows/deploy-production.yml",
-    "scripts/check-release-auth.mjs"
+    "scripts/check-release-auth.mjs",
+    "scripts/check-release-social"
   ],
   "workflow-packs.md": [
+    "apps/web/e2e/workflow-pack-pilot.spec.ts",
+    "apps/web/e2e/workflow-pack-protocol.spec.ts",
+    "apps/web/e2e/workflowPackBrowserProtocol.ts",
     "apps/web/app/(app)/dashboard/skills-workflows/",
     "packages/core/src/workflowPack",
     "packages/backend/convex/workflowPack",
@@ -545,7 +599,7 @@
     "packages/backend/convex/verticalVisual",
     "packages/backend/convex/verticalEval",
     "packages/backend/scripts/vertical-eval-",
-    "packages/backend/scripts/smokeRun.mjs",
+    "packages/backend/scripts/smokeRun",
     "packages/vault/src/dataWorkbook",
     "packages/backend/convex/verticalPacks",
     "packages/backend/convex/verticalPackTelemetry",
@@ -556,16 +610,23 @@
     "packages/backend/convex/verticalEngineering.test.ts",
     "packages/backend/convex/verticalProductDesign.test.ts",
     "apps/web/app/(app)/dashboard/profile/VerticalPackRecommendations.tsx",
-    "apps/web/app/(app)/dashboard/profile/verticalPackRecommendations"
+    "apps/web/app/(app)/dashboard/profile/verticalPackRecommendations",
+    "packages/backend/scripts/smokeRun.mjs"
   ],
-  "revenue-crm.md": [
-    "packages/revenue/src/crm",
-    "packages/backend/convex/revenueCrm"
-  ],
+  "revenue-crm.md": ["packages/revenue/src/crm", "packages/backend/convex/revenueCrm"],
   "revenue-finance.md": [
     "packages/revenue/src/money",
     "packages/revenue/src/finance",
     "packages/backend/convex/revenueFinance"
+  ],
+  "social-connections.md": [
+    "packages/core/src/social",
+    "packages/backend/convex/social",
+    "apps/web/app/(app)/connect-social/",
+    "apps/web/app/(app)/dashboard/marketing/SocialPanel.tsx",
+    "packages/backend/convex/youtubeMetadata.test.ts",
+    "packages/backend/convex/socialDisconnect.test.ts",
+    "apps/web/app/social/youtube/callback/"
   ],
   "online-presence.md": [
     "packages/backend/convex/presenceComparison",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["NEXT_PUBLIC_CONVEX_URL", "CONVEX_DEPLOYMENT"],
+  "globalEnv": ["NEXT_PUBLIC_CONVEX_URL", "CONVEX_DEPLOYMENT", "CI"],
   "globalPassThroughEnv": ["CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS"],
   "tasks": {
     "dev": {

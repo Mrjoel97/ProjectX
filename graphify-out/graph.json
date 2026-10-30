@@ -111247,6 +111247,126 @@
       "norm_label": "zernioReports (table)"
     },
     {
+      "label": "socialWebhookReceipts (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L196",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_socialwebhookreceipts_table",
+      "community": 460,
+      "norm_label": "socialWebhookReceipts (table)"
+    },
+    {
+      "label": "socialOAuthStates (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L201",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_socialoauthstates_table",
+      "community": 460,
+      "norm_label": "socialOAuthStates (table)"
+    },
+    {
+      "label": "socialPosts (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L219",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_socialposts_table",
+      "community": 460,
+      "norm_label": "socialPosts (table)"
+    },
+    {
+      "label": "socialConnections (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L223",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_socialconnections_table",
+      "community": 460,
+      "norm_label": "socialConnections (table)"
+    },
+    {
+      "label": "vaultPresentations (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L2605",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_vaultpresentations_table",
+      "community": 460,
+      "norm_label": "vaultPresentations (table)"
+    },
+    {
+      "label": "mediaCampaigns (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L2612",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_mediacampaigns_table",
+      "community": 460,
+      "norm_label": "mediaCampaigns (table)"
+    },
+    {
+      "label": "brandKits (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L3034",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_brandkits_table",
+      "community": 460,
+      "norm_label": "brandKits (table)"
+    },
+    {
+      "label": "managedServices (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L210",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_managedservices_table",
+      "community": 460,
+      "norm_label": "managedServices (table)"
+    },
+    {
+      "label": "managedServiceRuns (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L211",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_managedserviceruns_table",
+      "community": 460,
+      "norm_label": "managedServiceRuns (table)"
+    },
+    {
+      "label": "managedServiceStandingApprovals (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L243",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_managedservicestandingapprovals_table",
+      "community": 460,
+      "norm_label": "managedServiceStandingApprovals (table)"
+    },
+    {
+      "label": "managedServiceOccurrences (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L292",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_managedserviceoccurrences_table",
+      "community": 460,
+      "norm_label": "managedServiceOccurrences (table)"
+    },
+    {
+      "label": "serviceOutcomeObservations (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L454",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_serviceoutcomeobservations_table",
+      "community": 460,
+      "norm_label": "serviceOutcomeObservations (table)"
+    },
+    {
       "label": "webProjects (table)",
       "file_type": "code",
       "source_file": "packages/backend/convex/schema.ts",
@@ -306236,6 +306356,148 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_proactivereview",
       "target": "packages_backend_convex_tenantprofile_fortenant"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L196",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_socialwebhookreceipts_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L201",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_socialoauthstates_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L219",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_socialposts_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L223",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_socialconnections_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L2605",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_vaultpresentations_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L2612",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_mediacampaigns_table"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/llm.ts",
+      "source_location": "L2047",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_llm",
+      "target": "packages_backend_convex_guardrails_remainingdailycents"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/llm.ts",
+      "source_location": "L4552",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_llm",
+      "target": "packages_backend_convex_vault_upsertsheets"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L3034",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_brandkits_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L210",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_managedservices_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L211",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_managedserviceruns_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L243",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_managedservicestandingapprovals_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L292",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_managedserviceoccurrences_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L454",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_serviceoutcomeobservations_table"
     },
     {
       "relation": "contains",

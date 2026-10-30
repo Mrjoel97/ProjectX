@@ -6,6 +6,9 @@ import {
   ENTITY_ADDRESS,
   GOVERNING_LAW,
   HAS_PLACEHOLDERS,
+  LEGAL_REVIEW_DEFERRED,
+  OWNER_APPROVED_PUBLICATION,
+  OWNER_REVIEWED_DATE,
   SITE,
   VENUE,
 } from "../legal";
@@ -13,7 +16,7 @@ import {
 export const metadata: Metadata = {
   title: "Terms of Service — Pikar AI",
   description:
-    "The terms governing your use of Pikar AI, including private beta status, acceptable use, responsibility for emails sent through your connected Google account, and limitations of liability.",
+    "The terms governing your use of Pikar AI, including private beta status, acceptable use, responsibility for approved emails and social posts, connected platform terms, and limitations of liability.",
   alternates: { canonical: `${SITE}/terms` },
 };
 
@@ -23,12 +26,13 @@ export default function Terms() {
       <h1>Terms of Service</h1>
       <p className="updated">Effective {EFFECTIVE}</p>
 
-      {HAS_PLACEHOLDERS && (
+      {HAS_PLACEHOLDERS || LEGAL_REVIEW_DEFERRED || !OWNER_APPROVED_PUBLICATION ? (
         <p className="notice">
-          <strong>Draft — not yet in force.</strong> This document has not been reviewed by a
-          qualified lawyer. The bracketed legal details below remain unconfirmed. Publication under
-          the existing review deferral does not complete legal review.
+          <strong>Draft — not yet in force.</strong> Publication approval is pending or deferred, or
+          identifying details remain unresolved.
         </p>
+      ) : (
+        <p className="updated">Published with owner approval on {OWNER_REVIEWED_DATE}.</p>
       )}
 
       <h2>1. Agreement</h2>
@@ -73,15 +77,51 @@ export default function Terms() {
 
       <h2>4. What the service does</h2>
       <p>
-        You give Pikar a goal. It plans the work and presents that plan to you. Once you approve it,
-        Pikar carries the plan out autonomously under cost and content guardrails, notifies you as
-        stages complete, and writes every step to an append-only audit log. You can halt a running
-        automation at any time.
+        You give Pikar a goal. It may read authorised context and prepare drafts while planning.
+        Work that requires approval is presented for your review before the approved action or plan
+        runs. Approved work proceeds under cost and content guardrails, with notifications and an
+        append-only audit trail. Direct social publication requires separate approval of the saved
+        post. You can halt a running automation at any time.
       </p>
       <p>
-        If you connect a Google account, Pikar&rsquo;s agents can read your email, draft and send
-        messages as you, and organise your mail. You grant this once, through Google&rsquo;s consent
-        screen, and may revoke it at any time. Pikar cannot permanently delete your email.
+        If you connect the Google mailbox integration, Pikar&rsquo;s agents can read your email,
+        draft and send messages as you, and organise your mail. You grant this once, through
+        Google&rsquo;s consent screen, and may revoke it at any time. Pikar cannot permanently
+        delete your email.
+      </p>
+
+      <h2 id="social-accounts">4a. Connected social accounts and publication</h2>
+      <p>
+        Pikar offers direct connections for customers to use their own Facebook Pages, linked
+        professional Instagram accounts, TikTok creators and YouTube channels. Signing in does not
+        connect all your accounts or grant every permission. You authorise each provider connection
+        and select the accounts your workspace may use. Connect only accounts you own or are
+        authorised to manage.
+      </p>
+      <p>
+        Identity, content reading and publication are separate capabilities. Additional access
+        requires the provider permissions shown during connection. Some capabilities remain
+        unavailable while platform approval or qualification is pending. A successful connection
+        alone does not promise publishing access, analytics, messaging or advertising features.
+      </p>
+      <p>
+        For direct social publication, an agent may prepare a draft, but you must review and approve
+        the saved post, destination, text, media, visibility and required disclosures before
+        submission. Approval of a general plan does not approve future posts. You are responsible
+        for the content you approve, authority to publish it, media and music rights, audience
+        choices, and commercial or altered-content disclosures. Do not submit another
+        creator&rsquo;s work without permission.
+      </p>
+      <p>
+        Providers can reject, delay, restrict or remove content. An accepted upload or processing
+        receipt does not establish that a post is publicly available. If an outcome is uncertain,
+        check the platform before approving another attempt. Disconnecting Pikar removes local
+        connection credentials. YouTube disconnect also requests Google revocation after showing its
+        effect on other integrations in the same Google project; the result screen explains whether
+        further manual action is needed. Other providers require separate revocation. Published
+        posts stay on the platform. See the{" "}
+        <a href="/privacy#social-accounts">social connection privacy controls</a> for revocation,
+        export and erasure information.
       </p>
 
       <h2>5. AI-generated output</h2>
@@ -100,7 +140,7 @@ export default function Terms() {
 
       <h2>6. Email sent through your Google account</h2>
       <p>
-        If you connect a Google account, Pikar acts on your mailbox using the{" "}
+        If you connect the Google mailbox integration, Pikar acts on your mailbox using the{" "}
         <code>gmail.modify</code> permission. Messages it sends leave{" "}
         <strong>from your mailbox, as you</strong>. In law and in fact,{" "}
         <strong>you are the sender</strong> — including messages sent autonomously as part of an
@@ -183,9 +223,29 @@ export default function Terms() {
 
       <h2>11. Third-party services</h2>
       <p>
-        Pikar depends on services we do not control, including Google, Convex, Vercel, and Amazon
-        Web Services. Your use of a connected Google account is also governed by Google&rsquo;s own
-        terms. We are not responsible for those services&rsquo; acts, omissions, or availability.
+        Pikar uses the external services described in our <a href="/privacy">Privacy Policy</a>. The
+        services involved depend on the feature and configured provider route. Your use of a
+        connected Google account is also governed by Google&rsquo;s own terms. We are not
+        responsible for those services&rsquo; acts, omissions, or availability.
+      </p>
+
+      <p>
+        Pikar uses YouTube API Services. By using Pikar&rsquo;s YouTube features, you agree to be
+        bound by the{" "}
+        <a href="https://www.youtube.com/t/terms" rel="noopener noreferrer">
+          YouTube Terms of Service
+        </a>
+        . Google&rsquo;s{" "}
+        <a href="https://policies.google.com/privacy" rel="noopener noreferrer">
+          Privacy Policy
+        </a>{" "}
+        also applies to information handled by Google. You can revoke Pikar&rsquo;s YouTube access
+        through your{" "}
+        <a href="https://myaccount.google.com/permissions" rel="noopener noreferrer">
+          Google Account connections
+        </a>
+        . Your use of Meta and TikTok is also subject to the relevant platform&rsquo;s terms,
+        community rules and content policies; Pikar approval does not override them.
       </p>
 
       <h2>12. Disclaimers</h2>

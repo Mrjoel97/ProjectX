@@ -10,6 +10,7 @@ import type { EvalEvidence, EvalEvidenceTenantTarget } from "@pikar/contracts/sk
 import {
   ATTACHMENT_EXTRACTOR_SKILL,
   BMC_SKILL,
+  BRAND_KIT_DESIGNER_SKILL,
   BUSINESS_BLUEPRINT_SKILL,
   BUSINESS_PROFILE_SKILL,
   COCKPIT_AGENT_SKILL,
@@ -45,6 +46,7 @@ import {
   NO_SUCH_TENANT_CANDIDATE_ERROR,
   OFFER_ARCHITECT_SKILL,
   ONBOARDING_AGENT_SKILL,
+  PRESENTATION_DRAFTER_SKILL,
   REPLY_DRAFTER_SKILL,
   RESEARCH_SPECIALIST_SKILL,
   SPREADSHEET_DRAFTER_SKILL,
@@ -58,6 +60,7 @@ import {
 } from "@pikar/contracts/skill";
 import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachmentExtractor";
 import { bmcSkillBody } from "@pikar/contracts/skills/bmc";
+import { brandKitDesignerBody } from "@pikar/contracts/skills/brandKitDesigner";
 import { businessBlueprintSkillBody } from "@pikar/contracts/skills/businessBlueprint";
 import { businessProfileSkillBody } from "@pikar/contracts/skills/businessProfile";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
@@ -95,6 +98,7 @@ import { packOfferAndLeadPlanSkillBody } from "@pikar/contracts/skills/packOffer
 import { packProcessSopSkillBody } from "@pikar/contracts/skills/packProcessSop";
 import { packSalesCallPrepSkillBody } from "@pikar/contracts/skills/packSalesCallPrep";
 import { packShopPreparationSkillBody } from "@pikar/contracts/skills/packShopPreparation";
+import { presentationDrafterSkillBody } from "@pikar/contracts/skills/presentationDrafter";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { researchSpecialistSkillBody } from "@pikar/contracts/skills/researchSpecialist";
 import { revenueSkillBodies } from "@pikar/contracts/skills/revenueBodies";
@@ -809,6 +813,7 @@ const SEEDS = [
   // golden fixture reaches the drafting path — and the same remedy: a NEW name, so the body
   // lands at v1 `active` and `document-drafter` stays byte-unchanged.
   { name: SPREADSHEET_DRAFTER_SKILL, body: spreadsheetDrafterSkillBody },
+  { name: PRESENTATION_DRAFTER_SKILL, body: presentationDrafterSkillBody },
   // UNGATED (20-03, MEDIA-01): the media specialist. Same deadlock as document-analyst — the
   // golden runner drives runCockpitAgent over TEXT fixtures and cannot exercise a
   // script/art-direction/storyboard turn, so gating would strand this at v1 on its first body
@@ -848,6 +853,8 @@ const SEEDS = [
   // synthesizing from a hardcoded fallback — which is the correct direction and is deliberate.
   { name: KNOWLEDGE_QUERY_PLANNER_SKILL, body: knowledgeQueryPlannerSkillBody },
   { name: KNOWLEDGE_SYNTHESIZER_SKILL, body: knowledgeSynthesizerSkillBody },
+  // Draft-only proposal; human approval and activation are enforced by the brand workflow.
+  { name: BRAND_KIT_DESIGNER_SKILL, body: brandKitDesignerBody },
 ];
 
 /** Every seeded skill name. Derived from `SEEDS`, never typed a second time. */

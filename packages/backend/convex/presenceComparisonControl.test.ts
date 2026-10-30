@@ -2,8 +2,8 @@ import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
-import schema from "./schema";
 import { COMPARISON_NAMESPACE } from "./presenceComparisonControl";
+import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const aggregateModules = import.meta.glob(

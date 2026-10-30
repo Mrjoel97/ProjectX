@@ -1,3 +1,5 @@
+> Last verified: 2026-10-23 — serviceBrainView is a bounded cited read over existing goals, ready business-profile sources, user-published foundation revisions and native service outcomes. It preserves original confirmation time and invalidates missing, foreign or changed sources. Agent-authored profile labels and row creation times do not confirm or refresh business claims. Local native source-withdrawal/foreign/stale tests pass; no agenda transition, weekly proposal, goal-achievement write or active instruction change is introduced by this read.
+
 > Last verified: 2026-10-20 — Explicit internal onboarding fixtures carry the closed tenant-profile marker `qualificationFixture: "onboarding-harness-v1"`. Weekly enumeration excludes that exact marker, and reviewOne rechecks it through the existing internal profile query before evaluation, agenda work or notifications. The second check also stops already-queued fixture reviews. Missing markers preserve ordinary and legacy behavior; this is no global recurrence switch. Only the internal fixture helper sets the marker. It prevents an ordinary weekly review from spending outside a separately bounded qualification probe, without certifying onboarding or model behavior.
 
 > Last verified: 2026-10-15 — Agenda goal lookup now uses the tenant/status/segment index and reads one active goal per displayed gap. Agenda rows themselves retain the closed route/playbook-key vocabulary; no tenant goal history is loaded for a weekly agenda. Local agenda regression suite passes.
@@ -998,3 +1000,11 @@ extended to the one new field that could break it. Plan 14-09 pins it with a mut
 scan.
 
 See `voice.md` § "Voice-doc sessions (Phase 14)" for the voice half.
+
+### 2026-10-23 — Field-level Business Ledger
+
+ADR065 keeps a bounded versioned blueprintFieldProvenance sidecar on the existing tenantProfile. Native synthesis snapshots exact source IDs/hash/time before work, confirmation records the actual immutable user-review audit and field/hash refs, and unchanged fields retain their first recording/review times. Observation time is unknown unless actually supplied. Review is a proposal decision, not verification or userProvided authority. The existing profile now shows the Business Ledger with stated/inferred labels, source availability, source links and optional dates/fingerprint details. The Executive service brain reads the same ledger helper. Assured standing context excludes changed, removed and unverified legacy linkage; the values remain visible for review. No new fact store, migration, source refiling, paid work or goal completion occurs.
+
+### Last verified: 2026-10-23 — Native reviewed test fixtures
+
+Older positive context fixtures now use a shared test-only helper that creates an actual synthetic source/hash and calls native draft writing plus authenticated public confirmation. It obtains real offline audit/field references rather than inserting pretend review metadata. Positive cockpit/evaluation/search/voice context assertions remain; legacy exclusion and the exact ADR063 absence exception remain explicit. This is simulated native test-user behavior, not live owner approval or golden evidence. Production source behavior and corpus cases are unchanged by the fixture correction.

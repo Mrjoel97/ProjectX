@@ -1,3 +1,35 @@
+> Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social and recurring-service changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
+
+> Last verified: 2026-10-26 — CI operator regressions now include the offline director comparison evaluator. Its four tests exercise actual storyboard/native admission and grading without model or provider requests. The PR typecheck exposed nullable media projection fields; the workspace now preserves their null semantics.
+
+> Last verified: 2026-10-24 — The isolated media candidate now incorporates main c765168d, including the owned-domain YouTube callback and its proxy route. Current fingerprints are regenerated from both feature lanes; exact combined-head CI remains required. No historical case or paid receipt changes.
+
+> Last verified: 2026-10-24 — The historical storyboard bakeoff self-check now validates its unchanged twelve Phase33.2 inputs against their original15/30/60s classification, separately proving current45s acceptance and50s refusal metadata. The ordinary live loader keeps current duration validation and refuses the stale corpus before dispatch or report/tenant writes, requiring a separately versioned reviewed corpus before paid reuse. No runtime quality/spend guard, golden46/vertical40 case, historical receipt or qualification result changed; this free harness compatibility check does not qualify native films.
+
+> Combined-source checkpoint: 2026-10-24 — The merged candidate must run the full existing repository gate, including all three actual FFmpeg fixtures, native-media/task-budget checks and direct-social release checks. The dated runs below cover their original sources; none is a passing exact-head result for this merge. Do not skip guards, reuse prior-source passing evidence or claim deployment from this integration.
+
+> Last verified: 2026-10-24 — Standard Seedance migration has focused45provider/62cost/161storyboard/137workspace/294backend-media passes; native-audio operator checks now cover one audio-bearing standard request and missing-audio refusal. Full final-head CI remains required. A paid native clip is separate provider evidence, not proof of full production native-audio integration.
+
+> Last verified: 2026-10-24 — CI includes the free Seedance operator regressions alongside existing image/reel controls. They verify fixed requests/catalogue pricing, shared-budget refusal, append-before-submit, single-use execution, profile checks and narrow billing reconciliation using mocked providers. Paid quality, latency and branded-product consistency require separate actual-output evidence.
+
+> Last verified: 2026-10-23 — CI39967368898 ran both real FFmpeg fixtures successfully (14.718 seconds combined). Typecheck/lint/free gates and frontend passed; the sole backend failure exposed a pre-existing campaign cancellation write outside the pinned terminal modules. That write now delegates transactionally to media.ts; the writer test is unchanged. Final exact-head CI must rerun.
+
+> Last verified: 2026-10-22 — Exact-source CI run39692848758 passed typecheck, lint, free gates and all frontend tests (86 files/1,231 passed/two existing skips), then exposed four old caption fixtures missing submitted-script binding and five stale namespace/schema inventory assertions. Fixtures now use actual same-batch voice/hash inputs, and the four new modules, one finite campaign scheduler and two tables are explicitly classified. Focused media tests pass 294/294 and routines/schema tests pass 50/50. Strict caption refusal, literal inventories and non-vacuity controls remain; no test is skipped or relaxed to hide the failure. Full CI must rerun on the corrected head.
+
+> Last verified: 2026-10-22 — The root now explicitly declares the already installed `@types/node` 26.1.1. Without it, a local install resolved undici's Node reference through ExcelJS's private Node 14 hoist while Vitest resolved Node 26, producing incompatible Buffer declarations in existing provenance tests. The standard contracts typecheck passes and its resolved Node files now belong only to 26.1.1. No type assertion, skipped check or package version bump was used; the lockfile change is only the root declaration. Strict test-fixture narrowing also repairs the prior PR83 web typecheck failure.
+
+> Last verified: 2026-10-22 — CI also runs the offline image and reel qualification operator regressions. Mocked responses verify append-before-submit receipts, shared spending records, unknown-outcome stops and refusal of repeated purchases; no provider key, paid request or deployment is used by CI. The authenticated artifact browser suite remains an explicit local-fixture run, outside the default hosted gate.
+
+> Full-suite integration checkpoint 2026-10-24: The first repository-wide run passed strict typecheck/lint and 4,742 backend cases, then caught closed-inventory omissions. Exact module, scheduler, cron, HTTP route and schema inventories now name the reviewed social additions; unknown additions still fail. The environment manifest classifies every direct-social literal/computed setting as optional and rejects unknown computed shapes. Narrow privacy-index and Instagram media-URL exceptions are paired with consumer/approval/tenant/output-boundary assertions. The seven affected suites pass 249 targeted cases. No gate was removed, provider approval asserted or live mutation performed; full corrected-candidate CI remains required.
+
+> 2026-10-24: Existing CI now runs the eight offline initial-social-release preflight regressions. The protected production check uses a positively verified names-only environment inventory and four allowlisted flag reads; missing flags count as off only after a successful inventory, and true/malformed values or transport errors block release. Full final-candidate CI remains required; local native TypeScript timed out rather than passing. No model calls or extra resources were used.
+
+> Last verified: 2026-10-29 — Social draft recovery and deterministic reporting change pinned runtime sources. Both evaluator inventories include the new pure narrative helper; current source fingerprints are regenerated using the existing offline generators. Historical approvals, handoffs and fixture bodies are preserved. This supplies no new paid evaluation, passing evidence or skill activation.
+
+> Last verified: 2026-10-24 — Staging release parity reuses the existing exact protected retention observer's lifecycle validation instead of requiring its original checkpoint to remain forever unexpired. Before expiry, the original pinned row must remain present. After expiry, absence alone is insufficient: the exact native purge receipt, actor, control namespace, checkpoint hash, times, count and export version must verify; overdue retained checkpoints still refuse. Preservation hashes the native pinned interview plus checkpoint or verified receipt, excluding observation time, and requires exact pre/post equality. A lifecycle transition during inspection still refuses preservation. No fixture is recreated, shortened, purged or otherwise changed by this check. Default observer output and attribution limits remain unchanged; focused tests exercise authentic purged snapshots, missing/forged/duplicate receipts, early absence, replacement and changed native state.
+
+> Last verified: 2026-10-21 — CI explicitly runs smokeRun.test.mjs alongside paid-attempt and evaluator-identity regressions. The offline tests cover the exact opt-in read-only transport retry, its shared two-invocation ceiling, native-error refusal and exclusion of paid actions and writes. These tests make no deployment or provider calls and supply no live qualification.
+
 > Last verified: 2026-10-24 — The v6 renderer/profile/recipe and merchant changes require current source identities and qualification; historical v5/v3 evidence is not transferred. Focused local core, native database and UI tests are source evidence only. Current v6 native three-width browser verification and real provider payment qualification are pending; no mocked event, example or seeded state certifies checkout.
 
 > Last verified: 2026-10-23 — The first bounded shop evaluation closed all 43 provider calls for $0.01474832 with no outstanding holds and both kill switches restored. All five output checks failed, and legacy model-record lookup also refused the new budget correlation IDs; no passing evidence was issued. The shop-only model reader now pairs actual case-tenant chat reservations and settlements under the exact envelope, excludes embeddings, and refuses missing, incomplete or inconsistent records. Legacy pack readers remain unchanged. See docs/releases/2026-10-23-online-presence-staging.json for the actual deployed source and observations. The final bounded invocation also remains exit2: $0.02033942, 45 settled calls, closed with zero holds and both kill switches restored. It saved all five version-2 private documents. Read-only reconstruction used each actual artifact/event/thread/hash, original pack facts, tool traces, clean assertions, pinned e028c25f body-load audits and settled chat records; the model IDs are preserved exactly as stored, including or/. Four cases passed the corrected full scorer; the remaining case was an explicit bullet Classification field beneath its named offer and passed its narrow corrected prose check. Adjacent Offer/Classification fields, closed passive No-operation lists and bounded coordinated absence statements now retain all prior controls, with 8 packs/40 cases/79 rejection checks. This diagnostic reconstruction writes no passing evidence, does not alter either historical failed paid receipt, and does not replace real browser/owner qualification; no further paid rerun is planned.
@@ -36,6 +68,10 @@
 >
 > The read-only seven-day observer now requires the pinned checkpoint's code-authored atomic purge receipt as well as absence after the eligible sweep. Six offline boundary tests reject missing/forged receipts; elapsed production/staging time remains unqualified until the original 2026-10-24 deadline. cronAttributionVerified remains false.
 > 2026-10-17 font build reliability: all three existing brand families are vendored with official OFL licenses and SHA256 provenance. Build-time next/font/google fetching and its generated query replacement path are removed. Exact cached WOFF2 bytes, subset ranges, weights, fallback metrics and latin preloads are retained. This removes that dependency class; it does not prove the root cause of the earlier intermittent Turbopack failure. Font byte/reference/coverage regressions run in the web suite.
+
+> Last verified: 2026-10-23 — CI now installs Ubuntu's `ffmpeg` and `fonts-dejavu-core` packages and verifies Bash, FFmpeg, FFprobe and the detected DejaVu Sans font before the existing `pnpm test` step. Both synthetic render fixtures in `assembleQuality.test.ts` must run: missing prerequisites with `CI=true` or `CI=1` fail collection instead of silently skipping. Local runs without those prerequisites retain optional skips. Turbo explicitly includes `CI` in `globalEnv`, so strict environment filtering cannot hide the requirement and CI/local task results have distinct cache keys. The existing 120-second fixture limits are unchanged. This source change requires an exact-head hosted run; previous CI skips are not runtime passes.
+
+> Last verified: 2026-10-24 — Native integration adds core/generated-only admission and strict full-timeline captions, native request/source ownership checks, exact reviewed-cost guards on all paid film entry points, and a real native-audio FFmpeg fixture. The golden source inventory explicitly includes nativeMedia, storyboard, render, mediaComplete, media pricing and director bytes. Existing paid case bytes/receipts are unchanged. Final exact-head CI must execute real render fixtures, not qualify them through prerequisite skips; hosted/provider recovery and creative acceptance remain separate.
 
 # Playbook: CI gate (typecheck / lint / test / build)
 
@@ -298,6 +334,10 @@ Couplings that are not visible in the graph:
 - **`NEXT_PUBLIC_CONVEX_URL`** (repository *variable*) — consumed by the deployed client when set and
   declared in `turbo.json`'s `globalEnv`. The current production build succeeds without it, so an
   unset variable does not prevent pull requests or forks from verifying the repository.
+- **`CI`** — GitHub Actions sets this to `true`. It is declared in `turbo.json`'s `globalEnv`
+  because the real media fixture suite refuses missing prerequisites in CI but allows optional
+  local skips. The value must reach Vitest under strict environment filtering and participate in
+  task hashes; a local run that skipped rendering cannot satisfy the hosted check from cache.
 - **`CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS`** — declared in `turbo.json`'s
   `globalPassThroughEnv`. Turbo filters the environment it hands to a task, so an env var set in the
   shell does NOT reach a turbo-run task unless it is declared. The repo's local sqlite backend is
@@ -320,7 +360,9 @@ Couplings that are not visible in the graph:
 3. `pnpm install --frozen-lockfile` — a drifted lockfile fails here, deliberately.
 4. `pnpm typecheck` → `turbo run typecheck` → `tsc --noEmit` per package.
 5. `pnpm lint` → `biome ci .` — formatter, `organizeImports` and linter, no writes.
-6. `pnpm test` → `turbo run test` → `vitest run` per package.
+6. Install Ubuntu media test prerequisites (`ffmpeg`, `fonts-dejavu-core`) and verify the detected
+   Bash, font and both binaries. `pnpm test` → `turbo run test` → `vitest run` per package, including
+   all three real synthetic FFmpeg fixtures, including native-audio assembly. No provider request or external media is used.
 7. `pnpm build` → `turbo run build` → `next build`.
 
 ## Invariants — what must never break
@@ -341,6 +383,8 @@ Couplings that are not visible in the graph:
   could drift from `package.json`. Enforced by `ci.yml` calling `pnpm <script>` only.
 - **Playwright stays out.** `apps/web`'s `test:e2e` needs a live deployment and a seeded tenant; it
   is not part of this gate. Enforced by `turbo run test` matching only the `test` script.
+- **Real render fixtures cannot silently skip in CI.** Keep the Ubuntu prerequisites and the
+  `CI=true` / `CI=1` missing-prerequisite refusal. Both fixtures retain their 120-second limits.
 
 ## How to change safely
 
@@ -449,3 +493,11 @@ provider acceptance still require verification.
 - **A local pass is not the merge verdict.** The four gate commands were verified locally on
   2026-08-04, but every pushed change still requires its own successful GitHub Actions run before
   the gate can be called green for that commit.
+
+### 2026-10-23 — Managed-service outcomes and inert construction identities
+
+The closed golden/vertical evaluator inventories now include the service brain/history/projection policy dependencies and named inert recurrence construction. Refresh generated fingerprints only after final formatting; corpus bytes and historical handoffs remain unchanged. This mechanical retirement prevents prior evidence silently qualifying new runtime/schema dependencies. It does not run an evaluator, spend money or supply qualification. ADR063 keeps recurrence activation deferred.
+
+### 2026-10-23 — Legacy fixture preflight
+
+The isolated golden blueprint seed remains a synthetic unreviewed record. Current-source preflight separately proves the owned fixture document/needle exists and that its needle does not leak into assured standing context. No fake user review is inserted. Case37's expectations and all corpus cases remain unchanged; the source fingerprint is refreshed after this real authority-contract change. These offline controls do not authorize or execute another paid evaluation.

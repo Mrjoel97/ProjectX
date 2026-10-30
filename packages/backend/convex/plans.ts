@@ -10,12 +10,15 @@
 // workflow). Readers are tenantQuery so the browser subscribes and the PLAN/DRAFT/
 // REPORT cards update live; every reader is guarded on ctx.tenantId (no cross-tenant leak).
 import { CHANNELS, type Channel, isSchedulable, parseChannel } from "@pikar/core";
+import { brandImageDirection } from "@pikar/core/brandKit";
 import { MAX_PLAN_RECIPIENTS } from "@pikar/core/emailIntent";
+import { MEDIA_DEFAULT_IMAGE_QUALITY } from "@pikar/cost/media";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalQuery, type QueryCtx } from "./_generated/server";
+import { approvedBrandForTenant } from "./brandKits";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { activeMediaJobs } from "./lib/mediaRead";
 import { hasDraftContent, isOpenRoot, newestRoot, threadRoots } from "./lib/planRow";
@@ -154,11 +157,21 @@ export const insertPlan = internalMutation({
      *  that would then need a second guard to close. Birth-only closes it for free. */
     channel: v.optional(v.union(v.literal("email"), v.literal("vault"))),
   },
-  handler: async (ctx, { tenantId, threadId, parentPlanId, kind, subject, channel }) =>
-    await ctx.db.insert("plans", {
+  handler: async (ctx, { tenantId, threadId, parentPlanId, kind, subject, channel }) => {
+    const brand = await approvedBrandForTenant(ctx, tenantId);
+    return await ctx.db.insert("plans", {
       tenantId,
       threadId,
       status: "collecting",
+      ...(brand
+        ? {
+            brandKitRef: {
+              docId: brand.docId,
+              revision: brand.revision,
+              contentHash: brand.contentHash,
+            },
+          }
+        : {}),
       recipients: [],
       ...(parentPlanId === undefined ? {} : { parentPlanId }),
       ...(kind === undefined ? {} : { kind }),
@@ -170,7 +183,8 @@ export const insertPlan = internalMutation({
       // question unanswerable. 25-06 lets the user change it before approval.
       mailProvider: "google",
       createdAt: Date.now(),
-    }),
+    });
+  },
 });
 
 /** ADR-037 retired `RECYCLABLE_STATUS` (collecting | proposed | canceled). The question the three
@@ -486,6 +500,10 @@ const parsedShot = v.object({
   windowStartMs: v.number(),
   description: v.string(),
   overlay: v.optional(v.string()),
+  overlayStartMs: v.optional(v.number()),
+  overlayEndMs: v.optional(v.number()),
+  transitionOut: v.optional(v.union(v.literal("cut"), v.literal("fade"))),
+  motionGraphic: v.optional(v.literal("orbit-ring")),
   prompt: v.string(),
   narration: v.string(),
   asset: v.optional(v.object({ source: v.literal("vault"), docId: v.string() })),
@@ -581,6 +599,8 @@ export const persistDeck = internalMutation({
     await ctx.db.patch(a.planId, {
       kind: "media",
       script: a.script,
+      // Revisions of historical decks preserve their separate-audio contract.
+      mediaAudioMode: plan.mediaAudioMode ?? (plan.shots === undefined ? "native" : undefined),
       ...(a.artDirection === null ? {} : { artDirection: a.artDirection }),
       clipSeconds: a.clipSeconds,
       // Passed through UNCONDITIONALLY, undefined included. This is a direct `db.patch`, not
@@ -637,8 +657,10 @@ export const stageImagePlan = internalMutation({
         reason: "image_in_flight" | "draft_in_progress" | "invalid_prompt";
       }
   > => {
-    const clean = prompt.trim();
-    if (clean.length === 0 || clean.length > 4_000) return { ok: false, reason: "invalid_prompt" };
+    const brand = await approvedBrandForTenant(ctx, tenantId);
+    const clean = [prompt.trim(), ...(brand ? [brandImageDirection(brand.kit)] : [])].join("\n\n");
+    if (!prompt.trim() || new TextEncoder().encode(clean).length > 4096)
+      return { ok: false, reason: "invalid_prompt" };
     // The whole root window, for the reason `stageMediaPlan` gives above: a paid image callback can
     // still land on a root that a newer one now sits in front of, and attaching that asset to a
     // different proposal is the failure this scan prevents.
@@ -672,6 +694,10 @@ export const stageImagePlan = internalMutation({
     await ctx.db.patch(planId, {
       kind: "media",
       mediaMode: "image",
+      mediaImageQuality: MEDIA_DEFAULT_IMAGE_QUALITY,
+      brandKitRef: brand
+        ? { docId: brand.docId, revision: brand.revision, contentHash: brand.contentHash }
+        : undefined,
       imagePrompt: clean,
       recipients: [],
       subject: `Image: ${clean}`.slice(0, 120),
@@ -1068,8 +1094,14 @@ export const resetPlan = internalMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
     const prior = await ctx.db.get(planId);
+    const brand = prior ? await approvedBrandForTenant(ctx, prior.tenantId) : null;
+    if (prior?.nativeCaptionAudioStorageId)
+      await ctx.storage.delete(prior.nativeCaptionAudioStorageId);
     await ctx.db.patch(planId, {
       status: "collecting",
+      brandKitRef: brand
+        ? { docId: brand.docId, revision: brand.revision, contentHash: brand.contentHash }
+        : undefined,
       recipients: [],
       mode: undefined,
       subject: undefined,
@@ -1147,6 +1179,13 @@ export const resetPlan = internalMutation({
       // the staged event above, one rung worse for the render: a surviving `renderStorageId` would
       // show the PREVIOUS thread's reel under a brand-new proposal — a lie the user can watch.
       mediaMode: undefined,
+      mediaImageQuality: undefined,
+      mediaAudioMode: undefined,
+      mediaProductReferences: undefined,
+      nativeCaptionAudioStorageId: undefined,
+      nativeCaptionAudioHash: undefined,
+      nativeCaptionBatchId: undefined,
+      nativeCaptionRenderStorageId: undefined,
       imagePrompt: undefined,
       artDirection: undefined,
       script: undefined,

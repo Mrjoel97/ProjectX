@@ -381,7 +381,7 @@ A separate 14:58:53.908Z read-only postcheck confirmed unchanged candidate
 provenance, global registry and protected retention, with the budget still closed at 89 settled
 calls and the same cost; see 23-07-SUMMARY for the exact private receipt hash.
 
-## PR79 approved staging release and current readiness
+## Historical PR79 approved staging release and readiness
 
 The user's verbatim **“Approve staging release”** has authorization SHA256
 `53269cc546d1e7b6be1ba17a49f310591e5c6a564513f343bf1a0a41cd102371` and covers
@@ -406,7 +406,7 @@ relabel their source qualification. The documented owner-ratified Phase20-20 coc
 is preserved, not repaired or described as every body matching source. No new paid test,
 activation or production deployment is authorized; Phase 23/48 remain partial and 49 not started.
 
-## Current versioned handoff completed
+## Historical PR79 versioned handoff completed
 
 At `17:01:27.296Z`, the existing immutable writer, closed scanner and assertLiveMatches
 passed for [the PR79 handoff](../23-agent-authored-skills/handoffs/2026-10-20-pr79/23-LIVE-HANDOFF.json),
@@ -421,7 +421,7 @@ Actual measured 1440x900/390x900 iframes show the candidate and disabled activat
 Keyboard draft/diff expansion was verified in the direct native signed-in A view, not the
 embedded controls. Initial desktop AX-presence-only evidence is excluded in favor of actual
 scrolled screenshots/new witnesses. This is desktop-browser responsive proof, not touch or
-physical-device testing. The new directory is the current next input only; original handoff,
+physical-device testing. At that boundary, the PR79 directory was the next input; original handoff,
 partial observation and their source pins are unchanged. PaidReady/paidAuthorized remain
 false. No new eval-result, paid run, public B mutation, activation or production release
 occurred; Phase 23 stays 6/9, Phase 48 partial and Phase 49 not started.
@@ -439,6 +439,98 @@ public B mutation, owner activation, cleanup, budget replenishment or second run
 The narrow new-golden-envelope ledger precision repair is implemented offline with63focused
 regressions/independent review and passing free gates; all legacy/probe/pack/vertical accounting
 and independent rails remain. Source identities were refreshed without changing either corpus.
-Reviewed staging release, a new exact handoff and fresh paid consent are separate next gates.
+At that offline boundary, staging release, a new exact handoff and fresh paid consent were separate next gates.
 Phase23 remains6/9,48-02partial/SKILL-02open, Phase49notstarted. Existing earlier observations
 above remain historical and are not relabeled as new-source proof.
+
+## October21 PR81 staging release and current versioned handoff
+
+The separate staging-only approval SHA256
+`03f5acec88477108003f5d452ac1f7e47627634f0180c5a97d4ad9696d3ef9da`
+covers PR81 merge, exact-source staging release, existing account checks and a new handoff.
+PR81 merged as `821c3206e47eb4cec0ebcf3d99cf943358f2910a` without production
+promotion. Source `cafde7c6c7d65924b7a48433cf4938983d91707c` passed CI
+`39615369973`/job`119274837069`; staging release`39618889468`/job`119286711355`
+succeeded. [The immutable public release receipt](48-STAGING-PR81-RELEASE-2026-10-21.json),
+SHA256 `499a08b00c0bf5e64927351782fb4bc1b982afcb0c6b629768850dadaba19f73`, records
+applyCompleted, postflightPassed, preservationVerified, postflightParityZero and
+billingLabelsVerified true. Configuration, shared registry and protected retention hashes
+are identical before/after; billingLabelsMayHaveChanged is false. No old envelope was
+converted or reopened; the precision mode applies only to future isolated golden envelopes.
+
+[The current PR81 handoff](../23-agent-authored-skills/handoffs/2026-10-21-pr81/23-LIVE-HANDOFF.json),
+SHA256 `39dfb14558a96cdbede3ca7d0641ee33ed09edaec0526510950528a19a48a930`, binds the unchanged
+exact candidate/provenance, existing A owner/B non-owner and the current46-case suite at
+revision`2026-09-11.budgeted-evaluator.5867c6e86ad02677493c5b238d206965704761cf7eac8b7561078afac91d8d4d`,
+corpus SHA256`5dbe6fdbd447ab2a152ccf928d195ed404ca3bf431f5240397f6be3b627e55fd`.
+Fresh native identities showed A_IDENTITY_MATCH, B_IDENTITY_MATCH and NOT_STARTED. Direct
+native1280x720 and embedded390x900 views, keyboard draft entry and diff expansion were
+observed; final six current reads were stable. Embedded controls were not exercised; touch
+or physical-device behavior and new authoring/refusal replay are not claimed. Historical
+authoring/refusal and the owner-ratified cockpit variance retain their original scope.
+
+This new handoff supersedes only the next-input pointer. Original and PR79 handoffs, both
+partial attempts, their source pins and spend history remain unchanged. PaidReady and
+paidAuthorized remain false: no new evaluation, public B mutation, activation, cleanup or
+production deployment occurred. Fresh explicit paid consent and current admission checks
+remain required before23-07. Phase23 stays6/9,48-02partial/SKILL-02open, Phase48partial,
+and Phase49notstarted. Unqualified verticals remain excluded; the existing Buffer publishing
+and Zernio reporting exceptions do not grant broader autonomy.
+
+The [new handoff refresh](../23-agent-authored-skills/handoffs/2026-10-21-pr81/23-HANDOFF-REFRESH.json),
+SHA256 `32ca4afd73d5aece2b645acae84f4739234c65cf231c4ef2c7a3146b28cbdc60`, binds the private
+readback/browser receipt hashes and both immutable predecessor hashes. The next
+[proposed checkpoint](../23-agent-authored-skills/23-07-CHECKPOINT-2026-10-21-PR81.md), SHA256
+`deb8215f29b273c0d7a5509b25b41c75cf209c9fba0ff5c7b58f0123323172d4`, supplies a concrete review
+scope only at that refresh boundary. Its later approval was consumed by the terminal startup attempt below.
+
+## PR81 startup stop and unstaged read-only helper repair
+
+The separately approved PR81 attempt consumed authorization SHA256
+`c663e7a1b3dbe2f6060a41d2beb152de4578b0e12a86839419a456041ce2de1d` when its exclusive once record
+was written and the runner started at`2026-10-21T17:11:44.900Z`. It stopped at startup
+with`skills:inspectTenantSkill` reporting`TypeError: fetch failed`, before budget opening,
+fixture writes or provider work; zero cases were judged. The earlier wrapper admission-only
+exit had no once record or runner start and is not a second full attempt. A complete bounded
+native creation-time window, including a two-minute pre-attempt margin through server
+observation, returned zero spend rows, zero new envelopes and zero evaluation movements.
+Both historical closed budgets and bills are unchanged. No new budget, run/root identity,
+evidence, public B mutation, activation, cleanup or production change was observed.
+The consumed once record is not reset; native zero-work reconciliation permits no replay.
+
+[The immutable startup observation](../23-agent-authored-skills/23-07-STARTUP-2026-10-21-PR81.json) (SHA256 `8815857b7e559e24c4daf42a2092f0e0ae7b163d329ea0c12b67e3abb851bb2c`) records the stop and complete bounded native zero-work window.
+
+The narrow helper repair is offline only: golden revision
+`2026-09-11.budgeted-evaluator.825ef5cab4634d8560249094e8e6db1ad841732d72545bcf8fa57214f5965b51`
+and vertical revision`01d6d6908bd0eecac14bc30b1f90a88edb0db8f14c4cc46fc8fa2f036a724425`
+retain the unchanged 46-case golden and 40-case vertical corpora. The deployed source remains
+`cafde7c6c7d65924b7a48433cf4938983d91707c` with 5867/5dbe suite and immutable 39df
+handoff; that chain does not qualify the new helper source. Exact-source CI, reviewed staging
+release, a new versioned handoff and fresh paid approval must precede another attempt.
+No evaluation or source-deployment retry is authorized by the consumed approval.
+
+Phase21 acceptance and all immutable predecessors remain preserved. Phase 23 stays 6/9, 48-02 partial/SKILL-02 open, Phase 48 partial and49 not started; unqualified verticals stay unavailable and Buffer/Zernio exceptions retain their existing limits.
+
+## Current PR82 release and handoff boundary — 2026-10-22 reconciliation
+
+PR82 source `821b097ceae440730bc51988af0425fb878687fb` passed CI `39663077579`; merge
+`2a70886519fccbf0a0524f680f67142c909cbfa7` and release `39668142870`/job
+`119458556492` succeeded under staging-only approval d792. [Public release receipt](48-STAGING-PR82-RELEASE-2026-10-21.json),
+SHA256 `3113664464004c54d805023d965fcbdd59e1a77cfa4f43e09f94f7cc7872b60f`, preserves configuration, registry and retention.
+[Current handoff](../23-agent-authored-skills/handoffs/2026-10-21-pr82/23-LIVE-HANDOFF.json), SHA256
+`e7ee9d75acf644ab20d8e72e708b92941649b20b026b8778738b3f371ebf4b62`, and [refresh](../23-agent-authored-skills/handoffs/2026-10-21-pr82/23-HANDOFF-REFRESH.json), SHA256
+`f94d17cf0457952c3c035755d23683f55374bfbf682f7dd9677afd98fb62f59c`, bind the released 825ef/5dbe 46-case suite.
+
+Fresh native A owner/B non-owner identities showed NOT_STARTED. Keyboard draft/diff review,
+1280x720 direct native and 390x900 read-only iframe views, followed by six matching reads,
+passed; temporary local configuration was restored. The shared schema, actual private-canary
+scan and assertLiveMatches passed. Candidate/provenance, global/foreign state, registry,
+retention and both historical closed bills remain unchanged. Embedded controls, touch/device
+tests and new authoring/refusal replay are not claimed.
+
+This supersedes only the next-input pointer. All three predecessor handoffs, both partial
+paid attempts, the consumed PR81 startup approval/once record and its bounded zero-work
+receipt remain unchanged. No new paid checkpoint or consent, evaluation result, public B
+mutation, activation, cleanup or production deployment followed. Fresh exact-source admission
+and separate concrete paid approval remain required. Phase 23 stays 6/9, SKILL-02 open,
+Phase 48 partial and Phase 49 not started.

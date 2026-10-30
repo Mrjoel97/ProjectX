@@ -210,6 +210,7 @@ async function appendVersion(
       "web-design-renderer-v12",
       "web-design-renderer-v13",
       "web-design-renderer-v14",
+      "web-design-renderer-v15",
       WEB_DESIGN_RENDERER_VERSION,
     ].includes(recipeRef.rendererVersion);
   if (recipeRef?.rendererVersion !== undefined && !designed)

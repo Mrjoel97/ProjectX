@@ -1,4 +1,3 @@
-import { sealedIn } from "./vaultFolders";
 import {
   assessMerchantSetup,
   type MerchantSetup,
@@ -18,6 +17,7 @@ import { bindDigitalDeliveryForTenant } from "./merchantOperations";
 import { onlinePresenceShopContext } from "./onlinePresence";
 import { createProductForTenant, updateProductForSetup } from "./tenantCatalogue";
 import { configurePolicyForTenant, mapProductForTenant } from "./tenantOrders";
+import { sealedIn } from "./vaultFolders";
 
 /** Closed public read shape keeps generated API types independent of private transaction inference. */
 export type ShopSetupReview = {

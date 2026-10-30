@@ -34,8 +34,8 @@ import {
   providerReceiptHash,
 } from "./lib/presencePublication";
 import {
-  verifyRepairEvidence,
   verifyRendererRepairEvidence,
+  verifyRepairEvidence,
   verifySplitRendererRepairEvidence,
 } from "./presenceBrowserRepair";
 import schema from "./schema";

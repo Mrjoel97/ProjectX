@@ -1,4 +1,3 @@
-import { WEB_CAROUSEL_TAG } from "./webCarouselRuntime";
 import type {
   WebCatalogueNode,
   WebDocument,
@@ -13,6 +12,7 @@ import {
   verifiedDesignKnowledgeBundle,
 } from "./designKnowledge";
 import { webAssetPath } from "./webAssets";
+import { WEB_CAROUSEL_TAG } from "./webCarouselRuntime";
 import { canonicalWebLayoutPlan, type WebLayoutPlan } from "./webLayoutPlan";
 import {
   canonicalWebDocument,
@@ -22,7 +22,7 @@ import {
   sha256Bytes,
 } from "./webRuntime";
 
-export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v15" as const;
+export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v16" as const;
 const encoder = new TextEncoder();
 
 /** The renderer depends on the selected records, not merely the bundle's role labels. */
@@ -108,16 +108,26 @@ function designedInquiry(node: WebFormNode, route: WebRouteContext): string {
 }
 
 /** Approved media with a single immutable first-party carousel runtime. */
-function designedGallery(node: WebSectionNode, route: WebRouteContext, plan?: WebLayoutPlan): string | undefined {
+function designedGallery(
+  node: WebSectionNode,
+  route: WebRouteContext,
+  plan?: WebLayoutPlan,
+): string | undefined {
   if (node.id !== "gallery" || !node.children.every((child) => child.kind === "media"))
     return undefined;
   const images = node.children.filter((child) => child.kind === "media");
   const carousel = images.length >= 3 && images.length <= 6 && plan?.gallery !== "grid";
   const label = node.heading ?? "Gallery";
-  const slides = images.map((image, index) => `<li id="gallery-image-${index + 1}" class="gallery-slide" aria-label="Image ${index + 1} of ${images.length}">${renderWebMedia(image, route)}<p class="gallery-caption">${escapeWebText(image.alt)}</p></li>`).join("");
-  const controls = carousel ? '<div class="gallery-controls" aria-label="Gallery controls"><button type="button" data-gallery-previous aria-label="Previous image">←</button><button type="button" data-gallery-next aria-label="Next image">→</button></div>' : '';
-  return `<section id="gallery" class="designed-gallery${carousel ? " gallery-carousel" : ""}" aria-labelledby="gallery-heading"><div class="gallery-heading"><h2 id="gallery-heading">${escapeWebText(label)}</h2>${carousel ? '<p id="gallery-help">Images move automatically. Focus or hover to pause; press Space to pause or resume.</p>' : ""}</div><div class="gallery-viewport"${carousel ? ' tabindex="0" role="region" aria-roledescription="carousel" aria-label="Gallery images" aria-describedby="gallery-help"' : ''}><ul class="gallery-track">${slides}</ul></div>${controls}</section>`;
-
+  const slides = images
+    .map(
+      (image, index) =>
+        `<li id="gallery-image-${index + 1}" class="gallery-slide" aria-label="Image ${index + 1} of ${images.length}">${renderWebMedia(image, route)}<p class="gallery-caption">${escapeWebText(image.alt)}</p></li>`,
+    )
+    .join("");
+  const controls = carousel
+    ? '<div class="gallery-controls" aria-label="Gallery controls"><button type="button" data-gallery-previous aria-label="Previous image">←</button><button type="button" data-gallery-next aria-label="Next image">→</button></div>'
+    : "";
+  return `<section id="gallery" class="designed-gallery${carousel ? " gallery-carousel" : ""}" aria-labelledby="gallery-heading"><div class="gallery-heading"><h2 id="gallery-heading">${escapeWebText(label)}</h2>${carousel ? '<p id="gallery-help">Images move automatically. Focus or hover to pause; press Space to pause or resume.</p>' : ""}</div><div class="gallery-viewport"${carousel ? ' tabindex="0" role="region" aria-roledescription="carousel" aria-label="Gallery images" aria-describedby="gallery-help"' : ""}><ul class="gallery-track">${slides}</ul></div>${controls}</section>`;
 }
 
 /** Closed Pikar-owned art direction, informed by reviewed Taste guidance. The pinned source
@@ -134,7 +144,9 @@ export function renderDesignedWebDocument(
   const layoutPlan = profile.layoutPlan;
   const designTokens = layoutPlan?.version === 2 ? layoutPlan.designTokens : undefined;
   const innerPage = !!designTokens && parts.page.slug !== parts.document.pages[0]?.slug;
-  const baseColors = designTokens ? { ...designTokens.colors, hero: designTokens.colors.paper, heroInk: designTokens.colors.ink } : PALETTES[direction];
+  const baseColors = designTokens
+    ? { ...designTokens.colors, hero: designTokens.colors.paper, heroInk: designTokens.colors.ink }
+    : PALETTES[direction];
   const colors =
     !designTokens && surfaceStyle === "glass"
       ? { ...baseColors, paper: "#f3f6f4", card: "#e7eeea", ink: "#163a34", muted: "#375b54" }
@@ -156,15 +168,22 @@ export function renderDesignedWebDocument(
         ? "transparent"
         : colors.ink;
   const spacing = 36 - profile.dials.density * 2;
-  const width = designTokens?.spacing.contentWidth ?? (1180 + (profile.dials.variance - 5) * 18);
-  const motion = profile.dials.motion <= 2 || layoutPlan?.motion === "none" ? 0 : profile.dials.motion * 12;
+  const width = designTokens?.spacing.contentWidth ?? 1180 + (profile.dials.variance - 5) * 18;
+  const motion =
+    profile.dials.motion <= 2 || layoutPlan?.motion === "none" ? 0 : profile.dials.motion * 12;
   const hoverTransform = motion === 0 ? "none" : "translateY(-2px)";
   const radius = surfaceStyle === "clay" ? 24 : 0;
   const copyMeasure = profile.patternId === "hero-features-cta" ? "700px" : "100%";
   const controlHeight = profile.formProfileId === "forms-first" ? 44 : 40;
-  const tokenFonts = { "editorial-serif": 'Georgia,"Times New Roman",serif', "modern-serif": '"Palatino Linotype",Palatino,Georgia,serif', "humanist-sans": '"Segoe UI",Calibri,Arial,sans-serif', "geometric-sans": '"Century Gothic",Futura,Arial,sans-serif' };
-  const heading = designTokens ? tokenFonts[designTokens.typography.heading] :
-    direction === "editorial"
+  const tokenFonts = {
+    "editorial-serif": 'Georgia,"Times New Roman",serif',
+    "modern-serif": '"Palatino Linotype",Palatino,Georgia,serif',
+    "humanist-sans": '"Segoe UI",Calibri,Arial,sans-serif',
+    "geometric-sans": '"Century Gothic",Futura,Arial,sans-serif',
+  };
+  const heading = designTokens
+    ? tokenFonts[designTokens.typography.heading]
+    : direction === "editorial"
       ? 'Georgia,"Times New Roman",serif'
       : direction === "studio"
         ? '"Arial Black",Arial,sans-serif'
@@ -181,7 +200,13 @@ export function renderDesignedWebDocument(
       : entry.node.kind === "form"
         ? designedInquiry(entry.node, parts.route)
         : entry.node.kind === "section"
-          ? (designedGallery(entry.node, parts.route, layoutPlan) ?? (innerPage && entry.node.id === "services" && hero?.node.kind === "hero" && entry.node.heading === hero.node.heading ? entry.html.replace(`<h2>${escapeWebText(entry.node.heading)}</h2>`, "") : entry.html))
+          ? (designedGallery(entry.node, parts.route, layoutPlan) ??
+            (innerPage &&
+            entry.node.id === "services" &&
+            hero?.node.kind === "hero" &&
+            entry.node.heading === hero.node.heading
+              ? entry.html.replace(`<h2>${escapeWebText(entry.node.heading)}</h2>`, "")
+              : entry.html))
           : entry.html;
   const heroIndex = hero ? parts.nodes.indexOf(hero) : -1;
   const cta = hero
@@ -209,8 +234,23 @@ export function renderDesignedWebDocument(
         `<div class="content-block node-${entry.node.kind}"${entry === catalogue ? ' id="pikar-collection"' : ""}>${entryHtml(entry)}</div>`,
     )
     .join("");
+  // Reuse only an already-authorized brand image; never invent assets for sparse inner pages.
+  const supportingMedia =
+    innerPage && rail?.node.kind !== "media"
+      ? parts.document.pages[0]?.nodes.find(
+          (node) => node.kind === "media" && node.placement === "hero",
+        )
+      : undefined;
+  const supportingVisual =
+    supportingMedia?.kind === "media"
+      ? '<div class="inner-brand-visual">' +
+        renderWebMedia(supportingMedia, parts.route) +
+        '<p class="image-caption">' +
+        escapeWebText(parts.document.brand.name) +
+        "</p></div>"
+      : "";
   const heroHtml = hero
-    ? `<div class="hero-composition${rail ? " has-rail" : ""}${rail?.node.kind === "media" ? " has-media" : ""}"><div class="hero-copy">${hero.html}${cta ? `<div class="hero-action">${cta.html}</div>` : inquiry?.node.kind === "form" && rail !== inquiry ? `<div class="hero-action"><a class="cta" href="#inquiry-${escapeWebText(inquiry.node.id)}">Get in touch</a></div>` : !inquiry && contactPage && contactPage.slug !== parts.page.slug ? `<div class="hero-action"><a class="cta" href="/p/${parts.route.slug}/${contactPage.slug}">Get in touch</a></div>` : catalogue ? '<div class="hero-action"><a class="cta" href="#pikar-collection">Explore the collection</a></div>' : ""}</div>${rail ? `<div class="hero-rail${rail.node.kind === "media" ? " hero-visual" : ""}">${entryHtml(rail)}</div>` : ""}</div>`
+    ? `<div class="hero-composition${rail ? " has-rail" : ""}${rail?.node.kind === "media" ? " has-media" : ""}"><div class="hero-copy">${hero.html}${cta ? `<div class="hero-action">${cta.html}</div>` : inquiry?.node.kind === "form" && rail !== inquiry ? `<div class="hero-action"><a class="cta" href="#inquiry-${escapeWebText(inquiry.node.id)}">Get in touch</a></div>` : !inquiry && contactPage && contactPage.slug !== parts.page.slug ? `<div class="hero-action"><a class="cta" href="/p/${parts.route.slug}/${contactPage.slug}">Get in touch</a></div>` : catalogue ? '<div class="hero-action"><a class="cta" href="#pikar-collection">Explore the collection</a></div>' : ""}${supportingVisual}</div>${rail ? `<div class="hero-rail${rail.node.kind === "media" ? " hero-visual" : ""}">${entryHtml(rail)}</div>` : ""}</div>`
     : "";
   const home = `/p/${parts.route.slug}/${parts.document.pages[0]?.slug ?? parts.route.page}`;
   const brand = escapeWebText(parts.document.brand.name);
@@ -305,7 +345,8 @@ h2,h3{text-wrap:balance}p{text-wrap:pretty}.hero p:not(.eyebrow){max-width:48ch}
 @media(max-width:767px){.gallery-carousel .web-media{height:220px}.gallery-track{grid-template-columns:1fr;gap:24px}.gallery-carousel .gallery-slide{flex-basis:100%}.gallery-carousel .gallery-track{gap:16px}.gallery-heading{gap:12px}.gallery-heading p{font-size:1rem}}
 @media(prefers-reduced-motion:reduce){.gallery-carousel .gallery-track{scroll-behavior:auto;scroll-snap-type:none}}
 `;
-  const layoutCss = layoutPlan ? `
+  const layoutCss = layoutPlan
+    ? `
 body[data-layout-spacing=relaxed] .content-block{padding-block:80px}body[data-layout-spacing=compact] .content-block{padding-block:40px}
 body[data-layout-hero] .hero-composition.has-media{isolation:isolate;position:relative;overflow:hidden;margin:0 0 32px;gap:0;min-height:640px;padding:56px;display:flex;align-items:center;background:#14231f;color:#ffffff}
 body[data-layout-hero] .has-media .hero-rail.hero-visual{position:absolute;inset:0;z-index:-2;width:100%;height:100%;padding:0;background:transparent;border-radius:0}
@@ -322,8 +363,11 @@ body[data-layout-sections=stacked] #about,body[data-layout-sections=stacked] #pr
 body[data-layout-services=rows] #services{display:block}body[data-layout-services=rows] #services>p{display:block;max-width:none;padding:24px 0;margin:0;border-bottom:1px solid var(--rule);font-size:clamp(1.25rem,2.2vw,1.9rem);line-height:1.45}
 body[data-layout-services=columns] #services{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 48px}body[data-layout-services=columns] #services>h2{grid-column:1/-1;grid-row:auto}body[data-layout-services=columns] #services>p{padding:0;margin:0;font-size:1.2rem;line-height:1.6}
 @media(max-width:767px){body[data-layout-hero] .hero-composition.has-media{padding:40px 24px;min-height:600px}body[data-layout-hero] .has-media .hero h1{font-size:clamp(2.2rem,9vw,3.4rem);max-width:18ch}body[data-layout-hero=split] .hero-composition.has-media{grid-template-columns:1fr;gap:28px;min-height:0;padding:24px 0}body[data-layout-hero] .has-media .hero p{font-size:1rem;line-height:1.6}body[data-layout-sections=editorial-columns] #about,body[data-layout-sections=editorial-columns] #proof,body[data-layout-services=columns] #services{display:block}body[data-layout-sections=editorial-columns] #about>p,body[data-layout-sections=editorial-columns] #proof>p,body[data-layout-services=columns] #services>p{margin:20px 0}body[data-layout-spacing=relaxed] .content-block{padding-block:44px}body[data-layout-spacing=compact] .content-block{padding-block:28px}}
-` : "";
-  const layoutAttributes = layoutPlan ? ` data-layout-hero="${layoutPlan.hero}" data-layout-spacing="${layoutPlan.spacing}" data-layout-heading="${layoutPlan.headingScale}" data-layout-sections="${layoutPlan.sectionLayout}" data-layout-services="${layoutPlan.services}"` : "";
+`
+    : "";
+  const layoutAttributes = layoutPlan
+    ? ` data-layout-hero="${layoutPlan.hero}" data-layout-spacing="${layoutPlan.spacing}" data-layout-heading="${layoutPlan.headingScale}" data-layout-sections="${layoutPlan.sectionLayout}" data-layout-services="${layoutPlan.services}"`
+    : "";
   const motionCss =
     motion === 0
       ? "html,.gallery-carousel .gallery-track{scroll-behavior:auto}button:active,.cta:active{transform:none}"
@@ -359,15 +403,32 @@ button,.cta{transition:transform var(--motion-feedback) var(--motion-ease)}
   const footerNavigation = navigationLinks
     ? `<nav aria-label="Footer"><ul>${navigationLinks}</ul></nav>`
     : "";
-  const presentationCss = designTokens ? `body{font-family:${tokenFonts[designTokens.typography.body]}}body[data-layout-hero] .site-footer{background:${designTokens.footer === "light" ? colors.paper : colors.ink};color:${designTokens.footer === "light" ? colors.ink : colors.paper};border-color:${colors.rule}}body[data-layout-hero] .site-footer a,body[data-layout-hero] .site-footer p{color:inherit}body[data-layout-hero]:not([data-layout-hero=split]) .hero-composition.has-media{min-height:${designTokens.spacing.heroMinHeight}px}body[data-layout-hero] .hero h1{font-weight:${designTokens.typography.heading.endsWith("serif") ? 400 : 600}}@media(max-width:767px){body[data-layout-hero]:not([data-layout-hero=split]) .hero-composition.has-media{min-height:${Math.min(480, designTokens.spacing.heroMinHeight)}px}}body[data-layout-spacing] .content-block{padding-block:clamp(28px,6vw,${designTokens.spacing.sectionGap}px)}.content-flow p,.hero p:not(.eyebrow){max-width:${designTokens.spacing.copyMeasure}ch}body[data-layout-services=columns] #services>p{max-width:${designTokens.spacing.copyMeasure}ch}
+  const presentationCss = designTokens
+    ? `body{font-family:${tokenFonts[designTokens.typography.body]}}body[data-layout-hero] .site-footer{background:${designTokens.footer === "light" ? colors.paper : colors.ink};color:${designTokens.footer === "light" ? colors.ink : colors.paper};border-color:${colors.rule}}body[data-layout-hero] .site-footer a,body[data-layout-hero] .site-footer p{color:inherit}body[data-layout-hero]:not([data-layout-hero=split]) .hero-composition.has-media{min-height:${designTokens.spacing.heroMinHeight}px}body[data-layout-hero] .hero h1{font-weight:${designTokens.typography.heading.endsWith("serif") ? 400 : 600}}@media(max-width:767px){body[data-layout-hero]:not([data-layout-hero=split]) .hero-composition.has-media{min-height:${Math.min(480, designTokens.spacing.heroMinHeight)}px}}body[data-layout-spacing] .content-block{padding-block:clamp(28px,6vw,${designTokens.spacing.sectionGap}px)}.content-flow p,.hero p:not(.eyebrow){max-width:${designTokens.spacing.copyMeasure}ch}body[data-layout-services=columns] #services>p{max-width:${designTokens.spacing.copyMeasure}ch}
 body[data-layout-hero] .footer-brand{display:inline-flex;align-items:center;min-height:44px;min-width:44px;font-size:clamp(1.5rem,2.4vw,2.25rem);line-height:1.2;letter-spacing:-.025em;font-weight:500}
 body[data-layout-sections] #about{padding:0;background:transparent}body[data-layout-sections] #about>p{font-size:clamp(1.05rem,1.5vw,1.25rem);line-height:1.65}
 body[data-layout-services=columns] #services{gap:28px 40px}body[data-layout-services=columns] #services>h2{margin-bottom:4px}body[data-layout-services=columns] #services>p{border-top:1px solid var(--rule);padding:20px 0 4px;font-size:clamp(1.1rem,1.8vw,1.4rem);font-weight:500;line-height:1.5}
 body[data-layout-hero] .hero-composition.has-rail:not(.has-media){align-items:start;gap:clamp(24px,5vw,64px);padding-block:40px}body[data-layout-hero] .has-rail:not(.has-media) .hero-rail{padding:0;background:transparent}
 @media(max-width:767px){body[data-layout-services=columns] #services>p{margin:16px 0 0}body[data-layout-hero] .hero-composition.has-rail:not(.has-media){padding-block:24px}}
-` : '';
-  const innerComposition = innerPage ? (inquiry ? "inquiry" : parts.nodes.some(entry => entry.node.kind === "section" && entry.node.id === "services") ? "services" : "editorial") : undefined;
-  const innerPageCss = innerPage ? `
+`
+    : "";
+  const editorialFinishCss = designTokens
+    ? `
+body[data-layout-hero]{min-height:100svh;display:flex;flex-direction:column}body[data-layout-hero] .site-header,body[data-layout-hero] main,body[data-layout-hero] .site-footer{width:100%}body[data-layout-hero] .site-footer{margin-top:auto;border-top:1px solid var(--rule)}body[data-layout-hero] main{padding-bottom:48px}
+body[data-layout-hero=split] .hero-composition.has-media{gap:clamp(32px,5vw,72px);padding-block:48px 64px}body[data-layout-hero=split] .hero-composition.has-media .web-media{aspect-ratio:4/5!important;max-height:560px}body[data-layout-hero=split] .hero-composition.has-media .hero h1{font-size:clamp(2.6rem,4.5vw,4.6rem);line-height:1.08}
+body[data-layout-services=columns] #services{counter-reset:service-panel;gap:24px}body[data-layout-services=columns] #services>p{counter-increment:service-panel;display:flex;flex-direction:column;justify-content:space-between;gap:28px;background:var(--card);border:1px solid var(--rule);padding:28px;min-height:180px;font-family:var(--heading);font-size:clamp(1.5rem,2.5vw,2.2rem);font-weight:400;line-height:1.2}body[data-layout-services=columns] #services>p:before{content:counter(service-panel,decimal-leading-zero);font:500 .85rem/1.4 system-ui,sans-serif;color:var(--muted)}
+@media(max-width:767px){body[data-layout-hero=split] .hero-composition.has-media{padding-block:28px 40px;gap:32px}body[data-layout-services=columns] #services>p{min-height:150px;padding:24px}body[data-layout-hero] main{padding-bottom:32px}}
+`
+    : "";
+  const innerComposition = innerPage
+    ? inquiry
+      ? "inquiry"
+      : parts.nodes.some((entry) => entry.node.kind === "section" && entry.node.id === "services")
+        ? "services"
+        : "editorial"
+    : undefined;
+  const innerPageCss = innerPage
+    ? `
 body[data-inner-page] main{padding-top:48px;padding-bottom:48px}body[data-inner-page]:not([data-inner-page=inquiry]) main{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:40px 64px;align-items:start}
 body[data-inner-page] .hero-composition,body[data-inner-page] .hero-composition.has-rail:not(.has-media){padding:0;margin:0;min-height:0;gap:48px;align-items:start}body[data-inner-page] .hero h1{font-size:clamp(2.5rem,4.8vw,4.5rem);line-height:1.1;max-width:18ch}body[data-inner-page] .hero-action{margin-top:28px}
 body[data-inner-page][data-layout-spacing] .content-block{padding:0}body[data-inner-page] .content-flow{gap:24px;min-width:0}body[data-inner-page=editorial][data-layout-spacing] .content-block.node-text{background:var(--card);border:1px solid var(--rule);padding:32px}body[data-inner-page=editorial] .node-text>p{font-size:clamp(1.2rem,2vw,1.6rem);line-height:1.65;margin:0;max-width:48ch}
@@ -375,9 +436,19 @@ body[data-inner-page=services] #services{display:grid;grid-template-columns:repe
 body[data-inner-page=inquiry] .hero-composition.has-rail{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:64px}body[data-inner-page=inquiry] .has-rail:not(.has-media) .hero-rail{background:var(--card);border:1px solid var(--rule);padding:36px}body[data-inner-page=inquiry] legend{font-size:1.5rem;margin-bottom:12px}body[data-inner-page=inquiry] form button{margin-top:12px}body[data-inner-page=inquiry] label:has(input[type=checkbox]){min-height:44px;align-items:center}
 body[data-inner-page] .site-footer{border-top:1px solid var(--rule);margin-top:8px;padding-top:28px;padding-bottom:28px;align-items:center}
 @media(max-width:767px){body[data-inner-page] main{padding-top:28px;padding-bottom:32px}body[data-inner-page]:not([data-inner-page=inquiry]) main,body[data-inner-page=inquiry] .hero-composition.has-rail{display:grid;grid-template-columns:minmax(0,1fr);gap:28px}body[data-inner-page=editorial][data-layout-spacing] .content-block.node-text{padding:24px}body[data-inner-page=services] #services{grid-template-columns:minmax(0,1fr)}body[data-inner-page=services] #services>p{padding:24px}body[data-inner-page=inquiry] .has-rail:not(.has-media) .hero-rail{padding:24px}}
-` : '';
+`
+    : "";
   const description = parts.page.description ?? parts.document.description ?? parts.document.title;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${galleryCss}${layoutCss}${presentationCss}${innerPageCss}${motionCss}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"${layoutAttributes}${innerComposition ? ` data-inner-page="${innerComposition}"` : ""}><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer>${content.includes('class="designed-gallery gallery-carousel"') ? WEB_CAROUSEL_TAG : ""}</body></html>`;
+  const innerEditorialCss = innerPage
+    ? `
+body[data-inner-page] main{padding-top:56px;padding-bottom:64px}body[data-inner-page]:not([data-inner-page=inquiry]) main{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:64px;align-items:center}body[data-inner-page] .hero h1{font-size:clamp(2.6rem,4.6vw,4.3rem)}.inner-brand-visual{margin-top:36px;max-width:520px}.inner-brand-visual .web-media{aspect-ratio:3/2!important;max-height:300px}.image-caption{font-size:.85rem;line-height:1.5;color:var(--muted);margin:12px 0 0}
+body[data-inner-page=editorial][data-layout-spacing] .content-block.node-text{padding:36px 0;border:0;border-block:1px solid var(--rule);background:transparent}body[data-inner-page=editorial] .node-text>p{font-family:var(--heading);font-size:clamp(1.7rem,2.8vw,2.6rem);font-weight:400;line-height:1.35;max-width:28ch}
+body[data-inner-page=services] #services{grid-template-columns:minmax(0,1fr);gap:20px}body[data-inner-page=services][data-layout-services] #services>p{min-height:180px;padding:32px;font-size:clamp(1.7rem,2.7vw,2.5rem)}
+body[data-inner-page=inquiry] .hero-composition.has-rail{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:64px}body[data-inner-page=inquiry] .has-rail:not(.has-media) .hero-rail{padding:40px}body[data-inner-page=inquiry] legend{font-family:var(--heading);font-size:2rem;margin-bottom:24px}body[data-inner-page] .site-footer{margin-top:auto}
+@media(max-width:767px){body[data-inner-page] main{padding-top:28px;padding-bottom:40px}body[data-inner-page]:not([data-inner-page=inquiry]) main,body[data-inner-page=inquiry] .hero-composition.has-rail{grid-template-columns:minmax(0,1fr);gap:32px}.inner-brand-visual{margin-top:28px}.inner-brand-visual .web-media{max-height:220px}body[data-inner-page=editorial][data-layout-spacing] .content-block.node-text{padding:28px 0}body[data-inner-page=services][data-layout-services] #services>p{padding:24px;min-height:150px}body[data-inner-page=inquiry] .has-rail:not(.has-media) .hero-rail{padding:24px}}
+`
+    : "";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${galleryCss}${layoutCss}${presentationCss}${innerPageCss}${editorialFinishCss}${innerEditorialCss}${motionCss}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"${layoutAttributes}${innerComposition ? ` data-inner-page="${innerComposition}"` : ""}><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer>${content.includes('class="designed-gallery gallery-carousel"') ? WEB_CAROUSEL_TAG : ""}</body></html>`;
 }
 
 export function renderDesignedWebDocumentBytes(
@@ -414,7 +485,9 @@ export function designedWebDocumentHashMaterial(
     ...(profile.pageOverride === undefined ? {} : { pageOverride: profile.pageOverride }),
     ...(profile.artDirection === undefined ? {} : { artDirection: profile.artDirection }),
     ...(profile.surfaceStyle === undefined ? {} : { surfaceStyle: profile.surfaceStyle }),
-    ...(profile.layoutPlan === undefined ? {} : { layoutPlan: canonicalWebLayoutPlan(profile.layoutPlan) }),
+    ...(profile.layoutPlan === undefined
+      ? {}
+      : { layoutPlan: canonicalWebLayoutPlan(profile.layoutPlan) }),
   };
   return encoder.encode(
     `${WEB_DESIGN_RENDERER_VERSION}\n${canonicalWebDocument(document)}\n${JSON.stringify(canonicalProfile)}\n${rendered}`,

@@ -21,13 +21,17 @@ export const XLSX_MIME =
 
 /** The output formats renderAndStore can emit. `pdf` is the Phase-3.3 default — callers that
  *  omit `format` are byte-identical to today. Phase 40 (DOC-01) added `xlsx`; ADR-036 fixes this
- *  as the CLOSED set — there is no DOCX/PPTX member and there is not going to be one. */
-export type DocFormat = "pdf" | "html" | "xlsx";
+ *  as the original set. ADR-062 adds editable PPTX; DOCX remains unavailable. */
+export type DocFormat = "pdf" | "html" | "xlsx" | "pptx";
 
 const FORMAT: Record<DocFormat, { ext: string; mimeType: string }> = {
   pdf: { ext: "pdf", mimeType: "application/pdf" },
   html: { ext: "html", mimeType: "text/html" },
   xlsx: { ext: "xlsx", mimeType: XLSX_MIME },
+  pptx: {
+    ext: "pptx",
+    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  },
 };
 
 /** ext + MIME for a format — the ONE place either literal is written. */

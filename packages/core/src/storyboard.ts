@@ -1,3 +1,4 @@
+import { parseMediaFinishing } from "./mediaFinishing";
 /**
  * The BLOCK DECK contract (MEDIA-01, D8). Pure TS, Convex-free (CLAUDE.md §1).
  *
@@ -78,6 +79,10 @@ export type Block = {
   description: string;
   narration: string; // the spoken line for this window
   overlay?: string;
+  overlayStartMs?: number;
+  overlayEndMs?: number;
+  transitionOut?: "cut" | "fade";
+  motionGraphic?: "orbit-ring";
   prompt: string; // the per-block generation prompt (koda /generate)
 };
 
@@ -513,7 +518,7 @@ export function parseBlockDeck(body: string): ParsedDeck {
 
 /** The reel lengths a user may ask for. A closed set because each one is a price and a format
  *  decision, not a free parameter. */
-export const TARGET_DURATIONS = [15, 30, 60] as const;
+export const TARGET_DURATIONS = [15, 30, 45, 60] as const;
 export type TargetDuration = (typeof TARGET_DURATIONS)[number];
 
 /** Where a scene's pixels come from. A CLOSED set, and unlike `SHOT_TYPES` every member is
@@ -536,7 +541,7 @@ export const VISUAL_KINDS = [
 export type VisualKind = (typeof VISUAL_KINDS)[number];
 
 /**
- * The provider's duration grid: xAI's **1-15, any integer** (33.1-04, ADR-027). A
+ * The current provider's duration grid: Seedance 2.0's **4-15, any integer**. A
  * `generated_video` scene MUST land on it, and above 15 it is snapped down or refused.
  *
  * **WHAT THIS GRID CHANGED, stated because the old comment claimed the opposite.** Until
@@ -567,7 +572,7 @@ export type VisualKind = (typeof VISUAL_KINDS)[number];
  * pricing is downstream of the contract), and inverting that to deduplicate fifteen integers
  * would be a much larger change than the drift it prevents.
  */
-export const GENERATED_CLIP_SECONDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] as const;
+export const GENERATED_CLIP_SECONDS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] as const;
 
 /** The old closed set, mapped onto the new one, so a deck proposed under the block contract still
  *  READS. Accepted by the parser for one version and taught by the skill body for none:
@@ -596,6 +601,10 @@ export type Scene = {
    *  header note on the deleted floor. */
   narration: string;
   overlay?: string;
+  overlayStartMs?: number;
+  overlayEndMs?: number;
+  transitionOut?: "cut" | "fade";
+  motionGraphic?: "orbit-ring";
   prompt: string;
   /** Document-level citation (the Phase-14 locked idiom): ONE vault doc per scene, no chunk refs.
    *  Declared by the specialist as a `Source:` line in the scene's SCENE PROMPTS block. */
@@ -651,6 +660,10 @@ export const isPaidScene = (s: Scene): boolean => PAID_VISUAL[s.visual];
 export const hasAssetSource = (s: {
   visual?: string;
   overlay?: string;
+  overlayStartMs?: number;
+  overlayEndMs?: number;
+  transitionOut?: "cut" | "fade";
+  motionGraphic?: "orbit-ring";
   asset?: unknown;
   prompt?: string;
 }): boolean => {
@@ -852,7 +865,7 @@ export const SCENE_REFUSAL_WHY: Record<string, string> = {
     "the scene deck is there, but its table could not be read — the columns must include " +
     "Visual, Seconds, Description and Narration",
   empty_deck: "the scene deck came back empty",
-  bad_target_duration: "the reel length was not one of the supported 15, 30 or 60 seconds",
+  bad_target_duration: "the reel length was not one of the supported 15, 30, 45 or 60 seconds",
   unknown_visual_kind: "a scene asked for a kind of visual the renderer does not have",
   bad_scene_duration: "a scene did not say how many whole seconds it runs for",
   illegal_generated_duration: "a generated scene asked for a length the video model cannot produce",
@@ -987,6 +1000,10 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
   const iDesc = col("description", "desc");
   const iNarr = col("narration", "voiceover", "vo");
   const iOverlay = col("text overlay", "overlay");
+  const iOverlayStart = col("overlay start ms");
+  const iOverlayEnd = col("overlay end ms");
+  const iTransition = col("transition out");
+  const iMotion = col("motion graphic");
   const iAsset = col("asset", "source", "file");
   // `Seconds` is REQUIRED now, where the block contract treated it as an optional cross-check. A
   // scene deck without per-row durations is the uniform contract wearing new column names.
@@ -1025,6 +1042,26 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
     const description = (cells[iDesc] ?? "").trim();
     const narration = (cells[iNarr] ?? "").trim();
     const overlay = iOverlay >= 0 ? (cells[iOverlay] ?? "").trim() : "";
+    const cueCell = (i: number) => (i < 0 ? "" : (cells[i] ?? "").trim());
+    const startCue = cueCell(iOverlayStart);
+    const endCue = cueCell(iOverlayEnd);
+    const transitionCue = cueCell(iTransition);
+    const motionCue = cueCell(iMotion);
+    const hasFinishing =
+      startCue !== "" || endCue !== "" || transitionCue !== "" || motionCue !== "";
+    const finishing = hasFinishing
+      ? parseMediaFinishing(
+          {
+            ...(overlay === "" ? {} : { overlay }),
+            ...(startCue === "" ? {} : { overlayStartMs: Number(startCue) }),
+            ...(endCue === "" ? {} : { overlayEndMs: Number(endCue) }),
+            ...(transitionCue === "" ? {} : { transitionOut: transitionCue as "cut" | "fade" }),
+            ...(motionCue === "" ? {} : { motionGraphic: motionCue as "orbit-ring" }),
+          },
+          seconds * 1000,
+        )
+      : {};
+    if (finishing === null) return sceneFail("unreadable_deck");
     scenes.push({
       index,
       startMs,
@@ -1034,6 +1071,7 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
       description,
       narration,
       ...(overlay === "" ? {} : { overlay }),
+      ...finishing,
       // The deck's `#` column is DISPLAY, 1-based; row order is the reel's order and the truth.
       prompt: prompts.get(index + 1) ?? description,
       ...(() => {
@@ -1304,8 +1342,12 @@ function widenNarrationWindow(
     let most = 0;
     for (const [j, s] of scenes.entries()) {
       if (inSpan(j) || (s.visual === "generated_video") !== wantClip) continue;
-      // MIN_DONOR_SECONDS is also what keeps a shrunk clip on the 1..15 grid: the floor is 2.
-      const floor = s.durationMs / 1000 - MIN_DONOR_SECONDS;
+      // A donated generated clip must remain on the current provider's grid, whose minimum can
+      // exceed the editorial floor. Never repair narration into an unbuyable two-second clip.
+      const minimum = wantClip
+        ? Math.max(MIN_DONOR_SECONDS, GENERATED_CLIP_SECONDS[0])
+        : MIN_DONOR_SECONDS;
+      const floor = s.durationMs / 1000 - minimum;
       // AND IT MUST STILL FIT ITS OWN LINE. Without this, a donor is chosen on length alone and a
       // scene already at its narration limit gets robbed — it becomes the next offender, the next
       // pass robs the scene that just took its seconds, and `repairNarrationWindows` ping-pongs

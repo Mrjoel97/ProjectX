@@ -23,12 +23,15 @@ import { useAction, useMutation, usePaginatedQuery, useQuery } from "convex/reac
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useState } from "react";
+import { PdfDocumentViewer } from "../artifacts/PdfDocumentViewer";
 import { MarkdownDocument } from "../MarkdownDocument";
+import { PresentationPreview } from "../vault/PresentationPreview";
 // The SHIPPED vault preview, mounted here rather than reimplemented: it already renders markdown,
 // PDFs, images and video, the extraction/failure states and the entity chips. A second document
 // viewer would be a second thing to keep in step with `previewState`.
 import { PreviewModal } from "../vault/PreviewModal";
 import { DeliveryReview } from "./DeliveryReview";
+import { MediaCampaign } from "./MediaCampaign";
 import { MediaCanvas, ProposalFailureCanvas } from "./MediaCanvas";
 import { OnlinePresenceCard } from "./OnlinePresenceCard";
 import { RevenuePackPanel } from "./RevenuePackPanel";
@@ -2273,6 +2276,7 @@ const VERB: Record<string, [running: string, done: string]> = {
   // card, so this must never read "Saved to your vault" (BRAND §1 forbids claiming an action
   // that did not happen). Plural throughout — one card carries every version.
   createVariants: ["Writing the versions…", "Versions ready to approve"],
+  createMediaCampaign: ["Preparing your media batch…", "Media batch ready to review"],
   // Phase-19 (ACTN-05): MANDATORY beside the schema literal — traceParity.test.ts asserts set
   // equality BOTH ways, so either half alone is RED. The done state is the PROMISE the tool keeps:
   // it STAGES a card and applies nothing, so this must never read "Saved" or "Updated your
@@ -2307,6 +2311,8 @@ const VERB: Record<string, [running: string, done: string]> = {
   readBufferChannels: ["Reading your Buffer channels…", "Read your Buffer channels"],
   readBufferEngagement: ["Reading social engagement…", "Read social engagement"],
   readZernioEngagement: ["Reading your social report…", "Read your social report"],
+  readSocialService: ["Checking your social service…", "Checked your social service"],
+  startSocialService: ["Starting your social service…", "Checked the start request"],
   stageBufferPost: ["Preparing a campaign post…", "Campaign post ready for review"],
   readBusinessFinance: ["Reading your business finances…", "Read your business finances"],
   // STAGES a draft and sends nothing. REVN-06 stops at the existing human Approve gate, so this
@@ -2579,7 +2585,12 @@ function SourceCard({ threadId }: { threadId?: string }) {
  *  every revise) and is the ONLY thing this card can read for the type: byThread returns a
  *  vaultSources row, and the short/long discriminator otherwise lives on vaultDocuments.kind,
  *  which this card deliberately never queries. */
-const FORM_LABEL = { long: "DOCUMENT", short: "POST", sheet: "SPREADSHEET" } as const;
+const FORM_LABEL = {
+  long: "DOCUMENT",
+  short: "POST",
+  sheet: "SPREADSHEET",
+  presentation: "POWERPOINT",
+} as const;
 
 // The type badge pill. Token-only (the DocGrid icon-badge tint + --ink text): --teal-600 on white
 // is ~2.9:1 and BRAND §6 bans it for small text, so the teal lives in the FILL and the label stays
@@ -2752,6 +2763,14 @@ function OutputCard({ threadId }: { threadId?: string }) {
     api.vault.vaultDocText,
     selectedId ? { vaultDocId: selectedId } : "skip",
   );
+  const presentation = useQuery(
+    api.vaultPresentations.byDoc,
+    selectedId &&
+      artifact?.storedMimeType ===
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      ? { docId: selectedId }
+      : "skip",
+  );
   // Phase 40 (DOC-01), and the ONE place in this file that mints a storage URL.
   //
   // A Convex storage URL does not expire (`ctx.storage.getUrl` takes no expiry), so it is a
@@ -2825,21 +2844,9 @@ function OutputCard({ threadId }: { threadId?: string }) {
         {artifact === undefined || (pdfBytes && pdfUrl === undefined) ? (
           "Loading document…"
         ) : pdfUrl ? (
-          // The document AS IT WILL BE READ. The browser's own PDF viewer, the same bare iframe the
-          // vault modal uses (ADR-036: a `sandbox` attribute disables the viewer plugin and frames
-          // nothing). ONE scroll region — the viewer's — so a phone does not nest two.
-          <iframe
-            src={pdfUrl}
-            title={created.titles[selected] ?? "Document"}
-            data-testid="output-pdf"
-            style={{
-              width: "100%",
-              height: "min(70vh, 32rem)",
-              border: "1px solid var(--rule)",
-              borderRadius: "0.5rem",
-              background: "var(--card)",
-            }}
-          />
+          <PdfDocumentViewer url={pdfUrl} title={created.titles[selected] ?? "Document"} />
+        ) : presentation ? (
+          <PresentationPreview spec={presentation} />
         ) : artifact?.text ? (
           <div style={{ maxHeight: "32rem", overflowY: "auto" }}>
             <MarkdownDocument markdown={artifact.text} />
@@ -3316,6 +3323,8 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
 export function CardList({
   threadId,
   sending,
+  hideArtifacts = false,
+  onOpenOutput,
   // OPT-IN copy override for the no-plan fallback. Defaults to the cockpit wording, so every
   // existing caller is behaviourally unchanged. Exists because "answer the questions to build one"
   // is wrong on a surface with no composer — the voice-doc post-call screen (14-08).
@@ -3323,6 +3332,8 @@ export function CardList({
 }: {
   threadId?: string;
   sending: boolean;
+  hideArtifacts?: boolean;
+  onOpenOutput?: (key: string) => void;
   noPlanHint?: string;
 }) {
   const plan = useQuery(api.plans.byThread, threadId ? { threadId } : "skip");
@@ -3359,7 +3370,15 @@ export function CardList({
       ) : running ? null : (
         <p style={muted}>{noPlanHint}</p>
       );
-    return <PlanCards plan={plan} threadId={threadId} briefing={briefing} />;
+    return (
+      <PlanCards
+        plan={plan}
+        threadId={threadId}
+        briefing={briefing}
+        hideMedia={hideArtifacts}
+        onOpenOutput={onOpenOutput}
+      />
+    );
   };
 
   return (
@@ -3371,7 +3390,9 @@ export function CardList({
       {/* Same footing as SourceCard (ACTN-04 SC#6): createDocument saves and never sends, so a
           creating turn carries no plan row at all — the Output card must not sit under a plan gate. */}
       {threadId && <OnlinePresenceCard threadId={threadId} />}
-      <OutputCard threadId={threadId} />
+      {!hideArtifacts && <OutputCard threadId={threadId} />}
+      <MediaCampaign threadId={threadId ?? null} budgetRequestsOnly={hideArtifacts} />
+
       {/* Like SourceCard: evaluation happens on advice turns that may carry no plan row, so it
           renders above the plan-status branches and self-reads its own latest-row data. */}
       <EvaluationCard threadId={threadId} />
@@ -3391,11 +3412,33 @@ function PlanCards({
   plan,
   threadId,
   briefing,
+  hideMedia = false,
+  onOpenOutput,
 }: {
   plan: Plan;
   threadId: string;
   briefing: Briefing | null;
+  hideMedia?: boolean;
+  onOpenOutput?: (key: string) => void;
 }) {
+  if (hideMedia && (plan.kind === "media" || plan.mediaMode !== undefined || plan.proposalRefusal))
+    return (
+      <div style={{ ...briefingSheet, padding: 18 }}>
+        <p style={{ margin: "0 0 12px", color: "var(--ink-soft)" }}>
+          The {plan.mediaMode === "image" ? "image" : "video"} has its own workspace tab. Review its
+          plan there before generation.
+        </p>
+        {onOpenOutput && (
+          <button
+            type="button"
+            className="artifact-expand"
+            onClick={() => onOpenOutput(`plan:${plan._id}`)}
+          >
+            Open media workspace
+          </button>
+        )}
+      </div>
+    );
   // Generate moves media to delivering, but it never sends to recipients. Keep the same
   // canvas mounted so its reactive render/job failures and completed artifacts stay visible.
   if (plan.kind === "media") {

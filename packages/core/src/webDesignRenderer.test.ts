@@ -1,6 +1,6 @@
-import { WEB_CAROUSEL_TAG, hasUnsafeWebMarkup } from "./webCarouselRuntime";
 import { describe, expect, test } from "vitest";
 import { verifiedDesignKnowledgeBundle } from "./designKnowledge";
+import { hasUnsafeWebMarkup, WEB_CAROUSEL_TAG } from "./webCarouselRuntime";
 import {
   assertDesignProfileSources,
   designedWebDocumentHash,
@@ -22,11 +22,36 @@ describe("closed recipe design renderer", () => {
   };
 
   test("v2 presentation preserves validated palette, typography, spacing and light footer without replacing content", () => {
-    const { document, designProfile } = materializeWebRecipeWithProvenance("campaign-landing", base);
-    const html = renderDesignedWebDocument(document, { ...designProfile, layoutPlan: {
-      version: 2, hero: "split", sectionLayout: "stacked", services: "rows", gallery: "grid", spacing: "compact", headingScale: "balanced", motion: "subtle",
-      designTokens: { colors: { paper: "#faf8f2", card: "#ffffff", ink: "#222222", muted: "#555555", accent: "#224433", rule: "#cccccc" }, typography: { heading: "modern-serif", body: "humanist-sans" }, spacing: { contentWidth: 1100, sectionGap: 60, copyMeasure: 48, heroMinHeight: 440 }, footer: "light" },
-    } });
+    const { document, designProfile } = materializeWebRecipeWithProvenance(
+      "campaign-landing",
+      base,
+    );
+    const html = renderDesignedWebDocument(document, {
+      ...designProfile,
+      layoutPlan: {
+        version: 2,
+        hero: "split",
+        sectionLayout: "stacked",
+        services: "rows",
+        gallery: "grid",
+        spacing: "compact",
+        headingScale: "balanced",
+        motion: "subtle",
+        designTokens: {
+          colors: {
+            paper: "#faf8f2",
+            card: "#ffffff",
+            ink: "#222222",
+            muted: "#555555",
+            accent: "#224433",
+            rule: "#cccccc",
+          },
+          typography: { heading: "modern-serif", body: "humanist-sans" },
+          spacing: { contentWidth: 1100, sectionGap: 60, copyMeasure: 48, heroMinHeight: 440 },
+          footer: "light",
+        },
+      },
+    });
     expect(html).toContain("--paper:#faf8f2");
     expect(html).toContain("--measure:1100px");
     expect(html).toContain('--heading:"Palatino Linotype",Palatino,Georgia,serif');
@@ -44,21 +69,27 @@ describe("closed recipe design renderer", () => {
       alt,
     }));
     const { document, designProfile } = materializeWebRecipeWithProvenance("campaign-landing", {
-      ...base, media: { gallery }, design: { variance: 5, density: 5, motion: 6 },
+      ...base,
+      media: { gallery },
+      design: { variance: 5, density: 5, motion: 6 },
     });
-    const html = renderDesignedWebDocument(document, designProfile, { slug: "gallery", page: "campaign" });
+    const html = renderDesignedWebDocument(document, designProfile, {
+      slug: "gallery",
+      page: "campaign",
+    });
     expect(html).toContain('class="designed-gallery gallery-carousel"');
     expect(html).toContain('aria-roledescription="carousel"');
     expect(html.match(/data-gallery-(?:previous|next) aria-label/g)).toHaveLength(2);
     expect(html).toContain(WEB_CAROUSEL_TAG);
     expect(hasUnsafeWebMarkup(html)).toBe(false);
     for (let index = 1; index <= 3; index += 1) {
-
       expect(html).toContain(`id="gallery-image-${index}"`);
       expect(html).toContain(`/p/gallery/assets/photo${index - 1}/${String(index).repeat(64)}`);
     }
     expect(html).toContain("scroll-snap-type:x proximity");
-    expect(html).toContain(".gallery-carousel .gallery-track{scroll-behavior:auto;scroll-snap-type:none}");
+    expect(html).toContain(
+      ".gallery-carousel .gallery-track{scroll-behavior:auto;scroll-snap-type:none}",
+    );
     expect(html.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(/<script|aria-hidden="true"/);
     expect(html).toContain('loading="lazy"');
     expect(html).toContain("*:not(.gallery-track),*:before,*:after{transform:none!important}");
@@ -67,12 +98,14 @@ describe("closed recipe design renderer", () => {
   test("small galleries remain readable grids and gallery labels are escaped", () => {
     const { document, designProfile } = materializeWebRecipeWithProvenance("campaign-landing", {
       ...base,
-      media: { gallery: [{ storageRef: `webasset:detail:${"a".repeat(64)}`, alt: 'Paper & "ink"' }] },
+      media: {
+        gallery: [{ storageRef: `webasset:detail:${"a".repeat(64)}`, alt: 'Paper & "ink"' }],
+      },
     });
     const html = renderDesignedWebDocument(document, designProfile);
     expect(html).toContain('class="designed-gallery"');
     expect(html).not.toContain('class="gallery-controls"');
-    expect(html).toContain('Paper &amp; &quot;ink&quot;');
+    expect(html).toContain("Paper &amp; &quot;ink&quot;");
     expect(html).toContain('class="gallery-caption"');
   });
 
@@ -201,7 +234,9 @@ describe("closed recipe design renderer", () => {
       "<details><summary>View details</summary><p>A supplied product description.</p></details>",
     );
     expect(html).toContain("Ordering is unavailable");
-    expect(html.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(/<form|buy now|add to cart|payment|checkout/i);
+    expect(html.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(
+      /<form|buy now|add to cart|payment|checkout/i,
+    );
     expect(() =>
       materializeWebRecipeWithProvenance("storefront-catalogue", {
         brandName: "Ceramics",
@@ -267,7 +302,9 @@ describe("closed recipe design renderer", () => {
     expect(html).toContain("main>*{min-width:0}");
     expect(html).toContain("img,input,textarea,select{max-width:100%}");
     expect(html).toContain("W".repeat(256));
-    expect(html).toContain("html,.gallery-carousel .gallery-track{scroll-behavior:auto}button:active,.cta:active{transform:none}");
+    expect(html).toContain(
+      "html,.gallery-carousel .gallery-track{scroll-behavior:auto}button:active,.cta:active{transform:none}",
+    );
     expect(html).not.toContain("@keyframes");
   });
 
@@ -298,7 +335,9 @@ describe("closed recipe design renderer", () => {
       expect(movingHtml).toContain('action="/p/owned-campaign/campaign/cta/primary"');
       expect(movingHtml).toContain('action="/p/owned-campaign/campaign/forms/signup"');
       expect(movingHtml).toContain("I agree to hear from this publisher.");
-      expect(movingHtml.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(/<script|onload=|animationend|<canvas/);
+      expect(movingHtml.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(
+        /<script|onload=|animationend|<canvas/,
+      );
       expect(designedWebDocumentHash(still.document, still.designProfile, route)).not.toBe(
         designedWebDocumentHash(moving.document, moving.designProfile, route),
       );
@@ -352,7 +391,9 @@ describe("closed recipe design renderer", () => {
     expect(layer).toContain(
       "animation:pikar-section-arrive 1ms linear both;animation-timeline:view();animation-range:entry 0% cover 20%",
     );
-    expect(layer).toContain("#gallery>.web-media img,.gallery-slide .web-media img,.catalogue-items article>.web-media img");
+    expect(layer).toContain(
+      "#gallery>.web-media img,.gallery-slide .web-media img,.catalogue-items article>.web-media img",
+    );
     expect(layer).toContain(".catalogue-items details[open]>p");
     expect(layer).not.toMatch(
       /opacity:|visibility:|display:|pointer-events:|height:|width:|filter:|infinite|javascript|url\(/i,
@@ -697,5 +738,73 @@ test("clay shop heroes overlay real copy and collection action while preserving 
   expect(html).toContain('.hero-copy:before{content:"";position:absolute;inset:-64px -50vw -100px');
   expect(html).toContain("rgba(0,0,0,.68) calc(100% - 100px)");
   expect(webColorContrast("#ffffff", "#6e6e6e")).toBeGreaterThanOrEqual(4.5);
-  expect(html.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(/<script|<form|buy now|add to cart|background-image:/i);
+  expect(html.replace(WEB_CAROUSEL_TAG, "")).not.toMatch(
+    /<script|<form|buy now|add to cart|background-image:/i,
+  );
+});
+
+test("inner v2 pages reuse only an existing owned brand image and preserve the source document", () => {
+  const imageRef = `webasset:brand_image:${"a".repeat(64)}`;
+  const { document, designProfile } = materializeWebRecipeWithProvenance("business-site", {
+    brandName: "A print studio",
+    headline: "Printed with care",
+    about: "We design printed material.",
+    services: ["Identity", "Print"],
+    pageMode: "multi-page",
+    projectSlug: "print-studio",
+    contactConsent: "Contact me about this inquiry.",
+    media: { hero: { storageRef: imageRef, alt: "Supplied paper samples" } },
+  });
+  const before = canonicalWebDocument(document);
+  const profile = {
+    ...designProfile,
+    layoutPlan: {
+      version: 2 as const,
+      hero: "split" as const,
+      sectionLayout: "editorial-columns" as const,
+      services: "columns" as const,
+      gallery: "grid" as const,
+      spacing: "compact" as const,
+      headingScale: "balanced" as const,
+      motion: "subtle" as const,
+      designTokens: {
+        colors: {
+          paper: "#faf8f2",
+          card: "#ffffff",
+          ink: "#222222",
+          muted: "#555555",
+          accent: "#224433",
+          rule: "#cccccc",
+        },
+        typography: { heading: "modern-serif" as const, body: "humanist-sans" as const },
+        spacing: { contentWidth: 1100, sectionGap: 60, copyMeasure: 48, heroMinHeight: 440 },
+        footer: "light" as const,
+      },
+    },
+  };
+  for (const page of document.pages.slice(1)) {
+    const html = renderDesignedWebDocument(document, profile, {
+      slug: "print-studio",
+      page: page.slug,
+    });
+    expect(html).toContain('class="inner-brand-visual"');
+    expect(html).toContain(`src="/p/print-studio/assets/brand_image/${"a".repeat(64)}"`);
+    expect(html).toContain('alt="Supplied paper samples"');
+    expect(html).toContain("min-height:100svh;display:flex;flex-direction:column");
+    expect(html).toContain(".site-footer{margin-top:auto");
+    expect(hasUnsafeWebMarkup(html)).toBe(false);
+  }
+  expect(canonicalWebDocument(document)).toBe(before);
+  const withoutImage = {
+    ...document,
+    pages: document.pages.map((page) => ({
+      ...page,
+      nodes: page.nodes.filter((node) => node.kind !== "media"),
+    })),
+  };
+  const empty = renderDesignedWebDocument(withoutImage, profile, {
+    slug: "print-studio",
+    page: document.pages[1]?.slug ?? "about",
+  });
+  expect(empty).not.toContain('class="inner-brand-visual"');
 });

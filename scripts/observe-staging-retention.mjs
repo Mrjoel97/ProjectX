@@ -2,8 +2,9 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Read only. Never recreate, shorten, purge or otherwise change the clock fixture.
-export function buildObservationQuery(expectedFingerprint) {
+export function buildObservationQuery(expectedFingerprint, { preservationSnapshot = false } = {}) {
   if (!/^[a-f0-9]{64}$/.test(expectedFingerprint ?? "")) throw Error("MISSING_FIXTURE_PIN");
+  if (typeof preservationSnapshot !== "boolean") throw Error("INVALID_OBSERVATION_MODE");
   return `
 const interviews = await ctx.db.query("foundationInterviews").take(201);
 if (interviews.length > 200) throw Error("INCOMPLETE_INVENTORY");
@@ -37,6 +38,16 @@ if (receipt && (receipt.tenantId !== "control:foundation-retention:v1" || receip
     !Number.isFinite(receipt.payload.purgedAt) || receipt.payload.purgedAt < expiresAt || receipt.payload.purgedAt > observedAt ||
     receipt.ts !== receipt.payload.purgedAt || receipt.exportVersion !== 2 || rows.length !== 0)) throw Error("INVALID_RECEIPT");
 if (observedAt >= firstEligibleSweep && !receipt) throw Error("MISSING_PURGE_RECEIPT");
+${
+  preservationSnapshot
+    ? `
+// Release preservation cannot treat expiry or absence alone as proof of a completed purge.
+if (rows.length === 0 && !receipt) throw Error("MISSING_PURGE_RECEIPT");
+const protectedDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([fixtures[0], rows[0] ?? null, receipt ?? null])));
+return {sha256: Array.from(new Uint8Array(protectedDigest), b => b.toString(16).padStart(2, "0")).join(""), checkpointCount: rows.length};
+`
+    : ""
+}
 return { observedAt: new Date(observedAt).toISOString(),
   createdAt: new Date(createdAt).toISOString(), expiresAt: new Date(expiresAt).toISOString(),
   inventoryComplete: true, fixtureUnique: true, checkpointCount: rows.length,

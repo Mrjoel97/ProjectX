@@ -15,6 +15,9 @@ const state = vi.hoisted(() => ({
   queries: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: state.push }) }));
+vi.mock("./ManagedServicesPanel", () => ({
+  ManagedServicesPanel: () => <h2>Let Pikar handle the work</h2>,
+}));
 vi.mock("convex/react", () => ({
   useQuery: (ref: unknown, args: unknown) => state.queries(ref, args),
   useAction: () => state.start,
@@ -103,12 +106,27 @@ afterEach(async () => {
 });
 async function render() {
   await act(async () => root.render(<Page />));
+  await click("#workflows-tab");
 }
 async function click(selector: string) {
   const button = host.querySelector<HTMLButtonElement>(selector);
   expect(button).not.toBeNull();
   await act(async () => button?.click());
 }
+
+test("workflows opens first; services belongs in Marketing and keyboard navigation reaches skills", async () => {
+  await act(async () => root.render(<Page />));
+  expect(host.querySelector("#services-tab")).toBeNull();
+  expect(host.querySelector("#services-panel")).toBeNull();
+  expect(host.querySelector("#workflows-tab")?.getAttribute("aria-selected")).toBe("true");
+  await act(async () =>
+    host
+      .querySelector("#workflows-tab")
+      ?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })),
+  );
+  expect(host.querySelector("#skills-panel")?.hasAttribute("hidden")).toBe(false);
+});
+
 test("tenant library shows live offers and its own agent drafts, skipping owner reads and authoring", async () => {
   await render();
   expect(host.textContent).toContain("Business pulse");

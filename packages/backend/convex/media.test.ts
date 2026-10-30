@@ -6,11 +6,13 @@
 // environment matches the research.test.ts / dispatch.test.ts harness idiom — convex-test's lazy
 // module loader pulls every convex module, and some of them are "use node".
 import retrierTest from "@convex-dev/action-retrier/test";
+import { buildNativeScenePrompt } from "@pikar/core/nativeMedia";
 import { MUSIC_BLOCK_INDEX } from "@pikar/core/render";
 import type { Block, Scene, ShotType } from "@pikar/core/storyboard";
 import { maxCharsFor, minCharsFor } from "@pikar/core/storyboard";
 import {
   chooseMediaBatch,
+  estimateMediaUsd,
   MEDIA_DEFAULT_IMAGE,
   MEDIA_DEFAULT_STOCK,
   MEDIA_DEFAULT_STT,
@@ -38,23 +40,67 @@ import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/s
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { hmacHex } from "./gmailAuth";
-import { DEPLOYMENT_MEDIA_BUDGET_CENTS, MEDIA_DAILY_BUDGET_CENTS } from "./guardrails";
+import { DEPLOYMENT_MEDIA_BUDGET_CENTS, MEDIA_DAILY_BUDGET_CENTS, rateLimiter } from "./guardrails";
 import { contentHash } from "./lib/hash";
 import {
   buildSubmitBody,
   MAX_STOCK_ASSET_BYTES,
+  nativeReelReviewHash,
   pickStockAudio,
   pickStockPhoto,
   pickStockVideo,
+  reserveImageInner,
   reserveJobInner,
   reserveSceneJobInner,
   type SubmittableSpec,
   sceneDeckOf,
   submitLine,
 } from "./media";
+import { maybeStartCaptions } from "./mediaComplete";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+
+test("native review binds brand revision and decorative geometry while preserving finishing cues", async () => {
+  const plan = {
+    _id: "reviewed-plan",
+    mediaAudioMode: "native",
+    targetDurationSeconds: 15,
+    brandKitRef: { docId: "brand-doc", revision: 1, contentHash: "brand-one" },
+    shots: [
+      {
+        index: 0,
+        visual: "generated_video",
+        seconds: 15,
+        windowStartMs: 0,
+        description: "Owned bottle hero",
+        prompt: "Owned bottle hero",
+        narration: "",
+        overlay: "FORMA",
+        overlayStartMs: 500,
+        overlayEndMs: 3000,
+        transitionOut: "fade",
+        motionGraphic: "orbit-ring",
+      },
+    ],
+  } as unknown as Doc<"plans">;
+  const hash = await nativeReelReviewHash(plan);
+  expect(
+    await nativeReelReviewHash({ ...plan, brandKitRef: { ...plan.brandKitRef!, revision: 2 } }),
+  ).not.toBe(hash);
+  expect(
+    await nativeReelReviewHash({
+      ...plan,
+      shots: plan.shots?.map((shot) => ({ ...shot, motionGraphic: undefined })),
+    }),
+  ).not.toBe(hash);
+  expect(sceneDeckOf(plan)?.scenes[0]).toMatchObject({
+    overlayStartMs: 500,
+    overlayEndMs: 3000,
+    transitionOut: "fade",
+    motionGraphic: "orbit-ring",
+  });
+});
 const rateLimiterModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
 );
@@ -159,8 +205,11 @@ const REF_JOB = () => deck(3);
 // `openai/gpt-audio-mini` on OpenRouter — $0.015 -> $0.006 per 1000 chars, so 3 x 112 chars is
 // 0.336 of a thousand at the new rate. The $0.003024 delta is the whole change to this total, and
 // 88.8016 cents CEILINGS to 89 rather than 90.
-const REF_JOB_USD = 0.888016;
-const REF_JOB_CENTS = 89;
+// Standard Seedance 2.0: three four-second clips reserve five policy seconds each at $0.1512,
+// plus the unchanged voice, caption and render lines. This is not a verified provider invoice cap.
+const REF_JOB_USD = 2.316016;
+const REF_JOB_CENTS = 232;
+const REF_JOBS_PER_DAY = Math.floor(MEDIA_DAILY_BUDGET_CENTS / REF_JOB_CENTS);
 const REF_JOB_LINES = 7; // 3 video + 3 tts + 1 stt — the render line gets NO row
 
 // ── the two kill switches ──────────────────────────────────────────────────────────
@@ -276,10 +325,10 @@ test("an unpriced model is unknown_model — zero rows, never a guess", async ()
 
 describe("the reference job: the WHOLE reel is ONE reserved unit", () => {
   test("the arithmetic, derived from the price table rather than asserted twice", () => {
-    const clips =
-      3 *
-      MEDIA_DEFAULT_VIDEO.seconds *
-      (MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_VIDEO.model]?.[MEDIA_DEFAULT_VIDEO.resolution] ?? 0);
+    const clip = estimateMediaUsd({ kind: "video", ...MEDIA_DEFAULT_VIDEO });
+    expect(clip.ok).toBe(true);
+    if (!clip.ok) return;
+    const clips = 3 * clip.value;
     // 2x — rewrite allowance. 33.1-06: the rate is READ from the table now, like the clip line
     // above. It was the literal `0.015`, which made a test whose own name says "derived from the
     // price table" go red on a price move it should have absorbed — and would have gone SILENTLY
@@ -290,7 +339,7 @@ describe("the reference job: the WHOLE reel is ONE reserved unit", () => {
       (MEDIA_TTS_PRICING[MEDIA_DEFAULT_VOICE.model] ?? 0);
     const stt = 1 * 0.006; // the sub-minute input is billed as one minute
     expect(clips + voice + stt + MEDIA_SANDBOX_USD_PER_RENDER).toBeCloseTo(REF_JOB_USD, 6);
-    expect(REF_JOB_USD).toBeLessThan(MEDIA_JOB_CAP_USD); // 75% headroom — the test is not vacuous
+    expect(REF_JOB_USD).toBeLessThan(MEDIA_JOB_CAP_USD);
   });
 
   test("§4.1's SIX-BLOCK REEL IS NOW A REFUSAL — 24 generated seconds against a 12 s ceiling", async () => {
@@ -664,18 +713,16 @@ describe("the media windows: keyed per tenant, with a keyless ceiling behind the
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     } as const;
-    // ELEVEN jobs fit in the tenant window. The twelfth cannot. (It was four and a fifth while
-    // the reference job was six sora-2 blocks at 246 cents; the same reel is 90 cents on grok at
-    // the seconds ceiling, so the count is recomputed rather than left to pass by luck.)
-    for (let i = 0; i < 11; i++) expect((await reserve(t, job)).ok).toBe(true);
+    // Recompute the exact number of complete current-profile jobs that fit before exhaustion.
+    for (let i = 0; i < REF_JOBS_PER_DAY; i++) expect((await reserve(t, job)).ok).toBe(true);
     const rowsBefore = (await rows(t)).length;
-    expect(rowsBefore).toBe(11 * REF_JOB_LINES);
+    expect(rowsBefore).toBe(REF_JOBS_PER_DAY * REF_JOB_LINES);
 
     const res = await reserve(t, job);
 
     expect(res).toEqual({ ok: false, reason: "media_daily_exhausted" });
     expect((await rows(t)).length).toBe(rowsBefore); // all-or-nothing
-    expect(await mediaLeft(t, A)).toBe(MEDIA_DAILY_BUDGET_CENTS - 11 * REF_JOB_CENTS);
+    expect(await mediaLeft(t, A)).toBe(MEDIA_DAILY_BUDGET_CENTS - REF_JOBS_PER_DAY * REF_JOB_CENTS);
   });
 
   test("the KEYLESS ceiling refuses independently, with its own distinct reason", async () => {
@@ -690,21 +737,25 @@ describe("the media windows: keyed per tenant, with a keyless ceiling behind the
         withCaptions: true,
       }) as const;
 
-    // Many tenants, each individually modest (11 jobs = 990 < its own 1000 allowance), together
-    // exceeding the 10,000 ceiling. No single tenant is over its own window, so only the global
-    // rail can refuse here. Counts recomputed for the 90-cent reference job (33.1-04).
-    let sawCeiling = false;
-    outer: for (let i = 0; i < 15 && !sawCeiling; i++) {
-      for (let j = 0; j < 11; j++) {
-        const res = await reserve(t, job(`crowd_${i}`));
-        if (!res.ok) {
-          expect(res.reason).toBe("deployment_media_exhausted");
-          sawCeiling = true;
-          break outer;
-        }
-      }
-    }
-    expect(sawCeiling).toBe(true);
+    // Preconsume all but one job of the independently configured deployment allowance, then
+    // exercise the real final reservation. No fixed tenant multiplier can model every cap ratio.
+    await t.run((ctx) =>
+      rateLimiter.limit(ctx, "deploymentMediaSpendCents", {
+        count: DEPLOYMENT_MEDIA_BUDGET_CENTS - REF_JOB_CENTS,
+        reserve: true,
+      }),
+    );
+    expect((await reserve(t, job("last_global_job"))).ok).toBe(true);
+    expect(
+      await t.run(
+        async (ctx) =>
+          (
+            await rateLimiter.getValue(ctx, "mediaSpendCents", {
+              key: "newcomer",
+            })
+          ).value,
+      ),
+    ).toBe(MEDIA_DAILY_BUDGET_CENTS);
 
     // A FRESH tenant has its full personal budget and is still refused — and is told the truth
     // about why, rather than being blamed for a day it never touched.
@@ -766,10 +817,10 @@ test("CONCURRENCY: two jobs that fit alone but not together — exactly ONE wins
     withCaptions: true,
   } as const;
 
-  // Leave room for exactly one more job. TEN at 90 cents leaves 100: one fits, two do not.
-  for (let i = 0; i < 10; i++) expect((await reserve(t, job)).ok).toBe(true);
+  // Leave room for exactly one more complete current-profile job.
+  for (let i = 0; i < REF_JOBS_PER_DAY - 1; i++) expect((await reserve(t, job)).ok).toBe(true);
   const room = await mediaLeft(t, A);
-  expect(room).toBe(MEDIA_DAILY_BUDGET_CENTS - 10 * REF_JOB_CENTS);
+  expect(room).toBe(MEDIA_DAILY_BUDGET_CENTS - (REF_JOBS_PER_DAY - 1) * REF_JOB_CENTS);
   expect(room).toBeGreaterThanOrEqual(REF_JOB_CENTS); // one fits...
   expect(room).toBeLessThan(2 * REF_JOB_CENTS); // ...two do not. The test is not vacuous.
 
@@ -785,7 +836,7 @@ test("CONCURRENCY: two jobs that fit alone but not together — exactly ONE wins
   // Consumed cents equal the WINNER's estimate, not both.
   expect(await mediaLeft(t, A)).toBe(room - REF_JOB_CENTS);
   // ...and the loser wrote nothing.
-  expect(await rows(t)).toHaveLength(11 * REF_JOB_LINES);
+  expect(await rows(t)).toHaveLength(REF_JOBS_PER_DAY * REF_JOB_LINES);
 });
 
 // ── plan 20-18: the D5 reconciliation readers ──────────────────────────────────────
@@ -1057,11 +1108,12 @@ describe("listJobs: the per-plan detail, as a projection", () => {
 // Everything below is $0: `fetch` is a spy in every test, and `FAL_FIXTURE` covers the rest.
 
 const mediaSource = (
-  import.meta.glob("./media.ts", { query: "?raw", import: "default", eager: true }) as Record<
-    string,
-    string
-  >
-)["./media.ts"];
+  import.meta.glob("../../core/src/mediaProviderContract.ts", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>
+)["../../core/src/mediaProviderContract.ts"];
 /** Comments stripped — the invariants below are about the CODE surface, and this module's prose
  *  legitimately NAMES the things it forbids (a poll, a wait, a provider default). */
 const mediaCode = (mediaSource ?? "")
@@ -1161,6 +1213,7 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
       duration: MEDIA_DEFAULT_VIDEO.seconds,
       resolution: MEDIA_DEFAULT_VIDEO.resolution,
       aspect_ratio: "9:16",
+      generate_audio: false,
     });
   });
 
@@ -1180,12 +1233,13 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
     expect(buildSubmitBody({ ...VIDEO, resolution: "720p" }, "p").resolution).toBe("720p");
   });
 
-  test("NO audio field is sent, on any video submit", () => {
-    // The endpoint has no audio toggle (20-01 preflight): the only audio field is `audio_url` and
-    // we never send one. A clip's own native track is ducked to SFXVOL 0.20 under the voice bed by
-    // `render/assemble_final.sh`'s LEVEL LAW — Open Question 5 resolves at the assembler.
+  test("the narrated standard profile disables native audio while historical Grok keeps its body", () => {
     const keys = Object.keys(buildSubmitBody(VIDEO, "p"));
-    expect(keys.filter((k) => /audio/i.test(k))).toEqual([]);
+    expect(keys.filter((k) => /audio/i.test(k))).toEqual(["generate_audio"]);
+    expect(buildSubmitBody(VIDEO, "p")).toHaveProperty("generate_audio", false);
+    expect(buildSubmitBody({ ...VIDEO, model: "x-ai/grok-imagine-video" }, "p")).not.toHaveProperty(
+      "generate_audio",
+    );
   });
 
   test("the image body pins size, one output, and no rewrite/watermark", () => {
@@ -1376,11 +1430,8 @@ describe("OpenRouter video submit contract", () => {
     expect(typeof body.duration).toBe("number");
   });
 
-  test("no unpriced dimension is sent — not generate_audio, not Sora's size", () => {
-    // Grok has no native audio and this pipeline muxes TTS separately in assemble_final.sh.
-    // The price table keys on model/resolution/seconds; a fourth priced-looking dimension the table
-    // cannot see is exactly the money bug buildSubmitBody's doc comment exists to prevent.
-    expect(buildSubmitBody(VIDEO, "p")).not.toHaveProperty("generate_audio");
+  test("the standard request pins silent audio and never sends Sora's size field", () => {
+    expect(buildSubmitBody(VIDEO, "p")).toHaveProperty("generate_audio", false);
     expect(buildSubmitBody(VIDEO, "p")).not.toHaveProperty("size");
   });
 
@@ -1936,6 +1987,8 @@ describe("OpenRouter video task landing", () => {
     // Were the poller to pass a default 4 instead of the row's 7, this would read 28.
     const t = harness();
     const jobId = await seedSubmittedVideo(t, 7);
+    // This receipt-specific test remains on its original Grok model after the default migration.
+    await t.run((ctx) => ctx.db.patch(jobId, { model: "x-ai/grok-imagine-video", estUsd: 0.49 }));
     stubMediaEnv();
     vi.stubGlobal(
       "fetch",
@@ -3326,6 +3379,88 @@ async function seedImagePlan(t: T, tenantId = A, prompt = "A sunlit baobab at da
 }
 
 describe("standalone image: one reviewed prompt through the existing media rail", () => {
+  test("explicit quality binds reviewed prompt, price and immutable provider spec", async () => {
+    const t = harness();
+    const { planId, prompt } = await seedImagePlan(t);
+    await t.run((ctx) => ctx.db.patch(planId, { mediaImageQuality: "high" }));
+    const estimate = await asA(t).query(api.media.imageEstimate, { planId });
+    expect(estimate).toMatchObject({ quality: "high", totalCents: 20, refusal: null });
+    if (!("reviewHash" in estimate)) throw new Error("missing review hash");
+    const before = await mediaLeft(t);
+    expect(await asA(t).mutation(api.media.generateImage, { planId })).toMatchObject({
+      ok: false,
+      reason: "review_changed",
+    });
+    expect(
+      await asA(t).mutation(api.media.generateImage, {
+        planId,
+        expectedReviewHash: estimate.reviewHash,
+        maxCostCents: 1,
+      }),
+    ).toMatchObject({ ok: false, reason: "over_reviewed_cost" });
+    await t.run((ctx) => ctx.db.patch(planId, { imagePrompt: "Changed product" }));
+    expect(
+      await asA(t).mutation(api.media.generateImage, {
+        planId,
+        expectedReviewHash: estimate.reviewHash,
+        maxCostCents: 20,
+      }),
+    ).toMatchObject({ ok: false, reason: "review_changed" });
+    expect(await mediaLeft(t)).toBe(before);
+    expect(await rows(t)).toHaveLength(0);
+    await t.run((ctx) => ctx.db.patch(planId, { imagePrompt: prompt }));
+    const generated = await asA(t).mutation(api.media.generateImage, {
+      planId,
+      expectedReviewHash: estimate.reviewHash,
+      maxCostCents: 20,
+    });
+    expect(generated.ok).toBe(true);
+    if (!generated.ok) throw new Error("reservation failed");
+    const batch = await t.query(internal.media.batchToSubmit, {
+      tenantId: A,
+      batchId: generated.batchId,
+    });
+    expect(batch.lines[0]).toMatchObject({
+      spec: { quality: "high" },
+      promptHash: await contentHash(prompt),
+    });
+  });
+
+  test("image prompt drift after reservation refuses before any network request", async () => {
+    const t = harness();
+    const { planId, prompt } = await seedImagePlan(t);
+    await t.run((ctx) => ctx.db.patch(planId, { mediaImageQuality: "high" }));
+    const reserved = await t.run((ctx) => reserveImageInner(ctx, { tenantId: A, planId, prompt }));
+    if (!reserved.ok) throw new Error("reservation failed");
+    await t.run((ctx) => ctx.db.patch(planId, { imagePrompt: "Changed after reservation" }));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const result = await t.action(internal.media.submitBatch, {
+        tenantId: A,
+        batchId: reserved.batchId,
+      });
+      expect(result.failed).toBe(1);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect((await rows(t))[0]).toMatchObject({
+        status: "failed",
+        failureReason: "image_prompt_changed",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("high quality oversized prompt is refused by estimate and reservation without spend", async () => {
+    const t = harness();
+    const { planId } = await seedImagePlan(t, A, "界".repeat(1400));
+    await t.run((ctx) => ctx.db.patch(planId, { mediaImageQuality: "high" }));
+    expect(await asA(t).query(api.media.imageEstimate, { planId })).toMatchObject({
+      refusal: "invalid_prompt",
+    });
+    expect(await rows(t)).toHaveLength(0);
+  });
+
   test("estimate consumes nothing and exactly matches the reservation", async () => {
     const t = harness();
     const { planId, prompt } = await seedImagePlan(t);
@@ -4987,12 +5122,24 @@ function sidecarFor(blocks: number, clipSeconds = MEDIA_DEFAULT_VIDEO.seconds): 
  *  at blockIndex -1 — exactly what `reserveJobInner` writes for `withCaptions`. */
 async function seedCaptionable(
   t: T,
-  opts: { blocks?: number; batchId?: string; takesLanded?: boolean } = {},
+  opts: { blocks?: number; batchId?: string; takesLanded?: boolean; narrations?: string[] } = {},
 ) {
   const blocks = opts.blocks ?? 2;
   const batchId = opts.batchId ?? "batch_caps";
+  if (opts.narrations && opts.narrations.length !== blocks)
+    throw new Error("caption fixture needs one narration per take");
   const { planId, jobIds } = await seedInFlight(t, { blocks, batchId });
   const sttJobId = await t.run(async (ctx) => {
+    if (opts.narrations) {
+      const plan = await ctx.db.get(planId);
+      if (!plan?.shots) throw new Error("caption fixture needs a deck");
+      await ctx.db.patch(planId, {
+        shots: plan.shots.map((shot) => ({
+          ...shot,
+          narration: opts.narrations?.[shot.index] ?? shot.narration,
+        })),
+      });
+    }
     for (const id of jobIds) {
       const row = await ctx.db.get(id as Id<"mediaJobs">);
       if (row?.kind !== "tts") continue;
@@ -5005,6 +5152,10 @@ async function seedCaptionable(
       await ctx.db.patch(id as Id<"mediaJobs">, {
         assetStorageId: storageId,
         ...(opts.takesLanded ? { status: "succeeded" as const } : {}),
+        // The burn must bind each same-batch landed take to the exact current deck script.
+        ...(opts.narrations
+          ? { promptHash: await contentHash(opts.narrations[row.blockIndex] as string) }
+          : {}),
       });
     }
     return await ctx.db.insert("mediaJobs", {
@@ -5129,6 +5280,7 @@ describe("the caption BURN terminal: a failure degrades the reel, it never unpub
     const { planId, batchId, jobIds, sttJobId } = await seedCaptionable(t, {
       blocks: 2,
       takesLanded: true,
+      narrations: ["hello", "there"],
     });
     const reelId = await storeBlob(t, new Uint8Array([1, 2, 3]), "video/mp4");
     const sidecarId = await storeBlob(t, sidecarFor(2), "application/json");
@@ -5230,7 +5382,7 @@ describe("the caption BURN terminal: a failure degrades the reel, it never unpub
 
     expect(
       await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId }),
-    ).toEqual({ ok: false, reason: "caption_track_empty" });
+    ).toEqual({ ok: false, reason: "caption_expected_text_mismatch" });
     expectNoRenderPost(fetchMock, planId);
     expect((await planRow(t, planId))?.renderStatus).toBe("rendered");
   });
@@ -5252,6 +5404,7 @@ describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
     const { planId, batchId, sttJobId } = await seedCaptionable(t, {
       blocks: 2,
       takesLanded: true,
+      narrations: ["hello", "there"],
     });
     await t.run(async (ctx) => {
       // Every renderable line landed, as `batchToRender` requires.
@@ -5304,7 +5457,12 @@ describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
     const { planId } = await renderWithCaptions(t);
     const transcriptId = await storeBlob(
       t,
-      JSON.stringify({ words: [{ text: "hi", start: 0.5, end: 0.9, type: "word" }] }),
+      JSON.stringify({
+        words: [
+          { text: "hello", start: 0.5, end: 0.9, type: "word" },
+          { text: "there", start: 1.5, end: 1.9, type: "word" },
+        ],
+      }),
       "application/json",
     );
     const captionedId = await storeBlob(t, new Uint8Array([9, 9, 9]), "video/mp4");
@@ -5317,7 +5475,9 @@ describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
       "MEDIA_SANDBOX_FIXTURE",
       JSON.stringify({ ok: true, mp4StorageId: captionedId, renderMs: 100 }),
     );
-    await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId });
+    expect(
+      await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId }),
+    ).toEqual({ ok: true });
 
     const rows = await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect());
     for (const row of rows) {
@@ -5417,9 +5577,9 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
     } as const;
 
     // Drain the tenant's media window through the REAL rail rather than a test-only door, then ask
-    // for one more. 90c a job against a 1000c window, so the twelfth is the one that cannot fit.
+    // for one more at the current profile's exact reservation.
     let refused: Awaited<ReturnType<typeof reserve>> | null = null;
-    for (let i = 0; i < 13 && refused === null; i += 1) {
+    for (let i = 0; i <= REF_JOBS_PER_DAY && refused === null; i += 1) {
       const res = await reserve(t, { ...job, blocks: REF_JOB() });
       if (!res.ok) refused = res;
     }
@@ -5431,8 +5591,10 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
 
     // Exactly the successful reservations are recorded, and the refusal added nothing.
     const reserved = (await events(t)).filter((r) => r.phase === "reserved");
-    expect(reserved).toHaveLength(11);
-    expect(reserved.reduce((sum, r) => sum + r.amountCents, 0)).toBe(REF_JOB_CENTS * 11);
+    expect(reserved).toHaveLength(REF_JOBS_PER_DAY);
+    expect(reserved.reduce((sum, r) => sum + r.amountCents, 0)).toBe(
+      REF_JOB_CENTS * REF_JOBS_PER_DAY,
+    );
   });
 
   test("even a REFUSED media job opens coverage — a refusal is a confident zero", async () => {
@@ -5689,7 +5851,7 @@ describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable"
     expect(estimate.refusal).toBeNull();
     expect(estimate.totalCents).toBeGreaterThan(0);
     // ONE LINE PER PAID KIND (wave 7). The blended `pictures` row wave 5 printed hid the only
-    // lever the user has: 12 s of generated clip is $0.84 and the still beside it is $0.006.
+    // lever the user has: clip reservations include a policy second per request.
     expect(estimate.lines.map((l) => l.label)).toEqual([
       "clips",
       "stills",
@@ -5699,7 +5861,7 @@ describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable"
     ]);
     const line = (label: string) => estimate.lines.find((l) => l.label === label);
     expect(line("clips")?.qty).toBe(2);
-    expect(line("clips")?.cents).toBe(84); // 4 s + 8 s at $0.07 a second
+    expect(line("clips")?.cents).toBe(212); // (4+1 + 8+1) * $0.1512, rounded once
     expect(line("stills")?.qty).toBe(1);
     expect(line("stills")?.cents).toBe(1); // ONE still, whatever its scene's length
     // 33-04: the render line is DOUBLED at its one source so the retry sandbox is reserved, not
@@ -6063,7 +6225,7 @@ describe("33-02 editBrief: a chip edit patches the BRIEF plane and nothing else"
     const { planId } = await seedSceneDeck(t);
     await t.run(async (ctx) => ctx.db.patch(planId, { brief: BRIEF }));
     expect(
-      await asA(t).mutation(api.media.editBrief, { planId, patch: { durationSeconds: 45 } }),
+      await asA(t).mutation(api.media.editBrief, { planId, patch: { durationSeconds: 42 } }),
     ).toEqual({ ok: false, reason: "illegal_duration" });
     const plan = await planRowOf(t, planId);
     expect(plan?.brief).toEqual(BRIEF);
@@ -6140,21 +6302,21 @@ describe("33-02 switchDeck: the unpicked deck swaps in atomically, until Generat
     const { planId } = await seedSceneDeck(t);
     await seedAltDeck(t, planId);
 
-    // Before the switch: the picked deck is 4 s + 8 s of paid clip → 84 cents of clips.
+    // Before the switch: two clip reservations include two policy seconds.
     const before = await asA(t).query(api.media.jobEstimate, { planId });
-    expect(before.lines.find((l) => l.label === "clips")?.cents).toBe(84);
+    expect(before.lines.find((l) => l.label === "clips")?.cents).toBe(212);
 
     await asA(t).mutation(api.media.switchDeck, { planId });
 
     // After: the SAME query, textually untouched by this plan, prices the formerly-alternate deck
-    // (one 8 s clip → 56 cents) because `plans.shots` IS the picked deck.
+    // (one 8 s clip plus one policy second → 136 cents) because `plans.shots` IS the picked deck.
     const row = await planRowOf(t, planId);
     const deck = row ? sceneDeckOf(row) : null;
     expect(deck?.targetDurationSeconds).toBe(15);
     expect(deck?.scenes.map((s) => s.narration)).toEqual(["alt line 0", "alt line 1"]);
     const after = await asA(t).query(api.media.jobEstimate, { planId });
     expect(after.refusal).toBeNull();
-    expect(after.lines.find((l) => l.label === "clips")?.cents).toBe(56);
+    expect(after.lines.find((l) => l.label === "clips")?.cents).toBe(136);
   });
 
   test("no_alternate when there is nothing to switch to", async () => {
@@ -7055,9 +7217,9 @@ describe("33-05 the OLD final is held until the new one lands", () => {
       });
     });
 
-    // The new UNCAPTIONED final lands. The vault doc must NOT be repointed yet — and the old
-    // captioned final it references must survive this terminal.
+    // The new uncaptioned final lands; its independently stored sidecar stays live through burn.
     const mp4B = await storeBlob(t, new Uint8Array([2]), "video/mp4");
+    const sidecarB = await storeBlob(t, RENDER_SIDECAR, "application/json");
     await t.run(async (ctx) =>
       ctx.runMutation(internal.render.renderReel.recordRender, {
         tenantId: A,
@@ -7066,7 +7228,7 @@ describe("33-05 the OLD final is held until the new one lands", () => {
         result: {
           ok: true,
           renderStorageId: mp4B,
-          sidecarStorageId: mp4B,
+          sidecarStorageId: sidecarB,
           sidecarHash: "c".repeat(64),
           sceneCount: 4,
           renderMs: 1,
@@ -7080,6 +7242,7 @@ describe("33-05 the OLD final is held until the new one lands", () => {
     expect((await reelDocs(t))[0]?.storageId).toBe(mp4B); // …repointed at what the plan now says
     expect(await blobExists(t, capA)).toBe(false); // the superseded cut: nothing points at it
     expect(await blobExists(t, mp4B)).toBe(true); // the live one is never a delete candidate
+    expect(await blobExists(t, sidecarB)).toBe(true);
 
     // The burn completes: plan and doc repoint to capB, and the uncaptioned mp4B goes.
     const capB = await storeBlob(t, new Uint8Array([3]), "video/mp4");
@@ -7089,6 +7252,7 @@ describe("33-05 the OLD final is held until the new one lands", () => {
     expect((await reelDocs(t))[0]?.storageId).toBe(capB);
     expect(await blobExists(t, mp4B)).toBe(false);
     expect(await blobExists(t, capB)).toBe(true);
+    expect(await blobExists(t, sidecarB)).toBe(true);
   });
 });
 
@@ -7892,5 +8056,366 @@ describe("uncited claims cannot reach a rendered frame", () => {
     const t = harness();
     const res = await reserveWithShots(t, [shot(0), shot(1)]);
     expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+  });
+});
+
+describe("native Seedance application workflow", () => {
+  async function nativePlan(t: T, target = 30) {
+    const seconds = target === 30 ? 5 : 15;
+    const scenes = Array.from({ length: target / seconds }, (_, index) =>
+      sc({
+        index,
+        startMs: index * seconds * 1000,
+        durationMs: seconds * 1000,
+        narration: `Meet product ${index + 1}.`,
+        prompt: `Product reveal ${index + 1}`,
+      }),
+    );
+    const shots = scenes.map((s) => ({
+      index: s.index,
+      visual: s.visual,
+      seconds: s.durationMs / 1000,
+      windowStartMs: s.startMs,
+      description: s.description,
+      prompt: s.prompt,
+      narration: s.narration,
+    }));
+    const planId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: A,
+        threadId: "native_thread",
+        kind: "media",
+        mediaMode: "reel",
+        mediaAudioMode: "native",
+        status: "proposed",
+        createdAt: Date.now(),
+        targetDurationSeconds: target,
+        clipSeconds: seconds,
+        shots,
+        brief: { topic: "Launch", durationSeconds: target, defaulted: [] },
+        artDirection: {
+          palette: [],
+          mood: "premium",
+          lighting: "warm",
+          composition: "center",
+          environment: "studio",
+          texture: "matte",
+          references: [],
+          avoid: "warping",
+          music: "calm",
+        },
+      }),
+    );
+    return { planId, scenes, shots };
+  }
+  test.each([
+    30, 45, 60,
+  ])("reserves and estimates %ss native reels without TTS or external assets", async (target) => {
+    const t = harness();
+    const { planId, scenes } = await nativePlan(t, target);
+    const estimate = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(estimate.audioMode).toBe("native");
+    expect(estimate.refusal).toBeNull();
+    expect(estimate.capCents).toBe(1500);
+    expect(estimate.lines.map((line) => line.label)).not.toContain("voice");
+    expect(estimate.lines.map((line) => line.label)).not.toContain("music");
+    const reserved = await t.run((ctx) =>
+      reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes,
+        targetDurationSeconds: target,
+        withCaptions: true,
+      }),
+    );
+    expect(reserved.ok).toBe(true);
+    if (!reserved.ok) throw new Error(reserved.reason);
+    expect(reserved.estCents).toBe(estimate.totalCents);
+    const jobs = await rows(t);
+    expect(jobs.filter((job) => job.kind === "video")).toHaveLength(scenes.length);
+    expect(jobs.filter((job) => job.kind === "stt")).toHaveLength(1);
+    expect(jobs.every((job) => job.kind === "video" || job.kind === "stt")).toBe(true);
+    for (const job of jobs.filter((job) => job.kind === "video")) {
+      expect(job.model).toBe("bytedance/seedance-2.0");
+      expect(job.spec.kind === "video" && job.spec.generateAudio).toBe(true);
+      const scene = scenes[job.blockIndex];
+      if (!scene) throw new Error("missing native test scene");
+      expect(job.promptHash).toBe(await contentHash(buildNativeScenePrompt(scene, "calm")));
+    }
+  });
+  test("refuses native mixed-media acquisition before reservation", async () => {
+    const t = harness();
+    const { planId, scenes } = await nativePlan(t);
+    const first = scenes[0];
+    if (!first) throw new Error("missing scene");
+    scenes[0] = { ...first, visual: "stock_video" };
+    expect(
+      await t.run((ctx) =>
+        reserveSceneJobInner(ctx, {
+          tenantId: A,
+          planId,
+          scenes,
+          targetDurationSeconds: 30,
+          withCaptions: true,
+        }),
+      ),
+    ).toEqual({ ok: false, reason: "native_deck_invalid" });
+    expect(await rows(t)).toHaveLength(0);
+  });
+  test("ambient native reels reserve no transcription and never start a caption pass", async () => {
+    const t = harness();
+    const { planId, scenes, shots } = await nativePlan(t);
+    const spoken = await asA(t).query(api.media.jobEstimate, { planId });
+    for (const scene of scenes) scene.narration = "";
+    await t.run((ctx) =>
+      ctx.db.patch(planId, {
+        shots: shots.map((shot) => ({ ...shot, narration: "" })),
+      }),
+    );
+    const estimate = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(estimate.refusal).toBeNull();
+    expect(estimate.lines.some((line) => line.label === "captions")).toBe(false);
+    expect(estimate.estUsd).toBeLessThan(spoken.estUsd ?? 0);
+    const reserved = await t.run((ctx) =>
+      reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes,
+        targetDurationSeconds: 30,
+        withCaptions: true,
+      }),
+    );
+    expect(reserved.ok).toBe(true);
+    if (!reserved.ok) throw new Error(reserved.reason);
+    expect(reserved.estCents).toBe(estimate.totalCents);
+    const jobs = await rows(t);
+    expect(jobs).toHaveLength(scenes.length);
+    expect(jobs.every((job) => job.spec.kind === "video" && job.spec.generateAudio === true)).toBe(
+      true,
+    );
+    const source = await t.run((ctx) => ctx.storage.store(new Blob(["native soundtrack"])));
+    await t.run(async (ctx) => {
+      for (const job of jobs) await ctx.db.patch(job._id, { status: "succeeded" });
+      await ctx.db.patch(planId, {
+        renderStatus: "rendered",
+        renderStorageId: source,
+        nativeCaptionAudioStorageId: source,
+        nativeCaptionAudioHash: "native_audio_hash",
+        nativeCaptionBatchId: reserved.batchId,
+        nativeCaptionRenderStorageId: source,
+      });
+      const last = jobs[jobs.length - 1];
+      if (!last) throw new Error("missing native video");
+      await maybeStartCaptions(ctx, { ...last, status: "succeeded" });
+    });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.captionStatus).toBeUndefined();
+    expect((await rows(t)).some((job) => job.kind === "stt")).toBe(false);
+  });
+  test("keeps native asset switches closed and permits fifteen-second briefs", async () => {
+    const t = harness();
+    const { planId } = await nativePlan(t);
+    expect(
+      await asA(t).mutation(api.media.setSceneVisual, {
+        planId,
+        sceneIndex: 0,
+        visual: "stock_video",
+      }),
+    ).toEqual({ ok: false, reason: "native_deck_invalid" });
+    expect(
+      await asA(t).mutation(api.media.setSceneAsset, {
+        planId,
+        blockIndex: 0,
+        vaultDocId: "foreign",
+      }),
+    ).toEqual({ ok: false, reason: "native_deck_invalid" });
+    expect(
+      await asA(t).mutation(api.media.editBrief, { planId, patch: { durationSeconds: 15 } }),
+    ).toEqual({ ok: true });
+  });
+  test("persists new native decks while leaving legacy revisions separate", async () => {
+    const t = harness();
+    const { shots } = await nativePlan(t);
+    for (const legacy of [false, true]) {
+      const planId = await t.run((ctx) =>
+        ctx.db.insert("plans", {
+          tenantId: A,
+          threadId: "staging_thread",
+          status: "proposed",
+          createdAt: Date.now(),
+          ...(legacy ? { kind: "media" as const, shots } : {}),
+        }),
+      );
+      await t.mutation(internal.plans.persistDeck, {
+        tenantId: A,
+        planId,
+        script: "A product launch",
+        artDirection: null,
+        clipSeconds: 5,
+        targetDurationSeconds: 30,
+        shots,
+      });
+      const plan = await t.run((ctx) => ctx.db.get(planId));
+      expect(plan?.mediaAudioMode).toBe(legacy ? undefined : "native");
+    }
+  });
+  test("caption source must match the same rendered native batch and WAV hash", async () => {
+    const t = harness();
+    const { planId } = await nativePlan(t);
+    const wavId = await t.run((ctx) => ctx.storage.store(new Blob(["wrong WAV bytes"])));
+    const renderId = await t.run((ctx) => ctx.storage.store(new Blob(["render"])));
+    const batchId = "native_caption_batch";
+    await t.run(async (ctx) => {
+      await ctx.db.patch(planId, {
+        renderStatus: "rendered",
+        renderStorageId: renderId,
+        nativeCaptionAudioStorageId: wavId,
+        nativeCaptionAudioHash: "a".repeat(64),
+        nativeCaptionBatchId: batchId,
+        nativeCaptionRenderStorageId: renderId,
+      });
+      await ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId,
+        batchId,
+        blockIndex: -1,
+        provider: "openai",
+        kind: "stt",
+        model: MEDIA_DEFAULT_STT.model,
+        spec: { kind: "stt", audioMinutes: 0.5 },
+        promptHash: "script",
+        status: "queued",
+        estUsd: 0.003,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    });
+    expect(await t.query(internal.media.captionsToSubmit, { tenantId: A, batchId })).toMatchObject({
+      nativeAudioHash: "a".repeat(64),
+      takes: [{ storageId: wavId, blockIndex: 0 }],
+    });
+    vi.stubEnv("OPENROUTER_API_KEY", "fixture-not-a-key");
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    expect(await t.action(internal.media.submitCaptions, { tenantId: A, batchId })).toEqual({
+      ok: false,
+      code: "native_audio_source_changed",
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await t.run((ctx) => ctx.db.patch(planId, { nativeCaptionBatchId: "another_batch" }));
+    expect(await t.query(internal.media.captionsToSubmit, { tenantId: A, batchId })).toBeNull();
+  });
+  test("requires the exact native content and displayed cost before a new reservation", async () => {
+    const t = harness();
+    const { planId } = await nativePlan(t);
+    const estimate = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(estimate.reviewHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(await asA(t).mutation(api.media.generateReel, { planId })).toEqual({
+      ok: false,
+      reason: "review_changed",
+    });
+    expect(await asA(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 0 })).toEqual({
+      ok: false,
+      reason: "review_changed",
+    });
+    expect(await asA(t).mutation(api.cockpit.executePlan, { planId })).toEqual({
+      ok: false,
+      reason: "review_changed",
+    });
+    expect(
+      await asA(t).mutation(api.media.generateReel, {
+        planId,
+        expectedReviewHash: estimate.reviewHash,
+        maxCostCents: estimate.totalCents - 1,
+      }),
+    ).toEqual({ ok: false, reason: "over_reviewed_cost" });
+    await asA(t).mutation(api.media.editBlockPrompt, {
+      planId,
+      blockIndex: 0,
+      prompt: "A changed product reveal",
+    });
+    expect(
+      await asA(t).mutation(api.media.generateReel, {
+        planId,
+        expectedReviewHash: estimate.reviewHash,
+        maxCostCents: estimate.totalCents,
+      }),
+    ).toEqual({ ok: false, reason: "review_changed" });
+    expect(await rows(t)).toHaveLength(0);
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+  });
+  test("invalidating a native render deletes only the old extracted PCM", async () => {
+    const t = harness();
+    const { planId } = await nativePlan(t);
+    const wavId = await t.run((ctx) => ctx.storage.store(new Blob(["old native audio"])));
+    const renderId = await t.run((ctx) => ctx.storage.store(new Blob(["retained final"])));
+    await t.run((ctx) =>
+      ctx.db.patch(planId, {
+        renderStatus: "rendered",
+        renderStorageId: renderId,
+        nativeCaptionAudioStorageId: wavId,
+        nativeCaptionAudioHash: "old_hash",
+        nativeCaptionBatchId: "old_batch",
+        nativeCaptionRenderStorageId: renderId,
+      }),
+    );
+    await asA(t).mutation(api.media.editBlockPrompt, {
+      planId,
+      blockIndex: 0,
+      prompt: "New scene",
+    });
+    expect(await t.run(async (ctx) => (await ctx.storage.get(wavId)) !== null)).toBe(false);
+    expect(await t.run(async (ctx) => (await ctx.storage.get(renderId)) !== null)).toBe(true);
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.nativeCaptionAudioStorageId).toBeUndefined();
+    expect(plan?.nativeCaptionAudioHash).toBeUndefined();
+    expect(plan?.nativeCaptionBatchId).toBeUndefined();
+    expect(plan?.nativeCaptionRenderStorageId).toBeUndefined();
+    expect(plan?.renderStorageId).toBe(renderId);
+  });
+  test("late native transcription success or failure cannot change a newer caption pass", async () => {
+    const t = harness();
+    const { planId } = await nativePlan(t);
+    await t.run((ctx) =>
+      ctx.db.patch(planId, {
+        captionStatus: "transcribing",
+        nativeCaptionBatchId: "new_batch",
+        nativeCaptionAudioHash: "new_audio_hash",
+      }),
+    );
+    for (const ok of [true, false]) {
+      const jobId = await t.run((ctx) =>
+        ctx.db.insert("mediaJobs", {
+          tenantId: A,
+          planId,
+          batchId: "old_batch",
+          blockIndex: -1,
+          provider: "openai",
+          kind: "stt",
+          model: MEDIA_DEFAULT_STT.model,
+          spec: { kind: "stt", audioMinutes: 0.5 },
+          promptHash: "old_script",
+          status: "submitted",
+          estUsd: 0.003,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }),
+      );
+      await t.mutation(internal.media.recordCaptionSubmission, {
+        planId,
+        jobId,
+        offsetsS: [0],
+        nativeAudioHash: "old_audio_hash",
+        result: ok
+          ? { ok: true, providerRequestId: "old_provider" }
+          : { ok: false, blocked: false, code: "transport_error" },
+      });
+      const plan = await t.run((ctx) => ctx.db.get(planId));
+      expect(plan?.captionStatus).toBe("transcribing");
+      expect(plan?.captionReason).toBeUndefined();
+      expect(plan?.captionOffsetsS).toBeUndefined();
+      expect((await t.run((ctx) => ctx.db.get(jobId)))?.failureReason).toBe(
+        "native_audio_source_changed",
+      );
+    }
   });
 });

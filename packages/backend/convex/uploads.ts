@@ -140,17 +140,22 @@ export const uploadHttp = httpAction(async (ctx, request) => {
   if (!headers) return new Response(null, { status: 403 });
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
   let stored: Id<"_storage"> | undefined;
+  let phase: "validate" | "claim" | "storage_url" | "forward" | "response" | "complete" =
+    "validate";
   try {
     const token = new URL(request.url).searchParams.get("ticket");
     if (!token || token.length > 100 || !request.body) throw new Error("UPLOAD_TICKET_INVALID");
     const declared = Number(request.headers.get("Content-Length"));
     if (declared > MAX_UPLOAD_BYTES) throw new Error("UPLOAD_SIZE_INVALID");
+    phase = "claim";
     const ticket = await ctx.runMutation(internal.uploads.claim, {
       ticketHash: await contentHash(token),
     });
+    phase = "storage_url";
     const uploadUrl = await ctx.storage.generateUploadUrl();
     const body = boundedUploadBody(request.body);
     // Raw-body streaming avoids the 20MiB multipart limit and does not buffer a 200MiB video.
+    phase = "forward";
     const response = await fetch(uploadUrl, {
       method: "POST",
       body,
@@ -159,15 +164,22 @@ export const uploadHttp = httpAction(async (ctx, request) => {
       },
     });
     if (!response.ok) throw new Error("UPLOAD_FAILED");
+    phase = "response";
     const result = await response.json();
     if (typeof result.storageId !== "string") throw new Error("UPLOAD_FAILED");
     stored = result.storageId as Id<"_storage">;
+    phase = "complete";
     await ctx.runMutation(internal.uploads.complete, {
       receiptId: ticket.receiptId,
       storageId: stored,
     });
     return Response.json({ storageId: stored }, { headers });
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const code = ["UPLOAD_TICKET_INVALID", "UPLOAD_SIZE_INVALID", "UPLOAD_FAILED"].includes(message)
+      ? message
+      : "UPLOAD_INTERNAL_FAILURE";
+    console.warn(code, { phase });
     // Only a storage id returned directly by our own upload may be compensating-deleted.
     if (stored) await ctx.storage.delete(stored);
     return Response.json(

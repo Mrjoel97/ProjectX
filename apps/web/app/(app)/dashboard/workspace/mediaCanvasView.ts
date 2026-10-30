@@ -15,6 +15,7 @@
  * and styling stay in the component.
  */
 
+import { NATIVE_TARGET_DURATIONS } from "@pikar/core/nativeMedia";
 // TWO imports, both VALUES rather than types, and both for the same reason: a sentence about a
 // closed set or about a price must be DERIVED from the thing it describes, or it goes stale
 // silently. The length chip's options must BE the closed set `media.editBrief` validates against,
@@ -35,7 +36,11 @@ import {
   hasAssetSource,
   TARGET_DURATIONS,
 } from "@pikar/core/storyboard";
-import { MEDIA_GENERATED_SECONDS_CAP, sceneVisualSpec } from "@pikar/cost/media";
+import {
+  MEDIA_GENERATED_SECONDS_CAP,
+  MEDIA_NATIVE_GENERATED_SECONDS_CAP,
+  sceneVisualSpec,
+} from "@pikar/cost/media";
 
 /**
  * THE CLIP-VS-STILL LEVER, COMPUTED FROM THE PRICE TABLES AT RENDER — never typed out.
@@ -261,7 +266,13 @@ export const STALE_VOICE_NOTE =
  */
 export function refusalText(
   refusal: { reason: string; blockIndex?: number; chars?: number },
-  o: { capCents: number; totalCents: number; maxChars: number; noun: "scene" | "block" },
+  o: {
+    capCents: number;
+    totalCents: number;
+    maxChars: number;
+    noun: "scene" | "block";
+    audioMode?: "native" | "separate" | null;
+  },
 ): string {
   const money = usd;
   const which =
@@ -270,12 +281,16 @@ export function refusalText(
       : `${o.noun === "scene" ? "Scene" : "Block"} ${refusal.blockIndex + 1}`;
   switch (refusal.reason) {
     case "over_job_cap":
+      if (o.audioMode === "native")
+        return `This film's estimate of ${money(o.totalCents)} exceeds the ${money(o.capCents)} per-film limit. Request a shorter film or revise the storyboard before generating.`;
       return `This reel would cost ${money(o.totalCents)}, over the ${money(o.capCents)} per-reel limit — cut a ${o.noun}, or swap a generated clip for an animated still.`;
     // 33.1-04's generated-seconds ceiling. A DIFFERENT sentence from `over_job_cap` because it is a
     // different lever: the reel is affordable, and cutting a scene is not the cure — swapping one
     // for a still or stock is, because those cost the same at any length. The number is derived
     // from the cap rather than typed out, for the reason `CLIP_VS_STILL_RATIO` exists.
     case "over_generated_seconds":
+      if (o.audioMode === "native")
+        return `The generated scenes exceed the ${MEDIA_NATIVE_GENERATED_SECONDS_CAP}-second film limit. Revise the storyboard to match the chosen length.`;
       return `This reel uses more than ${MEDIA_GENERATED_SECONDS_CAP} seconds of generated video, which is the most one reel may buy — swap a generated ${o.noun} for an animated still or for stock, which cost the same at any length.`;
     case "illegal_duration":
       return o.noun === "scene"
@@ -287,6 +302,8 @@ export function refusalText(
       return `${which}'s narration is only ${refusal.chars} characters — too short to fill its window.`;
     case "unknown_model":
       return `This ${o.noun} names a model we can't price, so it won't run.`;
+    case "native_deck_invalid":
+      return "This storyboard needs 15, 30, 45 or 60 seconds of Seedance scenes, each 4–15 seconds long, with spoken lines that fit each scene. Revise the storyboard before generating.";
     // ── 33-06: four codes that existed on the rail with no sentence on the canvas ───────────────
     // 33-03's confirm gate. The lever is NOT a rewrite: the model proposed a figure and only the
     // owner may vouch for it, so the sentence points at the badge that does the vouching.
@@ -482,7 +499,7 @@ export type TrackerRow = {
   voice: { state: StageState; text: string };
 };
 
-export type TrackerView = { stages: TrackerStage[]; scenes: TrackerRow[] };
+export type TrackerView = { stages: TrackerStage[]; scenes: TrackerRow[]; nativeAudio?: true };
 
 /** Does this scene land a picture job? A card is drawn by ffmpeg at render time and an upload is
  *  the tenant's own file, which is what makes "skipped" a real state rather than a rounding of
@@ -561,13 +578,15 @@ export function trackerView(
   renderStatus: string | null | undefined,
   captionStatus: string | null | undefined,
   renderRetriedAt: number | null | undefined,
+  audioMode?: "native" | "separate" | null,
 ): TrackerView {
+  const native = audioMode === "native";
   const noun = scenes.some((s) => s.visual !== null) ? "scene" : "block";
 
   const pictureStates = scenes.filter((s) => buysPicture(s.visual)).map((s) => faceState(s.clip));
   const voiceStates = scenes
     .filter((s) => s.narration.trim() !== "")
-    .map((s) => faceState(s.voice));
+    .map((s) => faceState(native ? s.clip : s.voice));
 
   const generate = rollUp(pictureStates);
   const voice = rollUp(voiceStates);
@@ -585,32 +604,40 @@ export function trackerView(
   // `captionStatus` of `pending` on a silent deck means "never", not "soon".
   const caption =
     voiceStates.length === 0
-      ? { state: "skipped" as StageState, detail: "Silent reel — nothing to caption." }
+      ? {
+          state: "skipped" as StageState,
+          detail: native ? "No spoken lines to caption." : "Silent reel — nothing to caption.",
+        }
       : (CAPTION_DETAIL[captionStatus ?? "pending"] ?? {
           state: "pending" as StageState,
           detail: captionStatus ?? "Burned in once the reel is assembled.",
         });
 
   return {
+    ...(native ? { nativeAudio: true as const } : {}),
     stages: [
       {
         key: "generate",
-        label: "Pictures",
+        label: native ? "Picture & sound" : "Pictures",
         state: generate,
         detail:
           generate === "skipped"
             ? `Nothing to generate — every ${noun} uses your own footage or a text card.`
             : countDetail(pictureStates, noun),
       },
-      {
-        key: "voice",
-        label: "Voice",
-        state: voice,
-        detail:
-          voice === "skipped"
-            ? "Silent reel — no narration to record."
-            : countDetail(voiceStates, noun),
-      },
+      ...(!native
+        ? [
+            {
+              key: "voice",
+              label: "Voice",
+              state: voice,
+              detail:
+                voice === "skipped"
+                  ? "Silent reel — no narration to record."
+                  : countDetail(voiceStates, noun),
+            } as TrackerStage,
+          ]
+        : []),
       {
         key: "assemble",
         label: "Assemble",
@@ -624,13 +651,19 @@ export function trackerView(
               ? "Assembled."
               : assembleState === "failed"
                 ? "The assembly failed."
-                : `Starts once every ${noun}'s picture and voice have landed.`,
+                : native
+                  ? "Starts once every scene's picture and sound have landed."
+                  : `Starts once every ${noun}'s picture and voice have landed.`,
       },
       { key: "captions", label: "Captions", state: caption.state, detail: caption.detail },
     ],
     scenes: scenes.map((s, i) => {
       const picture: StageState = buysPicture(s.visual) ? faceState(s.clip) : "skipped";
-      const take: StageState = s.narration.trim() === "" ? "skipped" : faceState(s.voice);
+      const take: StageState = native
+        ? faceState(s.clip)
+        : s.narration.trim() === ""
+          ? "skipped"
+          : faceState(s.voice);
       return {
         blockIndex: s.blockIndex,
         label: `${noun === "scene" ? "Scene" : "Block"} ${i + 1}`,
@@ -648,6 +681,7 @@ export function trackerView(
  *  of typing it here is that a shape change over there shows up as a red test here rather than as a
  *  silently-empty panel. */
 export type JobEstimate = {
+  reviewHash?: string;
   lines: Array<{ label: string; qty: number; unit: string; cents: number }>;
   totalCents: number;
   capCents: number;
@@ -679,7 +713,7 @@ export type EstimateView = {
  */
 export function estimateView(
   est: JobEstimate | undefined,
-  o: { noun: "scene" | "block"; maxChars: number },
+  o: { noun: "scene" | "block"; maxChars: number; audioMode?: "native" | "separate" | null },
 ): EstimateView {
   if (est === undefined) {
     return {
@@ -699,6 +733,7 @@ export function estimateView(
           totalCents: est.totalCents,
           maxChars: o.maxChars,
           noun: o.noun,
+          audioMode: o.audioMode,
         });
 
   return {
@@ -712,7 +747,12 @@ export function estimateView(
       // The 40x lever, on the line it applies to. A blended "pictures" row hid it (wave 7's finding)
       // and so does an itemised one that says nothing: knowing WHICH line is expensive is only
       // useful next to knowing what the cheaper kind costs.
-      note: line.label === "clips" ? CLIP_COST_LEVER_NOTE : null,
+      note:
+        line.label === "clips"
+          ? o.audioMode === "native"
+            ? "Seedance 2.0 includes picture and sound. The estimate includes a policy allowance; actual provider usage can vary."
+            : CLIP_COST_LEVER_NOTE
+          : null,
     })),
     remaining: `${usd(est.remainingCents)} of today's media budget remains.`,
     refusalSentence,
@@ -732,7 +772,7 @@ export const pricedAsLine = (
   clipSeconds: number,
 ): string =>
   targetSeconds === null
-    ? `Priced at Grok Imagine on OpenRouter, 720p, ${clipSeconds} s per block`
+    ? `Priced at Seedance 2.0 on OpenRouter, 720p, ${clipSeconds} s per block`
     : `A ${targetSeconds}-second reel of ${sceneCount} scenes, priced per scene`;
 
 /** What the hero slot holds. A discriminated union rather than five booleans, because "playing the
@@ -882,7 +922,7 @@ export const BRIEF_LOCKED_NOTE =
  *  themselves — not a price claim — and the second clause names the same lever the clips line and
  *  `KIND_COST_NOTE` name, because that is the one a user can actually pull. */
 export const DURATION_COST_NOTE =
-  "60 seconds is four times the footage of 15 — the most to fill, and the most to buy unless you lean on stills and cards.";
+  "60 seconds is four times the footage of 15. Review the full film's estimated cost before generating.";
 
 const CHIP_LABEL: Record<BriefChipField, string> = {
   topic: "Topic",
@@ -898,7 +938,11 @@ const CHIP_LABEL: Record<BriefChipField, string> = {
  * No brief → no chips. `editBrief` refuses `no_brief` for the same reason: a chip row built over
  * nothing would let a client-side default be read back as "what the user asked for".
  */
-export function briefChips(brief: Brief | null | undefined, deckLocked: boolean): BriefChip[] {
+export function briefChips(
+  brief: Brief | null | undefined,
+  deckLocked: boolean,
+  audioMode?: "native" | "separate" | null,
+): BriefChip[] {
   if (!brief) return [];
   const editable = !deckLocked;
   const marked = (field: BriefChipField): boolean => brief.defaulted.includes(field);
@@ -937,12 +981,14 @@ export function briefChips(brief: Brief | null | undefined, deckLocked: boolean)
       // opening anything) and on the OPTION when it is not (read before it is chosen) — so the
       // component renders both slots unconditionally and the sentence still appears exactly once.
       note: brief.durationSeconds === 60 ? DURATION_COST_NOTE : null,
-      options: TARGET_DURATIONS.map((seconds) => ({
-        seconds,
-        label: `${seconds}s`,
-        note: seconds === 60 && seconds !== brief.durationSeconds ? DURATION_COST_NOTE : null,
-        current: seconds === brief.durationSeconds,
-      })),
+      options: (audioMode === "native" ? NATIVE_TARGET_DURATIONS : TARGET_DURATIONS).map(
+        (seconds) => ({
+          seconds,
+          label: `${seconds}s`,
+          note: seconds === 60 && seconds !== brief.durationSeconds ? DURATION_COST_NOTE : null,
+          current: seconds === brief.durationSeconds,
+        }),
+      ),
     },
     text("audience", false),
     text("tone", false),
@@ -1347,6 +1393,7 @@ const SWAP_ARMS = [
  */
 export function failureCards(
   plan: {
+    mediaAudioMode?: "native" | "separate" | null;
     /** A current validated download exists; render status alone cannot attest an artifact. */
     readyReel?: boolean;
     renderStatus?: string | null;
@@ -1485,11 +1532,16 @@ export function failureCards(
             renderCents === null
               ? `${usd(sceneEstCents(s))} adds, plus the re-assembly`
               : `${usd(sceneEstCents(s) + renderCents)} adds`,
-          note: `Buys this ${noun}'s picture and voice again and re-assembles the reel. The other ${noun}s are kept.`,
+          note:
+            plan.mediaAudioMode === "native"
+              ? "Generates this scene's picture and sound again, then re-assembles the film. Other scenes are kept."
+              : `Buys this ${noun}'s picture and voice again and re-assembles the reel. The other ${noun}s are kept.`,
         },
         // A KIND SWITCH ONLY HELPS A PICTURE. If the take is what failed, a text card changes
         // nothing about the missing voice — offering it would be a free click that fixes nothing.
-        ...(pictureFailed ? SWAP_ARMS.filter((a) => a.arm !== s.visual) : []),
+        ...(pictureFailed && plan.mediaAudioMode !== "native"
+          ? SWAP_ARMS.filter((a) => a.arm !== s.visual)
+          : []),
       ],
       detailCode:
         [

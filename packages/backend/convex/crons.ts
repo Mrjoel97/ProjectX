@@ -70,7 +70,7 @@ crons.daily(
 // saying "assembling" over a render that died at 09:01. Thirty minutes is the shortest cadence that
 // is still free — the sweep does nothing at all unless something is genuinely past its threshold.
 //
-// `runSweep` re-runs BOTH migrations with `{ reset: true }` internally; that reset is required, not
+// `runSweep` resets indexed candidate ranges internally; that reset is required, not
 // decorative (a completed migration no-ops on a bare invocation — the vault-sweep lesson above).
 crons.interval("reliability-sweep", { minutes: 30 }, internal.reliabilitySweep.runSweep, {});
 // 28.1-07 (BILL-04): the invoice rollup. Stripe has no built-in recurrence for standalone
@@ -108,6 +108,15 @@ crons.interval(
   "merchant-buyer-retention",
   { minutes: 5 },
   internal.merchantOperations.purgeExpiredBuyerData,
+  {},
+);
+
+crons.interval("social-oauth-retention", { minutes: 15 }, internal.social.cleanup, {});
+// API metadata expires independently of OAuth token renewal and customer-authored media.
+crons.hourly(
+  "youtube-api-metadata-retention",
+  { minuteUTC: 45 },
+  internal.social.cleanupYouTubeMetadata,
   {},
 );
 

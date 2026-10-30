@@ -13,6 +13,7 @@ import {
   type RateLimitConfig,
   RateLimiter,
 } from "@convex-dev/rate-limiter";
+import { DEFAULT_MEDIA_DAILY_BUDGET_CENTS } from "@pikar/core/mediaBudget";
 import { chooseModel } from "@pikar/cost";
 import {
   EVAL_BUDGET_LIFETIME_MS,
@@ -26,13 +27,19 @@ import { goldenProviderCeilingCents, goldenTavilyBilling } from "@pikar/cost/gol
 import { scanText } from "@pikar/pii";
 import { clampRefundCents, type EstimateInput, estimateFolderCents } from "@pikar/vault";
 import { v } from "convex/values";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalQuery } from "./_generated/server";
 import { probeControl } from "./authoringProbe";
 import { dispatchWorkflowLive } from "./dispatchRun";
 import { contentHash } from "./lib/hash";
+import {
+  assertManagedServicePaidAdmission,
+  reconcileStandingServiceAccounting,
+  standingServiceBinding,
+} from "./lib/managedServiceBudget";
+import { presenceModelOutputLimit } from "./lib/presenceModelLimits";
 import { internalMutation } from "./lib/tenantLifecycle";
 // The PLAIN-FUNCTION half of the ledger writer, not `ctx.runMutation`: the limiter movement and
 // its ledger row must commit or fail TOGETHER (FIN-01). A second transaction could leave the
@@ -70,17 +77,16 @@ export const DEPLOYMENT_BUDGET_CENTS = envCents(process.env.DEPLOYMENT_BUDGET_CE
 // folding media in would silently shrink every sub-agent envelope by up to 20x.
 //
 // D10 supersedes D4: the reserved unit is the whole JOB (clips + voice + captions STT + render)
-// against MEDIA_JOB_CAP_USD = $3.50, not a per-request cap. $10/day is ~2 full 60 s reels.
-export const MEDIA_DAILY_BUDGET_CENTS = 1_000; // $10/day PER TENANT.
+// against the explicit job policy: $3.50 legacy or $15 native, not a per-request cap.
+export const MEDIA_DAILY_BUDGET_CENTS = DEFAULT_MEDIA_DAILY_BUDGET_CENTS; // $100/day PER TENANT.
 // KEYLESS, and it exists for exactly the reason DEPLOYMENT_BUDGET_CENTS does: per-tenant keying
-// alone makes exposure N x $10, unbounded in N, with the manual kill switch as the only global
-// stop. 10,000 keeps the SAME 10x ratio the LLM ceiling holds over its per-tenant window — one
-// ratio to remember across both rails. Worst-case daily exposure is now $100 media + $50 LLM,
-// across four windows that never share. DO NOT remove this as redundant.
+// alone makes exposure N x $100, unbounded in N, with the manual kill switch as the only global
+// stop. The owner-selected source fallback is $2,000 shared media per day. An explicit existing
+// deployment environment value still wins; source changes do not reset stored limiter balances.
 export const DEPLOYMENT_MEDIA_BUDGET_CENTS = envCents(
   process.env.DEPLOYMENT_MEDIA_BUDGET_CENTS,
-  10_000,
-); // $100/day across ALL tenants.
+  200_000,
+); // $2,000/day across ALL tenants, unless explicitly configured otherwise.
 
 // ── The FOLDER-INGEST rail (Phase 15.3, VALT-06) ──────────────────────────────────────
 //
@@ -91,10 +97,10 @@ export const DEPLOYMENT_MEDIA_BUDGET_CENTS = envCents(
 // half-ingested folder is worse than a refused one, because the agent then grounds on it
 // confidently without knowing what is missing. Separate rails are what make both impossible.
 //
-// $25/day is DELIBERATELY the largest of the three per-tenant windows: a folder upload is a bursty
+// The separate $25/day ingest window covers a folder upload as a bursty
 // one-off onboarding-shaped event, not a daily habit, and the number is calibrated to the scanned-
 // PDF OCR path and to nothing else (~$0.005/page x 50 pages/doc — 15.3-RESEARCH §1.4). Accepted
-// consequence, owner decision: worst-case per-tenant daily exposure rises to $40.
+// consequence, owner decision: combined per-tenant daily policy is $130 ($5 LLM + $100 media + $25 ingest).
 export const INGEST_DAILY_BUDGET_CENTS = 2_500; // $25/day PER TENANT.
 // KEYLESS, for the third time and for the same reason: per-tenant keying alone makes exposure
 // N x $25, unbounded in N. 25,000 holds the SAME 10x ratio both existing rails hold.
@@ -909,12 +915,18 @@ export const reservePaidCall = internalMutation({
     ceilingCents: v.number(),
     rail: vRail,
     websiteDesign: v.optional(
-      v.object({ planId: v.id("plans"), revision: v.number(), runRef: v.string() }),
+      v.object({
+        planId: v.id("plans"),
+        revision: v.number(),
+        runRef: v.string(),
+        purpose: v.optional(v.literal("vision-review")),
+      }),
     ),
+    managedServiceRunId: v.optional(v.id("managedServiceRuns")),
   },
   handler: async (
     ctx,
-    { tenantId, callId, model, ceilingCents, rail, websiteDesign },
+    { tenantId, callId, model, ceilingCents, rail, websiteDesign, managedServiceRunId },
   ): Promise<Id<"spendEvents">> => {
     if (
       !/^[a-f0-9-]{36}$/.test(callId) ||
@@ -925,14 +937,19 @@ export const reservePaidCall = internalMutation({
       throw new Error("PAID_ADMISSION_INVALID");
     if ((await getGuardrailConfig(ctx)).killSwitch) throw new Error("PAID_KILL_SWITCH");
     const kimi = model === "or/moonshotai/kimi-k3.1-pro";
-    if (Boolean(websiteDesign) !== kimi || (websiteDesign && rail === "ingest"))
+    if ((websiteDesign && !kimi) || (websiteDesign && (rail === "ingest" || managedServiceRunId)))
       throw new Error("PAID_WEBSITE_MODEL_SCOPE_INVALID");
     if (websiteDesign) {
       if (
         !/^[a-f0-9]{16}$/.test(websiteDesign.runRef) ||
         !Number.isSafeInteger(websiteDesign.revision) ||
         websiteDesign.revision < 0 ||
-        ceilingCents !== goldenProviderCeilingCents({ kind: "chat", model, maxOutputTokens: 8192 })
+        ceilingCents !==
+          goldenProviderCeilingCents({
+            kind: "chat",
+            model,
+            maxOutputTokens: presenceModelOutputLimit(websiteDesign.purpose),
+          })
       )
         throw new Error("PAID_WEBSITE_ADMISSION_INVALID");
       const plan = await ctx.db.get(websiteDesign.planId);
@@ -950,6 +967,33 @@ export const reservePaidCall = internalMutation({
         session.revision !== websiteDesign.revision
       )
         throw new Error("PAID_WEBSITE_CONTEXT_CHANGED");
+      if (websiteDesign.purpose === "vision-review") {
+        const project = session.projectId ? await ctx.db.get(session.projectId) : null;
+        const version =
+          session.projectId && session.projectVersion !== undefined
+            ? await ctx.db
+                .query("webProjectVersions")
+                .withIndex("by_tenant_project_version", (q) =>
+                  q
+                    .eq("tenantId", tenantId)
+                    .eq("projectId", session.projectId!)
+                    .eq("version", session.projectVersion!),
+                )
+                .unique()
+            : null;
+        if (
+          !project ||
+          project.tenantId !== tenantId ||
+          project.draftVersion !== session.projectVersion ||
+          !version?.providerReceipt ||
+          version.contentHash !== session.projectContentHash ||
+          !version.browserReviewReportStorageId ||
+          version.browserReviewVisionStorageId ||
+          version.browserReviewJob?.state !== "captured" ||
+          version.browserReviewJob.runRef !== websiteDesign.runRef
+        )
+          throw new Error("PAID_WEBSITE_VISION_CONTEXT_INVALID");
+      }
       // An uncertain response must not become a fresh model attempt under a new run identity.
       const history = await ctx.db
         .query("spendEvents")
@@ -974,6 +1018,14 @@ export const reservePaidCall = internalMutation({
       if (history.some((row) => row.model === model && row.evalBreach))
         throw new Error("PAID_WEBSITE_PRIOR_BREACH");
     }
+    let standing = false;
+    if (managedServiceRunId) {
+      if (rail) throw new Error("SERVICE_PAID_RAIL_UNSUPPORTED");
+      await assertManagedServicePaidAdmission(ctx, tenantId, managedServiceRunId, ceilingCents);
+      const run = await ctx.db.get(managedServiceRunId);
+      if (!run) throw new Error("SERVICE_RUN_UNAVAILABLE");
+      standing = (await standingServiceBinding(ctx, run, true)) !== null;
+    }
     const [tenantRail, deploymentRail] =
       rail === "ingest"
         ? (["ingestSpendCents", "deploymentIngestSpendCents"] as const)
@@ -986,12 +1038,21 @@ export const reservePaidCall = internalMutation({
         .first()
     )
       throw new Error("PAID_CALL_ALREADY_RESERVED");
-    if (!(await rateLimiter.check(ctx, tenantRail, { key: tenantId, count: ceilingCents })).ok)
+    if (
+      !standing &&
+      !(await rateLimiter.check(ctx, tenantRail, { key: tenantId, count: ceilingCents })).ok
+    )
       throw new Error("PAID_DAILY_BUDGET_EXHAUSTED");
-    if (!(await rateLimiter.check(ctx, deploymentRail, { count: ceilingCents })).ok)
+    if (!standing && !(await rateLimiter.check(ctx, deploymentRail, { count: ceilingCents })).ok)
       throw new Error("PAID_DEPLOYMENT_BUDGET_EXHAUSTED");
-    await rateLimiter.limit(ctx, tenantRail, { key: tenantId, count: ceilingCents, reserve: true });
-    await rateLimiter.limit(ctx, deploymentRail, { count: ceilingCents, reserve: true });
+    if (!standing) {
+      await rateLimiter.limit(ctx, tenantRail, {
+        key: tenantId,
+        count: ceilingCents,
+        reserve: true,
+      });
+      await rateLimiter.limit(ctx, deploymentRail, { count: ceilingCents, reserve: true });
+    }
     return recordMovement(ctx, {
       tenantId,
       correlationId,
@@ -999,7 +1060,8 @@ export const reservePaidCall = internalMutation({
       phase: "reserved",
       amountCents: ceilingCents,
       model,
-      kind: "paid_call",
+      kind: standing ? "paid_call_standing" : "paid_call",
+      ...(managedServiceRunId ? { managedServiceRunId } : {}),
       createdAt: Date.now(),
     });
   },
@@ -1015,10 +1077,16 @@ export const settlePaidCall = internalMutation({
     if (
       !held ||
       held.tenantId !== tenantId ||
-      held.kind !== "paid_call" ||
+      !["paid_call", "paid_call_standing"].includes(held.kind ?? "") ||
       held.phase !== "reserved"
     )
       throw new Error("PAID_RESERVATION_INVALID");
+    const standing = held.kind === "paid_call_standing";
+    if (standing) {
+      const run = held.managedServiceRunId ? await ctx.db.get(held.managedServiceRunId) : null;
+      if (!run || run.tenantId !== tenantId || !(await standingServiceBinding(ctx, run)))
+        throw new Error("PAID_RESERVATION_INVALID");
+    }
     const [tenantRail, deploymentRail] =
       held.rail === "ingest"
         ? (["ingestSpendCents", "deploymentIngestSpendCents"] as const)
@@ -1032,25 +1100,27 @@ export const settlePaidCall = internalMutation({
     );
     if (previous) {
       if (previous.evalActualUsd !== costUsd) throw new Error("PAID_SETTLEMENT_MISMATCH");
+      if (standing && held.managedServiceRunId)
+        await reconcileStandingServiceAccounting(ctx, tenantId, held.managedServiceRunId);
       return { settled: true, breached: actualCents > held.amountCents };
     }
     const difference = actualCents - held.amountCents;
-    if (difference > 0) {
+    if (difference > 0 && !standing) {
       await rateLimiter.limit(ctx, tenantRail, { key: tenantId, count: difference, reserve: true });
       await rateLimiter.limit(ctx, deploymentRail, { count: difference, reserve: true });
     }
     if (difference < 0) {
       const refund = -difference;
-      const tenantRefund = refundableCents(
-        await rateLimiter.getValue(ctx, tenantRail, { key: tenantId }),
-        refund,
-        held.createdAt,
-      );
-      const deploymentRefund = refundableCents(
-        await rateLimiter.getValue(ctx, deploymentRail),
-        refund,
-        held.createdAt,
-      );
+      const tenantRefund = standing
+        ? 0
+        : refundableCents(
+            await rateLimiter.getValue(ctx, tenantRail, { key: tenantId }),
+            refund,
+            held.createdAt,
+          );
+      const deploymentRefund = standing
+        ? 0
+        : refundableCents(await rateLimiter.getValue(ctx, deploymentRail), refund, held.createdAt);
       if (tenantRefund > 0)
         await rateLimiter.limit(ctx, tenantRail, {
           key: tenantId,
@@ -1067,6 +1137,7 @@ export const settlePaidCall = internalMutation({
         amountCents: refund,
         model: held.model,
         kind: held.kind,
+        ...(held.managedServiceRunId ? { managedServiceRunId: held.managedServiceRunId } : {}),
         createdAt: Date.now(),
         ...(actualCents === 0 ? { evalActualUsd: 0 } : {}),
       });
@@ -1080,18 +1151,49 @@ export const settlePaidCall = internalMutation({
         amountCents: actualCents,
         model: held.model,
         kind: held.kind,
+        ...(held.managedServiceRunId
+          ? { managedServiceRunId: held.managedServiceRunId, evalBreach: difference > 0 }
+          : {}),
         createdAt: Date.now(),
         evalActualUsd: costUsd,
       });
+    if (standing && held.managedServiceRunId) {
+      // A provider exceeding its admitted ceiling cannot continue. Close the run before
+      // settlement so even an action/process failure cannot postpone the known envelope overrun.
+      if (difference > 0) {
+        const run = await ctx.db.get(held.managedServiceRunId);
+        if (run) {
+          if (run.state === "running" || run.state === "claimed")
+            await ctx.db.patch(run._id, {
+              state: "unknown",
+              terminalCode: "execution_uncertain",
+              updatedAt: Date.now(),
+            });
+          // A future timer may already be armed, even under a replacement approval made before
+          // this late bill became known. Closing the old bill must never resume that cadence.
+          await ctx.runMutation(internal.managedServiceRecurrence.suspendForService, {
+            tenantId,
+            serviceId: run.serviceId,
+            reason: "budget_required",
+          });
+        }
+      }
+      await reconcileStandingServiceAccounting(ctx, tenantId, held.managedServiceRunId);
+    }
     return { settled: true, breached: difference > 0 };
   },
 });
 
 export const preCall = internalMutation({
-  args: { tenantId: v.string(), rail: vRail, reserved: v.optional(v.boolean()) },
+  args: {
+    tenantId: v.string(),
+    rail: vRail,
+    reserved: v.optional(v.boolean()),
+    managedServiceRunId: v.optional(v.id("managedServiceRuns")),
+  },
   handler: async (
     ctx,
-    { tenantId, rail, reserved },
+    { tenantId, rail, reserved, managedServiceRunId },
   ): Promise<
     | { ok: true }
     | {
@@ -1103,6 +1205,12 @@ export const preCall = internalMutation({
     await ensureCoverage(ctx, tenantId, Date.now());
     const cfg = await getGuardrailConfig(ctx);
     if (cfg.killSwitch) return { ok: false, reason: "kill_switch" };
+    if (managedServiceRunId) {
+      if (rail || reserved) throw new Error("SERVICE_PAID_RAIL_UNSUPPORTED");
+      await assertManagedServicePaidAdmission(ctx, tenantId, managedServiceRunId, 1);
+      const run = await ctx.db.get(managedServiceRunId);
+      if (run && (await standingServiceBinding(ctx, run, true))) return { ok: true };
+    }
 
     // RESERVED FOLDER WORK CHECKS THE KILL SWITCH ONLY, and this is the whole "a folder can never
     // be refused halfway" guarantee. The money was already taken by `reserveFolder`, so checking
@@ -1244,15 +1352,35 @@ export const remainingDailyCents = internalQuery({
  *  plan 20-09's `jobEstimate` must show today's remaining budget beside the estimate. The
  *  `reserveJobInner` / `reserveJob` split, for the same reason. */
 export async function mediaRemainingCentsInner(ctx: QueryCtx, tenantId: string): Promise<number> {
-  const tenant = Math.max(
-    0,
-    (await rateLimiter.getValue(ctx, "mediaSpendCents", { key: tenantId })).value,
-  );
-  const deployment = Math.max(
-    0,
-    (await rateLimiter.getValue(ctx, "deploymentMediaSpendCents")).value,
-  );
-  return Math.min(tenant, deployment);
+  const tenant = await mediaDailyBudgetInner(ctx, tenantId);
+  return Math.min(tenant.dailyRemainingCents, tenant.deploymentRemainingCents);
+}
+
+/** Component getValue returns stored state, not a Date.now-adjusted balance. Advance the fixed
+ * window without writes so a new day never asks for an unnecessary task-specific increase. */
+export async function mediaDailyBudgetInner(
+  ctx: QueryCtx,
+  tenantId: string,
+): Promise<{
+  dailyLimitCents: number;
+  dailyRemainingCents: number;
+  dailyWindowStartMs: number;
+  deploymentRemainingCents: number;
+}> {
+  const [raw, deploymentRaw] = await Promise.all([
+    rateLimiter.getValue(ctx, "mediaSpendCents", { key: tenantId }),
+    rateLimiter.getValue(ctx, "deploymentMediaSpendCents"),
+  ]);
+  const current = calculateRateLimit(raw, raw.config, Date.now());
+  return {
+    dailyLimitCents: MEDIA_DAILY_BUDGET_CENTS,
+    dailyRemainingCents: Math.max(0, Math.floor(current.value)),
+    dailyWindowStartMs: current.ts,
+    deploymentRemainingCents: Math.max(
+      0,
+      Math.floor(calculateRateLimit(deploymentRaw, deploymentRaw.config, Date.now()).value),
+    ),
+  };
 }
 
 export const mediaRemainingCents = internalQuery({

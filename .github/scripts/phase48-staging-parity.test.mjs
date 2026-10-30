@@ -107,7 +107,7 @@ function mock(options = {}) {
         return ok(
           JSON.stringify({
             sha256: dry && options.retentionChanged ? "c".repeat(64) : digest,
-            checkpointCount: 1,
+            checkpointCount: options.retentionPurged ? 0 : 1,
           }),
         );
       }
@@ -425,6 +425,28 @@ test("dry-run reads preserve exact source, origins, registry and retention; no s
   assert.equal(calls.filter((x) => x.args[1] === "run").length, 6);
   assert.ok(!calls.some((x) => x.args.includes("OPENROUTER_API_KEY")));
   assert.ok(!calls.some((x) => x.args[1] === "env" && x.args.includes("CONVEX_SITE_URL")));
+});
+
+test("a verified purged retention snapshot remains protected across both parity reads", async () => {
+  const { execute, calls } = mock({ retentionPurged: true });
+  const result = await runParity(env, execute);
+  assert.equal(result.protectedRetentionUnchanged, true);
+  assert.equal(result.protectedRetentionSha256, digest);
+  assert.equal(result.parityEstablished, true);
+  const retentionReads = calls.filter(
+    (call) => call.args[1] === "run" && call.args[3].includes("foundationInterviews"),
+  );
+  assert.equal(retentionReads.length, 2);
+  for (const call of retentionReads) {
+    assert.match(call.args[3], /foundation_retention\.purged/);
+    assert.match(call.args[3], /MISSING_PURGE_RECEIPT/);
+    assert.doesNotMatch(
+      call.args[3],
+      /ctx\.db\.(insert|patch|replace|delete)|runMutation|runAction/,
+    );
+  }
+  const changed = mock({ retentionPurged: true, retentionChanged: true });
+  await assert.rejects(runParity(env, changed.execute));
 });
 
 test("runParity derives the narrow unspecified-node context from the pinned local CLI configuration", async () => {

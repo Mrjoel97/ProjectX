@@ -1,7 +1,7 @@
 import { sha256Bytes } from "./webRuntime";
 
 /** Immutable, code-owned runtime. Never interpolate customer or provider text. */
-export const WEB_CAROUSEL_SCRIPT =`(() => {
+export const WEB_CAROUSEL_SCRIPT = `(() => {
   const viewport = document.querySelector('.gallery-viewport');
   const track = document.querySelector('.gallery-track');
   const previous = document.querySelector('[data-gallery-previous]');
@@ -83,21 +83,26 @@ export const WEB_CAROUSEL_SCRIPT =`(() => {
   schedule();
 })();
 `;
-export const WEB_CAROUSEL_TAG = '<script data-pikar-carousel="v1">' + WEB_CAROUSEL_SCRIPT + '</script>';
+export const WEB_CAROUSEL_TAG =
+  '<script data-pikar-carousel="v1">' + WEB_CAROUSEL_SCRIPT + "</script>";
 const hex = sha256Bytes(new TextEncoder().encode(WEB_CAROUSEL_SCRIPT));
-const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 function base64Hash(hex: string): string {
-  const bytes = hex.match(/../g)!.map(byte => parseInt(byte, 16));
-  let output = '';
+  const bytes = hex.match(/../g)!.map((byte) => parseInt(byte, 16));
+  let output = "";
   for (let i = 0; i < bytes.length; i += 3) {
-    const value = (bytes[i]! << 16) | ((bytes[i+1] ?? 0) << 8) | (bytes[i+2] ?? 0);
-    output += alphabet[(value >>> 18) & 63]! + alphabet[(value >>> 12) & 63]! + (i+1 < bytes.length ? alphabet[(value >>> 6) & 63] : '=') + (i+2 < bytes.length ? alphabet[value & 63] : '=');
+    const value = (bytes[i]! << 16) | ((bytes[i + 1] ?? 0) << 8) | (bytes[i + 2] ?? 0);
+    output +=
+      alphabet[(value >>> 18) & 63]! +
+      alphabet[(value >>> 12) & 63]! +
+      (i + 1 < bytes.length ? alphabet[(value >>> 6) & 63] : "=") +
+      (i + 2 < bytes.length ? alphabet[value & 63] : "=");
   }
   return output;
 }
 export const WEB_CAROUSEL_SCRIPT_POLICY = "script-src 'sha256-" + base64Hash(hex) + "'";
 /** Only one exact trusted tag can be exempted; duplicate or modified scripts remain rejected. */
 export function hasUnsafeWebMarkup(html: string): boolean {
-  const stripped = html.replace(WEB_CAROUSEL_TAG, '');
+  const stripped = html.replace(WEB_CAROUSEL_TAG, "");
   return /<(?:script|iframe|object|embed|base)\b|\son[a-z]+\s*=|http-equiv\s*=/i.test(stripped);
 }

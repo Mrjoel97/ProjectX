@@ -241,6 +241,21 @@ describe("Approvals connected state contracts", () => {
 
   // D10: `executePlan`'s media arm reads a SHOT DECK. An image plan has none, so that button
   // returns `no_deck` on every click that has ever been made or ever will be.
+  test("native films route to exact storyboard and cost review in the workspace", () => {
+    const props = bodyProps();
+    const html = renderToStaticMarkup(
+      createElement(AwaitingCardBody, {
+        ...props,
+        item: { ...props.item, kind: "reel" },
+        plan: { ...props.plan, kind: "media", mediaAudioMode: "native" },
+      }),
+    );
+    expect(html).not.toContain("Approve governed generation");
+    expect(html).toContain("Review &amp; generate in workspace");
+    expect(html).toContain("exact cost");
+    expect(html).toContain("Discard");
+  });
+
   test("an image plan offers no Approve button, only the honest canvas route", () => {
     const html = renderToStaticMarkup(
       createElement(

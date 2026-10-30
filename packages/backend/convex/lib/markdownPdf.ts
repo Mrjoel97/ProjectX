@@ -13,15 +13,17 @@ import { type Color, PDFDocument, type PDFFont, rgb, StandardFonts } from "pdf-l
 
 const PAGE_W = 612; // US-Letter, points
 const PAGE_H = 792;
-const MARGIN = 64;
+const MARGIN = 48;
 const CONTENT_W = PAGE_W - 2 * MARGIN;
 const LEADING = 1.42;
 
 // A restrained, professional palette (deterministic — no theme input, so bytes stay reproducible).
 const INK = rgb(0.13, 0.15, 0.18); // body text, near-black
-const ACCENT = rgb(0.09, 0.33, 0.45); // headings, rules, list markers — deep teal
+const ACCENT = rgb(0.08, 0.2, 0.29); // headings, rules, list markers — navy
 const RULE = rgb(0.82, 0.85, 0.87); // hairline section + table borders
 const TH_BG = rgb(0.93, 0.96, 0.97); // table header fill
+const ALT_BG = rgb(0.97, 0.98, 0.985);
+const MUTED = rgb(0.35, 0.42, 0.48);
 
 // Point size per block kind (headings bold + accent; body/list regular ink).
 const SIZE: Record<string, number> = {
@@ -39,7 +41,23 @@ type Word = { text: string; font: PDFFont };
 
 // Greedy word-wrap for a single already-sanitized string at one font/size (used for table cells).
 function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  const words = text.split(/\s+/).filter((w) => w.length > 0);
+  if (maxWidth < font.widthOfTextAtSize("W", size)) throw new Error("column_too_narrow");
+  const words = text
+    .split(/\s+/)
+    .filter((w) => w.length > 0)
+    .flatMap((word) => {
+      if (font.widthOfTextAtSize(word, size) <= maxWidth) return [word];
+      const pieces: string[] = [];
+      let piece = "";
+      for (const character of word) {
+        if (piece && font.widthOfTextAtSize(piece + character, size) > maxWidth) {
+          pieces.push(piece);
+          piece = character;
+        } else piece += character;
+      }
+      if (piece) pieces.push(piece);
+      return pieces;
+    });
   if (words.length === 0) return [""];
   const lines: string[] = [];
   let cur = "";
@@ -70,7 +88,7 @@ function layoutRuns(
     for (const w of toWinAnsi(run.text)
       .split(/\s+/)
       .filter((x) => x.length > 0))
-      words.push({ text: w, font });
+      for (const text of wrapText(w, font, size, maxWidth)) words.push({ text, font });
   }
   if (words.length === 0) return [[]];
   const space = regular.widthOfTextAtSize(" ", size);
@@ -106,10 +124,13 @@ export async function markdownToPdf(title: string, markdown: string): Promise<Ui
 
     let page = doc.addPage([PAGE_W, PAGE_H]);
     let y = PAGE_H - MARGIN;
+    const nextPage = () => {
+      page = doc.addPage([PAGE_W, PAGE_H]);
+      y = PAGE_H - MARGIN;
+    };
     const space = (h: number) => {
       if (y - h < MARGIN) {
-        page = doc.addPage([PAGE_W, PAGE_H]);
-        y = PAGE_H - MARGIN;
+        nextPage();
       }
     };
 
@@ -162,53 +183,113 @@ export async function markdownToPdf(title: string, markdown: string): Promise<Ui
       });
     };
 
-    // A GitHub-style table: header row filled + bold, body rows with hairline column/row borders.
+    // Content-weighted report columns, quiet horizontal rules and zebra rows. Headers repeat
+    // after a page break; an exceptionally tall row continues without losing its final cells.
     const drawTable = (header: string[], rows: string[][]) => {
       const cols = Math.max(header.length, ...rows.map((r) => r.length), 1);
-      const colW = CONTENT_W / cols;
+      const weights = Array.from({ length: cols }, (_, c) =>
+        Math.max(
+          80,
+          Math.min(
+            280,
+            Math.max(
+              ...[header, ...rows].map((r) =>
+                body.widthOfTextAtSize(toWinAnsi(r[c] ?? ""), TABLE_SIZE),
+              ),
+            ) * 0.65,
+          ),
+        ),
+      );
+      const sum = weights.reduce((n, w) => n + w, 0);
+      const widths = weights.map((weight) => (CONTENT_W * weight) / sum);
+      const lefts = widths.map((_, c) => MARGIN + widths.slice(0, c).reduce((n, w) => n + w, 0));
       const pad = 5;
-      const rowOf = (cells: string[], isHeader: boolean) => {
-        const wrapped = Array.from({ length: cols }, (_, c) =>
-          wrapText(toWinAnsi(cells[c] ?? ""), isHeader ? bold : body, TABLE_SIZE, colW - 2 * pad),
+      const lineHeight = TABLE_SIZE * 1.3;
+      const wrapRow = (cells: string[], isHeader: boolean) =>
+        Array.from({ length: cols }, (_, c) =>
+          wrapText(
+            toWinAnsi(cells[c] ?? ""),
+            isHeader ? bold : body,
+            TABLE_SIZE,
+            (widths[c] ?? 0) - 2 * pad,
+          ),
         );
-        const h = Math.max(1, ...wrapped.map((l) => l.length)) * (TABLE_SIZE * 1.3) + 2 * pad;
-        space(h);
+      const count = (wrapped: string[][]) => Math.max(1, ...wrapped.map((lines) => lines.length));
+      const headerLines = wrapRow(header, true);
+      const headerHeight = count(headerLines) * lineHeight + 2 * pad;
+      const fullRowSpace = PAGE_H - 2 * MARGIN - headerHeight;
+      if (headerHeight + lineHeight + 2 * pad > PAGE_H - 2 * MARGIN)
+        throw new Error("table_header_too_tall");
+      const segment = (
+        wrapped: string[][],
+        isHeader: boolean,
+        offset: number,
+        lines: number,
+        alternate = false,
+      ) => {
+        const h = lines * lineHeight + 2 * pad;
         const top = y;
-        if (isHeader)
-          page.drawRectangle({ x: MARGIN, y: top - h, width: CONTENT_W, height: h, color: TH_BG });
+        if (isHeader || alternate)
+          page.drawRectangle({
+            x: MARGIN,
+            y: top - h,
+            width: CONTENT_W,
+            height: h,
+            color: isHeader ? TH_BG : ALT_BG,
+          });
         wrapped.forEach((cellLines, c) => {
           let cy = top - pad - TABLE_SIZE;
-          for (const ln of cellLines) {
+          for (const ln of cellLines.slice(offset, offset + lines)) {
             page.drawText(ln, {
-              x: MARGIN + c * colW + pad,
+              x: (lefts[c] ?? MARGIN) + pad,
               y: cy,
               size: TABLE_SIZE,
               font: isHeader ? bold : body,
               color: INK,
             });
-            cy -= TABLE_SIZE * 1.3;
+            cy -= lineHeight;
           }
         });
-        page.drawRectangle({
-          x: MARGIN,
-          y: top - h,
-          width: CONTENT_W,
-          height: h,
-          borderColor: RULE,
-          borderWidth: 0.6,
+        page.drawLine({
+          start: { x: MARGIN, y: top - h },
+          end: { x: MARGIN + CONTENT_W, y: top - h },
+          color: RULE,
+          thickness: 0.5,
         });
-        for (let c = 1; c < cols; c++)
-          page.drawLine({
-            start: { x: MARGIN + c * colW, y: top },
-            end: { x: MARGIN + c * colW, y: top - h },
-            thickness: 0.6,
-            color: RULE,
-          });
         y = top - h;
       };
+      const repeatHeader = () => segment(headerLines, true, 0, count(headerLines));
       y -= 6;
-      rowOf(header, true);
-      for (const r of rows) rowOf(r, false);
+      const first = rows[0] ? count(wrapRow(rows[0], false)) * lineHeight + 2 * pad : 0;
+      // Keep an ordinary first row intact; begin an oversized continuation on this page
+      // instead of leaving the report title alone on an otherwise empty sheet.
+      space(headerHeight + (first <= fullRowSpace ? first : lineHeight + 2 * pad));
+      repeatHeader();
+      for (const [index, row] of rows.entries()) {
+        const wrapped = wrapRow(row, false),
+          total = count(wrapped);
+        const rowHeight = total * lineHeight + 2 * pad;
+        if (rowHeight <= fullRowSpace && y - rowHeight < MARGIN) {
+          nextPage();
+          repeatHeader();
+        }
+        let offset = 0;
+        while (offset < total) {
+          const room = Math.floor((y - MARGIN - 2 * pad) / lineHeight);
+          if (room < 1) {
+            nextPage();
+            repeatHeader();
+            continue;
+          }
+          const take = Math.min(total - offset, room);
+          segment(wrapped, false, offset, take, index % 2 === 1);
+          offset += take;
+          if (offset < total) {
+            nextPage();
+            repeatHeader();
+          }
+        }
+      }
       y -= 8;
     };
 
@@ -226,13 +307,21 @@ export async function markdownToPdf(title: string, markdown: string): Promise<Ui
       y -= 16;
     }
 
-    for (const tok of tokenizeMarkdown(markdown)) {
+    const tokens = tokenizeMarkdown(markdown);
+    for (const [index, tok] of tokens.entries()) {
+      if (
+        index === 0 &&
+        tok.kind === "h1" &&
+        toWinAnsi(tok.text).trim() === toWinAnsi(title).trim()
+      )
+        continue;
       if (tok.kind === "table") {
         drawTable(tok.header, tok.rows);
         continue;
       }
       if (tok.kind === "h1" || tok.kind === "h2" || tok.kind === "h3") {
-        const size = SIZE[tok.kind]!;
+        const size = SIZE[tok.kind] ?? 13.5;
+        space(size * LEADING + 58); // keep a heading with the beginning of its following content
         y -= size * 0.5; // breathing room before a heading
         drawBlock(inlineRuns(tok.text), size, { color: ACCENT, baseFont: bold });
         if (tok.kind !== "h3") {
@@ -259,6 +348,35 @@ export async function markdownToPdf(title: string, markdown: string): Promise<Ui
         drawBlock(inlineRuns(tok.text), size, {});
       }
     }
+
+    const pages = doc.getPages(),
+      footerSize = 7.5;
+    let footerTitle = toWinAnsi(title);
+    while (body.widthOfTextAtSize(footerTitle, footerSize) > CONTENT_W - 72)
+      footerTitle = footerTitle.slice(0, -1);
+    pages.forEach((sheet, i) => {
+      sheet.drawLine({
+        start: { x: MARGIN, y: MARGIN - 14 },
+        end: { x: PAGE_W - MARGIN, y: MARGIN - 14 },
+        color: RULE,
+        thickness: 0.5,
+      });
+      sheet.drawText(footerTitle, {
+        x: MARGIN,
+        y: MARGIN - 27,
+        font: body,
+        size: footerSize,
+        color: MUTED,
+      });
+      const folio = `${i + 1} / ${pages.length}`;
+      sheet.drawText(folio, {
+        x: PAGE_W - MARGIN - body.widthOfTextAtSize(folio, footerSize),
+        y: MARGIN - 27,
+        font: body,
+        size: footerSize,
+        color: MUTED,
+      });
+    });
 
     return await doc.save();
   } catch (e) {

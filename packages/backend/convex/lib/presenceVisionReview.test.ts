@@ -126,13 +126,14 @@ test("real SDK serializes byte images through scoped paid admission and returns 
   expect(args.beforeCall).toHaveBeenCalledOnce();
   expect(wire).toHaveLength(1);
   expect(wire[0]!.model).toBe("moonshotai/kimi-k3.1-pro");
+  expect(wire[0]!.max_tokens).toBe(4096);
   const parts = wire[0]!.messages[1].content;
   expect(parts.filter((p: any) => p.type === "image_url")).toHaveLength(3);
   expect(parts[1].image_url.url).toMatch(/^data:image\/jpeg;base64,/);
   expect((args.ctx as any).runMutation.mock.calls[0][1]).toMatchObject({
     tenantId: "ordinary-tenant",
-    ceilingCents: 428,
-    websiteDesign: { revision: 3 },
+    ceilingCents: 424,
+    websiteDesign: { revision: 3, purpose: "vision-review" },
   });
   reply = { pages: [{ ...page, contrast: "uncertain", issues: ["Unreadable overlay"] }] };
   const uncertain = await reviewPresenceVision(input());

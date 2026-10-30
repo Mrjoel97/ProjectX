@@ -1,28 +1,28 @@
-import type { WebCatalogueItem, WebDocument, WebNode } from "@pikar/contracts/webRuntime";
 import type { MerchantProvider } from "@pikar/contracts/tenantCommerce";
+import type { WebCatalogueItem, WebDocument, WebNode } from "@pikar/contracts/webRuntime";
 import {
+  type MerchantCartView,
+  type MerchantOrderStatusView,
   renderMerchantCart,
   renderMerchantCommerceLink,
   renderMerchantOrderStatus,
-  type MerchantCartView,
-  type MerchantOrderStatusView,
 } from "@pikar/core/merchantBuyer";
 import { digitalEntitlementAccessible } from "@pikar/core/tenantMerchant";
 import { parseWebAssetRef } from "@pikar/core/webAssets";
 import { sha256Bytes } from "@pikar/core/webRuntime";
-import { makeFunctionReference, type HttpRouter } from "convex/server";
+import { type HttpRouter, makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
+  type ActionCtx,
   httpAction,
   internalQuery,
-  type ActionCtx,
-  type QueryCtx,
   type MutationCtx,
+  type QueryCtx,
 } from "./_generated/server";
 import { verifyStripeSignature } from "./billingWebhook";
-import { internalMutation } from "./lib/tenantLifecycle";
 import { merchantClient, missingMerchantConfiguration, wire } from "./lib/merchantProviderClient";
+import { internalMutation } from "./lib/tenantLifecycle";
 import { merchantReadiness } from "./merchantCommerce";
 import { reconcileMerchantPayment, startMerchantCheckout } from "./merchantProvider";
 import { createCartForTenant, placeOrderForTenant } from "./tenantOrders";

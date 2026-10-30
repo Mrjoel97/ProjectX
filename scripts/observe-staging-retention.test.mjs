@@ -42,7 +42,7 @@ const receipt = {
 };
 const observationQuery = buildObservationQuery(fingerprint);
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
-function check(now, rows, interviews = [fixture], receipts = []) {
+function check(now, rows, interviews = [fixture], receipts = [], preservationSnapshot = false) {
   class Clock extends Date {
     static now() {
       return now;
@@ -82,8 +82,57 @@ function check(now, rows, interviews = [fixture], receipts = []) {
       },
     },
   };
-  return new AsyncFunction("ctx", "Date", observationQuery)(ctx, Clock);
+  return new AsyncFunction(
+    "ctx",
+    "Date",
+    preservationSnapshot
+      ? buildObservationQuery(fingerprint, { preservationSnapshot: true })
+      : observationQuery,
+  )(ctx, Clock);
 }
+
+test("release preservation follows the same pinned lifecycle and hashes native state without observation time", async () => {
+  const retained = await check(expires - 2, [checkpoint], [fixture], [], true);
+  assert.equal(retained.checkpointCount, 1);
+  assert.match(retained.sha256, /^[a-f0-9]{64}$/);
+  assert.deepEqual(retained, await check(expires - 1, [checkpoint], [fixture], [], true));
+  const purged = await check(sweep, [], [fixture], [receipt], true);
+  assert.equal(purged.checkpointCount, 0);
+  assert.deepEqual(Object.keys(purged).sort(), ["checkpointCount", "sha256"]);
+  assert.deepEqual(purged, await check(sweep + 1000, [], [fixture], [receipt], true));
+  assert.notEqual(purged.sha256, retained.sha256);
+  // A different valid native receipt cannot hide behind the same lifecycle result.
+  const changed = {
+    ...receipt,
+    ts: sweep + 1,
+    payload: { ...receipt.payload, purgedAt: sweep + 1 },
+  };
+  assert.notEqual(
+    purged.sha256,
+    (await check(sweep + 1000, [], [fixture], [changed], true)).sha256,
+  );
+  assert.doesNotMatch(JSON.stringify(purged), /retention-qualification|local-only|observedAt/);
+});
+
+test("release preservation never equates expiry or unproven absence with an authentic purge", async () => {
+  await assert.rejects(check(expires - 1, [], [fixture], [], true), /EARLY_ABSENCE/);
+  await assert.rejects(check(expires, [], [fixture], [], true), /MISSING_PURGE_RECEIPT/);
+  await assert.rejects(check(sweep, [checkpoint], [fixture], [], true), /PURGE_NOT_OBSERVED/);
+  await assert.rejects(check(sweep, [], [fixture], [], true), /MISSING_PURGE_RECEIPT/);
+  await assert.rejects(
+    check(sweep, [], [fixture], [{ ...receipt, actor: "other" }], true),
+    /INVALID_RECEIPT/,
+  );
+  await assert.rejects(check(sweep, [], [fixture], [receipt, receipt], true), /AMBIGUOUS_RECEIPT/);
+  await assert.rejects(
+    check(sweep, [], [{ ...fixture, _id: "replacement" }], [receipt], true),
+    /FIXTURE_REPLACED/,
+  );
+  assert.throws(
+    () => buildObservationQuery(fingerprint, { preservationSnapshot: "true" }),
+    /INVALID_OBSERVATION_MODE/,
+  );
+});
 test("presence before expiry cannot be reported as elapsed retention", async () => {
   const result = await check(expires - 1, [checkpoint]);
   assert.equal(result.beforeExpiryPresenceVerified, true);

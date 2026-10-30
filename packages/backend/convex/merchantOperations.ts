@@ -1,5 +1,3 @@
-import { sealedIn } from "./vaultFolders";
-import { appendAudit } from "./audit";
 import type {
   MerchantCheckoutAttempt,
   MerchantFulfilment,
@@ -21,15 +19,17 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalQuery } from "./_generated/server";
+import { appendAudit } from "./audit";
 import { tenantAction, tenantMutation } from "./lib/functions";
+import { merchantClient, wire } from "./lib/merchantProviderClient";
 import {
   assertTenantWritable,
   internalAction,
   internalMutation,
   lifecycleActionContext,
 } from "./lib/tenantLifecycle";
-import { merchantClient, wire } from "./lib/merchantProviderClient";
 import { refreshMerchantForTenant } from "./merchantProvider";
+import { sealedIn } from "./vaultFolders";
 
 const mutationRef = (name: string) =>
   makeFunctionReference<"mutation">(`merchantOperations:${name}`);

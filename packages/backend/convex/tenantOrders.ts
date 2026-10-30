@@ -14,12 +14,12 @@ import {
 } from "@pikar/core/tenantOrder";
 import { sha256Bytes } from "@pikar/core/webRuntime";
 import { makeFunctionReference } from "convex/server";
-import { v, type Infer } from "convex/values";
+import { type Infer, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { internalMutation, assertTenantWritable } from "./lib/tenantLifecycle";
 import { appendAudit } from "./audit";
 import { tenantMutation, tenantQuery } from "./lib/functions";
+import { assertTenantWritable, internalMutation } from "./lib/tenantLifecycle";
 
 const CART_TTL_MS = 30 * 60_000;
 const EXPIRY_PAGE_SIZE = 5;

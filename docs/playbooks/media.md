@@ -1,3 +1,41 @@
+> Last verified: 2026-10-29 — The approved FORMA example is a quality reference, never a default aesthetic. Media Director v13 ties each treatment to the product, audience, channel and approved brand; batch variants need distinct story purposes. Native captions use neutral white phrase text on a subtle dark backing with bounded fade/rise inside the verified speech endpoints. No benchmark slogans, gold palette, product assumptions, transcript edits or audio changes are injected. Legacy separate-audio caption styling remains unchanged. Title/caption collision and actual motion still require playback review; automatic product-aware layout and duplicate-title removal are not implemented. The v13 registry seed must be published through the normal release path before an existing hosted registry uses it. No paid requests are part of these checks.
+
+> Last verified: 2026-10-26 — Native orbit-ring color reuses the existing validated render palette field, choosing the second reviewed art-direction hex as accent and falling back to neutral contrast ink. It no longer hardcodes a Pikar cyan. Text-card contrast behavior is unchanged; malformed color input refuses before ASS generation.
+
+> Last verified: 2026-10-26 — A subsequent actual-SDK Kimi probe stopped at an HTTP refusal; one billing outcome is unresolved and further paid work is halted. Read-only endpoint capabilities expose the probe defect: named-function tool choice is unsupported, required/auto/none are supported. Free real-SDK tests cover required selection and signed/unsigned reasoning behavior. No director promotion; see the dated comparison report for the exact diagnostic limitation.
+
+> Last verified: 2026-10-26 — Finishing profile2 adds a400ms eased title rise/120ms text fade and opt-in orbit-ring: a bounded perspective-projected decorative3D annulus rendered via existing libass. Review hashes bind the profile and graphic choice. Actual free FFmpeg tests verify moving title pixels, changing ring pixels, interval bounds and unchanged native audio offsets. Exact product3D remains unavailable without suitable approved geometry and a supported renderer; the director refuses a purchasable substitute.
+
+> Last verified: 2026-10-26 — The offline director evaluator uses actual production storyboard/native validators, exact paired input pins and explicit human-review fields; no evaluator network or automatic promotion. An owner-authorized direct comparison used the existing reference image and costUSD0.0322004 total, bringing the shared testing ledger toUSD4.4814872 with zero unresolved attempts. Both models produced valid two-variation15s decks; this is not production tool-loop or rendered-film qualification. See53-DIRECTOR-COMPARISON-2026-10-26.md.
+
+> Last verified: 2026-10-29 — The watchdog cron now resets five indexed candidate ranges rather than scanning all historical mediaJobs/plans rows. Recovery logic, thirty-minute cadence, arming gate, live-work deferral, manual-retry clocks, fix-menu holds and notifications remain unchanged. New migration names isolate indexed cursors from existing full-table cursors. Legacy sweepStuckMediaJobs/sweepStuckPlans exports remain compatible for in-flight/operator use and still scan historical tables when explicitly invoked; do not use them for recurring operation. The indexed runner uses a local schema-aware migrations instance; other migration ranges are unchanged. This source change is not deployed and makes no provider call or budget change.
+
+> Last verified: 2026-10-24 — Full-suite follow-up explicitly inventories the PCM-only cleanup site while preserving the final film, registers the real rate limiter in the workspace campaign fixture, and exposes task-budget consent through the filtered audit viewer. Focused regressions accompany these integration fixes; runtime approval and storage protections remain enforced.
+
+> Last verified: 2026-10-24 — The historical storyboard bakeoff self-check now validates its unchanged twelve Phase33.2 inputs against their original15/30/60s classification, separately proving current45s acceptance and50s refusal metadata. The ordinary live loader keeps current duration validation and refuses the stale corpus before dispatch or report/tenant writes, requiring a separately versioned reviewed corpus before paid reuse. No runtime quality/spend guard, golden46/vertical40 case, historical receipt or qualification result changed; this free harness compatibility check does not qualify native films.
+
+> Last verified: 2026-10-24 — Combined-source integration preserves native media and social storage classifications (79 schema tables). Social cron and operator regressions remain covered alongside all three real FFmpeg fixtures; exact combined-head CI is required before staging. No deployment or new paid request.
+
+> Last verified: 2026-10-24 — New native Seedance generated-only30/45/60s films and mixed image/video batches retain15 deliverables/two active films. Exact task-only overage consent is visible in conversation; current media defaults are100USD/customer/day and2,000USD shared/day (ADR-067). Native ambience-only films buy no STT. Legacy rows keep their original model/audio contracts. Real native-audio assembly and strict same-source caption tests are separate from unqualified product/voice reference continuity and hosted release.
+
+> Last verified: 2026-10-24 — Owner-selected standard bytedance/seedance-2.0 is the source default at720p/4s, with4–15s generated grid and no Mini/Fast fallback. Historical Grok rows remain priceable. One actual4snative-audio call returned stereo AAC/video for $0.6111 in147.652s, without TTS/music/stock/STT calls. Production still uses separate voice unless a future persisted native mode is implemented; its renderer/caption contracts are not bypassed. See ADR-064 and the dated standard/native report.
+
+> Last verified: 2026-10-24 — Opt-in Seedance1.5Pro and2.0Mini wire contracts explicitly disable native audio, pin portrait output and reject unsupported duration/resolution. App defaults, pricing and generated-second limits are unchanged. The isolated three-clip benchmark reuses purchased Grok briefs, checks exact public catalogue rates, appends before submission and never retries. Its results are recorded in the dated Phase53 comparison; short clips do not qualify a full generated-only launch film.
+
+> Last verified: 2026-10-23 — CI39967368898 executed both real FFmpeg fixtures successfully. Its terminal-writer inventory exposed the existing campaign cancellation write; queued cancellation now runs synchronously inside media.ts with exact campaign/plan/batch ownership, preserving the unchanged two-module writer pin and leaving submitted work untouched.
+
+> Last verified: 2026-10-23 — The click-only campaign downloadManifest requires exact tenant/thread/campaign scope and validates all child membership before returning current finals. Maximum15 unique owned children; stale image slots, moved/deleted children and active/invalid video finals refuse or remain explicitly omitted. Single-file downloads share the stronger current-final checks. Music attribution accompanies ready video entries. No reservation, retry, publication or provider call is added. CI now supplies FFmpeg/font prerequisites and refuses unavailable runtime checks under CI=true/1; actual execution must be confirmed on the final head.
+
+> Last verified: 2026-10-23 — Checked captions now opt into bounded within-take regrouping: the same cue count, 32-character ceiling and original word endpoints, with a soft 0.75-second objective before maximum reading rate. New cuts cannot divide overlapping word ranges; more than128 words or no clean partition retain the previous grouping. Fifty-nine focused core checks passed; actual147-word evidence changes6→3 cues above20CPS and15→0 cues below0.75s. Three source passages still require slower narration for the target. Audio investigation also found that requesting linear loudnorm does not prove linear execution: delivery pins48kHz and records the filter's actual mode, with explicit intentional-silence handling and missing-statistics refusal. Final export timing and real-sample qualification are recorded in the dated Phase53 quality follow-up; numerical checks do not establish listening or creative acceptance. No provider request/default, registry activation or deployment is added.
+
+> Last verified: 2026-10-22 — The full media regression file now passes 294/294 after replacing old caption terminal fixtures with matching submitted narration, same-batch TTS hashes and complete transcripts. Positive burn/retention tests still assert actual success before cleanup; unusable transcript words explicitly refuse before sandbox work. No runtime guard or financial receipt was relaxed.
+
+> Last verified: 2026-10-22 — Actual operator outputs exposed two cross-take caption words and captions behind native player controls. The shared caption builder now supports strict, exact-script ownership with unchanged provider timestamps and existing speech-anchor rebasing; the app binds scripts to same-batch TTS prompt hashes. Explicit mismatch/timing/nonpositive-cue failures preserve the uncaptioned deliverable. The ASS style reserves the bottom 20% and at least 8% horizontally without changing its font. Frozen operator sources, original receipts/ledger and baseline exports remain separate from the new candidate fingerprint; no paid retry, provider default or production skill promotion is introduced.
+
+> Last verified: 2026-10-21 — The assembler now exports the already priced 720×1280/30fps profile independently of the first source, uses Lanczos scaling and copies normalized H.264 scenes at concatenation instead of encoding them again. Every scene pins the same MP4 track timescale; narration, music, duration, decode and sidecar gates remain enforced. A real synthetic seven-second 24 fps landscape / 60 fps portrait / still / card fixture passed with 210 frames, monotonic decode timestamps, full-span AAC and a validated sidecar. This qualifies the local technical profile, not provider source detail, hosted cost/latency, B-roll relevance or owner visual acceptance. Stock rendition ranking now rejects malformed durations/dimensions/non-HTTPS files and prioritizes usable portrait detail; provider video relevance order is preserved.
+
+> Last verified: 2026-10-21 — Phase 53 composes image/video/mixed campaigns over existing media reservations/jobs, with exact-review approval, bounded queueing and explicit reconciliation/cancel/partial states. Offline core/backend checks passed in the delegated lane; actual media quality/provider recovery remains unqualified.
+
 > Last verified: 2026-10-21 — The reliability sweep cron count explicitly includes the fixed hourly web-form privacy-retention job. Its inventory grows from12 to13; media watchdog behavior and scheduling remain unchanged. The existing reliability sweep tests pass in the isolated integration recheck.
 
 > Last verified: 2026-10-19 — The fixed cron inventory is now twelve jobs because ADR-060 adds the opt-in Zernio read-only report dispatcher. Reliability sweep and media scheduling behavior are unchanged.
@@ -5,6 +43,10 @@
 > Last verified: 2026-10-19 — The pinned cron count increases from ten to eleven for the owner-authorized Buffer engagement snapshot and OAuth-retention driver (ADR-058). Media reliability sweep implementation, thresholds, arming and provider calls are unchanged. See buffer.md for the separate marketing workflow.
 
 > Last verified: 2026-10-15 — Current canvas and render inputs read exact plan/block/kind indexes, selecting newest current or succeeded slots without scanning immutable attempt history. Live admission checks query queued/submitted status indexes; malformed active batches over100 fail closed. Batch readers cap100lines with explicit overflow refusal. Retry selection uses newest createdAt. spendForPeriod now returns500-row page totals, isDone/continueCursor, and unrounded estUsd: follow all cursors, sum estUsd then round once; never label one page as the period total. listJobs supports small histories up to1000 and otherwise requires listJobsPage (100rows). Local520-attempt history/paged-accounting regression passes.
+
+> Last verified: 2026-10-24 — ADR-065 replaces new film staging with explicit native Seedance2.0, generated-only30/45/60s. Missing mode remains legacy. Native reviewed prompts include visual, narration and sound; no separate TTS/music/stock acquisition or cheaper fallback. Native sound is preserved at scene start; captions bind the exact assembled PCM hash/batch/film and require actual words to match the reviewed script. Workspace uses one Picture & sound stage and native retry controls. Additional storage participates in tenant erasure. See the dated native integration report for checks and remaining full-film/reference-input qualification; source changes are not deployment or registry activation.
+
+> Last verified: 2026-10-24 — Native films now accept up to three explicitly selected owned Vault product images per film. Selection pins immutable storage SHA/size/type in the exact priced review; estimate/reservation and submission recheck ownership and availability, and submission reads the actual bytes before attaching owned HTTPS storage URLs as OpenRouter input_references. Changed or deleted sources refuse before provider submission. References never auto-copy across products or mixed-batch children. Changing picks clears stale render state and invalidates prior picture reuse. Existing Vault files remain reachable through tenant export/erasure; per-film cleanup does not delete the source photographs. Image references improve guidance but do not prove fidelity or provide voice cloning; audio/video reference inputs remain unwired. Free scope/review/wire tests accompany this change; paid visual acceptance is separate.
 
 # Playbook: Media Canvas (finished reels and standalone images)
 
@@ -5667,3 +5709,132 @@ downstream of it.
 ## Reliability extraction — 2026-10-15
 
 Last verified: 2026-10-15 — stock audio/video/photo selection moved to the pure core stockSelection module. Media adapters supply the existing configured duration tolerances and keep their public compatibility exports. No provider requests, prices, ranking or output shapes change. Existing media selection tests are the regression contract.
+
+
+## Phase 53 — campaign production and quality acceptance
+
+packages/core/src/mediaCampaign.ts owns bounded input/status/queue policy; mediaCampaign.ts is the tenant adapter. Core and Executive tool cap a campaign at15items. One active campaign per tenant admits at most2 whole deliverables through their caption terminal; ordinary single-item jobs keep their independent admission. Campaign manifests and private plans share the real tenant/thread for exact review, but ordinary roots/Approvals exclude campaign children before bounded scans and direct single-item execution/generation refuses.
+
+Campaign strings pass fail-closed personal-data redaction before staging or director use. Creation and all director schedules commit in one transaction; a tenant-indexed normalized request/content hash reuses the same campaign on replay without duplicate director schedules. Controlled research and evaluation contexts cannot start this tool. Media purchases still require the separate human Generate action. Current child reservation policy is at least one cent, rounded up per whole child job; older floor descriptions below describe historical pricing and do not override current chooseMediaBatch code.
+
+Staging creates proposals only; video storyboards use existing governed director dispatch. Human approval binds a hash of current plans and the selected items plus aggregate maximum. reserveApproved re-estimates and reserves through existing per-item media rails in one subtransaction; a refusal or changed estimate rolls back earlier child reservations. The maximum uses upward cents rounding without replacing legacy rail settlement semantics. Parent accounting records cumulative reserved maxima, not a fresh provider-billed total.
+
+The queue preserves succeeded siblings and downloads. Ambiguous submit/provider/network/timeout outcomes become needs_reconciliation and stop new starts rather than permitting a blind paid retry. Explicit selected retries disclose added maximum cost. Cancel prevents queued starts; already submitted work may finish, and no refund is assumed. Progress/refresh and settlement watchdog are bounded; their local tests do not prove hosted crash recovery or provider cancellation.
+
+Download queries validate campaign, child-plan and asset ownership before minting one selected URL. The browser exports a JSON item/credit manifest without temporary capabilities and supports individual completed files; a single ZIP asset collection is not yet implemented. Do not call the JSON manifest a complete asset archive. Publication remains a separate exact-content approval under ADR-046 and existing social-provider controls.
+
+Existing stock/uploaded scenes already support B-roll. Quality acceptance still needs representative actual image sets and30/60-second reels, measured final dimensions/fps/duration/audio/captions, relevant B-roll/credits, pacing/continuity and owner visual review. The supplied Taste Skill repository is frontend-design guidance, not a video provider. No4K/native-source-resolution/provider-quality claim or paid comparison follows from a preset or local parser test. Record subsequent source-supported profile changes and actual benchmarks separately.
+
+Verify focused mediaCampaign core/backend and rendered MediaCampaign tests, existing media money-path tests and ordinary plan/approval regressions. 53-01 records partial evidence; root consolidated/hosted/provider/visual gates remain open.
+
+## Candidate production quality review — 2026-10-21
+
+Last verified: 2026-10-21 — `packages/core/src/productionQuality.ts` validates candidate image
+quality/placement tuples and typed human review records for30/60-second vertical reels. Its house
+policy checks timeline, safe caption/overlay layout, shot scale/purpose/coverage variety, source and
+license references, generated-second limits and explicit visual/audio/caption evidence. It does not
+inspect media bytes, establish license rights, authorize spending or certify a rendered artifact.
+Synthetic test evidence is never owner quality acceptance.
+
+`productionQuality.fixtures.ts` freezes a public synthetic image prompt and representative30/60s
+briefs/narration. The focused regression reproduces the official GPT Image2 output calculator and
+derives the current low-profile reel reservations from shared prices with2×voice allowance:41¢
+and77¢. Three separately reserved baseline images add3¢, for121¢ of current software reservation;
+director/research planning uses its separate envelope. These numbers are not guaranteed provider
+invoice maxima. The benchmark packet records exact proposed inputs, output-only quality estimates,
+source URLs, recovery rehearsals and actual-output acceptance requirements.
+
+Higher image qualities are supported by the provider but remain candidate-only. No Images-route
+hard token/spend bound has been qualified; the published calculator is an estimate and excludes
+inputs. Do not change only the outgoing quality value or claim a billing maximum. Persist and
+price the exact profile in plan/job/estimate/admission/reconciliation together before connecting
+it to paid egress. Keep legacy low defaults until measured representative owner acceptance.
+The complete v7 editorial director candidate is outside canonical seeds/mirrors and NOT active;
+the existing media director is deliberately ungated by the text runner, so editing its canonical
+seed is a promotion action. See `.planning/phases/53-media-and-document-production/53-QUALITY-BENCHMARK.md`.
+
+## Scoped image pricing qualification — 2026-10-22
+
+Last verified: 2026-10-22 — the owner approved a shared$5 testing policy allowance and use of the
+explicit staging credential in memory only. `scripts/run-image-quality-qualification.mjs` is an
+isolated operator experiment, not app admission or a new production quality preset. Default
+preparation performs no network work; paid execution requires the exact manifest/source digest,
+policy acknowledgement and standard-credit billing attestation. It fixes three portrait PNGs at
+low/medium/high, one image per request, no references/streaming/fallbacks/retries, and25/50/75¢
+profile policy allowances. Those amounts and the shared$5 target are not provider invoice ceilings.
+
+The `.tmp/phase53-paid-qualification/charges.jsonl` append-only ledger must cover ALL testing
+lanes under this approval. An exclusive lock serializes admission. Each purchase records a durable
+started receipt before egress; unresolved/crashed attempts block new work. Actual `usage.cost`
+always survives a later metadata, price-variance or image failure. Missing/invalid usage, unknown
+BYOK mode, unexpected identity, rate variance, overrun or ambiguous transport stops rather than
+replaying. A single-use run marker prevents rerunning completed purchases. The process-only
+`OPENROUTER_QUALIFICATION_API_KEY` is neither logged nor persisted; the integration owner controls
+the authorized staging broker. No production key/settings change or deployment is permitted.
+
+Ten focused offline operator tests pass; a prepared manifest is not a live billing or creative
+result. Review `.planning/phases/53-media-and-document-production/53-IMAGE-QUALIFICATION-2026-10-22.md`
+for primary-source limit semantics, explicit access authorization, current digest and execution
+gate. OpenRouter's Images in-flight accounting does not establish a no-overshoot invoice cap;
+standard account/key controls remain additional backstops. Production defaults and prices remain
+unchanged until separate receipt-backed qualification and explicit promotion.
+> Last verified: 2026-10-22 — PR 83 CI triage found a blocking Biome formatting diagnostic on the campaign-lock condition in media.ts. The condition was formatted with the existing repository rules; its ownership, draft-state and prior-reservation checks are unchanged. This is a formatting repair, with no media purchase, job retry, approval, renderer or provider behavior change. Current-source CI remains required after resolving the separate upstream documentation/evaluator-pin conflicts.
+
+## Exact-script caption ownership and readable placement — 2026-10-22
+
+The real 30/60-second operator baseline contains all 147 spoken words, including 19 legitimate
+zero-duration STT word alignments. Its strict experiment gate stopped on `end <= start`; that
+historical source/result/hold is preserved. Production word grouping already retains zero-duration
+words. A grouped cue must have finite positive duration; an isolated zero-duration cue is refused,
+never padded with invented timing.
+
+`buildCaptionLinesChecked` takes exact `expectedTakeTexts` in narrated ordinal order. It requires
+one-to-one normalized full-token equality, the same number of narrated scenes and clean-take
+offsets, and finite ordered word starts/ends with `end >= start`. Decreasing word ends are refused
+instead of letting the next word truncate a prior word's display span. Exact script word counts determine
+which take owns each original word. Repeated phrases are assigned by ordinal, not fuzzy matching.
+Actual text/timestamps are not rewritten. A half-second bound around the assigned clean take
+rejects larger timing errors; it does not create duration, stretch audio or move provider times.
+Existing measured speech anchors, leading-silence adjustment, clamping and grouping remain the
+timing mechanism. Mismatch, invalid/implausible times and nonpositive grouped cues have explicit
+failure codes. Cues must also remain positive after the canonical ASS centisecond quantization;
+a positive floating-point duration that rounds to the same displayed timestamp is refused, never
+stretched. `buildCaptionLines` without expected scripts retains its legacy timestamp partition.
+
+The app's `captionsToBurn` adapter reads the tenant-prefixed, bounded STT batch, matches successful
+TTS block indexes to nonempty shot narration, and verifies every exact narration `promptHash`.
+An edited deck, missing/ambiguous voices or another batch cannot supply replacement scripts for
+old audio. Binding failures and checked-core refusals write the existing degraded caption terminal
+before starting a render request. Narration remains content-plane data; audit/dead-letter payloads
+contain only existing refs and reason codes. No schema, price, provider request or admission cap
+changes are needed.
+
+`toAss` keeps the existing 64-unit DejaVu Sans/white-outline style and smart wrapping, but computes
+horizontal margins with `ceil(PlayResX × 0.08)` and bottom margin with `ceil(PlayResY × 0.20)`.
+The default 1080×1920 script uses 87/87/384; a 720×1280 script uses 58/58/256. These are caption
+insets, not a promise about every platform's changing chrome. Actual playback/frame review still
+checks text visibility and crop safety. Canonical assembly/burn scripts are unchanged.
+
+The original paid baseline and all known charges remain intact. A separately fingerprinted local
+candidate reuses the delivered 147-word transcript, voices, high still and licensed footage with
+zero additional purchases. Generated opening footage failed physical-composition review (a
+floating rear bottle), and generated detail varies bottle identity. Replacing those scenes with the
+reviewed still is an explicit free editorial QC fallback, not successful video-provider acceptance
+or a production generation-profile promotion. See the phase 53 reel recovery record for receipts,
+baseline limitations, input identities and candidate verification.
+
+### 2026-10-26 — explicit image quality and creative director contract
+
+New image plans may persist `MEDIA_DEFAULT_IMAGE_QUALITY = high`; missing historical quality still means low. The provider contract sends the reviewed quality without a cheaper fallback. Explicit GPT Image 2 portrait profiles reserve low $0.006, medium $0.07, high $0.20; medium/high require 1024x1536 and at most4096 UTF-8 prompt bytes. These are policy reservations, not invoice guarantees. Evidence is the three-sample 2026-10-22 image report recorded in `media.fixtures.json`. Sunburst has no qualified route or price and is not enabled. Persist quality through plan review, batch admission and job submission; do not reinterpret old missing values as high.
+
+Media Director v11 grounds approved brand revisions, designs story/camera endpoints and matched motion, and calls for actual playback review. Optional overlay timing and cut/fade columns describe only executable renderer capabilities. No controllable product mesh, animated logo asset or guaranteed generated lettering is promised. Native Seedance audio remains intact.
+
+`node packages/backend/scripts/prepare-director-comparison.mjs` prints a free preparation manifest, not an evaluation result. It fixes the director-body hash, paired briefs, structural gates, blind creative rubric and90-second production timeout. Kimi K3.1 Pro remains a candidate; executing the production comparison requires separately bounded approval and records actual model/fallback/cost. No model-default change or paid call occurs in preparation.
+
+Image review hardening: explicit quality plans now require the displayed review hash and maximum cents at Generate. The digest binds prompt, model/dimensions/quality, approved brand reference and price policy. Historical missing-quality callers retain their existing entry point. Submission carries and checks each image job's immutable prompt hash; a changed plan prompt fails before a provider call. Both estimate and admission reject oversized high/medium prompts. The cockpit links customers without approved branding to the Profile Brand kit panel and never treats a draft or chat acknowledgement as activation.
+
+### 2026-10-26 — deterministic native finishing
+
+Native scene shots may carry overlayStartMs/overlayEndMs (scene-relative integers, at least 500 ms readable window inside the scene) and transitionOut cut/fade. Text is limited to 80 characters/12 words, with at most 25 characters per word and is written as a literal UTF-8 file with drawtext expansion disabled. Default text covers its scene; safe upper placement keeps it clear of bottom captions. A fade is a 200 ms fade-through-background on either side of the boundary, never an overlapping dissolve: no clip retiming or speech overlap. Legacy separate-audio renders retain their existing path. Native generation is told to leave lettering to the compositor. Brand/logo image animation and controlled product 3D are not implemented by this lane.
+
+The renderer validates cues before starting a sandbox and requires finishing version 1/count proof before uploading a finished result. Native approval hashes bind the finishing version and brand-kit revision. Free FFmpeg fixtures inspect actual title-window pixels and transition pixels, decode the whole output, verify soundtrack frequency at the original scene offsets, and reject missing native audio. This verifies execution, not creative quality; release still needs normal-speed and slow-motion review of actual generated footage for identity, transitions, readable titles and sound continuity.

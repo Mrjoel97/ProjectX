@@ -136,7 +136,8 @@ describe("finance.summary — two planes, kept apart", () => {
       DEPLOYMENT_MEDIA_BUDGET_CENTS,
       DEPLOYMENT_INGEST_BUDGET_CENTS,
     ]) {
-      expect(serialized).not.toContain(String(ceiling));
+      // Match a complete numeric value: a timestamp may contain the same digits.
+      expect(serialized).not.toMatch(new RegExp(`:\\s*${ceiling}(?=[,}])`));
     }
   });
 

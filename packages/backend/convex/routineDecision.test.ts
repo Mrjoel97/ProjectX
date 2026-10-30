@@ -682,7 +682,13 @@ describe("the `defer` absence checks, observed FIRING", () => {
     const adrs = readdirSync(join(repoRoot, "docs/decisions"));
     expect(adrs.length).toBeGreaterThan(20);
     expect(adrs).toContain("013-the-render-worker.md");
-    expect(adrs.filter((f) => /routine|recurrence|schedul/i.test(f))).toEqual([]);
+    // ADR-063 permits inert construction; ADR-067 admits only the built-in social service.
+    // The generic routine decision remains defer.
+    // Every other matching filename is still refused by the checks and synthetic controls above.
+    expect(adrs.filter((f) => /routine|recurrence|schedul/i.test(f))).toEqual([
+      "063-inert-recurrence-construction.md",
+      "067-managed-social-recurrence.md",
+    ]);
   });
 });
 
@@ -975,6 +981,32 @@ describe("nothing imports the recurrence spike", () => {
     .filter((f) => /\.(ts|tsx|mjs)$/.test(f) && !/\.test\.(ts|tsx)$/.test(f))
     .filter((f) => f !== SPIKE);
 
+  const metadataArrays: Record<string, RegExp> = {
+    "packages/backend/scripts/goldenEvaluatorIdentity.mjs":
+      /^export const EVALUATOR_FILES = \[\n(?: {2}"[A-Za-z0-9_./-]+",\n)+\]\.sort\(\);$/m,
+    "packages/backend/scripts/vertical-eval-corpus.mjs":
+      /^export const EVALUATOR_FILES = \[\n(?: {2}"[A-Za-z0-9_./-]+",\n)+\]\.sort\(\);$/m,
+    "packages/backend/scripts/goldenEvaluatorIdentity.test.mjs":
+      /^ {2}const dependencies = \[\n(?: {4}"[A-Za-z0-9_./-]+",\n)+ {2}\];$/m,
+  };
+  const relative = (file: string) =>
+    file
+      .slice(repoRoot.length + 1)
+      .split(sep)
+      .join("/");
+  const usesSpike = (file: string, text: string) => {
+    const metadata = metadataArrays[relative(file)];
+    const normalized = text.replace(/\r\n/g, "\n");
+    // Remove ONE exact path entry only from these named, entirely literal identity arrays.
+    // Imports, expressions, duplicate entries and every other module remain in the scan.
+    const executable = metadata
+      ? normalized.replace(metadata, (array) =>
+          array.replace(/^ {2,4}"packages\/core\/src\/routineSchedule\.ts",\n/m, ""),
+        )
+      : normalized;
+    return executable.includes("routineSchedule");
+  };
+
   test("POSITIVE CONTROL: the scan reaches every root round 1 and round 2 could not see", () => {
     // If this list is ever empty, or stops containing a nested file, the scan below is vacuous
     // and would pass no matter what the tree contained.
@@ -1004,8 +1036,48 @@ describe("nothing imports the recurrence spike", () => {
     expect(scanned.some((f) => f.includes(join("apps", "web", "app")))).toBe(true);
   });
 
-  test("no non-test source file anywhere names the spike", () => {
-    const importers = scanned.filter((f) => readFileSync(f, "utf8").includes("routineSchedule"));
-    expect(importers.map((f) => f.slice(repoRoot.length + 1))).toEqual([]);
+  test("only ADR-067's named pure managed-service policy consumer imports the ICU spike", () => {
+    const importers = scanned.filter((f) => usesSpike(f, readFileSync(f, "utf8")));
+    expect(importers.map(relative)).toEqual(["packages/core/src/managedServicePolicy.ts"]);
+  });
+
+  test("identity metadata never exempts executable imports or other source occurrences", () => {
+    for (const file of Object.keys(metadataArrays)) {
+      const absolute = join(repoRoot, file);
+      const text = readFileSync(absolute, "utf8");
+      expect(usesSpike(absolute, text), file).toBe(false);
+      expect(usesSpike(join(repoRoot, "unlisted.mjs"), text), file).toBe(true);
+      expect(usesSpike(absolute, `${text}\nimport "@pikar/core/routineSchedule";`), file).toBe(
+        true,
+      );
+      expect(
+        usesSpike(absolute, `${text}\nawait import("@pikar/core/routineSchedule");`),
+        file,
+      ).toBe(true);
+      expect(
+        usesSpike(
+          absolute,
+          text.replace(/^( +"packages\/core\/src\/routineSchedule\.ts",\r?\n)/m, "$1$1"),
+        ),
+        file,
+      ).toBe(true);
+      expect(
+        usesSpike(
+          absolute,
+          text.replace(/const (EVALUATOR_FILES|dependencies) =/, "const other ="),
+        ),
+        file,
+      ).toBe(true);
+      expect(
+        usesSpike(
+          absolute,
+          text.replace(
+            /^( +)"packages\/core\/src\/routineSchedule\.ts",/m,
+            '$1await import("@pikar/core/routineSchedule"),',
+          ),
+        ),
+        file,
+      ).toBe(true);
+    }
   });
 });

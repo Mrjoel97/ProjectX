@@ -75,22 +75,49 @@ export const run = internalAction({
       receipt: source.providerReceiptHash,
     }).slice(0, 16);
     const retrying = source.job?.state === "failed" && !source.job.preProviderRetry;
-    const runRef = retrying ? digest({ priorRunRef: source.job!.runRef, attempt: 1 }).slice(0, 16) : baseRunRef;
-    let retryEvidence;
+    const runRef = retrying
+      ? digest({ priorRunRef: source.job!.runRef, attempt: 1 }).slice(0, 16)
+      : baseRunRef;
+    let retryEvidence:
+      | {
+          reportStorageId: NonNullable<typeof source.reportStorageId>;
+          capture: Record<string, unknown>;
+        }
+      | undefined;
     if (retrying) {
       // Read only the existing owned capture; claim atomically validates its identity,
       // ownership, hard checks and conservative no-spend proof before a new attempt.
-      if (!source.reportStorageId) return { status: "pending", reason: "retry_capture_unavailable" };
+      if (!source.reportStorageId)
+        return { status: "pending", reason: "retry_capture_unavailable" };
       try {
         const blob = await ctx.storage.get(source.reportStorageId);
-        if (!blob || blob.size > 3_000_000) return { status: "pending", reason: "retry_capture_unavailable" };
+        if (!blob || blob.size > 3_000_000)
+          return { status: "pending", reason: "retry_capture_unavailable" };
         const capture = JSON.parse(await blob.text());
-        retryEvidence = { reportStorageId: source.reportStorageId, capture: {
-          status: capture.status, contentHash: capture.contentHash, providerReceiptHash: capture.providerReceiptHash,
-          artifactHashes: capture.artifactHashes, reports: capture.reports,
-          screenshots: Array.isArray(capture.screenshots) ? capture.screenshots.map(({pageSlug,viewportWidth,reducedMotion,sha256,mimeType}: Capture) => ({pageSlug,viewportWidth,reducedMotion,sha256,mimeType})) : null,
-        } };
-      } catch { return { status: "pending", reason: "retry_capture_unavailable" }; }
+        retryEvidence = {
+          reportStorageId: source.reportStorageId,
+          capture: {
+            status: capture.status,
+            contentHash: capture.contentHash,
+            providerReceiptHash: capture.providerReceiptHash,
+            artifactHashes: capture.artifactHashes,
+            reports: capture.reports,
+            screenshots: Array.isArray(capture.screenshots)
+              ? capture.screenshots.map(
+                  ({ pageSlug, viewportWidth, reducedMotion, sha256, mimeType }: Capture) => ({
+                    pageSlug,
+                    viewportWidth,
+                    reducedMotion,
+                    sha256,
+                    mimeType,
+                  }),
+                )
+              : null,
+          },
+        };
+      } catch {
+        return { status: "pending", reason: "retry_capture_unavailable" };
+      }
     }
     const scope = { tenantId: args.tenantId, versionId: source.versionId, runRef };
     const beforeCall = async () => {

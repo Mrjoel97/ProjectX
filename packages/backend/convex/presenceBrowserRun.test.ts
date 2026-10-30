@@ -3,14 +3,14 @@ import type { WebBrowserPageReport } from "@pikar/core/webBrowserQuality";
 import { sha256Bytes } from "@pikar/core/webRuntime";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
-import { beforeEach, afterEach, expect, test, vi } from "vitest";
-import limiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import limiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { internal } from "./_generated/api";
 import {
   artifactHashes,
-  providerReceiptHash,
   presencePublicationReady,
+  providerReceiptHash,
 } from "./lib/presencePublication";
 import { reviewPresenceScreenshots } from "./lib/presenceVisionReview";
 import schema from "./schema";
@@ -95,8 +95,13 @@ beforeEach(() => {
       tenantId: args.tenantId,
       callId: crypto.randomUUID(),
       model: "or/moonshotai/kimi-k3.1-pro",
-      ceilingCents: 428,
-      websiteDesign: { planId: args.planId, revision: args.revision, runRef: args.runRef },
+      ceilingCents: 424,
+      websiteDesign: {
+        planId: args.planId,
+        revision: args.revision,
+        runRef: args.runRef,
+        purpose: "vision-review",
+      },
     });
     await args.ctx.runMutation(internal.guardrails.settlePaidCall, {
       tenantId: args.tenantId,
@@ -166,6 +171,7 @@ async function setup() {
       domainMode: "platform_path",
       hostingDeclaration: { hosting: "pikar_platform_path", source: "tenant_structured_content" },
       revision: 1,
+      draftVersion: 1,
       createdAt: 1,
       updatedAt: 1,
     }),
@@ -195,6 +201,9 @@ async function setup() {
       revision: 1,
       humanMessages: [],
       brief: { businessName: "Fixture" },
+      projectId,
+      projectVersion: 1,
+      projectContentHash: "f".repeat(64),
       sourceSnapshots: [{ ref: "fixture", revision: "v1" }],
       status: "awaiting_review",
       createdAt: 1,
@@ -285,25 +294,60 @@ test("duplicate attempt does not capture or spend twice", async () => {
 });
 
 test("a proven pre-provider failure rereads owned evidence, recaptures, and spends only on its one retry", async () => {
-  const {t,args,versionId}=await setup();
-  const prior = await t.run(async ctx => {
-    const reportStorageId=await ctx.storage.store(new Blob([JSON.stringify(state.capture)],{type:"application/json"}));
-    const screenshots=[];
-    for(const image of state.capture.screenshots) {
-      const storageId=await ctx.storage.store(new Blob([Uint8Array.from(Buffer.from(image.base64,"base64")).buffer],{type:image.mimeType}));
-      screenshots.push({storageId,pageSlug:image.pageSlug,viewportWidth:image.viewportWidth,reducedMotion:image.reducedMotion,sha256:image.sha256,mimeType:image.mimeType});
+  const { t, args, versionId } = await setup();
+  const prior = await t.run(async (ctx) => {
+    const reportStorageId = await ctx.storage.store(
+      new Blob([JSON.stringify(state.capture)], { type: "application/json" }),
+    );
+    const screenshots = [];
+    for (const image of state.capture.screenshots) {
+      const storageId = await ctx.storage.store(
+        new Blob([Uint8Array.from(Buffer.from(image.base64, "base64")).buffer], {
+          type: image.mimeType,
+        }),
+      );
+      screenshots.push({
+        storageId,
+        pageSlug: image.pageSlug,
+        viewportWidth: image.viewportWidth,
+        reducedMotion: image.reducedMotion,
+        sha256: image.sha256,
+        mimeType: image.mimeType,
+      });
     }
-    for(const storageId of [reportStorageId,...screenshots.map(image=>image.storageId)]) await ctx.db.insert("uploadReceipts",{tenantId:args.tenantId,ticketHash:String(storageId),expiresAt:Date.now()+60000,state:"complete",storageId});
-    const job={runRef:"pre-provider-failed",startedAt:Date.now()-1000,state:"failed" as const,reason:"browser_review_incomplete"};
-    await ctx.db.patch(versionId,{browserReviewJob:job,browserReviewReportStorageId:reportStorageId,browserReviewScreenshots:screenshots});
-    return {job,reportStorageId};
+    for (const storageId of [reportStorageId, ...screenshots.map((image) => image.storageId)])
+      await ctx.db.insert("uploadReceipts", {
+        tenantId: args.tenantId,
+        ticketHash: String(storageId),
+        expiresAt: Date.now() + 60000,
+        state: "complete",
+        storageId,
+      });
+    const job = {
+      runRef: "pre-provider-failed",
+      startedAt: Date.now() - 1000,
+      state: "failed" as const,
+      reason: "browser_review_incomplete",
+    };
+    await ctx.db.patch(versionId, {
+      browserReviewJob: job,
+      browserReviewReportStorageId: reportStorageId,
+      browserReviewScreenshots: screenshots,
+    });
+    return { job, reportStorageId };
   });
-  Object.assign(state.source,prior);
-  expect((await t.action(run,args)).status).toBe("passed");
+  Object.assign(state.source, prior);
+  expect((await t.action(run, args)).status).toBe("passed");
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(reviewPresenceScreenshots).toHaveBeenCalledTimes(1);
-  const saved=await t.run(ctx=>ctx.db.get(versionId));
-  expect(saved?.browserReviewJob).toMatchObject({runRef:sha256Bytes(new TextEncoder().encode(JSON.stringify({priorRunRef:"pre-provider-failed",attempt:1}))).slice(0,16),state:"completed",preProviderRetry:{attempt:1,priorRunRef:"pre-provider-failed"}});
+  const saved = await t.run((ctx) => ctx.db.get(versionId));
+  expect(saved?.browserReviewJob).toMatchObject({
+    runRef: sha256Bytes(
+      new TextEncoder().encode(JSON.stringify({ priorRunRef: "pre-provider-failed", attempt: 1 })),
+    ).slice(0, 16),
+    state: "completed",
+    preProviderRetry: { attempt: 1, priorRunRef: "pre-provider-failed" },
+  });
 });
 test("bad DOM measurements persist owned evidence but skip vision spend and remain private", async () => {
   const { t, args, versionId } = await setup();

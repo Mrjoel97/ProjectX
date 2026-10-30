@@ -56,6 +56,7 @@ import { internalMutation } from "./lib/tenantLifecycle";
 // the same serializable transaction as the proposed -> approved CAS. See its doc comment.
 import {
   deckOf,
+  nativeReelReviewRefusal,
   type ReserveRefusal,
   type ReserveResult,
   reserveJobInner,
@@ -71,7 +72,7 @@ import { recordRevenueEvent } from "./revenueTelemetry";
 // repo pins ai@7 and drives models via the gateway string (llm.ts DEFAULT_MODEL). Since the model
 // is never called here, cast the config past the version guard. Drop the cast when agent ships
 // v7-compatible types (CLAUDE.md §6 — do not bump to "fix" this).
-const cockpitAgent = new Agent(components.agent, {
+export const cockpitAgent = new Agent(components.agent, {
   name: "email-cockpit",
   languageModel: DEFAULT_MODEL,
 } as unknown as ConstructorParameters<typeof Agent>[1]);
@@ -199,7 +200,7 @@ async function recordPackPlanDecision(
  * `runSpecialistTurn` REQUIRES a `planId` even for an analysis-only run. The row starts at
  * `collecting` with no `kind`, which is exactly right for one: nothing arms and nothing delivers.
  */
-async function ensureThreadAndPlan(
+export async function ensureThreadAndPlan(
   ctx: ActionCtx & { tenantId: string },
   threadId: string | undefined,
   firstMessage: string,
@@ -1292,10 +1293,14 @@ async function armOrPublishChildren(
 }
 
 export const executePlan = tenantMutation({
-  args: { planId: v.id("plans") },
+  args: {
+    planId: v.id("plans"),
+    expectedReviewHash: v.optional(v.string()),
+    maxCostCents: v.optional(v.number()),
+  },
   handler: async (
     ctx,
-    { planId },
+    { planId, expectedReviewHash, maxCostCents },
   ): Promise<
     // 19-05: `withheld` names the suppressed addresses this approve DROPPED. A partial send is
     // still `ok: true` — the user must be told who was left out, not stopped from mailing the rest.
@@ -1326,6 +1331,8 @@ export const executePlan = tenantMutation({
           | "all_recipients_suppressed"
           | "too_many_recipients"
           | ReserveRefusal
+          | "review_changed"
+          | "over_reviewed_cost"
           // 2026-08-10: the finance_write arm's two refusals — `applyFinanceClaims` RETURNS them
           // rather than throwing (its own doc comment explains why), so this dispatcher's ONLY job
           // is to pass the reason through unmodified to the card. Only bugs throw.
@@ -1334,6 +1341,7 @@ export const executePlan = tenantMutation({
   > => {
     const plan = await ctx.db.get(planId);
     if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant approve
+    if (plan.mediaCampaignId) throw new Error("Generate this item through its media batch.");
     await ctx.runQuery(internal.authoringProbe.assertUnregisteredThread, {
       tenantId: ctx.tenantId,
       threadId: plan.threadId,
@@ -1341,6 +1349,13 @@ export const executePlan = tenantMutation({
     // Idempotent no-op (double-approve): only "proposed" proceeds. Convex mutations are
     // serializable, so of two concurrent approves exactly one flips the status and seeds/starts.
     if (plan.status !== "proposed") return { ok: true, alreadyStarted: true };
+    if (plan.kind === "media" && plan.mediaAudioMode === "native") {
+      const refusal = await nativeReelReviewRefusal(ctx, plan, {
+        expectedReviewHash,
+        maxCostCents,
+      });
+      if (refusal) return { ok: false, reason: refusal };
+    }
 
     // REVW-02 fail-closed: a plan escalated past MAX_REGENERATE (proposeEmailPlan) can NEVER be
     // approved/sent — the cockpit mirror of the pipeline unapproved-send guard (07-03). Sibling early

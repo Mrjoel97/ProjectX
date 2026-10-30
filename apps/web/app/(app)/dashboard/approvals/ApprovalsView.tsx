@@ -128,6 +128,10 @@ export function refusalMessage(reason: string): string {
     gmail_not_connected: "Gmail is not connected. Nothing was sent and nothing was spent.",
     send_time_too_far: "That time is outside the safe scheduling window. Nothing was sent.",
     review_escalated: "This plan cannot be approved until its review issue is resolved.",
+    review_changed:
+      "The storyboard changed. Review it and its current cost in the workspace before generating.",
+    over_reviewed_cost:
+      "The current cost exceeds the reviewed amount. Review the updated estimate in the workspace.",
     // ADR-039 D3: the channel this plan is bound to has no scheduler arm, so a time on it would be
     // a promise the system does not keep. Nothing was scheduled and nothing fired.
     channel_not_schedulable:
@@ -631,6 +635,7 @@ export function AwaitingCardBody({
   // D10's ONE discriminator. `approvals.ts`'s `planKind` splits `plans.kind === "media"` into
   // reel/image on `mediaMode` alone, so a reel is unaffected here by construction.
   const imagePlan = item.kind === "image";
+  const nativeFilm = item.kind === "reel" && plan.mediaAudioMode === "native";
   // NOT `item.kind` — a refused reel's kind is `memo`, which is the whole reason it reached the
   // memo chrome. The refusal itself is the only thing on the row that still says "reel".
   const refused = plan.proposalRefusal != null;
@@ -702,6 +707,11 @@ export function AwaitingCardBody({
 
       {/* D10: the honest route, in place of a button whose only possible answer is `no_deck`. */}
       {imagePlan && <p style={{ ...muted, fontSize: "0.86rem" }}>{IMAGE_CANVAS_NOTE}</p>}
+      {nativeFilm && (
+        <p style={{ ...muted, fontSize: "0.86rem" }}>
+          Review this film's storyboard, sound and exact cost in the workspace before generating.
+        </p>
+      )}
       {refused && (
         <p style={{ ...muted, fontSize: "0.86rem" }} data-testid="approvals-proposal-refused">
           {REFUSED_PROPOSAL_NOTE}
@@ -709,7 +719,7 @@ export function AwaitingCardBody({
       )}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-        {!imagePlan && !refused && (
+        {!imagePlan && !nativeFilm && !refused && (
           <button type="button" style={primary} disabled={busy} onClick={onApprove}>
             {busy ? "Working…" : actionLabel(item.kind, plan)}
           </button>
@@ -720,13 +730,15 @@ export function AwaitingCardBody({
           </button>
         )}
         <Link href={threadHref} style={{ ...button, textDecoration: "none" }}>
-          {refused
-            ? "Try again in cockpit"
-            : item.kind === "calendar_event"
-              ? "Change time in cockpit"
-              : item.kind === "email"
-                ? "Revise in cockpit"
-                : "Edit in cockpit"}
+          {nativeFilm
+            ? "Review & generate in workspace"
+            : refused
+              ? "Try again in cockpit"
+              : item.kind === "calendar_event"
+                ? "Change time in cockpit"
+                : item.kind === "email"
+                  ? "Revise in cockpit"
+                  : "Edit in cockpit"}
         </Link>
         <button
           type="button"

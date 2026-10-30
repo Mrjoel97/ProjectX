@@ -14,6 +14,7 @@ export type ZernioPost = {
   source: "external" | "zernio";
   metrics: ZernioMetrics;
   updatedAt: string | null;
+  nativePostUrl?: string;
 };
 export type ZernioAccountReport = {
   accountId: string;
@@ -192,6 +193,7 @@ export async function readZernioReport(
           source: post.source,
           metrics: post.metrics,
           updatedAt: post.updatedAt,
+          ...(post.nativePostUrl ? { nativePostUrl: post.nativePostUrl } : {}),
         });
       }
     }

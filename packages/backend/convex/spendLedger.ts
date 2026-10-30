@@ -80,6 +80,7 @@ const movementArgs = {
   model: v.optional(v.string()),
   kind: v.optional(v.string()),
   evalBudgetId: v.optional(v.id("spendEvents")),
+  managedServiceRunId: v.optional(v.id("managedServiceRuns")),
   evalEnvelope: v.optional(
     v.object({
       tenantIds: v.array(v.string()),

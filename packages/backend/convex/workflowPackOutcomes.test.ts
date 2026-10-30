@@ -20,6 +20,7 @@ import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/comp
 // PRODUCTION `executePlan`, not a stub, so its components have to exist.
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+import { schedulingTest, withPausedScheduler } from "../test/pausedScheduler";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
@@ -85,7 +86,15 @@ function leaves(value: unknown, path = "$"): { path: string; value: unknown }[] 
  * ONE complete journey through the REAL terminals: a recommendation is shown, accepted, the pack
  * runs and stages a reply, the human approves it. Returns the tenant id the journey belongs to.
  */
-async function completeJourney(t: T, userId: string): Promise<{ planId: Id<"plans"> }> {
+const completeJourney = (t: T, userId: string): Promise<{ planId: Id<"plans"> }> =>
+  withPausedScheduler(() => completeJourneyBeforeDelivery(t, userId));
+
+// Await the real scripted pack and native human-approval terminals. Only the resulting queued
+// delivery callbacks are paused: delivery execution is not this outcome projection's assertion.
+async function completeJourneyBeforeDelivery(
+  t: T,
+  userId: string,
+): Promise<{ planId: Id<"plans"> }> {
   await t.run(async (ctx) => {
     await ctx.db.insert("skills", {
       name: "pack-customer-complaint",
@@ -298,7 +307,7 @@ describe("one complete journey produces non-zero, internally consistent counters
   // not by itself evidence a pack produced it.
   // MUTATION that must turn this RED: attribute on the newest pack event instead of on the
   // `plan_proposed` one in `recordPackPlanDecision`.
-  test("an executive plan on the same thread is credited to nobody", async () => {
+  schedulingTest("an executive plan on the same thread is credited to nobody", async () => {
     const t = harness();
     const userId = String(await t.run((ctx) => ctx.db.insert("users", {})));
     await t.run(async (ctx) => {

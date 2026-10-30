@@ -1,32 +1,32 @@
-import { appendAudit } from "./audit";
-import { sha256Bytes } from "@pikar/core/webRuntime";
-import type { WebDocument, WebNode } from "@pikar/contracts/webRuntime";
 import type {
   MerchantCapability,
   MerchantCheckoutAttempt,
   MerchantInventoryOutcome,
   NormalizedMerchantPaymentReceipt,
 } from "@pikar/contracts/tenantCommerce";
+import type { WebDocument, WebNode } from "@pikar/contracts/webRuntime";
+import {
+  consumeInventory,
+  type InventoryState,
+  releaseInventory,
+} from "@pikar/core/tenantInventory";
 import {
   admitMerchantCheckout,
   prepareMerchantCheckout,
   transitionMerchantPayment,
   validateMerchantPaymentReceipt,
 } from "@pikar/core/tenantMerchant";
-import {
-  consumeInventory,
-  releaseInventory,
-  type InventoryState,
-} from "@pikar/core/tenantInventory";
 import { hashOrderQuote } from "@pikar/core/tenantOrder";
+import { sha256Bytes } from "@pikar/core/webRuntime";
 import { makeFunctionReference } from "convex/server";
-import { v, type Infer } from "convex/values";
+import { type Infer, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalQuery } from "./_generated/server";
+import { appendAudit } from "./audit";
 import { tenantMutation, tenantQuery } from "./lib/functions";
-import { internalMutation, assertTenantWritable } from "./lib/tenantLifecycle";
 import { missingMerchantConfiguration } from "./lib/merchantProviderClient";
+import { assertTenantWritable, internalMutation } from "./lib/tenantLifecycle";
 
 const provider = v.union(v.literal("stripe"), v.literal("paypal"));
 type Db = QueryCtx | MutationCtx;

@@ -1,5 +1,5 @@
-import { hasUnsafeWebMarkup } from "./webCarouselRuntime";
 import type { WebDocument, WebNode } from "@pikar/contracts/webRuntime";
+import { hasUnsafeWebMarkup } from "./webCarouselRuntime";
 import { escapeWebText, sha256Bytes, validateWebDocument } from "./webRuntime";
 
 export const WEB_QUALITY_POLICY_VERSION = "web-quality-v1" as const;

@@ -6,8 +6,8 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import Link from "next/link";
 import { useCallback, useState } from "react";
-import { PreviewCanvas } from "./preview/PreviewCanvas";
 import { MerchantWorkspace } from "./MerchantWorkspace";
+import { PreviewCanvas } from "./preview/PreviewCanvas";
 
 type ProjectId = FunctionArgs<typeof api.webProjects.getProject>["projectId"];
 const button = {
@@ -95,12 +95,15 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
       (previewReadiness?.pin === previewPin && previewReadiness.ready));
   // The server binds readiness to this version's content, provider receipt and all page artifacts.
   // A loaded preview alone cannot qualify a generated design for approval or publication.
-  const providerReviewRequired = selected.requiresProviderReview === true || !!selected.providerReceipt;
+  const providerReviewRequired =
+    selected.requiresProviderReview === true || !!selected.providerReceipt;
   const providerReviewReady = !providerReviewRequired || selected.browserQualityReady === true;
   const reviewReady = sourceReady && providerReviewReady;
   const reviewNeedsRefinement = selected.browserReview?.status === "failed";
   const reviewJobFailed = selected.browserReviewJob?.state === "failed";
-  const reviewInProgress = selected.browserReviewJob?.state === "running" || selected.browserReviewJob?.state === "captured";
+  const reviewInProgress =
+    selected.browserReviewJob?.state === "running" ||
+    selected.browserReviewJob?.state === "captured";
   const firstPage = (selected.document as { pages: { slug: string }[] }).pages[0]?.slug;
   const publicUrl =
     project.publicHost && firstPage
@@ -152,8 +155,19 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
         onReadinessChange={onPreviewReadiness}
       />
       {providerReviewRequired && !providerReviewReady && (
-        <aside aria-label="Visual quality review" style={{ background: "var(--canvas)", padding: 16, borderRadius: 12 }}>
-          <h3>{reviewNeedsRefinement ? "Design needs refinement" : reviewJobFailed ? "Visual review could not finish" : reviewInProgress ? "Visual quality review in progress" : "Visual quality review pending"}</h3>
+        <aside
+          aria-label="Visual quality review"
+          style={{ background: "var(--canvas)", padding: 16, borderRadius: 12 }}
+        >
+          <h3>
+            {reviewNeedsRefinement
+              ? "Design needs refinement"
+              : reviewJobFailed
+                ? "Visual review could not finish"
+                : reviewInProgress
+                  ? "Visual quality review in progress"
+                  : "Visual quality review pending"}
+          </h3>
           <p role="status">
             {reviewNeedsRefinement
               ? "This version has not passed its visual checks. Pikar needs to resolve the findings before approval or publication."
@@ -165,20 +179,30 @@ export function SiteEditor({ projectId, version }: { projectId: string; version?
                   ? "Pikar is checking this version on desktop and mobile, including reduced motion. Approval and publication remain unavailable until review succeeds."
                   : "This version is waiting for desktop, mobile and reduced-motion checks. Approval and publication become available only when its saved design passes review."}
           </p>
-          {latest && reviewNeedsRefinement && selected.browserReviewJob?.state === "completed" &&
-            typeof selected.rendererVersion === "string" && selected.rendererVersion !== WEB_DESIGN_RENDERER_VERSION &&
-            session && Number.isSafeInteger(session.revision) && (
+          {latest &&
+            reviewNeedsRefinement &&
+            selected.browserReviewJob?.state === "completed" &&
+            typeof selected.rendererVersion === "string" &&
+            selected.rendererVersion !== WEB_DESIGN_RENDERER_VERSION &&
+            session &&
+            Number.isSafeInteger(session.revision) && (
               <button
                 type="button"
                 style={button}
                 disabled={busy || !sourceReady}
-                onClick={() => void run(() => refineLayout({
-                  projectId: id,
-                  expectedProjectRevision: project.revision,
-                  expectedSessionRevision: session.revision,
-                  expectedVersion: selected.version,
-                  expectedContentHash: selected.contentHash,
-                }), "A refined draft is ready for fresh visual checks. Open the newest draft above to follow its review.")}
+                onClick={() =>
+                  void run(
+                    () =>
+                      refineLayout({
+                        projectId: id,
+                        expectedProjectRevision: project.revision,
+                        expectedSessionRevision: session.revision,
+                        expectedVersion: selected.version,
+                        expectedContentHash: selected.contentHash,
+                      }),
+                    "A refined draft is ready for fresh visual checks. Open the newest draft above to follow its review.",
+                  )
+                }
               >
                 Refine layout
               </button>

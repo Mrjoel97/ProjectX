@@ -11,7 +11,9 @@ import {
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { Component, type CSSProperties, type ReactNode, useState } from "react";
+import { ManagedServicesPanel } from "../skills-workflows/ManagedServicesPanel";
 import { BufferMarketing } from "./BufferPanel";
+import { SocialConnections } from "./SocialPanel";
 import { ZernioMarketing } from "./ZernioPanel";
 
 const card: CSSProperties = {
@@ -66,11 +68,12 @@ export function ChannelsView({
     <section style={card}>
       <h2>Direct channel connections</h2>
       <p>
-        Buffer manages your selected social channels above. These rows describe separate direct
-        connections.
+        Manage Buffer channels under Publishing. These rows describe separate direct connections.
       </p>
       <div style={grid}>
-        {MARKETING_CHANNEL_CATALOG.map((channel) => {
+        {MARKETING_CHANNEL_CATALOG.filter(
+          (channel) => channel.id === "gmail" || channel.id === "linkedin",
+        ).map((channel) => {
           const state = marketingChannelState(channel.id, { connected, configured });
           return (
             <article key={channel.id} style={card}>
@@ -424,35 +427,163 @@ function CapturedLeads() {
     </section>
   );
 }
+const marketingTabs = [
+  {
+    id: "services",
+    label: "Services",
+    description: "Set up social marketing work, review progress and manage schedules.",
+  },
+  {
+    id: "publishing",
+    label: "Publishing",
+    description: "Review drafts and approve exactly what goes to your selected channels.",
+  },
+  {
+    id: "reports",
+    label: "Reports",
+    description: "Review engagement, source dates and the limits of your available insights.",
+  },
+  {
+    id: "leads",
+    label: "Leads & links",
+    description: "Track shared files and capture leads with clear consent.",
+  },
+  {
+    id: "accounts",
+    label: "Connections",
+    description: "Manage direct social access and other marketing channels.",
+  },
+] as const;
+type MarketingTab = (typeof marketingTabs)[number]["id"];
 export function MarketingView() {
+  const [section, setSection] = useState<MarketingTab>("services");
+  const [visited, setVisited] = useState<MarketingTab[]>(["services"]);
+  const select = (id: MarketingTab) => {
+    setSection(id);
+    setVisited((current) => (current.includes(id) ? current : [...current, id]));
+  };
   return (
-    <main style={{ display: "grid", gap: 24, minWidth: 0 }}>
+    <main
+      style={{
+        display: "grid",
+        gap: 24,
+        minWidth: 0,
+        maxWidth: "72rem",
+        margin: "0 auto",
+        padding: "clamp(1rem, 3vw, 2rem)",
+      }}
+    >
       <header>
-        <p className="caps-label">Marketing</p>
-        <h1>Build reach with a clear next step</h1>
-        <p>
-          Review channel availability, create tracked file links and record consent-aware leads.
-        </p>
-        <p>
-          Use Buffer for approved social posts and Zernio for Instagram and TikTok reports. Direct
-          social-network connections remain separate.
+        <h1 style={{ margin: "0 0 8px", fontSize: "1.75rem" }}>Marketing</h1>
+        <p style={{ margin: 0, color: "var(--ink-soft)" }}>
+          Plan your social work, review content and see what is working.
         </p>
       </header>
-      <SectionBoundary name="Buffer social marketing">
-        <BufferMarketing />
-      </SectionBoundary>
-      <SectionBoundary name="Zernio social reports">
-        <ZernioMarketing />
-      </SectionBoundary>
-      <SectionBoundary name="Channels">
-        <Channels />
-      </SectionBoundary>
-      <SectionBoundary name="Tracked links">
-        <TrackedLinks />
-      </SectionBoundary>
-      <SectionBoundary name="Captured leads">
-        <CapturedLeads />
-      </SectionBoundary>
+      <div
+        role="tablist"
+        aria-label="Marketing sections"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+          borderBottom: "1px solid var(--rule)",
+          paddingBottom: 12,
+        }}
+      >
+        {marketingTabs.map((tab, index) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            id={`marketing-${tab.id}-tab`}
+            aria-controls={`marketing-${tab.id}-panel`}
+            aria-selected={section === tab.id}
+            tabIndex={section === tab.id ? 0 : -1}
+            onClick={() => select(tab.id)}
+            onKeyDown={(event) => {
+              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              const next =
+                marketingTabs[
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? marketingTabs.length - 1
+                      : (index + (event.key === "ArrowRight" ? 1 : marketingTabs.length - 1)) %
+                        marketingTabs.length
+                ];
+              if (!next) return;
+              select(next.id);
+              event.currentTarget.parentElement
+                ?.querySelector<HTMLButtonElement>(`#marketing-${next.id}-tab`)
+                ?.focus();
+            }}
+            style={{
+              minHeight: 44,
+              padding: "10px 16px",
+              border: "1px solid var(--rule)",
+              borderRadius: 8,
+              background: section === tab.id ? "var(--canvas)" : "var(--card)",
+              color: "var(--ink)",
+              font: "inherit",
+              fontWeight: section === tab.id ? 700 : 400,
+              cursor: "pointer",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {marketingTabs.map((tab) => (
+        <section
+          key={tab.id}
+          role="tabpanel"
+          id={`marketing-${tab.id}-panel`}
+          aria-labelledby={`marketing-${tab.id}-tab`}
+          hidden={section !== tab.id}
+        >
+          {visited.includes(tab.id) && (
+            <div style={{ display: "grid", gap: 20, minWidth: 0 }}>
+              <p style={{ margin: 0, color: "var(--ink-soft)" }}>{tab.description}</p>
+              {tab.id === "services" && (
+                <SectionBoundary name="Social marketing services">
+                  <ManagedServicesPanel />
+                </SectionBoundary>
+              )}
+              {tab.id === "publishing" && (
+                <SectionBoundary name="Publishing">
+                  <BufferMarketing />
+                </SectionBoundary>
+              )}
+              {tab.id === "reports" && (
+                <SectionBoundary name="Reports">
+                  <ZernioMarketing />
+                </SectionBoundary>
+              )}
+              {tab.id === "leads" && (
+                <>
+                  <SectionBoundary name="Tracked links">
+                    <TrackedLinks />
+                  </SectionBoundary>
+                  <SectionBoundary name="Captured leads">
+                    <CapturedLeads />
+                  </SectionBoundary>
+                </>
+              )}
+              {tab.id === "accounts" && (
+                <>
+                  <SectionBoundary name="Direct social accounts">
+                    <SocialConnections />
+                  </SectionBoundary>
+                  <SectionBoundary name="Other channels">
+                    <Channels />
+                  </SectionBoundary>
+                </>
+              )}
+            </div>
+          )}
+        </section>
+      ))}
     </main>
   );
 }

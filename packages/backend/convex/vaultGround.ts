@@ -259,6 +259,7 @@ export const vaultGroundHydrated = internalAction({
     driveOwned: (boolean | null)[];
     chunks: string[];
     spine: string | null;
+    brandSpine: string | null;
   }> => {
     const { docIds, matchedByDoc } = await runVaultGround(ctx, tenantId, query, evalBudgetId);
 
@@ -353,6 +354,7 @@ export const vaultGroundHydrated = internalAction({
       truncated,
       driveOwned,
       chunks,
+      brandSpine: await ctx.runQuery(internal.brandKits.spineForTenant, { tenantId }),
       spine,
     };
   },

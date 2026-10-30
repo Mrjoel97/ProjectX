@@ -6,10 +6,10 @@ import {
   generateStitchDesignEvidence,
   preflightStitchDesign,
   recoverStitchDesignEvidence,
-  stitchConfigurationSummary,
   STITCH_MCP_ENDPOINT,
   type StitchDesignRequest,
   type StitchDesignServices,
+  stitchConfigurationSummary,
 } from "./stitchDesignClient";
 
 function png() {

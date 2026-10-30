@@ -82,6 +82,9 @@ export const OR_DEFAULT_MODEL = "or/openai/gpt-4o-mini";
 export const OR_CHEAP_MODEL = "or/openai/gpt-4.1-nano";
 export const OR_RESEARCH_MODEL = "or/openai/gpt-5.6-luna";
 export const OR_RESEARCH_FALLBACK_MODEL = "or/openai/gpt-4.1-mini";
+// Staged comparison candidates only: no production lane selects these constants yet.
+export const ROUTINE_CANDIDATE_MODEL = "or/deepseek/deepseek-v4.1-flash";
+export const COMPLEX_CANDIDATE_MODEL = "or/moonshotai/kimi-k3.1-pro";
 // 27-10. The WORKFLOW-PACK lane. Same ids as the research pair today, and SEPARATE constants for
 // exactly the reason RESEARCH_MODEL states about DEFAULT_MODEL: a later change to one lane must not
 // silently move another. See PACK_MODEL below for the measurement that bought this lane.
@@ -379,8 +382,10 @@ export const pageReadFeeUsd = (): number => WEB_PAGE_READ_USD_TAVILY;
 // into two and SILENTLY DROP EVERY OPENAI ROW — leaving the fallback ids unpriced and billing $0,
 // the precise failure this file's other comments exist to prevent. One row per real model id.
 export const PRICING: Record<string, { inPerMTok: number; outPerMTok: number }> = {
-  // Explicit comparison support only; DEFAULT_MODEL and ordinary routing remain unchanged.
-  "or/moonshotai/kimi-k3.1-pro": { inPerMTok: 2, outPerMTok: 10 },
+  // Conservative route ceilings, also enforced on the OpenRouter request. Cache discounts
+  // do not reduce admission estimates; authoritative usage still settles the real charge.
+  [ROUTINE_CANDIDATE_MODEL]: { inPerMTok: 0.3, outPerMTok: 1.2 },
+  [COMPLEX_CANDIDATE_MODEL]: { inPerMTok: 2, outPerMTok: 10 },
   // OpenAI — no longer the default, still priced so a revert or a fallback cannot bill $0.
   [OPENAI_DEFAULT_MODEL]: { inPerMTok: 0.15, outPerMTok: 0.6 },
   [OPENAI_CHEAP_MODEL]: { inPerMTok: 0.1, outPerMTok: 0.4 },

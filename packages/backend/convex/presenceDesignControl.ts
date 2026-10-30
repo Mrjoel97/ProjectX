@@ -217,7 +217,8 @@ export const claimStitchRecovery = internalMutation({
       last.reconciliationRequired !== true ||
       last.phase !== "claimed" ||
       projects.length !== 1 ||
-      !projectName || !/^projects\/[A-Za-z0-9_-]{1,96}$/.test(projectName) ||
+      !projectName ||
+      !/^projects\/[A-Za-z0-9_-]{1,96}$/.test(projectName) ||
       generationStarts.length !== 1
     )
       throw Error("PRESENCE_RECOVERY_UNAVAILABLE");

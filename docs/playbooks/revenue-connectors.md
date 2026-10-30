@@ -1,3 +1,5 @@
+> Implementation update: 2026-10-20 — The shared credential envelope accepts x/meta/tiktok/youtube with the existing tenant/provider/connection/environment AES-GCM binding. Revenue provider gates and lanes remain separate. Offline/live validation status is tracked in social-connections.md.
+
 > Last verified: 2026-10-19 — the credential envelope additionally accepts provider=zernio with the same tenant/connection/environment AES-GCM binding. Revenue provider lanes remain unchanged; Zernio uses standalone tables and GET-only reporting (ADR-060).
 
 > Last verified: 2026-10-19 — The credential-envelope scope additionally accepts the standalone Buffer provider for AES-GCM tenant/connection/provider binding. The revenue Provider union, provider gates, entities and four connector lanes remain unchanged. Buffer uses separate tables and OAuth/MCP lifecycle; see buffer.md and ADR-058.

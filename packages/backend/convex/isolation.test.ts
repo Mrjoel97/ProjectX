@@ -24,6 +24,14 @@ const sources = import.meta.glob("./**/*.ts", {
   eager: true,
 }) as Record<string, string>;
 
+test("unused merchant global indexes cannot acquire an unreviewed reader", () => {
+  const readers = Object.entries(sources).filter(([path]) => !path.endsWith(".test.ts"));
+  expect(readers.length).toBeGreaterThan(100);
+  for (const [path, source] of readers) {
+    expect(source, path).not.toMatch(/\.withIndex\(\s*["'](?:by_updated|by_provider_account)["']/);
+  }
+});
+
 const RUNTIME_TABLES = Object.keys(schema.tables).sort();
 
 /**
@@ -162,10 +170,34 @@ function indexesOf(table: string): { indexDescriptor: string; fields: string[] }
 const NON_TENANT_LEADING: Record<string, string> = {
   "webProjects.by_host_slug":
     "public route resolves host/slug; only published exact versions pass tenant lifecycle checks",
+  "tenantMerchantAccounts.by_updated":
+    "reserved index with no consumers; zero-consumer assertion below prevents unreviewed global reads",
+  "tenantMerchantAccounts.by_provider_account":
+    "reserved index with no consumers; zero-consumer assertion below prevents unreviewed global reads",
+  "tenantMerchantAccounts.by_status_provider_updated":
+    "internal bounded capability refresh of existing merchant accounts; tenant-facing readers use by_tenant",
+  "tenantMerchantEvents.by_provider_event":
+    "internal provider event deduplication after payment/tenant binding; rejects cross-account replay",
+  "tenantMerchantPayments.by_provider_order":
+    "internal provider webhook/payment lookup; verified provider/account receipt binds subsequent tenant updates",
+  "tenantMerchantPayments.by_buyer_purge":
+    "fixed privacy retention deletes only expired buyer data in bounded batches",
+  "tenantMerchantOperations.by_expiry":
+    "fixed privacy retention expires bounded digital entitlement grants; no customer work starts",
   "webProjects.by_slug":
     "global public slug allocation, internal creation helper; tenant readers use by_tenant",
   "webSubmissions.by_expires_at":
     "fixed system privacy retention sweep; deletes only expired bounded batches",
+  "socialWebhookReceipts.by_provider":
+    "global app delivery health, last timestamp and payload hash only; contains no tenant data",
+  "socialOAuthStates.by_state_hash":
+    "one-use callback and authenticated receipt lookup; provider and tenant checked before activation",
+  "socialOAuthStates.by_expiry": "bounded internal retention of expired OAuth material only",
+  "socialConnections.by_provider":
+    "internal YouTube count-only retention impact and gated bounded cleanup across tenants; tenant-facing reads use by_tenant",
+  "socialPosts.by_provider":
+    "internal YouTube count-only retention impact and gated bounded cleanup across tenants; customer content and exports remain tenant-bound",
+
   "zernioConnections.by_ticket":
     "one-use HTTP credential intake; the authenticated beginConnect mutation binds tenant and profile before minting the capability",
   "zernioConnections.by_report_due":
@@ -242,9 +274,99 @@ const NON_TENANT_LEADING: Record<string, string> = {
   // `billingRollup.tick` and `billingRollup.periodForPost`, both internal and both reached only
   // from the cron chain; there is no tenant-facing caller and no argument a caller could supply.
   // The tenant-facing surface (`billing.invoices`) uses `by_tenant`, which does lead with tenantId.
+  // Internal watchdog maintenance has no requesting tenant. Row-owned tenantIds
+  // still scope every recovery lookup/write; no customer query uses these ranges.
+  "mediaJobs.by_watchdog_status_updatedAt": "internal stale submitted-job recovery across tenants",
+  "plans.by_watchdog_renderStatus": "internal pending/rendering-plan recovery across tenants",
+  "plans.by_watchdog_captionStatus": "internal transcribing-plan recovery across tenants",
+  "plans.by_watchdog_status_kind_createdAt":
+    "internal stale collecting-memo recovery across tenants",
   "billingPeriods.by_status_dueAt":
     "deployment-wide claim scan from the cron; no tenant-facing caller",
 };
+
+test("social provider-leading indexes have only the two reviewed internal retention consumers", () => {
+  const source = sources["./social.ts"] ?? "";
+  expect(source.length).toBeGreaterThan(500);
+  const declarations = /export const (\w+) = (\w+)\(/g;
+  const sites = [...source.matchAll(/\.withIndex\("by_provider"/g)];
+  expect(sites).toHaveLength(4);
+  const consumers = sites.map((site) => {
+    const enclosing = [...source.slice(0, site.index).matchAll(declarations)].pop();
+    return { name: enclosing?.[1], builder: enclosing?.[2] };
+  });
+  expect(consumers).toEqual([
+    { name: "youtubeMetadataCleanupImpact", builder: "internalQuery" },
+    { name: "youtubeMetadataCleanupImpact", builder: "internalQuery" },
+    { name: "cleanupYouTubeMetadata", builder: "internalMutation" },
+    { name: "cleanupYouTubeMetadata", builder: "internalMutation" },
+  ]);
+  const impact = source.slice(
+    source.indexOf("export const youtubeMetadataCleanupImpact"),
+    source.indexOf("export const cleanupYouTubeMetadata"),
+  );
+  expect(impact).toMatch(/paginate\(\{ numItems: 50/);
+  expect(impact).toMatch(/inspected,/);
+  expect(impact).toMatch(/legacy,/);
+  expect(impact).toMatch(/stale,/);
+  expect(impact).not.toMatch(/return\s+(?:row|post|page)\b/);
+  expect(impact).not.toMatch(/ciphertextB64|ivB64|accountName|assetName|providerPostId/);
+  const cleanup = source.slice(
+    source.indexOf("export const cleanupYouTubeMetadata"),
+    source.indexOf("export const cleanup ="),
+  );
+  expect(cleanup).toContain(
+    'if (process.env.SOCIAL_YOUTUBE_METADATA_CLEANUP_ENABLED !== "true") return;',
+  );
+  expect(cleanup.match(/paginate\(\{ numItems: 50/g)).toHaveLength(2);
+  expect(cleanup).toContain('q.eq("tenantId", post.tenantId).eq("provider", "youtube")');
+  expect(cleanup).toContain("youtubePostMetadataCleared()");
+});
+
+test("watchdog global indexes have only reviewed internal migration consumers", () => {
+  const consumers = [];
+  for (const [path, source] of Object.entries(sources)) {
+    if (path.endsWith(".test.ts")) continue;
+    for (const site of source.matchAll(/\.withIndex\("(by_watchdog_[^"]+)"/g)) {
+      const declaration = [
+        ...source.slice(0, site.index).matchAll(/export const (\w+) = (\w+)\.define\(/g),
+      ].pop();
+      consumers.push({ path, index: site[1], name: declaration?.[1], builder: declaration?.[2] });
+    }
+  }
+  expect(consumers).toEqual([
+    {
+      path: "./reliabilitySweep.ts",
+      index: "by_watchdog_status_updatedAt",
+      name: "sweepSubmittedMediaJobs",
+      builder: "indexedMigrations",
+    },
+    {
+      path: "./reliabilitySweep.ts",
+      index: "by_watchdog_renderStatus",
+      name: "sweepPendingRenderPlans",
+      builder: "indexedMigrations",
+    },
+    {
+      path: "./reliabilitySweep.ts",
+      index: "by_watchdog_renderStatus",
+      name: "sweepRenderingPlans",
+      builder: "indexedMigrations",
+    },
+    {
+      path: "./reliabilitySweep.ts",
+      index: "by_watchdog_captionStatus",
+      name: "sweepTranscribingPlans",
+      builder: "indexedMigrations",
+    },
+    {
+      path: "./reliabilitySweep.ts",
+      index: "by_watchdog_status_kind_createdAt",
+      name: "sweepCollectingMemoPlans",
+      builder: "indexedMigrations",
+    },
+  ]);
+});
 
 describe("every tenant-owned index leads with tenantId, or names why it does not", () => {
   test("the runtime index accessor is alive, so the scan cannot pass vacuously", () => {

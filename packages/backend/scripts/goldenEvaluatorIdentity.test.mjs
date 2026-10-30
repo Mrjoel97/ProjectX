@@ -111,3 +111,61 @@ for (const relativePath of [
     assert.equal(renderCorpus(root), verticalBefore);
   });
 }
+test("routing and shared CLI edits retire both evaluator identities without changing corpus bytes", (t) => {
+  const dependencies = [
+    "packages/backend/convex/cockpitCapabilities.ts",
+    "packages/backend/scripts/smokeRun.mjs",
+    "packages/backend/convex/managedServices.ts",
+    "packages/backend/convex/managedServiceRuns.ts",
+    "packages/backend/convex/managedServiceExecution.ts",
+    "packages/backend/convex/managedServiceTools.ts",
+    "packages/backend/convex/lib/managedServiceBudget.ts",
+    "packages/core/src/managedServices.ts",
+    "packages/core/src/managedServicePolicy.ts",
+    "packages/core/src/serviceOutcomes.ts",
+    "packages/core/src/socialServiceOutcome.ts",
+    "packages/backend/convex/serviceOutcomes.ts",
+    "packages/backend/convex/blueprint.ts",
+    "packages/core/src/blueprint.ts",
+    "packages/backend/convex/managedServiceRecurrence.ts",
+    "packages/backend/convex/serviceConversations.ts",
+    "packages/backend/convex/foundation.ts",
+    "packages/backend/convex/lib/foundationValidators.ts",
+    "packages/backend/convex/onboarding.ts",
+    "packages/core/src/foundation.ts",
+    "packages/core/src/businessProfile.ts",
+    "packages/core/src/serviceKnowledge.ts",
+    "packages/backend/convex/managedServiceRecurrenceExecution.ts",
+    "packages/core/src/routineSchedule.ts",
+  ];
+  for (const relativePath of dependencies) {
+    assert.ok(EVALUATOR_FILES.includes(relativePath));
+    assert.ok(VERTICAL_EVALUATOR_FILES.includes(relativePath));
+  }
+  const root = fixtureRoot(t);
+  const fixtureBytes = CORPUS_IDS.map((id) => {
+    const path = `packages/backend/scripts/vertical-eval-cases/${id}.json`;
+    const bytes = readFileSync(new URL(`./vertical-eval-cases/${id}.json`, import.meta.url));
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), bytes);
+    return { path, bytes };
+  });
+  const goldenBefore = computeEvaluatorRevision(root);
+  const verticalBefore = renderCorpus(root);
+  for (const relativePath of dependencies) {
+    const sourcePath = join(root, relativePath);
+    const original = readFileSync(sourcePath, "utf8");
+    writeFileSync(sourcePath, original.replace("value = 1", "value = 2"));
+    assert.notEqual(computeEvaluatorRevision(root), goldenBefore, relativePath);
+    const verticalAfter = renderCorpus(root);
+    assert.notEqual(verticalAfter, verticalBefore, relativePath);
+    const withoutRevision = (value) =>
+      value.replace(/(VERTICAL_EVALUATOR_REVISION =\n {2}")[a-f0-9]{64}(";)/, "$1$2");
+    assert.equal(withoutRevision(verticalAfter), withoutRevision(verticalBefore));
+    for (const { path, bytes } of fixtureBytes)
+      assert.deepEqual(readFileSync(join(root, path)), bytes);
+    writeFileSync(sourcePath, original);
+    assert.equal(computeEvaluatorRevision(root), goldenBefore);
+    assert.equal(renderCorpus(root), verticalBefore);
+  }
+});

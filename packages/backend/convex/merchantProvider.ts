@@ -6,7 +6,6 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { internalQuery } from "./_generated/server";
 import { tenantAction } from "./lib/functions";
-import { internalAction } from "./lib/tenantLifecycle";
 import {
   makeMerchantCapability,
   merchantClient,
@@ -18,6 +17,7 @@ import {
   stripePaymentReceipt,
   wire,
 } from "./lib/merchantProviderClient";
+import { internalAction } from "./lib/tenantLifecycle";
 
 const provider = v.union(v.literal("stripe"), v.literal("paypal"));
 type Context = {
@@ -277,7 +277,7 @@ export async function startMerchantCheckout(
   orderId: Id<"tenantOrders">,
   name: MerchantProvider,
 ) {
-  let context = (await ctx.runQuery(queryRef("checkoutContext"), {
+  const context = (await ctx.runQuery(queryRef("checkoutContext"), {
     tenantId,
     orderId,
     provider: name,
@@ -537,6 +537,7 @@ export function verifiedBuyerDetails(
     result.buyerEmail = email;
   if (!physical) return result;
   const text = (x: unknown) =>
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: Reject control characters at the untrusted input boundary.
     typeof x === "string" && x.trim().length > 0 && x.length <= 200 && !/[\u0000-\u001f]/.test(x)
       ? x
       : undefined;

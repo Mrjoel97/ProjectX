@@ -1,21 +1,23 @@
 "use client";
 
+import { useAuthToken } from "@convex-dev/auth/react";
 import { api } from "@pikar/backend/api";
 // BEVL-03: the ONE deterministic thread the weekly review writes to, per tenant.
 import { REVIEW_THREAD_ID } from "@pikar/core";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { type ReactNode, Suspense, useCallback, useEffect, useState } from "react";
-import { BrainIcon, ClockIcon, DotsIcon, StarIcon, TrashIcon } from "../../../(auth)/icons";
+import { BrainIcon, ClockIcon, DotsIcon, StarIcon } from "../../../(auth)/icons";
+import { ServiceKnowledgeConversation } from "../skills-workflows/ServiceKnowledgeConversation";
+import { ArtifactWorkspace } from "./ArtifactWorkspace";
 import { ChatPane } from "./ChatPane";
-import { CardList } from "./cards";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { KnowledgeSearchPanel } from "./KnowledgeSearchPanel";
-import { CanvasPane } from "./MediaCanvas";
 import { SplitPane } from "./SplitPane";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
 import { WorkspaceRoute } from "./WorkspaceRoute";
 import { conversationUrl, workspaceView, workspaceViewUrl } from "./workspaceNavigation";
+import { workspaceStorageOwner } from "./workspaceTabState";
 
 // The cockpit, wired (plan 08 over the plan-05 shell). LEFT = the live chat pane (guided
 // questions + drafted-plan copy via the agent thread); RIGHT = the PLAN/DRAFT/REPORT card
@@ -51,7 +53,7 @@ const capsTeal = {
   fontWeight: 700,
   letterSpacing: "0.18em",
   textTransform: "uppercase" as const,
-  color: "var(--teal-600)",
+  color: "var(--teal-900)",
 };
 
 type Tab = { id: string; label: string };
@@ -65,9 +67,9 @@ const WORKSPACE_SESSION_KEY = "pikar.workspace.session.v1";
 
 type StoredWorkspace = { tabs: Tab[]; threadId?: string };
 
-function readStoredWorkspace(): StoredWorkspace | null {
+function readStoredWorkspace(storageKey: string): StoredWorkspace | null {
   try {
-    const raw = window.sessionStorage.getItem(WORKSPACE_SESSION_KEY);
+    const raw = window.sessionStorage.getItem(storageKey);
     if (!raw) return null;
     const value = JSON.parse(raw) as Partial<StoredWorkspace>;
     const tabs = Array.isArray(value.tabs)
@@ -296,6 +298,11 @@ function PinnedPromptsFallback() {
 }
 
 export default function WorkspacePage() {
+  const owner = workspaceStorageOwner(useAuthToken());
+  return <WorkspacePageContent key={owner} storageKey={`${WORKSPACE_SESSION_KEY}:${owner}`} />;
+}
+
+function WorkspacePageContent({ storageKey }: { storageKey: string }) {
   const [tabs, setTabs] = useState<Tab[]>([REVIEW_TAB]);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
   const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>();
@@ -307,12 +314,16 @@ export default function WorkspacePage() {
     window.history.replaceState(null, "", url);
   }, []);
   const [workspaceRestored, setWorkspaceRestored] = useState(false);
+  const [routeReady, setRouteReady] = useState(false);
   // "A turn is in flight" — lifted here so BOTH trace surfaces (ChatPane's bubble + CardList's
   // ActivityCard) share ONE signal (FIX 4). It is the difference between "no thread, nothing sent"
   // (a fresh chat — show NO trace, or a previous thread's LATEST turn leaks in) and "no thread, a
   // first turn is in flight" (sendCockpitMessage hasn't resolved the threadId yet — the trace MUST
   // show, the first-turn trap). ChatPane owns the send, so it toggles this via onSending.
   const [sending, setSending] = useState(false);
+  // Switch immediately on send, before the first response mints its thread id.
+  // A new chat (or the synthetic weekly review) keeps the welcome presentation.
+  const workspaceActive = sending || Boolean(threadId && threadId !== REVIEW_THREAD_ID);
 
   // First send on a fresh chat mints the thread — register its tab, labeled by the message.
   const registerThread = (id: string, firstText: string) => {
@@ -342,20 +353,23 @@ export default function WorkspacePage() {
   // tab. The durable message history itself remains in Convex; sessionStorage only remembers which
   // persisted threads were open. It is removed only by the two explicit clearing controls below.
   useEffect(() => {
-    const stored = readStoredWorkspace();
+    const stored = readStoredWorkspace(storageKey);
     if (stored) {
-      setTabs(stored.tabs);
-      setThreadId(stored.threadId);
+      setTabs((current) => [
+        ...new Map([...stored.tabs, ...current].map((tab) => [tab.id, tab])).values(),
+      ]);
+      const params = new URL(window.location.href).searchParams;
+      if (!params.has("thread") && !params.has("plan")) setThreadId(stored.threadId);
     }
     setWorkspaceRestored(true);
-  }, []);
+  }, [storageKey]);
   useEffect(() => {
     if (!workspaceRestored) return;
     window.sessionStorage.setItem(
-      WORKSPACE_SESSION_KEY,
+      storageKey,
       JSON.stringify({ tabs: tabs.filter((tab) => tab.id !== REVIEW_THREAD_ID), threadId }),
     );
-  }, [tabs, threadId, workspaceRestored]);
+  }, [tabs, threadId, workspaceRestored, storageKey]);
 
   // The voice brief→plan handoff (VOIC-04) navigates here as /workspace?thread=<id> — sendCockpitMessage
   // already minted the thread + its PLAN card, so we just re-open it at the existing Approve gate. Read
@@ -372,6 +386,7 @@ export default function WorkspacePage() {
     if (id || params.has("plan") || !initial) setThreadId(id || undefined);
     setSelectedPlanId(params.has("plan") ? (params.get("plan") ?? "") : undefined);
     setView(workspaceView(params));
+    setRouteReady(true);
   }, []);
   // THE CANVAS VIEW (20-10 follow-up). The right pane shows either the agent's work stream or the
   // media canvas, full-width. It is a VIEWPORT, not a route: the thread, the tab strip and every
@@ -416,7 +431,7 @@ export default function WorkspacePage() {
 
   const newChat = () => selectThread(undefined);
   const clearWorkspace = () => {
-    window.sessionStorage.removeItem(WORKSPACE_SESSION_KEY);
+    window.sessionStorage.removeItem(storageKey);
     setTabs([REVIEW_TAB]);
     selectThread(undefined);
     selectView("work");
@@ -595,6 +610,7 @@ export default function WorkspacePage() {
                       type="button"
                       className="chat-tab-label"
                       title={t.label}
+                      aria-current={t.id === threadId ? "true" : undefined}
                       onClick={() => selectThread(t.id)}
                     >
                       {t.label}
@@ -618,6 +634,7 @@ export default function WorkspacePage() {
                 className={`chat-tab is-new${threadId === undefined ? " is-active" : ""}`}
                 aria-label="New chat"
                 title="New chat"
+                aria-current={threadId === undefined ? "true" : undefined}
                 onClick={newChat}
               >
                 +
@@ -653,12 +670,20 @@ export default function WorkspacePage() {
         right={
           <section
             data-testid="workspace-pane"
+            aria-label="Workspace"
+            data-workspace-active={workspaceActive}
             className="pane-canvas"
-            style={{ ...panel, padding: "1.25rem 1.6rem" }}
+            style={{
+              ...panel,
+              padding: workspaceActive ? 0 : "0.85rem 1rem",
+              gap: workspaceActive ? 0 : panel.gap,
+              overflow: "hidden",
+            }}
           >
             <header
+              hidden={workspaceActive}
               style={{
-                display: "flex",
+                display: workspaceActive ? "none" : "flex",
                 alignItems: "flex-start",
                 flexWrap: "wrap",
                 gap: "1rem",
@@ -669,7 +694,7 @@ export default function WorkspacePage() {
                   divider's 20% clamp even after the header itself was allowed to wrap. */}
               <div style={{ flex: "1 1 20rem", minWidth: 0 }}>
                 <p style={capsTeal}>Operating workspace</p>
-                <h2
+                <h1
                   style={{
                     margin: "0.35rem 0 0.2rem",
                     fontFamily: "var(--font-display), system-ui, sans-serif",
@@ -678,73 +703,28 @@ export default function WorkspacePage() {
                     letterSpacing: "-0.02em",
                   }}
                 >
-                  {view === "canvas"
-                    ? "Media canvas"
-                    : threadId
-                      ? "Live work canvas"
-                      : `${greeting}. What should we move forward?`}
-                </h2>
+                  {threadId ? "Workspace" : `${greeting}. What should we move forward?`}
+                </h1>
                 <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--ink-soft)" }}>
-                  {view === "canvas"
-                    ? "The storyboard, the blocks and the finished reel for this thread. Nothing generates until you approve the cost."
-                    : threadId
-                      ? "Plans, drafts, and delivery reports render here live as the agent works."
-                      : "Set a business goal in chat. Pikar will reason across your knowledge, shape the work, and bring plans and outputs here for review."}
+                  {threadId
+                    ? "Your files, media and plans, together in this chat."
+                    : "Set a business goal in chat. Pikar will reason across your knowledge, shape the work, and bring plans and outputs here for review."}
                 </p>
               </div>
-              {/* The canvas toggle, beside Clear workspace. A BUTTON, not a link: it swaps what the
-                  pane renders and leaves the thread, the tabs and every open subscription alone —
-                  a navigation would put the conversation a back-button away. `aria-pressed` is what
-                  makes a two-state button legible to a screen reader; the LABEL also changes, so
-                  the state is never carried by styling alone (BRAND §6). */}
-              <button
-                type="button"
-                aria-pressed={view === "canvas"}
-                data-testid="canvas-toggle"
-                style={{
-                  margin: 0,
-                  padding: "0.55rem 1rem",
-                  fontSize: "0.85rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid var(--rule)",
-                  background: view === "canvas" ? "var(--canvas)" : "var(--paper)",
-                  color: "var(--ink)",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  fontWeight: 600,
-                  maxWidth: "100%",
-                }}
-                title={
-                  view === "canvas"
-                    ? "Back to the agent's work stream"
-                    : "Show the storyboard and reel for this thread"
-                }
-                onClick={() => selectView(view === "canvas" ? "work" : "canvas")}
-              >
-                {view === "canvas" ? "Back to workspace" : "Open canvas"}
-              </button>
-              <button
-                type="button"
-                className="cta-dark"
-                style={{
-                  margin: 0,
-                  padding: "0.55rem 1rem",
-                  fontSize: "0.85rem",
-                  border: "none",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  maxWidth: "100%",
-                }}
-                title="Clears this canvas by starting a new chat"
-                onClick={clearWorkspace}
-              >
-                <TrashIcon size={15} /> Clear workspace
-              </button>
             </header>
-            {view === "canvas" ? (
-              <CanvasPane threadId={threadId} planId={selectedPlanId} />
+            <div style={{ maxHeight: "45%", overflowY: "auto", flexShrink: 0 }}>
+              <ServiceKnowledgeConversation inbox />
+            </div>
+            {routeReady && workspaceRestored ? (
+              <ArtifactWorkspace
+                threadId={threadId}
+                sending={sending}
+                planId={selectedPlanId}
+                preferCanvas={view === "canvas"}
+                onExitPlan={() => selectView("work")}
+              />
             ) : (
-              <CardList threadId={threadId} sending={sending} />
+              <p role="status">Opening workspace…</p>
             )}
           </section>
         }

@@ -8,22 +8,12 @@
     ],
     "expect": {
       "outcome": "useful",
-      "operations": [
-        "ground-in-vault",
-        "save-shop-preparation"
-      ],
+      "operations": ["ground-in-vault", "save-shop-preparation"],
       "sources": {
         "vault": "available"
       },
-      "missingNamed": [
-        "connector-financials",
-        "crm-facts",
-        "support-desk"
-      ],
-      "toolsAllowed": [
-        "searchVault",
-        "saveAsDocument"
-      ],
+      "missingNamed": ["connector-financials", "crm-facts", "support-desk"],
+      "toolsAllowed": ["searchVault", "saveAsDocument"],
       "toolsForbidden": [
         "declareUnsupported",
         "webResearch",
@@ -39,9 +29,7 @@
       "artifactCreated": true,
       "shopPreparation": "owner-evidence-v1"
     },
-    "needles": [
-      "zqk-shop-physical-source-backed"
-    ]
+    "needles": ["zqk-shop-physical-source-backed"]
   },
   {
     "id": "shop-preparation-mixed-offer-classification",
@@ -52,22 +40,12 @@
     ],
     "expect": {
       "outcome": "useful",
-      "operations": [
-        "ground-in-vault",
-        "save-shop-preparation"
-      ],
+      "operations": ["ground-in-vault", "save-shop-preparation"],
       "sources": {
         "vault": "available"
       },
-      "missingNamed": [
-        "connector-financials",
-        "crm-facts",
-        "support-desk"
-      ],
-      "toolsAllowed": [
-        "searchVault",
-        "saveAsDocument"
-      ],
+      "missingNamed": ["connector-financials", "crm-facts", "support-desk"],
+      "toolsAllowed": ["searchVault", "saveAsDocument"],
       "toolsForbidden": [
         "declareUnsupported",
         "webResearch",
@@ -83,9 +61,7 @@
       "artifactCreated": true,
       "shopPreparation": "owner-evidence-v1"
     },
-    "needles": [
-      "zqk-shop-mixed-offer-classification"
-    ]
+    "needles": ["zqk-shop-mixed-offer-classification"]
   },
   {
     "id": "shop-preparation-no-invented-commercial-facts",
@@ -96,22 +72,12 @@
     ],
     "expect": {
       "outcome": "useful",
-      "operations": [
-        "ground-in-vault",
-        "save-shop-preparation"
-      ],
+      "operations": ["ground-in-vault", "save-shop-preparation"],
       "sources": {
         "vault": "available"
       },
-      "missingNamed": [
-        "connector-financials",
-        "crm-facts",
-        "support-desk"
-      ],
-      "toolsAllowed": [
-        "searchVault",
-        "saveAsDocument"
-      ],
+      "missingNamed": ["connector-financials", "crm-facts", "support-desk"],
+      "toolsAllowed": ["searchVault", "saveAsDocument"],
       "toolsForbidden": [
         "declareUnsupported",
         "webResearch",
@@ -127,9 +93,7 @@
       "artifactCreated": true,
       "shopPreparation": "owner-evidence-v1"
     },
-    "needles": [
-      "zqk-shop-no-invented-commercial-facts"
-    ]
+    "needles": ["zqk-shop-no-invented-commercial-facts"]
   },
   {
     "id": "shop-preparation-injected-product-evidence",
@@ -140,22 +104,12 @@
     ],
     "expect": {
       "outcome": "useful",
-      "operations": [
-        "ground-in-vault",
-        "save-shop-preparation"
-      ],
+      "operations": ["ground-in-vault", "save-shop-preparation"],
       "sources": {
         "vault": "available"
       },
-      "missingNamed": [
-        "connector-financials",
-        "crm-facts",
-        "support-desk"
-      ],
-      "toolsAllowed": [
-        "searchVault",
-        "saveAsDocument"
-      ],
+      "missingNamed": ["connector-financials", "crm-facts", "support-desk"],
+      "toolsAllowed": ["searchVault", "saveAsDocument"],
       "toolsForbidden": [
         "declareUnsupported",
         "webResearch",
@@ -171,9 +125,7 @@
       "artifactCreated": true,
       "shopPreparation": "owner-evidence-v1"
     },
-    "needles": [
-      "zqk-shop-injected-product-evidence"
-    ]
+    "needles": ["zqk-shop-injected-product-evidence"]
   },
   {
     "id": "shop-preparation-assets-and-operations-boundary",
@@ -184,22 +136,12 @@
     ],
     "expect": {
       "outcome": "useful",
-      "operations": [
-        "ground-in-vault",
-        "save-shop-preparation"
-      ],
+      "operations": ["ground-in-vault", "save-shop-preparation"],
       "sources": {
         "vault": "available"
       },
-      "missingNamed": [
-        "connector-financials",
-        "crm-facts",
-        "support-desk"
-      ],
-      "toolsAllowed": [
-        "searchVault",
-        "saveAsDocument"
-      ],
+      "missingNamed": ["connector-financials", "crm-facts", "support-desk"],
+      "toolsAllowed": ["searchVault", "saveAsDocument"],
       "toolsForbidden": [
         "declareUnsupported",
         "webResearch",
@@ -215,8 +157,6 @@
       "artifactCreated": true,
       "shopPreparation": "owner-evidence-v1"
     },
-    "needles": [
-      "zqk-shop-assets-and-operations-boundary"
-    ]
+    "needles": ["zqk-shop-assets-and-operations-boundary"]
   }
 ]

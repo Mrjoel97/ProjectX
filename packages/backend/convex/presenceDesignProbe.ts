@@ -1,7 +1,7 @@
 import { sha256Bytes } from "@pikar/core/webRuntime";
 import { v } from "convex/values";
-import { internalAction } from "./lib/tenantLifecycle";
 import { preflightStitchDesign, stitchConfigurationSummary } from "./lib/stitchDesignClient";
+import { internalAction } from "./lib/tenantLifecycle";
 
 export const STITCH_INCLUDED_CREDITS_DECLARATION =
   "operator_confirmed_included_free_credits_no_paid_overage" as const;

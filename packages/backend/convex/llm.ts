@@ -37,6 +37,7 @@ import {
   EXECUTIVE_ROUTER_SKILL,
   INBOX_DIGEST_SKILL,
   MEDIA_DIRECTOR_SKILL,
+  PRESENTATION_DRAFTER_SKILL,
   REPLY_DRAFTER_SKILL,
   RESEARCH_SPECIALIST_SKILL,
   REVENUE_SPECIALIST_SKILL,
@@ -93,11 +94,22 @@ import {
   validateFigureClaim,
 } from "@pikar/core";
 import {
+  type ManagedServiceRuntimeScope,
+  managedServiceToolNames,
+} from "@pikar/core/managedServices";
+import {
+  type PresentationSpec,
+  presentationJsonSchema,
+  presentationToMarkdown,
+  validatePresentationSpec,
+} from "@pikar/core/presentation";
+import {
   type ResearchClaims,
   renderResearchEvidence,
   researchClaimsSchema,
 } from "@pikar/core/researchEvidence";
 import { verticalIdForSkill } from "@pikar/core/verticalPacks";
+import { reportFromSheets } from "@pikar/core/workbookReport";
 import {
   CHEAP_MODEL,
   DEFAULT_MODEL,
@@ -114,7 +126,8 @@ import {
 import { scanText } from "@pikar/pii";
 // Subpath import (NOT the barrel), the vaultExtract discipline: SheetJS is ~1 MB and enters only
 // the `use node` modules that write or read a workbook. STATIC, per Pitfall 9 — see sheets.ts.
-import { sheetsToXlsx } from "@pikar/vault/sheets";
+import { reportToXlsx } from "@pikar/vault/reportWorkbook";
+import { sheetRows as workbookPreviewRows } from "@pikar/vault/sheets";
 import { type BriefSections, buildBriefMarkdown } from "@pikar/voice";
 import {
   generateObject,
@@ -141,7 +154,7 @@ import {
   shouldUseGmailCapability,
 } from "./cockpitCapabilities";
 import { buildInvoiceReminderTool } from "./invoiceReminders";
-import { VARIANT_FAILED_MEMO } from "./lib/dispatchShared";
+import { ENVELOPE_FRACTION, VARIANT_FAILED_MEMO } from "./lib/dispatchShared";
 import { type EvalContext, evalBudgetModel, type ImageInput } from "./lib/evalBudgetModel";
 import { fogIntegration, traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
@@ -152,8 +165,11 @@ import {
   resolveModel as resolveSharedModel,
 } from "./lib/models";
 import { buildOnlinePresenceTools } from "./lib/onlinePresenceTools";
+import { presentationToPptx } from "./lib/presentationPptx";
 import { internalAction } from "./lib/tenantLifecycle";
 import { buildWebResearchTool, sourcesFromToolOutput } from "./lib/webResearchTools";
+import { buildManagedServiceTools } from "./managedServiceTools";
+import { buildSocialTools } from "./socialTools";
 
 export { markdownToPdf } from "./lib/markdownPdf";
 export {
@@ -1413,14 +1429,16 @@ export function buildHistoryBlock(history: HistoryMessage[] | undefined): string
  */
 function buildTurnPrompt(a: {
   spine: string | null;
+  brandSpine?: string | null;
   finance: string | null;
+  knowledge?: string | null;
   history: { role: "user" | "assistant"; content: string }[] | undefined;
   plan: PlanRow | null;
   tz: string | undefined;
   text: string;
 }): string {
-  const { spine, finance, history, plan, tz, text } = a;
-  const standing = [spine, finance].filter((p) => p !== null).join("\n");
+  const { spine, brandSpine, finance, knowledge, history, plan, tz, text } = a;
+  const standing = [spine, brandSpine, finance, knowledge].filter((p) => p != null).join("\n");
   return `${standing === "" ? "" : `${standing}\n\n`}${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, tz)}\n\nThe user says: ${text}`;
 }
 
@@ -1739,7 +1757,50 @@ export type ToolContext = {
   evalBudgetId?: Id<"spendEvents">;
   researchControlId?: Id<"researchControls">;
   researchRequestId?: string;
+  managedServiceRunId?: Id<"managedServiceRuns">;
+  managedServiceScope?: ManagedServiceRuntimeScope;
+  /** Set by the ordinary attended loop; deterministic drivers and leaf calls omit it. */
+  attendedServiceAccess?: boolean;
 };
+
+async function readManagedServiceScope(
+  toolCtx: Pick<ToolContext, "ctx" | "tenantId" | "planId" | "threadId" | "managedServiceRunId">,
+): Promise<ManagedServiceRuntimeScope> {
+  if (!toolCtx.managedServiceRunId) throw new Error("SERVICE_EXECUTION_UNAVAILABLE");
+  return await toolCtx.ctx.runQuery(internal.managedServiceRuns.getExecutionContext, {
+    tenantId: toolCtx.tenantId,
+    runId: toolCtx.managedServiceRunId,
+    planId: toolCtx.planId,
+    threadId: toolCtx.threadId,
+  });
+}
+
+/** Native grants are built first. The service can only remove tools and fence their execution. */
+export function scopeManagedServiceTools<T extends ToolSet>(
+  built: T,
+  scope: ManagedServiceRuntimeScope,
+  check: () => Promise<unknown>,
+): T {
+  const allowed = new Set(managedServiceToolNames(scope.operationIds));
+  return Object.fromEntries(
+    Object.entries(built)
+      .filter(([name]) => allowed.has(name))
+      .map(([name, definition]) => [
+        name,
+        {
+          ...definition,
+          ...(definition.execute
+            ? {
+                execute: async (...args: Parameters<NonNullable<typeof definition.execute>>) => {
+                  await check();
+                  return definition.execute?.(...args);
+                },
+              }
+            : {}),
+        },
+      ]),
+  ) as T;
+}
 
 /**
  * Build the governed tool set for one plan (AGNT-01/02). Each tool wraps its primitive and
@@ -1955,6 +2016,103 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
   // model must not get wrong in that window (no drafts this turn, one card, relay the count)
   // belongs in the string it reads on EVERY turn, not only in the body it may never be told.
   const createVariantsTool = {
+    createMediaCampaign: tool({
+      description:
+        "Prepare a set of images, video reels, or both from one campaign brief. Each item needs " +
+        "its own visual prompt or video brief. Video storyboards are prepared in the background. " +
+        "The user reviews the batch, its maximum cost and each video before clicking Generate. " +
+        "This tool never buys media or publishes. Use it for multiple media deliverables, not written-content variants.",
+      inputSchema: jsonSchema<{
+        title: string;
+        items: (
+          | { kind: "image"; label: string; prompt: string }
+          | { kind: "video"; label: string; brief: string }
+        )[];
+        maxCostCents: number;
+      }>({
+        type: "object",
+        properties: {
+          title: { type: "string", maxLength: 120 },
+          items: {
+            type: "array",
+            minItems: 1,
+            maxItems: 15,
+            items: {
+              oneOf: [
+                {
+                  type: "object",
+                  properties: {
+                    kind: { const: "image", type: "string" },
+                    label: { type: "string" },
+                    prompt: { type: "string" },
+                  },
+                  required: ["kind", "label", "prompt"],
+                  additionalProperties: false,
+                },
+                {
+                  type: "object",
+                  properties: {
+                    kind: { const: "video", type: "string" },
+                    label: { type: "string" },
+                    brief: { type: "string" },
+                  },
+                  required: ["kind", "label", "brief"],
+                  additionalProperties: false,
+                },
+              ],
+            },
+          },
+          maxCostCents: {
+            type: "integer",
+            minimum: 1,
+            maximum: 1000,
+            description:
+              "Proposed whole-batch maximum in USD cents, subject to the user's Generate approval and existing daily limits.",
+          },
+        },
+        required: ["title", "items", "maxCostCents"],
+        additionalProperties: false,
+      }),
+      execute: async ({ title, items, maxCostCents }): Promise<string> => {
+        if (evalBudgetId)
+          return "This evaluation cannot prepare a media campaign. Nothing was started.";
+        if (toolCtx.researchControlId || toolCtx.researchRequestId)
+          return "A controlled research run cannot start a media campaign. Nothing was started.";
+        const checkedTitle = scanText(title);
+        if (!checkedTitle.ok)
+          return "The campaign could not be checked for personal data. Nothing was saved.";
+        const safeItems: typeof items = [];
+        for (const item of items) {
+          const label = scanText(item.label);
+          const brief = scanText(item.kind === "image" ? item.prompt : item.brief);
+          if (!label.ok || !brief.ok)
+            return "The campaign could not be checked for personal data. Nothing was saved.";
+          safeItems.push(
+            item.kind === "image"
+              ? { kind: "image", label: label.value.safeText, prompt: brief.value.safeText }
+              : { kind: "video", label: label.value.safeText, brief: brief.value.safeText },
+          );
+        }
+        const threadId = toolCtx.threadId as string;
+        const rootRequestId = toolCtx.rootRequestId as string;
+        const videoCount = items.filter((item) => item.kind === "video").length;
+        const remaining = await ctx.runQuery(internal.guardrails.remainingDailyCents, { tenantId });
+        const share = videoCount ? Math.floor((remaining * ENVELOPE_FRACTION) / videoCount) : 0;
+        // Each director is admitted through the existing durable dispatch rail. These are only
+        // storyboard turns; generation remains a human-only campaign mutation.
+        if (videoCount && share < 1)
+          return "Today's AI budget cannot prepare these video storyboards. Nothing was saved or generated. Try a smaller batch later.";
+        await ctx.runMutation(internal.mediaCampaign.stage, {
+          tenantId,
+          threadId,
+          title: checkedTitle.value.safeText,
+          items: safeItems,
+          maxCostCents,
+          directorContext: { rootRequestId, envelopeCents: share, skillVersions, tenantSkillIds },
+        });
+        return `Prepared ${items.length} media items in a batch. Video storyboards arrive in the background. Review the batch in the workspace before generating; nothing was published.`;
+      },
+    }),
     createVariants: tool({
       // Split literal: every chunk under the 200-char §5 source-scan ceiling (skills.test.ts).
       description:
@@ -2279,15 +2437,23 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
     // tables to 2–4 columns so they fit the page"), and it is GATED, so `spreadsheet-drafter` is a
     // new ungated row rather than an edit to it (the Phase 18 content-drafter precedent).
     const drafter = format === "xlsx" ? SPREADSHEET_DRAFTER_SKILL : DOCUMENT_DRAFTER_SKILL;
-    const drafted = await ctx.runAction(internal.llm.draftDocument, {
-      evalBudgetId,
-      tenantId,
-      safeText,
-      safeTextHash: await contentHash(safeText),
-      // The eval runner's drafter pin rides HERE (EVAL-01) — undefined = active skill.
-      skillName: drafter,
-      skillVersion: skillVersions?.[drafter],
-    });
+    const drafted =
+      format === "pptx"
+        ? await ctx.runAction(internal.llm.draftPresentation, {
+            evalBudgetId,
+            tenantId,
+            safeText,
+            skillVersion: skillVersions?.[PRESENTATION_DRAFTER_SKILL],
+          })
+        : await ctx.runAction(internal.llm.draftDocument, {
+            evalBudgetId,
+            tenantId,
+            safeText,
+            safeTextHash: await contentHash(safeText),
+            // The eval runner's drafter pin rides HERE (EVAL-01) — undefined = active skill.
+            skillName: drafter,
+            skillVersion: skillVersions?.[drafter],
+          });
     // 43-02: the money rail can now refuse this, and it refuses by RETURNING. This function has
     // no catch of its own, so a throw would have escaped as a raw SDK tool-error instead of a
     // sentence — and the attachment plane already speaks `{ ok: false, message }`.
@@ -2296,11 +2462,11 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
     // The tool schema's `enum` is advertising, not enforcement: the AI SDK's `jsonSchema()` carries
     // no validator, so an out-of-enum `format` would fall through the render ternary to the HTML
     // branch and then die in `formatSpec(format)`. Refuse it in the tool's own voice instead.
-    if (format !== "pdf" && format !== "html" && format !== "xlsx") {
+    if (format !== "pdf" && format !== "html" && format !== "xlsx" && format !== "pptx") {
       return {
         ok: false,
         message:
-          "I couldn't generate the attachment — that format isn't available. Offer a PDF, a web page (html) or a spreadsheet (xlsx).",
+          "I couldn't generate the attachment — that format isn't available. Offer PDF, HTML, XLSX or PowerPoint (PPTX).",
       };
     }
     const setError = async (message: string): Promise<{ ok: false; message: string }> => {
@@ -2330,8 +2496,10 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         format === "pdf"
           ? await markdownToPdf(draft.title, draft.markdown)
           : format === "xlsx"
-            ? sheetsToXlsx(sheets)
-            : new TextEncoder().encode(renderHtmlDocument(draft.title, draft.markdown));
+            ? await reportToXlsx(reportFromSheets(sheets, draft.title))
+            : format === "pptx" && "spec" in drafted
+              ? await presentationToPptx(drafted.spec)
+              : new TextEncoder().encode(renderHtmlDocument(draft.title, draft.markdown));
     } catch {
       return setError(
         "I couldn't generate the attachment — the document failed to render. Tell the user and offer to try again.",
@@ -2690,8 +2858,29 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
       ? buildInvoiceReminderTool(ctx, tenantId, planId, evalRevenueFixtureId)
       : ({} as ReturnType<typeof buildInvoiceReminderTool>)),
     ...(grants.dispatch && toolCtx.threadId && toolCtx.rootRequestId && !toolCtx.evalContext
-      ? buildBufferTools(ctx, tenantId)
+      ? {
+          ...buildBufferTools(
+            ctx,
+            tenantId,
+            toolCtx.managedServiceRunId
+              ? {
+                  runId: toolCtx.managedServiceRunId,
+                  currentScope: () => readManagedServiceScope(toolCtx),
+                }
+              : undefined,
+          ),
+          ...buildSocialTools(ctx, tenantId),
+        }
       : ({} as ReturnType<typeof buildBufferTools>)),
+    ...(toolCtx.attendedServiceAccess &&
+    grants.dispatch &&
+    toolCtx.threadId &&
+    toolCtx.rootRequestId &&
+    !toolCtx.evalContext &&
+    !toolCtx.evalBudgetId &&
+    !toolCtx.managedServiceRunId
+      ? buildManagedServiceTools(ctx, tenantId, toolCtx.rootRequestId)
+      : ({} as ReturnType<typeof buildManagedServiceTools>)),
     setSubject: tool({
       description: "Set the email subject line.",
       inputSchema: jsonSchema<{ subject: string }>({
@@ -2880,9 +3069,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           },
           format: {
             type: "string",
-            enum: ["pdf", "html", "xlsx"],
+            enum: ["pdf", "html", "xlsx", "pptx"],
             description:
-              "Output format. Omit for a PDF; html only when the user asks for a web page; xlsx for a real spreadsheet they will work in — a price list, a schedule, a tracker, a comparison they will edit.",
+              "Output format. Omit for PDF; html for a web page; xlsx for a styled Excel workbook; pptx for an editable PowerPoint presentation.",
           },
         },
         required: ["topic"],
@@ -4236,7 +4425,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // The FORMAT clause. There is no format argument and there is no pptx, docx or slides
         // path; asked for one, say what this writes instead of agreeing. Observed live: the agent
         // reported creating a deck "in PowerPoint format" that never existed.
-        "It writes markdown with a PDF (`long`) or a real .xlsx workbook (`sheet`) — never PowerPoint, Word or slides. " +
+        "It writes a PDF report (`long`), a styled Excel workbook (`sheet`), or an editable PowerPoint deck (`presentation`). " +
         "The finished document appears in the workspace as well as the vault. " +
         // The trigger rule. It is a rule for THIS surface, where an unasked-for document is a
         // surprise — and it is one reason no workflow pack holds this tool: for a pack whose output
@@ -4246,7 +4435,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         "would write and wait for a yes.",
       inputSchema: jsonSchema<{
         topic: string;
-        form: "short" | "long" | "sheet";
+        form: "short" | "long" | "sheet" | "presentation";
         replace?: number;
       }>({
         type: "object",
@@ -4256,9 +4445,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           // and the PDF branch, which keeps the short/long split in code rather than a heuristic.
           form: {
             type: "string",
-            enum: ["short", "long", "sheet"],
+            enum: ["short", "long", "sheet", "presentation"],
             description:
-              "long = proposal, one-pager, report. short = post, ad copy, headline. sheet = a spreadsheet they will work in (price list, schedule, tracker, comparison).",
+              "long = PDF report. short = post or ad copy. sheet = styled Excel workbook. presentation = editable PowerPoint slide deck.",
           },
           // The locked replace-in-place revision. 1-based #index over what this conversation has
           // already created — the regenerateAttachment idiom. NEVER a raw id: the index resolves
@@ -4273,6 +4462,8 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         additionalProperties: false,
       }),
       execute: async ({ topic, form, replace }): Promise<string> => {
+        if (!["short", "long", "sheet", "presentation"].includes(form))
+          return "That document format is unavailable. Choose PDF, Excel, PowerPoint or short text.";
         const plan = await readPlan(); // threadId + the cross-tenant guard — NEVER from the model
         const scan = scanText(topic);
         // Fail-closed, but as a SENTENCE: a governed stop is a paused conversation, never a throw
@@ -4295,21 +4486,38 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         let draft: { title: string; markdown: string };
         let storageId: Id<"_storage"> | undefined;
         let sheetRows: { name: string; rows: string[][] }[] = [];
+        let presentation: PresentationSpec | undefined;
         try {
-          const drafted = await ctx.runAction(internal.llm.draftDocument, {
-            evalBudgetId,
-            tenantId,
-            safeText,
-            safeTextHash: await contentHash(safeText),
-            skillName,
-            skillVersion: skillVersions?.[skillName],
-          });
+          const drafted =
+            form === "presentation"
+              ? await ctx.runAction(internal.llm.draftPresentation, {
+                  evalBudgetId,
+                  tenantId,
+                  safeText,
+                  skillVersion: skillVersions?.[PRESENTATION_DRAFTER_SKILL],
+                })
+              : await ctx.runAction(internal.llm.draftDocument, {
+                  evalBudgetId,
+                  tenantId,
+                  safeText,
+                  safeTextHash: await contentHash(safeText),
+                  skillName,
+                  skillVersion: skillVersions?.[skillName],
+                });
           // 43-02. RETURNED from inside the try, deliberately: the catch below would otherwise
           // be the thing that answered, and its sentence tells the agent to try again — the one
           // instruction an exhausted rail must never receive.
           if (!drafted.ok) return DRAFT_BLOCKED_MESSAGE;
           draft = drafted;
-          if (form === "long") {
+          if (form === "presentation" && "spec" in drafted) {
+            presentation = validatePresentationSpec(drafted.spec);
+            const bytes = await presentationToPptx(presentation);
+            if (exceedsByteCap(bytes.byteLength))
+              return "The presentation exceeds the file size limit. Ask for fewer slides.";
+            storageId = await ctx.storage.store(
+              new Blob([bytes as BlobPart], { type: formatSpec("pptx").mimeType }),
+            );
+          } else if (form === "long") {
             // ponytail: cast — a Uint8Array IS a valid BlobPart at runtime; the DOM lib types
             // Uint8Array<ArrayBufferLike> too strictly (it may be SharedArrayBuffer-backed).
             const bytes = (await markdownToPdf(draft.title, draft.markdown)) as BlobPart;
@@ -4325,7 +4533,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
             if (sheetRows.length === 0) {
               return "I couldn't build the spreadsheet — the draft came back with no table in it. Tell the user and ask which columns they want.";
             }
-            const bytes = sheetsToXlsx(sheetRows) as BlobPart;
+            const bytes = (await reportToXlsx(
+              reportFromSheets(sheetRows, draft.title),
+            )) as BlobPart;
             storageId = await ctx.storage.store(
               new Blob([bytes], { type: formatSpec("xlsx").mimeType }),
             );
@@ -4394,8 +4604,10 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           });
           // A refusal (no such #index, foreign tenant, a user upload) is a SENTENCE — the mutation
           // never throws, and neither does this.
-          if (!res.ok)
+          if (!res.ok) {
+            if (storageId) await ctx.storage.delete(storageId);
             return `There's no document #${effectiveReplace} I can rewrite in this conversation — nothing was changed. Tell the user which documents are here and ask which one they mean.`;
+          }
           // Drop the SUPERSEDED bytes only AFTER the patch persists, and only when they really were
           // superseded (the regenerateAttachment ordering — never orphan a live ref).
           if (res.oldStorageId && res.oldStorageId !== storageId)
@@ -4404,6 +4616,40 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         }
         const vaultDocId =
           docIds[effectiveReplace === undefined ? docIds.length - 1 : effectiveReplace - 1];
+        if (!vaultDocId) throw new Error("created_document_missing");
+        // Previews are optional views. Their failure must not hide a successfully saved original
+        // or invite a paid redraft. Re-read XLSX bytes through the existing capped grid parser.
+        let presentationPreviewAvailable = false;
+        try {
+          if (form === "sheet" && storageId) {
+            const original = await ctx.storage.get(storageId);
+            if (!original) throw new Error("workbook_preview_original_missing");
+            const preview = workbookPreviewRows(new Uint8Array(await original.arrayBuffer()));
+            await ctx.runMutation(internal.vault.upsertSheets, {
+              tenantId,
+              docId: vaultDocId,
+              expectedStorageId: storageId,
+              ...preview,
+            });
+          }
+          if (presentation) {
+            const spec = JSON.stringify(presentation);
+            if (new TextEncoder().encode(spec).length <= 128 * 1024) {
+              await ctx.runMutation(internal.vaultPresentations.upsert, {
+                tenantId,
+                docId: vaultDocId,
+                expectedStorageId: storageId,
+                spec,
+              });
+              presentationPreviewAvailable = true;
+            } else {
+              console.warn("[createDocument] optional presentation preview exceeded its byte cap");
+            }
+          }
+        } catch {
+          // Error messages can carry model/source content; keep diagnostics code-owned.
+          console.warn("[createDocument] optional artifact preview unavailable");
+        }
         // ONE refs-only audit, from the TOOL (cockpit.ts emits exactly two events and a test pins
         // that count). Hashes, ids, a closed enum and a boolean — never the topic, never the prose.
         await ctx.runMutation(internal.audit.log, {
@@ -4459,11 +4705,16 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
             : `rewritten as #${effectiveReplace}`;
         const shown = " It is already open in the workspace for the user to read.";
         const asFormat =
-          form === "sheet"
-            ? " Written as a spreadsheet — a real .xlsx workbook to download."
-            : storageId
-              ? " Written as markdown, with a PDF to download."
-              : " Written as markdown.";
+          form === "presentation"
+            ? " Written as an editable .pptx PowerPoint deck." +
+              (presentationPreviewAvailable
+                ? " A slide preview is available in the workspace."
+                : " The slide preview is unavailable; the editable original is ready to download.")
+            : form === "sheet"
+              ? " Written as a spreadsheet — a real .xlsx workbook to download."
+              : storageId
+                ? " Written as markdown, with a PDF to download."
+                : " Written as markdown.";
         return `Created "${draft.title}" — ${saved}.${shown}${asFormat}`;
       },
     }),
@@ -4745,7 +4996,12 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
       },
     }),
   };
-  return applyGmailCapability({ ...allTools, ...presenceTools }, grants.gmail);
+  const permitted = applyGmailCapability({ ...allTools, ...presenceTools }, grants.gmail);
+  if (!toolCtx.managedServiceRunId) return permitted;
+  if (!toolCtx.managedServiceScope) throw new Error("SERVICE_EXECUTION_UNAVAILABLE");
+  return scopeManagedServiceTools(permitted, toolCtx.managedServiceScope, () =>
+    readManagedServiceScope(toolCtx),
+  );
 }
 
 // ── The governed Executive-Agent tool-loop (AGNT-01/02) ──────────────────────
@@ -4880,6 +5136,7 @@ async function runAgentLoop(
     visualInput?: ImageInput;
     evalContext?: EvalContext;
     evalBudgetId?: Id<"spendEvents">;
+    managedServiceRunId?: Id<"managedServiceRuns">;
     researchControlId?: Id<"researchControls">;
     researchRequestId?: string;
     primary: PricedModel;
@@ -4990,12 +5247,33 @@ async function runAgentLoop(
     visualInput,
     evalContext,
     evalBudgetId,
+    managedServiceRunId,
     researchControlId,
     researchRequestId,
     maxSteps,
     timeoutMs,
     softCutoffMs,
   } = args;
+  const serviceContext = { ctx, tenantId, planId, threadId, managedServiceRunId };
+  const serviceScope = managedServiceRunId
+    ? await readManagedServiceScope(serviceContext)
+    : undefined;
+  if (serviceScope) {
+    if (
+      toolNames !== undefined ||
+      evalContext !== undefined ||
+      evalBudgetId !== undefined ||
+      researchControlId !== undefined ||
+      researchRequestId !== undefined ||
+      tenantSkillIds !== undefined
+    )
+      throw new Error("SERVICE_EXECUTION_CONTEXT_CONFLICT");
+    const pin = serviceScope.skills.find(
+      (skill) => skill.name === COCKPIT_AGENT_SKILL && skill.tenantId === null,
+    );
+    if (!pin || pin.bodyHash !== (await contentHash(system)))
+      throw new Error("SERVICE_SKILL_CHANGED");
+  }
   if (evalContext && evalBudgetId && evalContext.budgetId !== evalBudgetId)
     throw new Error("EVAL_BUDGET_CONTEXT_MISMATCH");
   const activeBudgetId = evalContext?.budgetId ?? evalBudgetId;
@@ -5025,6 +5303,9 @@ async function runAgentLoop(
       evalBudgetId,
       researchControlId,
       researchRequestId,
+      managedServiceRunId,
+      managedServiceScope: serviceScope,
+      attendedServiceAccess: toolNames === undefined,
     },
     grants,
   );
@@ -5168,6 +5449,7 @@ async function runAgentLoop(
               tenantId,
               model: m.model,
               modelId: m.id,
+              managedServiceRunId,
               onCost: (cost) => {
                 costUsd += cost;
               },
@@ -5191,6 +5473,14 @@ async function runAgentLoop(
           }
         : { prompt }),
       tools,
+      ...(managedServiceRunId
+        ? {
+            prepareStep: async () => {
+              await readManagedServiceScope(serviceContext);
+              return {};
+            },
+          }
+        : {}),
       ...(args.structuredResearch
         ? {
             output: researchOutput,
@@ -5201,7 +5491,7 @@ async function runAgentLoop(
       stopWhen: [stepCountIs(stepBudget), outOfClock],
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       abortSignal: AbortSignal.timeout(budgetMs),
-      maxRetries: activeBudgetId ? 0 : maxRetries,
+      maxRetries: activeBudgetId || managedServiceRunId ? 0 : maxRetries,
       // ── The activity trace (CKPT-05) — this IS the whole emitter ──────────────────────────────
       // ai@7 emits these natively, so not one of the 14 tool wrappers is edited (ponytail rung 4:
       // a native framework feature covers it). Both callbacks are AWAITED by the SDK
@@ -5471,6 +5761,7 @@ async function runAgentLoop(
   try {
     return await run(primary, 1, 0);
   } catch (e) {
+    if (managedServiceRunId) throw e; // A service never replays an uncertain paid turn on another model.
     if (!isFallbackEligible(e)) throw e; // our bug / config → propagate (the driver saves an error turn)
     // 33.2: the rollover is RECORDED. Until now the loop swallowed the primary's failure and the
     // run succeeded on the fallback with nothing in any plane saying so — the 33.2 bake-off scored
@@ -5710,12 +6001,16 @@ export async function runSpecialistTurn(
       : isMedia
         ? [MEDIA_MODEL, MEDIA_FALLBACK_MODEL]
         : [DEFAULT_MODEL, CHEAP_MODEL];
+  const pinnedBrandSpine = await ctx.runQuery(internal.brandKits.pinnedSpineForPlan, {
+    tenantId,
+    planId,
+  });
   const res = await runAgentLoop(ctx, {
     tenantId,
     planId,
     system: skill.body,
     structuredResearch: isResearch,
-    prompt,
+    prompt: pinnedBrandSpine ? `${prompt}\n\n${pinnedBrandSpine}` : prompt,
     visualInput: args.visualInput,
     evalContext: args.evalContext,
     evalBudgetId: args.evalBudgetId,
@@ -6129,6 +6424,7 @@ export const runCockpitAgent = internalAction({
     threadId: v.string(),
     planId: v.id("plans"),
     text: v.string(),
+    managedServiceRunId: v.optional(v.id("managedServiceRuns")),
     model: v.optional(v.string()),
     // The trusted client's clock+zone for setSendTime (§2-D). Optional — a turn without it simply
     // cannot call setSendTime (it defers to the picker). The SMOKE path pins its own below.
@@ -6173,6 +6469,7 @@ export const runCockpitAgent = internalAction({
       threadId,
       planId,
       text,
+      managedServiceRunId,
       model,
       clientContext,
       skillVersions,
@@ -6192,18 +6489,38 @@ export const runCockpitAgent = internalAction({
     costUsd?: number;
   }> => {
     assertResearchControlContext({ researchControlId, researchRequestId });
+    const serviceScope = managedServiceRunId
+      ? await readManagedServiceScope({ ctx, tenantId, planId, threadId, managedServiceRunId })
+      : undefined;
+    if (
+      managedServiceRunId &&
+      (model !== undefined ||
+        evalBudgetId !== undefined ||
+        researchControlId !== undefined ||
+        researchRequestId !== undefined ||
+        tenantSkillIds !== undefined ||
+        skillVersions !== undefined)
+    )
+      throw new Error("SERVICE_EXECUTION_CONTEXT_CONFLICT");
     // 1. Governed gate BEFORE any reasoning call — a governed stop is a paused reply, never a DLQ.
     const pre:
       | { ok: true }
       | {
           ok: false;
           reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
-        } = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+        } = await ctx.runMutation(internal.guardrails.preCall, {
+      tenantId,
+      ...(managedServiceRunId ? { managedServiceRunId } : {}),
+    });
     if (!pre.ok) return { reply: PAUSED_REPLY, blocked: pre.reason };
 
     // 2. System = the cockpit-agent skill body (no hardcoded prompt — §5; fails closed unseeded).
     //    A pinned version loads AS ITSELF (EVAL-01 — the eval must observe the candidate body).
-    const pin = skillVersions?.[COCKPIT_AGENT_SKILL];
+    const pin =
+      serviceScope?.skills.find(
+        (skill) => skill.name === COCKPIT_AGENT_SKILL && skill.tenantId === null,
+      )?.version ?? skillVersions?.[COCKPIT_AGENT_SKILL];
+    if (serviceScope && pin === undefined) throw new Error("SERVICE_SKILL_CHANGED");
     const skill: { body: string; version: number } =
       pin !== undefined
         ? await ctx.runQuery(internal.skills.getSkillVersion, {
@@ -6261,7 +6578,7 @@ export const runCockpitAgent = internalAction({
 
     // 4. Offline sentinel path (Plan 05 E2E): one op → one governed tool call, no generateText. The
     //    SMOKE path pins a deterministic clock so sendTime= resolves offline (§2-D — never the model).
-    const smokeOp = parseAgentSmoke(text, tenantId);
+    const smokeOp = managedServiceRunId ? null : parseAgentSmoke(text, tenantId);
     // Code-owned intent routing determines whether this turn may see the Gmail rail. A genuine
     // email action with no grant gets a just-in-time connection request; every other capability
     // continues without Gmail. SMOKE remains the deterministic offline tool harness.
@@ -6270,7 +6587,8 @@ export const runCockpitAgent = internalAction({
         actionTypeOf(plan.kind) === "email" &&
         (plan.recipients?.length || plan.subject || plan.body || plan.candidates?.length),
     );
-    const gmailRequired = shouldUseGmailCapability(text, continuingEmailPlan);
+    const gmailRequired =
+      !managedServiceRunId && shouldUseGmailCapability(text, continuingEmailPlan);
     // Keyed on the eval tenant alone, NOT on whether this run happens to pin a skill. A pin is
     // evidence the harness is driving; it was never the definition, and requiring one made every
     // unpinned run withhold the email rail and measure the harness. See the three paid-for
@@ -6292,7 +6610,8 @@ export const runCockpitAgent = internalAction({
     // structurally absent unless the executive lineage grant is supplied. The old ordering built
     // a record without `dispatchMedia` and then immediately tried to invoke that missing key,
     // turning every direct video request into the driver's generic "nothing was sent" reply.
-    const directVideo = !smokeOp && !gmailRequired && isExplicitVideoCreationRequest(text);
+    const directVideo =
+      !managedServiceRunId && !smokeOp && !gmailRequired && isExplicitVideoCreationRequest(text);
     // A driver-only record: NO_GRANTS plus the two bits this path decides itself. Not `grantsFor`
     // — there is no allow-list here, and the executive's grants would open authoring/reminder
     // staging on a record whose only consumer is the SMOKE op or the direct video dispatch.
@@ -6420,7 +6739,8 @@ export const runCockpitAgent = internalAction({
     // REAL runAgentLoop (no gateway), so the driver's agent.timeout path is exercisable end-to-end.
     // Never a production input — a real turn never carries this exact text (parseAgentSmoke returns
     // null for it, so it falls through here rather than a tool op).
-    const forceTimeout = fixtureSeamFor(tenantId) && text.trim() === "SMOKE::agent::timeout";
+    const forceTimeout =
+      !managedServiceRunId && fixtureSeamFor(tenantId) && text.trim() === "SMOKE::agent::timeout";
     const timeoutModel = (): LanguageModel =>
       new MockLanguageModelV4({
         doGenerate: async () => {
@@ -6439,11 +6759,22 @@ export const runCockpitAgent = internalAction({
     // tenant with figures and no confirmed blueprint (the ordinary state of a new account), and it
     // must never be concatenated upstream of `evaluations.ts`'s grounding chunk. See
     // `buildTurnPrompt`.
+    const brandSpine = await ctx.runQuery(internal.brandKits.spineForTenant, { tenantId });
     let finance: string | null = null;
     try {
       finance = await ctx.runQuery(internal.cash.financeSpineFor, { tenantId });
     } catch {
       finance = null;
+    }
+    let knowledge: string | null = null;
+    try {
+      const confirmed = await ctx.runQuery(internal.serviceConversations.confirmedContext, {
+        tenantId,
+      });
+      if (confirmed.items.length)
+        knowledge = `<confirmed_service_information scope="each named service" kind="user-confirmed reference data">\n${JSON.stringify(confirmed).replaceAll("<", "\\u003c")}\n</confirmed_service_information>`;
+    } catch (error) {
+      if (managedServiceRunId) throw error;
     }
     const { reply, costUsd } = await traced(
       {
@@ -6457,8 +6788,18 @@ export const runCockpitAgent = internalAction({
           tenantId,
           planId,
           system: skill.body,
+          managedServiceRunId,
           // History ABOVE the plan context; "The user says:" stays the FINAL line (the current turn).
-          prompt: buildTurnPrompt({ spine, finance, history, plan, tz: clientContext?.tz, text }),
+          prompt: buildTurnPrompt({
+            spine,
+            brandSpine,
+            finance,
+            knowledge,
+            history,
+            plan,
+            tz: clientContext?.tz,
+            text,
+          }),
           primary: {
             model: forceTimeout ? timeoutModel() : resolveModel(primaryId),
             id: primaryId,
@@ -6533,15 +6874,28 @@ export const __cockpitTurnPrompt = internalAction({
     } catch {
       spine = null;
     }
+    const brandSpine = await ctx.runQuery(internal.brandKits.spineForTenant, { tenantId });
     let finance: string | null = null;
     try {
       finance = await ctx.runQuery(internal.cash.financeSpineFor, { tenantId });
     } catch {
       finance = null;
     }
+    let knowledge: string | null = null;
+    try {
+      const confirmed = await ctx.runQuery(internal.serviceConversations.confirmedContext, {
+        tenantId,
+      });
+      if (confirmed.items.length)
+        knowledge = `<confirmed_service_information scope="each named service" kind="user-confirmed reference data">\n${JSON.stringify(confirmed).replaceAll("<", "\\u003c")}\n</confirmed_service_information>`;
+    } catch {
+      // Existing business context and the user's turn remain usable if enrichment cannot load.
+    }
     return buildTurnPrompt({
+      brandSpine,
       spine,
       finance,
+      knowledge,
       history: undefined,
       plan,
       tz: undefined,
@@ -6562,6 +6916,7 @@ export const __runCockpitAgentWithScript = internalAction({
     tenantId: v.string(),
     planId: v.id("plans"),
     primary: v.array(v.any()),
+    managedServiceRunId: v.optional(v.id("managedServiceRuns")),
     fallback: v.optional(v.array(v.any())),
     failPrimary: v.optional(v.boolean()),
     // Optional EVAL-01 version pin (mirrors runCockpitAgent) so the pin is testable offline; the
@@ -6587,6 +6942,7 @@ export const __runCockpitAgentWithScript = internalAction({
       tenantId,
       planId,
       primary,
+      managedServiceRunId,
       fallback,
       failPrimary,
       skillVersions,
@@ -6607,7 +6963,16 @@ export const __runCockpitAgentWithScript = internalAction({
     modelId: string;
     fallbackModelId: string;
   }> => {
-    const pin = skillVersions?.[COCKPIT_AGENT_SKILL];
+    const serviceScope = managedServiceRunId
+      ? await readManagedServiceScope({ ctx, tenantId, planId, threadId, managedServiceRunId })
+      : undefined;
+    if (managedServiceRunId && (skillVersions || toolNames))
+      throw new Error("SERVICE_EXECUTION_CONTEXT_CONFLICT");
+    const pin =
+      serviceScope?.skills.find(
+        (skill) => skill.name === COCKPIT_AGENT_SKILL && skill.tenantId === null,
+      )?.version ?? skillVersions?.[COCKPIT_AGENT_SKILL];
+    if (serviceScope && pin === undefined) throw new Error("SERVICE_SKILL_CHANGED");
     const skill: { body: string; version: number } =
       pin !== undefined
         ? await ctx.runQuery(internal.skills.getSkillVersion, {
@@ -6629,6 +6994,7 @@ export const __runCockpitAgentWithScript = internalAction({
         tenantId,
         planId,
         system: skill.body,
+        managedServiceRunId,
         prompt: `${buildAgentContext(plan ?? {})}\n\nThe user says: drive the plan to a proposal.`,
         primary: { model: primaryModel as unknown as LanguageModel, id: DEFAULT_MODEL },
         fallback: { model: fallbackModel as unknown as LanguageModel, id: CHEAP_MODEL },
@@ -6824,6 +7190,71 @@ const documentSchema = jsonSchema<{ title: string; markdown: string }>({
  */
 const DRAFT_BLOCKED_MESSAGE =
   "I couldn't draft that — the AI spending limit has been reached, so nothing was generated and nothing was charged. Tell the user their budget is used up and do NOT try again this turn.";
+
+/** Presentation drafting stays on the same registry, tenant and paid-call rails as documents. */
+export const draftPresentation = internalAction({
+  args: {
+    tenantId: v.string(),
+    safeText: v.string(),
+    skillVersion: v.optional(v.number()),
+    evalBudgetId: v.optional(v.id("spendEvents")),
+  },
+  handler: async (
+    ctx,
+    { tenantId, safeText, skillVersion, evalBudgetId },
+  ): Promise<
+    | { ok: true; title: string; markdown: string; spec: PresentationSpec }
+    | {
+        ok: false;
+        reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+      }
+  > => {
+    const skill =
+      skillVersion === undefined
+        ? await ctx.runQuery(internal.skills.getActiveSkill, { name: PRESENTATION_DRAFTER_SKILL })
+        : await ctx.runQuery(internal.skills.getSkillVersion, {
+            name: PRESENTATION_DRAFTER_SKILL,
+            version: skillVersion,
+          });
+    const gate = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+    if (!gate.ok) return { ok: false, reason: gate.reason };
+    const finish = (value: unknown) => {
+      const spec = validatePresentationSpec(value);
+      return { ok: true as const, title: spec.title, markdown: presentationToMarkdown(spec), spec };
+    };
+    if (parseSmoke(safeText, tenantId))
+      return finish({
+        title: "Smoke Presentation",
+        theme: "teal",
+        slides: [
+          { kind: "cover", title: "Smoke Presentation", subtitle: "An editable business review" },
+          {
+            kind: "bullets",
+            title: "Next steps",
+            bullets: ["Review the source evidence", "Choose the next action"],
+          },
+        ],
+      });
+    const draft = async (model: string) => {
+      const result = await generateObject({
+        model: goldenModel(ctx, tenantId, model, evalBudgetId, true),
+        schema: jsonSchema<PresentationSpec>(presentationJsonSchema as never),
+        system: skill.body,
+        prompt: safeText,
+        abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        maxRetries: 0,
+        maxOutputTokens: 8000,
+      });
+      return finish(result.object);
+    };
+    try {
+      return await draft(DEFAULT_MODEL);
+    } catch (error) {
+      if (!isFallbackEligible(error)) throw error;
+      return await draft(CHEAP_MODEL);
+    }
+  },
+});
 
 export const draftDocument = internalAction({
   args: {

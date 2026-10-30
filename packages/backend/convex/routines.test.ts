@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
@@ -13,8 +14,9 @@ import {
 //
 // `check-routine-gate.mjs --validate-decision` says `defer` (recorded in
 // `.planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md`), so 29-12's job
-// is the affirmative proof that recurrence is ABSENT from the tree, and to make no implementation
-// edit at all.
+// remains the affirmative proof that recurrence cannot execute. ADR-063 explicitly permits
+// the named inert native adapter and its storage for development-only transaction tests;
+// this exception does not change defer, scheduler sites, cron registrations or activation.
 //
 // ═══ WHY THIS FILE IS AN ALLOWLIST AND NOT A BLOCKLIST ═══════════════════════════════════════
 //
@@ -91,6 +93,10 @@ const sourcesUnder = (root: string) =>
 // Phase 31 adds only internal bounded operator probe controls and GET-driven aggregate
 // funnels. Neither module schedules work; the independent scheduler and token pins below
 // remain unchanged and prove recurrence is still deferred.
+// Phase 53's four modules were reviewed individually: lib/presentationPptx.ts exports validated
+// OOXML bytes without ctx or scheduling; vaultPresentations.ts owns a bounded tenant preview;
+// workspaceArtifacts.ts provides bounded tenant/thread queries only. mediaCampaign.ts schedules
+// the finite, explicitly requested production run classified beside SCHEDULER_CALL_SITES below.
 const CONVEX_MODULES = [
   "_generated/api.d.ts",
   "_generated/dataModel.d.ts",
@@ -110,6 +116,7 @@ const CONVEX_MODULES = [
   "billingRollup.ts",
   "billingWebhook.ts",
   "blueprint.ts",
+  "brandKits.ts",
   "briefings.ts",
   "buffer.ts",
   "bufferActions.ts",
@@ -172,20 +179,39 @@ const CONVEX_MODULES = [
   "lib/foundationValidators.ts",
   "lib/functions.ts",
   "lib/hash.ts",
+  "lib/managedServiceBudget.ts",
   "lib/markdownPdf.ts",
   "lib/mediaRead.ts",
+  "lib/merchantProviderClient.ts",
   "lib/models.ts",
   "lib/onlinePresenceTools.ts",
   "lib/paidBudgetModel.ts",
   "lib/planRow.ts",
+  "lib/presenceModelLimits.ts",
+  "lib/presencePublication.ts",
+  "lib/presenceRequiredPipeline.ts",
+  "lib/presenceVisionReview.ts",
+  "lib/presentationPptx.ts",
+  "lib/stitchDesignClient.ts",
   "lib/tenantLifecycle.ts",
   "lib/toolContextArgs.ts",
   "lib/webResearchTools.ts",
   "lib/ws.d.ts",
   "llm.ts",
+  "managedServiceExecution.ts",
+  "managedServiceRecurrence.ts",
+  "managedServiceRecurrenceExecution.ts",
+  "managedServiceRuns.ts",
+  "managedServiceTools.ts",
+  "managedServices.ts",
   "media.ts",
+  "mediaCampaign.ts",
   "mediaComplete.ts",
   "mediaIntent.ts",
+  "merchantCommerce.ts",
+  "merchantHttp.ts",
+  "merchantOperations.ts",
+  "merchantProvider.ts",
   "microsoftAuth.ts",
   "microsoftCalendar.ts",
   "migrations.ts",
@@ -193,7 +219,9 @@ const CONVEX_MODULES = [
   "notifyExternal.ts",
   "onboarding.ts",
   "onlinePresence.ts",
+  "onlinePresenceDesign.ts",
   "onlinePresenceRun.ts",
+  "onlinePresenceShop.ts",
   "ops.ts",
   "opsSignals.ts",
   "optimizerConfig.ts",
@@ -204,6 +232,15 @@ const CONVEX_MODULES = [
   "pinnedWorkflows.ts",
   "pipeline.ts",
   "plans.ts",
+  "presenceBrowserRepair.ts",
+  "presenceBrowserReview.ts",
+  "presenceBrowserRun.ts",
+  "presenceComparisonControl.ts",
+  "presenceComparisonRun.ts",
+  "presenceDesignControl.ts",
+  "presenceDesignProbe.ts",
+  "presenceRequiredRun.ts",
+  "presenceVisualRevision.ts",
   "proactiveReview.ts",
   "proposals.ts",
   "providerGates.ts",
@@ -229,16 +266,29 @@ const CONVEX_MODULES = [
   "review.ts",
   "savedPrompts.ts",
   "schema.ts",
+  "serviceConversations.ts",
+  "serviceOutcomes.ts",
   "skilloptExport.ts",
   "skills.ts",
   "smoke.ts",
   "smokeAssert.ts",
+  "social.ts",
+  "socialActions.ts",
+  "socialContentActions.ts",
+  "socialMedia.ts",
+  "socialPublishing.ts",
+  "socialTools.ts",
+  // Static GET-only TikTok URL ownership proof; no scheduler, customer media or provider call.
+  "socialVerification.ts",
+  "socialWebhooks.ts",
   "spendLedger.ts",
   "stripeAuth.ts",
   "stripeConnector.ts",
   "telemetry.ts",
+  "tenantCatalogue.ts",
   "tenantDelete.ts",
   "tenantExport.ts",
+  "tenantOrders.ts",
   "tenantProfile.ts",
   "uploads.ts",
   "vault.ts",
@@ -250,6 +300,7 @@ const CONVEX_MODULES = [
   "vaultGround.ts",
   "vaultIngest.ts",
   "vaultLlm.ts",
+  "vaultPresentations.ts",
   "vaultRag.ts",
   "vaultSmoke.ts",
   "vaultSources.ts",
@@ -277,6 +328,7 @@ const CONVEX_MODULES = [
   "workflowPackDiscovery.ts",
   "workflowPackEventLog.ts",
   "workflowPackOutcomes.ts",
+  "workspaceArtifacts.ts",
   "worm.ts",
   "wormCursor.ts",
   "zernio.ts",
@@ -295,6 +347,9 @@ const CONVEX_MODULES = [
 // page of a folder walk. None re-arms itself on a cadence.
 // Readiness additions: one delivery watchdog; bounded foundation transcript/graph cleanup
 // and publication ingestion; bounded graph cleanup continuation. None adds user routines.
+// Presence additions schedule only exact-version review/one bounded repair or explicit visual
+// revision. Commerce additions schedule finite stock/order TTL and one verified payment
+// delivery follow-up; fixed maintenance jobs remain named separately in the cron inventory.
 const SCHEDULER_CALL_SITES = [
   "billingRollup.ts",
   // ADR-058: explicitly approved Buffer writes and opt-in daily metric reads only.
@@ -312,10 +367,23 @@ const SCHEDULER_CALL_SITES = [
   "evaluations.ts",
   "foundation.ts",
   "llm.ts",
+  // ADR-067: exact opt-in built-in social preparation dispatcher; no generic routine cron.
+  "managedServiceRecurrence.ts",
   "media.ts",
+  // Phase 53: explicit finite campaign manifests (max 15 items, two workers). Proposal director
+  // starts are bounded by that manifest; paid submission starts only after human approval.
+  // The 5s self-callback polls this run while status === running, with expectedUpdatedAt replay
+  // guards and a per-item two-hour settlement stop to needs_reconciliation. Cancellation stops
+  // queued starts; no future occurrence, standing approval or calendar cadence is created.
+  "mediaCampaign.ts",
   "mediaComplete.ts",
+  "merchantCommerce.ts",
+  "merchantOperations.ts",
   "notifications.ts",
   "onboarding.ts",
+  "onlinePresence.ts",
+  "presenceBrowserRepair.ts",
+  "presenceVisualRevision.ts",
   "proactiveReview.ts",
   // Native erasure continuation only; stalled component observation stops after 60 polls.
   "ragErasure.ts",
@@ -323,6 +391,13 @@ const SCHEDULER_CALL_SITES = [
   "researchControl.ts",
   "review.ts",
   "smoke.ts",
+  // Privacy cleanup only: 50-row cursor continuations clear stale YouTube metadata;
+  // the fixed hourly driver is explicitly gated, with no model/provider calls or user routine.
+  "social.ts",
+  // Explicit customer approval schedules one immutable native social post; no recurrence.
+  "socialPublishing.ts",
+  "tenantCatalogue.ts",
+  "tenantOrders.ts",
   "vault.ts",
   "vaultDrive.ts",
   "vaultFolders.ts",
@@ -413,10 +488,10 @@ describe("the scheduling primitives have a CLOSED, PINNED call-site set", () => 
     const registered = [...(crons?.text ?? "").matchAll(/crons\.\w+\(\s*\n?\s*"([^"]+)"/g)].map(
       (m) => m[1],
     );
-    // THE CLAIM: a CLOSED set of five fixed global jobs. Round 3 asserted only
+    // THE CLAIM: a CLOSED set of fourteen reviewed global jobs. Round 3 asserted only
     // `expect(crons).not.toMatch(/tenantId/)`, which is a literal-string grep — a per-tenant
     // fan-out passing `orgId`, `workspaceId` or an id array read green. Pinning the registered
-    // NAMES instead means a sixth job of any name, per-tenant or not, is a visible diff.
+    // NAMES instead means another job of any name, per-tenant or not, is a visible diff.
     expect(registered).toEqual([
       "expired-upload-receipts",
       "expired-auth-revocations",
@@ -434,6 +509,11 @@ describe("the scheduling primitives have a CLOSED, PINNED call-site set", () => 
       "zernio-engagement-reports",
       // Fixed deployment-wide privacy retention; no user-authored recurring work.
       "web-form-retention",
+      "merchant-capability-refresh",
+      "merchant-buyer-retention",
+      // Expired OAuth receipts and gated API metadata erasure only; neither starts customer work.
+      "social-oauth-retention",
+      "youtube-api-metadata-retention",
     ]);
   });
 });
@@ -470,6 +550,56 @@ const BANNED_TOKENS = [
   "standingApproval",
 ];
 
+// ADR-063: exact declaration/use lines in the inert adapter, never a file-level exemption.
+// Other banned tokens and any additional expression on these lines still fail this scan.
+const DEVELOPMENT_ADAPTER_LINES = new Set([
+  "standingOccurrenceKey,",
+  'approvalId: Id<"managedServiceStandingApprovals">;',
+  "const rawKey = standingOccurrenceKey(occurrence);",
+  "const occurrenceKey = await contentHash(rawKey);",
+  '.eq("occurrenceKey", occurrenceKey),',
+  "previousOccurrenceKeys: [],",
+  "occurrenceKey,",
+  "reservationKey: occurrenceKey,",
+  `correlationId: \`standing:\${occurrenceKey}\`,`,
+  `reservation.correlationId !== \`standing:\${row.occurrenceKey}\` ||`,
+  `!receipt.correlationId.startsWith(\`standing:\${row.occurrenceKey}:\`) ||`,
+  "reservationKey: row.occurrenceKey,",
+  `const correlationId = \`standing:\${row.occurrenceKey}:\${row.receiptIds.length}\`;`,
+  'approvalId: v.id("managedServiceStandingApprovals"),',
+  'type SuspensionReason = NonNullable<Doc<"managedServiceStandingApprovals">["suspensionReason"]>;',
+  'const approvalView = (row: Doc<"managedServiceStandingApprovals">) => ({',
+  'row: Doc<"managedServiceStandingApprovals">,',
+  'approval: Doc<"managedServiceStandingApprovals">,',
+  '.query("managedServiceStandingApprovals")',
+  'const approvalId = await ctx.db.insert("managedServiceStandingApprovals", {',
+  "standingApprovalId: approval._id,",
+  `requestKey: \`standing_\${occurrence.occurrenceKey}\`,`,
+]);
+const STANDING_BUDGET_LINES = new Set([
+  "if (!run.standingOccurrenceId && !run.standingApprovalId) return null;",
+  "if (!run.standingOccurrenceId || !run.standingApprovalId)",
+  "const approval = await ctx.db.get(run.standingApprovalId);",
+  `reservation.correlationId !== \`standing:\${occurrence.occurrenceKey}\` ||`,
+]);
+const DEVELOPMENT_SCHEMA_TABLES = ["managedServiceStandingApprovals", "managedServiceOccurrences"];
+const developmentSchemaLine = (lines: string[], n: number, token: string) => {
+  if (!["standingApproval", "occurrenceKey"].includes(token)) return false;
+  if (
+    token === "standingApproval" &&
+    lines[n]?.trim() === 'standingApprovalId: v.optional(v.id("managedServiceStandingApprovals")),'
+  )
+    return true;
+  if (/^\s*\/\/ │\s+managedServiceRuns, managedServiceStandingApprovals,\s+│$/.test(lines[n] ?? ""))
+    return true;
+  let table: string | undefined;
+  for (const line of lines.slice(0, n + 1)) {
+    const declaration = /^ {2}([A-Za-z][A-Za-z0-9]*): defineTable\(/.exec(line);
+    if (declaration) table = declaration[1];
+  }
+  return table !== undefined && DEVELOPMENT_SCHEMA_TABLES.includes(table);
+};
+
 /**
  * `file:line` for every banned token in a corpus, minus the exempted lines. Factored out of the
  * test so the EXEMPTION ITSELF can be driven with a synthetic corpus — round 3's exemption test
@@ -487,9 +617,15 @@ const tokenHits = (corpus: Array<{ file: string; lines: string[] }>) => [
       const needle = token.toLowerCase();
       return corpus.flatMap(({ file, lines }) =>
         lines
-          .map((text, n) => ({ at: `${file}:${n + 1}`, text: text.trim() }))
+          .map((text, n) => ({ at: `${file}:${n + 1}`, text: text.trim(), n }))
           .filter(({ text }) => text.toLowerCase().includes(needle))
           .filter(({ text }) => ALLOWED.get(file) !== text)
+          .filter(
+            ({ text, n }) =>
+              !(file === "managedServiceRecurrence.ts" && DEVELOPMENT_ADAPTER_LINES.has(text)) &&
+              !(file === "lib/managedServiceBudget.ts" && STANDING_BUDGET_LINES.has(text)) &&
+              !(file === "schema.ts" && developmentSchemaLine(lines, n, token)),
+          )
           .map(({ at }) => at),
       );
     }),
@@ -526,7 +662,7 @@ describe("the ten-token convenience scan", () => {
     );
   });
 
-  test("the ten banned tokens are these, and none appears in the convex namespace", () => {
+  test("the ten bans remain intact outside the ADR-063 exact inert declarations and uses", () => {
     // PINNED, like every other closed set in 29-11/29-12. Round 3's list was an inline array, so
     // dropping a token from it was invisible in review.
     expect(BANNED_TOKENS).toEqual([
@@ -549,15 +685,202 @@ describe("the ten-token convenience scan", () => {
     ]);
     // The claim.
     expect(tokenHits(code)).toEqual([]);
+    expect(
+      tokenHits([
+        {
+          file: "managedServiceRecurrence.ts",
+          lines: [
+            "const occurrenceKey = await contentHash(rawKey);",
+            "const occurrenceKey = Date.now();",
+            "const nextRunAt = 1;",
+          ],
+        },
+      ]),
+    ).toEqual(["managedServiceRecurrence.ts:3", "managedServiceRecurrence.ts:2"]);
+    expect(
+      tokenHits([
+        {
+          file: "schema.ts",
+          lines: [
+            "  managedServiceOccurrences: defineTable({",
+            "    occurrenceKey: v.string(),",
+            "    nextRunAt: v.number(),",
+            "  elsewhere: defineTable({ occurrenceKey: v.string() }),",
+          ],
+        },
+      ]),
+    ).toEqual(["schema.ts:3", "schema.ts:4"]);
   });
 });
 
-describe("no recurrence UI ROUTE", () => {
+const disabledAdapterErrors = (text: string) => {
+  const errors = [];
+  if (!/^export const MANAGED_SERVICE_RECURRENCE_ENABLED = (?:false|true);$/m.test(text))
+    errors.push("uncontrolled_admission");
+  if (/process\.env|import\.meta\.env/.test(text)) errors.push("environment_override");
+  if (/cronJobs\s*\(|\bcrons\.|ctx\.runAction\s*\(|\bfetch\s*\(/.test(text))
+    errors.push("runtime_effect");
+  const schedulerTargets = [
+    ...text.matchAll(/ctx\.scheduler\.(runAt|runAfter|cancel)\s*\(([\s\S]*?)\);/g),
+  ]
+    .map((match) =>
+      match[1] === "cancel"
+        ? `cancel:${match[2]?.trim()}`
+        : `${match[1]}:${/internal\.([A-Za-z]+)\.([A-Za-z]+)/
+            .exec(match[2] ?? "")
+            ?.slice(1)
+            .join(".")}`,
+    )
+    .sort();
+  if (
+    JSON.stringify(schedulerTargets) !==
+    JSON.stringify([
+      "cancel:row.scheduledFunctionId",
+      "runAfter:managedServiceRecurrenceExecution.start",
+      "runAt:managedServiceRecurrence.dispatch",
+      "runAt:managedServiceRecurrence.expire",
+    ])
+  )
+    errors.push("runtime_effect");
+  if (
+    /admitted\s*:\s*v\.|admitted\s*:\s*true/.test(text) ||
+    [...text.matchAll(/admitted:\s*MANAGED_SERVICE_RECURRENCE_ENABLED/g)].length !== 2 ||
+    !/claimStandingOccurrence\(ctx, args, \{ admitted: false \}\)/.test(text)
+  )
+    errors.push("native_bypass");
+  const endpoints = [
+    ...text.matchAll(
+      /export const (\w+) = (?:internalMutation|internalQuery|internalAction|tenantMutation|tenantQuery|tenantAction)\(/g,
+    ),
+  ]
+    .map((match) => match[1])
+    .sort();
+  if (
+    JSON.stringify(endpoints) !==
+    JSON.stringify([
+      "claim",
+      "configure",
+      "dispatch",
+      "expire",
+      "status",
+      "suspend",
+      "suspendFailedTick",
+      "suspendForService",
+      "tick",
+    ])
+  )
+    errors.push("extra_endpoint");
+  return errors;
+};
+const adapterConsumers = (corpus: Array<{ file: string; text: string }>) =>
+  corpus
+    .filter(
+      ({ file, text }) =>
+        file !== "managedServiceRecurrence.ts" &&
+        file !== "_generated/api.d.ts" &&
+        /(?:from\s*["'][^"']*managedServiceRecurrence["']|(?:internal|api)\.managedServiceRecurrence\.)/.test(
+          text,
+        ),
+    )
+    .map(({ file }) => file);
+
+describe("ADR-067 permits only the reviewed built-in social recurrence adapter", () => {
+  test("only the exact development ADR is exempt, and scheduling dependencies remain forbidden", () => {
+    const prefix = join(tmpdir(), "pikar-defer-guard-");
+    const root = mkdtempSync(prefix);
+    if (!root.startsWith(prefix)) throw new Error("UNSAFE_FIXTURE_CLEANUP");
+    try {
+      const decisions = join(root, "docs", "decisions");
+      mkdirSync(decisions, { recursive: true });
+      writeFileSync(
+        join(decisions, "063-inert-recurrence-construction.md"),
+        "Development only; decision remains defer.",
+      );
+      writeFileSync(
+        join(decisions, "067-managed-social-recurrence.md"),
+        "Only the named opt-in adapter; generic routines remain deferred.",
+      );
+      writeFileSync(join(root, "package.json"), "{}");
+      expect(deferAbsenceChecks({ repoRoot: root }).errors).toEqual([]);
+      writeFileSync(join(decisions, "064-recurrence-other.md"), "Not authorized by ADR063.");
+      expect(deferAbsenceChecks({ repoRoot: root }).errors).toEqual([
+        expect.stringContaining("064-recurrence-other.md"),
+      ]);
+      writeFileSync(
+        join(root, "package.json"),
+        JSON.stringify({ dependencies: { "node-cron": "1" } }),
+      );
+      expect(deferAbsenceChecks({ repoRoot: root }).errors).toEqual([
+        expect.stringContaining("064-recurrence-other.md"),
+        expect.stringContaining("scheduling dependency (node-cron)"),
+      ]);
+    } finally {
+      // Only the directory created above may be removed, never another computed target.
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+  test("native admission is code-owned, endpoints/targets/consumers are closed, and no cron is added", () => {
+    const adapter = code.find(({ file }) => file === "managedServiceRecurrence.ts");
+    expect(adapter).toBeDefined();
+    const text = adapter?.text ?? "";
+    expect(disabledAdapterErrors(text)).toEqual([]);
+    expect(adapterConsumers(code).sort()).toEqual([
+      "guardrails.ts",
+      "lib/managedServiceBudget.ts",
+      "managedServices.ts",
+      "serviceOutcomes.ts",
+    ]);
+    expect(
+      (code.find(({ file }) => file === "guardrails.ts")?.text ?? "").match(
+        /internal\.managedServiceRecurrence\.[A-Za-z]+/g,
+      ),
+    ).toEqual(["internal.managedServiceRecurrence.suspendForService"]);
+    expect(
+      disabledAdapterErrors(
+        text.replace(
+          /MANAGED_SERVICE_RECURRENCE_ENABLED = (?:true|false)/,
+          "MANAGED_SERVICE_RECURRENCE_ENABLED = Boolean(process.env.ENABLE_RECURRING)",
+        ),
+      ),
+    ).toContain("uncontrolled_admission");
+    expect(
+      disabledAdapterErrors(`${text}\nctx.scheduler.runAfter(1, internal.x.y, {});`),
+    ).toContain("runtime_effect");
+    expect(
+      disabledAdapterErrors(
+        text.replace("tenantId: v.string(),", "tenantId: v.string(), admitted: v.boolean(),"),
+      ),
+    ).toContain("native_bypass");
+    expect(
+      disabledAdapterErrors(
+        text.replace("admitted: MANAGED_SERVICE_RECURRENCE_ENABLED", "admitted: true"),
+      ),
+    ).toContain("native_bypass");
+    const worker =
+      code.find(({ file }) => file === "managedServiceRecurrenceExecution.ts")?.text ?? "";
+    expect(worker).toContain("internal.managedServiceRuns.bindAndStart");
+    expect(worker).toContain("internal.plans.insertPlan");
+    expect(worker).not.toMatch(
+      /api\.plans\.byThread|runCockpitAgent|fetch\s*\(|process\.env|runAction\s*\(/,
+    );
+    expect(
+      adapterConsumers([
+        {
+          file: "hidden.ts",
+          text: 'import { claimStandingOccurrence } from "./managedServiceRecurrence";',
+        },
+      ]),
+    ).toEqual(["hidden.ts"]);
+  });
+});
+
+describe("only ADR-067's named managed-social setup panel", () => {
   // A name filter, and honestly labelled as one: apps/web is owned by sibling plans in this
   // phase and churns, so pinning its file list here would fight them. The arming plane is
   // convex — a React route cannot schedule anything — so the closed sets above are where the
-  // proof lives; this is the cheap signal that nobody shipped a "Routines" tab.
-  test("no route segment or component is named for routines or scheduling", () => {
+  // proof lives. ADR-067 permits one setup component within Skills and Workflows, not a
+  // generic Routines route or another independently admitted scheduling surface.
+  test("the only recurrence-named component is the built-in service setup panel", () => {
     const webSources = sourcesUnder("apps/web/app");
     // POSITIVE CONTROL: the walk really reached the dashboard routes.
     expect(webSources.length).toBeGreaterThan(20);
@@ -567,7 +890,9 @@ describe("no recurrence UI ROUTE", () => {
     ]) {
       expect(webSources, `${known} should be in the scan`).toContain(known);
     }
-    expect(webSources.filter((f) => /routine|cron|recurr|schedul/i.test(f))).toEqual([]);
+    expect(webSources.filter((f) => /routine|cron|recurr|schedul/i.test(f))).toEqual([
+      "(app)/dashboard/skills-workflows/ServiceRecurrencePanel.tsx",
+    ]);
   });
 });
 

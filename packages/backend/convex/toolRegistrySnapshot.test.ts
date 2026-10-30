@@ -42,6 +42,7 @@ type AgentContext = {
   threadId?: string;
   rootRequestId?: string;
   gmailEnabled?: boolean;
+  attendedServiceAccess?: boolean;
 };
 
 // THE one call site: the old positional option object mapped FAITHFULLY onto the Phase 38
@@ -67,6 +68,7 @@ function buildOld(o: {
       tenantSkillIds: o.tenantSkillIds,
       threadId: a.threadId,
       rootRequestId: a.rootRequestId,
+      attendedServiceAccess: a.attendedServiceAccess,
       evalRevenueFixtureId: a.evalRevenueFixtureId,
     },
     {
@@ -113,6 +115,7 @@ function specialistContext(
 }
 
 const EXECUTIVE: AgentContext = {
+  attendedServiceAccess: true,
   grantWebResearch: false,
   grantDispatch: true,
   grantSkillAuthoring: true,
@@ -223,6 +226,7 @@ test("executive via runAgentLoop, lineage present", () => {
     "briefInbox",
     "checkAvailability",
     "createDocument",
+    "createMediaCampaign",
     "createVariants",
     "dispatchMedia",
     "dispatchResearch",
@@ -242,6 +246,9 @@ test("executive via runAgentLoop, lineage present", () => {
     "readBufferChannels",
     "readBufferEngagement",
     "readFinance",
+    "readSocialAccounts",
+    "readSocialContent",
+    "readSocialService",
     "readZernioEngagement",
     "recordScorecardAnswer",
     "regenerateAttachment",
@@ -250,6 +257,7 @@ test("executive via runAgentLoop, lineage present", () => {
     "replyToMessage",
     "resetPlan",
     "resolveContacts",
+    "saveSocialServiceAnswer",
     "searchVault",
     "setMode",
     "setRecipients",
@@ -259,6 +267,8 @@ test("executive via runAgentLoop, lineage present", () => {
     "stageCrmWrite",
     "stageFinanceWrite",
     "stageInvoiceReminder",
+    "stageSocialPost",
+    "startSocialService",
   ]);
 });
 
@@ -308,6 +318,7 @@ test("executive continue turn (omitRecipientEdits)", () => {
     "briefInbox",
     "checkAvailability",
     "createDocument",
+    "createMediaCampaign",
     "createVariants",
     "dispatchMedia",
     "dispatchResearch",
@@ -327,6 +338,9 @@ test("executive continue turn (omitRecipientEdits)", () => {
     "readBufferChannels",
     "readBufferEngagement",
     "readFinance",
+    "readSocialAccounts",
+    "readSocialContent",
+    "readSocialService",
     "readZernioEngagement",
     "recordScorecardAnswer",
     "regenerateAttachment",
@@ -334,6 +348,7 @@ test("executive continue turn (omitRecipientEdits)", () => {
     "replyToMessage",
     "resetPlan",
     "resolveContacts",
+    "saveSocialServiceAnswer",
     "searchVault",
     "setMode",
     "setSendTime",
@@ -342,6 +357,8 @@ test("executive continue turn (omitRecipientEdits)", () => {
     "stageCrmWrite",
     "stageFinanceWrite",
     "stageInvoiceReminder",
+    "stageSocialPost",
+    "startSocialService",
   ]);
 });
 
@@ -351,6 +368,7 @@ test("executive, gmail disabled", () => {
     "authorSkillCandidate",
     "checkAvailability",
     "createDocument",
+    "createMediaCampaign",
     "createVariants",
     "dispatchMedia",
     "dispatchResearch",
@@ -365,13 +383,19 @@ test("executive, gmail disabled", () => {
     "readBufferChannels",
     "readBufferEngagement",
     "readFinance",
+    "readSocialAccounts",
+    "readSocialContent",
+    "readSocialService",
     "readZernioEngagement",
     "recordScorecardAnswer",
+    "saveSocialServiceAnswer",
     "searchVault",
     "stageBufferPost",
     "stageCrmWrite",
     "stageFinanceWrite",
     "stageInvoiceReminder",
+    "stageSocialPost",
+    "startSocialService",
   ]);
 });
 
@@ -1038,6 +1062,7 @@ test("SMOKE direct video path", () => {
     "briefInbox",
     "checkAvailability",
     "createDocument",
+    "createMediaCampaign",
     "createVariants",
     "dispatchMedia",
     "dispatchResearch",
@@ -1057,6 +1082,8 @@ test("SMOKE direct video path", () => {
     "readBufferChannels",
     "readBufferEngagement",
     "readFinance",
+    "readSocialAccounts",
+    "readSocialContent",
     "readZernioEngagement",
     "recordScorecardAnswer",
     "regenerateAttachment",
@@ -1073,6 +1100,7 @@ test("SMOKE direct video path", () => {
     "stageBufferPost",
     "stageCrmWrite",
     "stageFinanceWrite",
+    "stageSocialPost",
   ]);
 });
 

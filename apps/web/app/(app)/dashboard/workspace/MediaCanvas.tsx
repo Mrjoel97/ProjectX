@@ -65,6 +65,7 @@ import {
   voiceLine,
   windowLabel,
 } from "./mediaCanvasView";
+import { NativeProductReferences } from "./NativeProductReferences";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
 /**
@@ -100,6 +101,7 @@ import { useSendCockpitMessage } from "./useSendCockpitMessage";
 type MediaPlan = {
   _id: string;
   mediaMode?: "reel" | "image" | null;
+  mediaAudioMode?: "native" | "separate" | null;
   imagePrompt?: string | null;
   artDirection?: ArtDirection | null;
   clipSeconds?: number | null;
@@ -331,18 +333,36 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   const cites = useQuery(api.media.sceneCitations, { planId });
 
   const generateReel = useMutation(api.media.generateReel);
+  const [referenceBusy, setReferenceBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
   // The `approve()` / `busy` / `note` shape from `PlanCard`, verbatim: the busy flag makes a second
   // click a client-side no-op, and the server's own transition makes a double-generate spend once.
   async function generate() {
-    if (busy) return;
+    if (busy || referenceBusy) return;
     setBusy(true);
     setNote(null);
     try {
-      const res = await generateReel({ planId });
-      if (!res?.ok) setNote(res?.reason ? `Not started: ${res.reason}.` : "Not started.");
+      const res = await generateReel({
+        planId,
+        ...(plan.mediaAudioMode === "native"
+          ? {
+              expectedReviewHash: estimate?.reviewHash,
+              maxCostCents: estimate?.totalCents,
+            }
+          : {}),
+      });
+      if (!res?.ok)
+        setNote(
+          res?.reason === "review_changed"
+            ? "The storyboard changed. Review it and its updated cost, then generate again."
+            : res?.reason === "over_reviewed_cost"
+              ? "The current estimate exceeds the amount reviewed. Review the updated cost before generating."
+              : res?.reason
+                ? `Not started: ${res.reason}.`
+                : "Not started.",
+        );
     } finally {
       setBusy(false);
     }
@@ -385,6 +405,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
     reel?.status,
     plan.captionStatus,
     plan.renderRetriedAt,
+    plan.mediaAudioMode,
   );
   const hero = heroState(
     { renderStatus: reel?.status ?? null, renderReason: reel?.reason ?? null },
@@ -397,6 +418,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   const cost = estimateView(estimate as JobEstimate | undefined, {
     noun,
     maxChars: Math.round(clipSeconds * 14),
+    audioMode: plan.mediaAudioMode,
   });
 
   // The vault list is fetched ONCE for the deck and only when a scene actually needs it — an
@@ -411,7 +433,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   // read, and it is why the chips go read-only and the switcher disappears at the same instant
   // Generate buys the deck.
   const locked = plan.deckLockedAt !== undefined && plan.deckLockedAt !== null;
-  const chips = briefChips(plan.brief, locked);
+  const chips = briefChips(plan.brief, locked, plan.mediaAudioMode);
   const stale = deckStale(plan.briefChangedAt, plan.deckProposedAt);
   const variations = variationView(plan);
 
@@ -423,6 +445,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   const citations = citationView(cites);
   const failures = failureCards(
     {
+      mediaAudioMode: plan.mediaAudioMode,
       readyReel: reel?.status === "rendered" && Boolean(reel?.url),
       renderStatus: reel?.status ?? null,
       renderReason: reel?.reason ?? null,
@@ -446,6 +469,20 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
       {/* THE BRIEF READS FIRST. Everything under it is an ANSWER to it, so a mis-parsed ask is
           visible before a person spends time judging the storyboard that came out of it. */}
       <BriefRow planId={planId} threadId={threadId} chips={chips} locked={locked} stale={stale} />
+      {plan.mediaAudioMode === "native" && (
+        <p style={{ ...dimText, marginTop: "0.6rem" }}>
+          Seedance 2.0 creates each scene with sound. Review product details, camera angles,
+          lighting and spoken lines before generating.
+        </p>
+      )}
+      {plan.mediaAudioMode === "native" && (
+        <NativeProductReferences
+          key={plan._id}
+          planId={planId}
+          locked={locked || busy}
+          onSavingChange={setReferenceBusy}
+        />
+      )}
 
       {/* WHAT THE PARSER DID (33-13). Between the ask and the answer, because it changes what
           the answer IS — and never behind a disclosure widget. */}
@@ -473,7 +510,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
       <GenerateBar
         view={cost}
         pricedAs={pricedAsLine(plan.targetDurationSeconds ?? null, deck.length, clipSeconds)}
-        busy={busy}
+        busy={busy || referenceBusy}
         note={note}
         blockLine={citations.blockLine}
         onGenerate={() => void generate()}
@@ -493,6 +530,9 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
       <div style={{ display: "grid", gap: "0.9rem" }}>
         {deck.map((b, position) => (
           <SceneTile
+            nativeAudio={plan.mediaAudioMode === "native"}
+            reviewHash={estimate?.reviewHash}
+            maxCostCents={estimate?.totalCents}
             key={b.blockIndex}
             block={b}
             position={position}
@@ -1040,7 +1080,11 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
     setBusy(true);
     setNote(null);
     try {
-      const result = await generateImage({ planId });
+      const result = await generateImage({
+        planId,
+        expectedReviewHash: estimate?.reviewHash,
+        maxCostCents: estimate?.totalCents,
+      });
       if (!result.ok) {
         setNote(
           result.reason === "already_started"
@@ -1118,6 +1162,8 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
           <>
             <p style={{ ...dimText, marginTop: "0.45rem" }}>
               1 image · {estimate.width}×{estimate.height} · {estimate.model}
+              {" · "}
+              {estimate.quality ?? "low"} quality
             </p>
             <p style={{ ...dimText, marginTop: "0.25rem" }}>
               Total {usd(estimate.totalCents)} · {usd(estimate.remainingCents)} of today's media
@@ -1303,7 +1349,10 @@ function PipelineTracker({ view, compact }: { view: TrackerView; compact?: boole
               <span style={{ color: STAGE_TONE[row.picture.state] }}>
                 picture {row.picture.text}
               </span>{" "}
-              · <span style={{ color: STAGE_TONE[row.voice.state] }}>voice {row.voice.text}</span>
+              ·{" "}
+              <span style={{ color: STAGE_TONE[row.voice.state] }}>
+                {view.nativeAudio ? "sound" : "voice"} {row.voice.text}
+              </span>
             </li>
           ))}
         </ul>
@@ -1533,6 +1582,10 @@ type Block = {
   asset: { source: "vault"; docId: string } | null;
   description: string;
   overlay: string | null;
+  overlayStartMs?: number | null;
+  overlayEndMs?: number | null;
+  transitionOut?: "cut" | "fade" | null;
+  motionGraphic?: "orbit-ring" | null;
   prompt: string;
   narration: string;
   narrationChars: number;
@@ -1569,6 +1622,9 @@ type VaultVideo = { _id: string; title: string; mimeType?: string | null; status
  * from the reverse.
  */
 function SceneTile({
+  nativeAudio,
+  reviewHash,
+  maxCostCents,
   block,
   position,
   total,
@@ -1582,6 +1638,9 @@ function SceneTile({
   citation,
   failure,
 }: {
+  nativeAudio: boolean;
+  reviewHash?: string;
+  maxCostCents?: number;
   block: Block;
   position: number;
   total: number;
@@ -1661,7 +1720,11 @@ function SceneTile({
     setFixNote(null);
     if (fix.arm === "regenerate") {
       void run(async () => {
-        const res = await regenerate({ planId, blockIndex: block.blockIndex });
+        const res = await regenerate({
+          planId,
+          blockIndex: block.blockIndex,
+          ...(nativeAudio ? { expectedReviewHash: reviewHash, maxCostCents } : {}),
+        });
         if (!res.ok) setFixNote(fixRefusal(res.reason, noun));
       });
       return;
@@ -1713,7 +1776,7 @@ function SceneTile({
           {windowLabel(block.startMs, block.durationMs)} · {durationLabel(block.durationMs)}
         </span>
       </div>
-      {block.visual && (
+      {block.visual && !nativeAudio && (
         <p style={{ ...dimText, fontSize: "0.72rem", margin: "0.3rem 0 0" }}>
           {KIND_COST_NOTE[block.visual]}
         </p>
@@ -1779,7 +1842,20 @@ function SceneTile({
         {block.description}
       </p>
       {block.overlay && (
-        <p style={{ ...dimText, ...traceText, margin: "0.3rem 0 0" }}>Overlay: {block.overlay}</p>
+        <p style={{ ...dimText, ...traceText, margin: "0.3rem 0 0" }}>
+          Animated title: {block.overlay}
+          {typeof block.overlayStartMs === "number" && typeof block.overlayEndMs === "number"
+            ? ` · ${(block.overlayStartMs / 1000).toFixed(1)}–${(block.overlayEndMs / 1000).toFixed(1)}s within this scene`
+            : ""}
+        </p>
+      )}
+      {block.transitionOut === "fade" && (
+        <p style={{ ...dimText, margin: "0.3rem 0 0" }}>Transition: fade through background</p>
+      )}
+      {block.motionGraphic === "orbit-ring" && (
+        <p style={{ ...dimText, margin: "0.3rem 0 0" }}>
+          3D accent: orbiting ring around the hero area (decorative, not a product model)
+        </p>
       )}
 
       {/* THE CITATION (33-08) — where this scene's figure came from, and whose word it is.
@@ -1883,7 +1959,11 @@ function SceneTile({
           </div>
         )}
         <div className="trace-line">
-          <span style={traceText}>{voiceLine(block.narration, block.voice)}</span>
+          <span style={traceText}>
+            {nativeAudio
+              ? "Sound is included in the generated scene."
+              : voiceLine(block.narration, block.voice)}
+          </span>
         </div>
         {block.voice?.verdict && (
           <div className="trace-line">
@@ -2156,7 +2236,16 @@ function SceneTile({
               type="button"
               disabled={busy}
               style={ghostBtn}
-              onClick={() => void run(() => regenerate({ planId, blockIndex: block.blockIndex }))}
+              onClick={() =>
+                void run(async () => {
+                  const res = await regenerate({
+                    planId,
+                    blockIndex: block.blockIndex,
+                    ...(nativeAudio ? { expectedReviewHash: reviewHash, maxCostCents } : {}),
+                  });
+                  if (!res.ok) setNote(fixRefusal(res.reason, noun));
+                })
+              }
             >
               Regenerate this {noun}
             </button>
@@ -2171,7 +2260,11 @@ function SceneTile({
                   : buysPicture
                     ? "one new clip"
                     : null,
-                block.narration.trim() === "" ? null : "one new voice take",
+                nativeAudio
+                  ? "its native sound"
+                  : block.narration.trim() === ""
+                    ? null
+                    : "one new voice take",
               ]
                 .filter(Boolean)
                 .join(" and ")}

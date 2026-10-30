@@ -1,6 +1,6 @@
-import { hasUnsafeWebMarkup } from "@pikar/core/webCarouselRuntime";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { buildSandboxOptions, type SandboxLike, type SandboxOptions } from "@pikar/core/render";
+import { hasUnsafeWebMarkup } from "@pikar/core/webCarouselRuntime";
 import { presenceBrowserWorkerScript } from "./worker";
 
 const HASH = /^[a-f0-9]{64}$/;

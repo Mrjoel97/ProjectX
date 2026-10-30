@@ -136,11 +136,13 @@ function validRequest(value: StitchDesignRequest): boolean {
     typeof row.prompt === "string" &&
     row.prompt.trim().length > 0 &&
     new TextEncoder().encode(row.prompt).byteLength <= 24000 &&
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: Reject control characters at the untrusted input boundary.
     !/[\u0000\u000b\u000c]/.test(row.prompt) &&
     ["DESKTOP", "MOBILE", "TABLET"].includes(String(row.deviceType))
   );
 }
 function artifactUrl(value: unknown, fileName?: unknown, projectId?: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: Reject control characters at the untrusted input boundary.
   if (typeof value !== "string" || value.length > 8192 || /[\u0000-\u0020\u007f\\]/.test(value))
     throw new BoundaryError("STITCH_ARTIFACT_URL_REFUSED");
   let url: URL;
@@ -402,6 +404,7 @@ async function runStitch(
       throw new BoundaryError("STITCH_SCOPE_REFUSED");
     }
     const key = process.env.STITCH_API_KEY;
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: Reject control characters at the untrusted input boundary.
     if (!key || key.length > 1024 || /[\s\u0000-\u001f]/.test(key))
       throw new BoundaryError("STITCH_CONFIGURATION_REQUIRED");
     const timeout = services.requestTimeoutMs ?? 180000;
@@ -488,6 +491,7 @@ async function runStitch(
             costStatus: "not_reported",
           });
         } catch {
+          // biome-ignore lint/correctness/noUnsafeFinally: Failed budget reconciliation must override success or provider failure and close the admission gate.
           throw new BoundaryError("STITCH_BUDGET_RECONCILIATION_REQUIRED", true);
         }
       }
@@ -723,6 +727,7 @@ async function runStitch(
       },
     );
     const htmlText = decode(htmlBytes);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: Reject control characters at the untrusted input boundary.
     if (!htmlText.trim() || htmlText.includes("\u0000"))
       throw new BoundaryError("STITCH_HTML_INVALID");
     const image = await attempt(
@@ -760,7 +765,7 @@ async function runStitch(
           }
           declaredMime = `image/${metadata.mimeType}`;
         } else data = await bytes(response, MAX_IMAGE_BYTES, signal);
-        let raster;
+        let raster: ReturnType<typeof inspectWebAssetBytes>;
         try {
           raster = inspectWebAssetBytes(data, declaredMime);
         } catch {

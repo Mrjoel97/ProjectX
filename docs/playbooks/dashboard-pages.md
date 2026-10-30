@@ -1,3 +1,31 @@
+> Last verified: 2026-10-29 — Social Marketing service setup and scheduling now live under Marketing, not Skills and Workflows. Marketing separates Services, Publishing, Reports, Leads & links, and Connections; sections load on first visit and retain draft state during tab changes. Keyboard navigation and per-section errors are preserved. Service review links target Marketing. No grants, budgets, schedules or publication rules changed.
+
+> Last verified: 2026-10-29 — Production postflight for release 9d9a111f found an outdated new-service scheduling notice. Setup now directs the user to save first and then review and approve a schedule. Existing saved-service scheduling controls, readiness checks and explicit approval are unchanged. No service is started or scheduled by this copy correction.
+
+> Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social and recurring-service changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
+
+> Last verified: 2026-10-26 — The finance privacy regression checks complete numeric values rather than numeric substrings, so a daily-reset timestamp containing the shared ceiling digits cannot cause a false leak failure. Tenant rail values and exclusion of deployment ceilings remain asserted; runtime finance behavior is unchanged.
+
+> Last verified: 2026-10-24 — Preserve main c765168d legal disclosures and owned-domain callback alongside the media workspace. This integration does not replace the policy pages or alter the approved public contact details. Combined-source CI and hosted acceptance remain separate.
+
+> Combined-source checkpoint: 2026-10-24 — Preserve the tabbed artifact workspace and in-conversation media budget request while retaining social draft locking, explicit destination/approval controls and truthful disconnect/data-erasure disclosures. Reading an output or social account does not authorize generation or publication. Final merged-candidate CI and release remain pending.
+
+> Last verified: 2026-10-24 — Over-daily-limit media batch approval appears in the chat while artifacts remain in workspace tabs. It names exact task cost/remaining allowance/required extra; changed content, selection, amount or window needs fresh approval. Current media source defaults100USD/customer/day and2,000USD shared/day do not change chat/research/document rails or the separate test allowance.
+
+> Last verified: 2026-10-21 — The workspace now has a Work tab, bounded per-chat artifact tabs, searchable reopenable output history, unread completions and an expanded reading pane. Keyboard tab navigation and close/reopen change the view only; closing a tab does not delete an output. The shared selected-only reader handles safe Markdown/text, original PDF pages, labelled slide layout previews, capped read-only worksheet grids and image/video controls. Missing Office projections retain honest original downloads. Local Edge fixture QA covered actual PDF pages/text layer, wide and 420-pixel reading, slides/chart and worksheet switching with no external requests or page errors; this is not authenticated hosted acceptance. Native PowerPoint 15.0 rendered all seven synthetic layouts and preserved a text edit through save/reopen. ARTF-01..04 remain open; see ADR-063 and Phase 53-02.
+
+> Last verified: 2026-10-21 — Phase 53 keeps campaign-private plans out of ordinary Approval counts/lists/running work using an index predicate before read bounds; campaign review stays in its workspace card. Local regressions are distinct from hosted responsive/owner acceptance.
+
+> 2026-10-24: Social draft controls lock during pending save/upload to prevent lost edits. YouTube disconnect requires confirmation of Google project-wide revocation and reports confirmed/unconfirmed provider results truthfully. Existing connected human reads remain visible when new connections are disabled. Data-erasure UI names social providers correctly and warns about shared Google permissions. Current focused customer checks pass 31 cases; legal pages receive factual social disclosures while the existing legal-review deferral remains visible.
+
+> Last verified: 2026-10-20 — Connect social now supports explicit customer account selection, bounded recent-content reads, owned-media drafts and saved-revision post review. Publishing remains disabled pending qualification. Direct-social privacy/terms drafts separate mailbox/social consent, local disconnect/provider revocation and agent drafting/customer approval; YouTube terms/privacy links are included. Company/legal placeholders and qualified review remain open; isolated review deployment does not establish production legal readiness.
+
+> Implementation update: 2026-10-20 — Settings Connections and Marketing expose native social account setup, with loading/configuration/consent states and no automatic publishing. Offline/live validation status is tracked in social-connections.md.
+
+> Last verified: 2026-10-29 — Marketing renders a shared plain-language narrative above existing Zernio evidence. It reads the cached snapshot without another provider/model call and preserves old-data, lifetime, sample and attribution limitations. Five interface checks pass; hosted staging acceptance is pending.
+
+> Last verified: 2026-10-23 — Skills and Workflows opens on Services, with goal/account/operation setup, maximum spend per run, native start status and Pause/Stop/Resume. Unavailable services explain that setup may be saved; cadence remains disabled. Existing Workflows/Skills remain accessible. Workspace trace labels cover both service tools. Nineteen local UI tests pass; mocked UI states are not hosted acceptance.
+
 > Last verified: 2026-10-24 — Sites now includes website, landing-page and shop drafts plus three explicitly fictional renderer-generated examples. Storefront cards identify presentation drafts, not a working shop. The editor mounts merchant readiness, provider consent, actual order states and exact-package setup review; current stock and preserve/set decisions are shown separately from initial proposed stock. Publication and checkout readiness remain separate. V6 native visual verification is pending.
 
 > Last verified: 2026-10-24 — Sites is a first-class sidebar link after Skills and Workflows, using the existing globe icon, active-page state and collapsed tooltip. The Chat options menu provides the same destination on compact screens without adding a sixth fixed bottom tab. It opens the existing /dashboard/sites surface for landing pages, websites and shop preparation; checkout availability and all review/publication gates remain unchanged. A real Shell regression checks the customer link, current-page state, collapse accessibility and navigation away.
@@ -47,6 +75,8 @@
 > Last verified: 2026-10-16 — export wording now describes reusable stored-file links, asks users to keep the export private because anyone with a link can access its file, and advises saving files before erasure. No automatic URL expiry is promised or implemented. [Convex serving-files documentation](https://docs.convex.dev/file-storage/serve-files) states that direct file URLs can be reused/shared and revocation requires deleting the stored file. The existing Settings download DOM test checks this disclosure alongside the downloaded export; no storage behavior changed.
 
 > Last verified: 2026-10-16 — Settings JSON export preserves file descriptors from every continuation page, including later tables and null URLs for missing bytes. The aggregate contract requires files; existing header, omissions and final truncation limits are retained. A DOM regression clicks Download my data and reads the actual downloaded Blob across three pages/two tables, checking file links, rows and partial-export disclosure. File capabilities remain only in the user-requested download, with no logging or additional storage requests.
+
+> Last verified: 2026-10-24 — Native-film approval cards route to the workspace's exact storyboard/sound/cost review. Legacy approvals and standalone-image routes retain their meaning. The native workspace combines picture/sound progress, exposes30/45/60s choices, forwards reviewed content/cost on generation/retry and omits stock/still downgrade arms. Backend review guards also close direct native executePlan calls without exact review. See media.md for native source/quality limits.
 
 # Playbook: Connected dashboard pages
 
@@ -3251,3 +3281,19 @@ Last verified: 2026-09-12 — `e2e/marketing-uat.spec.ts` collects three serial,
 Last verified: 2026-10-15 — Delivery report badges distinguish unknown external outcomes and expose mailbox reconciliation. Ordinary status labels remain readable.
 
 Last verified: 2026-10-15 — The operator confirmed legal name pikar-ai, operating country Tanzania and support joel@pikar-ai.com. Legal banners now accurately describe unresolved address/review rather than asserting an unformed entity or an active build block. Commercial billing must stay disabled for this release by explicit operator instruction; registered address remains pending.
+
+
+## Phase 53 — campaign visibility and artifact labels
+
+Campaign children are reviewed through the media batch card, not ordinary Approvals. summary, paginatePlans, runningWork and listCleared use by_tenant_status_campaign_createdAt with mediaCampaignId=undefined before take/paginate/time bounds. The ordinary thread-root lookup likewise filters through by_thread_campaign before ROOT_SCAN. Preserve these indexed exclusions; filtering only after a capped read lets repeated campaigns hide older normal work or inflate approval badges. approvals.test.ts covers this boundary.
+
+The new workspace campaign card shows real proposed/queued/running/succeeded/failed/partial/reconciliation/cancelled state, per-item review/download and selected paid retry. Cumulative reserved maximum is not actual spend. JSON manifest download contains no bearer URLs and is not a ZIP collection. Missing/failing items cannot be labelled complete or replaced by placeholders.
+
+PPTX remains an owned Vault/Content artifact with a labelled same-spec layout preview and original download, not a second content store or Office-fidelity renderer. Reuse existing provenance, on-demand download and tenant boundaries. Root consolidated regressions, authenticated browser/responsive review and owner artifact quality gates remain open.
+
+### 2026-10-23 — Service supervision
+
+The Skills and Workflows service card links an owned business goal using current configuration/control revisions. The results panel separates completed work, the user's usefulness feedback, supported account measurements and unproven business improvement. Feedback cannot complete a goal or approve a post. Pending work disables goal edits. Check interrupted work asks the native workflow and ledger before closing an interrupted claim; unresolved cost or unavailable liveness keeps it blocked. Closing never automatically starts another run. Synthetic interface states were reviewed at390/768/1440 pixels without horizontal overflow; this is not hosted authenticated acceptance.
+# Finance projection update
+
+> Last verified: 2026-10-24 — Finance reports a recurring service's prepaid standing envelope once. Its `paid_call_standing` provider-detail receipts remain in the append-only ledger for exact run reconciliation but are excluded from displayed money totals and chart buckets. Reads bound the raw ledger scan before filtering and derive the partial indicator from the scanned count, so a full detail page cannot quietly become a complete zero. Native Finance/accounting regression covers cumulative sub-cent usage without duplicate charges; hosted financial and recurring-service acceptance remain separate.

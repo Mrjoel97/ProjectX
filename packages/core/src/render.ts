@@ -1,3 +1,5 @@
+import { type MediaFinishing, parseMediaFinishing } from "./mediaFinishing";
+import { orbitRingAss } from "./orbitRing";
 /**
  * The render stage's PURE half (MEDIA-01, D11). Pure TS, Convex-free AND SDK-free (CLAUDE.md §1).
  *
@@ -18,6 +20,7 @@ import {
   type AssemblyVisual,
   parseAssemblySidecar,
 } from "./assembly";
+import { isNativeCaptionWav } from "./captions";
 import { MUSIC_MOODS, type MusicMood, TARGET_DURATIONS } from "./storyboard";
 
 // ── The duration ceiling (plan 20-15 Task 1, settled 2026-08-02) ───────────────────────────────
@@ -540,6 +543,17 @@ export function cardColorsOf(palette: readonly string[] | undefined): {
   return { bg, ink: luminance(bg) > 0.179 ? "0x000000" : "0xFFFFFF" };
 }
 
+/** Native graphics reuse the reviewed palette wire field; no text cards share this mode.
+ * The second valid color is the accent. Missing accents remain neutral, never Pikar cyan. */
+export function nativeGraphicColorsOf(palette: readonly string[] | undefined): {
+  bg: string;
+  ink: string;
+} {
+  const base = cardColorsOf(palette);
+  const colors = (palette ?? []).map(hexIn).filter((color): color is string => color !== null);
+  return { bg: base.bg, ink: colors[1] ?? base.ink };
+}
+
 // ── The RUNNER: the route handler's whole body, with the SDK injected ──────────────────────────
 //
 // The Next.js route file is a ~20-line adapter over this function (CLAUDE.md §1: domain logic in
@@ -604,7 +618,9 @@ type RenderRequestBody =
       /** The DECLARED reel length. The scenes must sum to it, here and in the script. */
       targetSeconds: number;
       /** The reel, in order. Order IS the index — the same rule the deck parser follows. */
-      scenes: Array<{ kind: AssemblyVisual; seconds: number }>;
+      scenes: Array<{ kind: AssemblyVisual; seconds: number } & MediaFinishing>;
+      /** Explicit new-job mode; absent preserves the historical separate narration mix. */
+      nativeAudio?: true;
       inputs: Array<{ name: string; jobId: string }>;
       /** Text cards: the only input whose bytes come from the body rather than a job row. */
       cards: Array<{ name: string; text: string }>;
@@ -625,7 +641,7 @@ type RenderRequestBody =
        *  once, in one tested function, instead of at whichever end happens to look. Absent means
        *  the black-and-white card every reel had before. */
       card?: { bg: string; ink: string };
-      uploadUrls: { mp4: string; sidecar: string };
+      uploadUrls: { mp4: string; sidecar: string; audio?: string };
     }
   | {
       mode: "caption";
@@ -699,7 +715,7 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
   if (!Array.isArray(b.scenes) || b.scenes.length === 0) return null;
   if (!Array.isArray(b.inputs) || b.inputs.length === 0) return null;
 
-  const scenes: Array<{ kind: AssemblyVisual; seconds: number }> = [];
+  const scenes: Array<{ kind: AssemblyVisual; seconds: number } & MediaFinishing> = [];
   let summed = 0;
   for (const entry of b.scenes) {
     if (entry === null || typeof entry !== "object") return null;
@@ -707,7 +723,16 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
     if (!isStr(kind) || !SCENE_KIND_SET.has(kind)) return null;
     if (typeof seconds !== "number" || !Number.isInteger(seconds) || seconds < 1) return null;
     summed += seconds;
-    scenes.push({ kind: kind as AssemblyVisual, seconds });
+    const finishing = parseMediaFinishing(entry as MediaFinishing, seconds * 1000);
+    if (finishing === null) return null;
+    if (
+      b.nativeAudio !== true &&
+      (finishing.overlay !== undefined ||
+        finishing.transitionOut !== undefined ||
+        finishing.motionGraphic !== undefined)
+    )
+      return null;
+    scenes.push({ kind: kind as AssemblyVisual, seconds, ...finishing });
   }
   // The script asserts this too, and refuses before doing any work. Asserting it HERE as well is
   // the cheaper of the two failures by a whole sandbox: a deck that does not add up to what it
@@ -774,6 +799,17 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
     if (!inputs.some((i) => i.name === b.musicFile)) return null;
   }
   const musicFile = b.musicFile as string | undefined;
+  if (b.nativeAudio !== undefined && b.nativeAudio !== true) return null;
+  if (
+    b.nativeAudio === true &&
+    (scenes.some((scene) => scene.kind !== "video") ||
+      cards.length !== 0 ||
+      inputs.length !== scenes.length ||
+      inputs.some((input, i) => input.name !== renderInputName("video", i)) ||
+      music !== undefined ||
+      musicFile !== undefined)
+  )
+    return null;
 
   // THE CARD PALETTE, and this is a TRUST BOUNDARY rather than a format check. Both values are
   // written into an ffmpeg filtergraph inside the VM, so the shape is re-asserted here even though
@@ -791,23 +827,25 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
 
   const up = b.uploadUrls;
   if (up === null || typeof up !== "object") return null;
-  const { mp4, sidecar } = up as Record<string, unknown>;
+  const { mp4, sidecar, audio } = up as Record<string, unknown>;
   // The WRITE-direction SSRF guard. These URLs come from the body (Convex mints them per render),
   // so the runner POSTs bytes to them — and must not POST a tenant's reel to a host of the
   // caller's choosing. Their origin has to be the deployment we derived, not one we were handed.
   if (!sameOrigin(mp4) || !sameOrigin(sidecar)) return null;
+  if (b.nativeAudio === true ? !sameOrigin(audio) : audio !== undefined) return null;
 
   return {
     mode: "assemble",
     renderId: b.renderId,
     targetSeconds: b.targetSeconds,
     scenes,
+    ...(b.nativeAudio === true ? { nativeAudio: true as const } : {}),
     inputs,
     cards,
     ...(music === undefined ? {} : { music }),
     ...(musicFile === undefined ? {} : { musicFile }),
     ...(card === undefined ? {} : { card }),
-    uploadUrls: { mp4, sidecar },
+    uploadUrls: { mp4, sidecar, ...(typeof audio === "string" ? { audio } : {}) },
   };
 }
 
@@ -977,6 +1015,18 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
     files.push({ path: `in/${card.name}`, content: new TextEncoder().encode(card.text) });
   }
 
+  for (const [i, scene] of body.scenes.entries()) {
+    if (scene.motionGraphic === "orbit-ring")
+      files.push({
+        path: `in/motion${String(i + 1).padStart(2, "0")}.ass`,
+        content: new TextEncoder().encode(orbitRingAss(scene.seconds, body.card?.ink)),
+      });
+    if (scene.overlay !== undefined)
+      files.push({
+        path: `in/overlay${String(i + 1).padStart(2, "0")}.txt`,
+        content: new TextEncoder().encode(scene.overlay),
+      });
+  }
   const startedAt = Date.now();
   const sandbox = await deps.createSandbox(
     buildSandboxOptions({ snapshotId: deps.snapshotId, timeoutMs: RENDER_SANDBOX_TIMEOUT_MS }),
@@ -996,8 +1046,24 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
     const run = await sandbox.runCommand("sh", [
       "assemble_final.sh",
       ...body.scenes.flatMap((s) => ["--scene", `${s.kind}:${s.seconds}`]),
+      ...body.scenes.flatMap((s, i) =>
+        s.overlay !== undefined || s.transitionOut !== undefined || s.motionGraphic !== undefined
+          ? [
+              "--finish",
+              [
+                i,
+                s.transitionOut ?? "cut",
+                s.overlay === undefined ? 0 : 1,
+                s.overlayStartMs ?? 0,
+                s.overlayEndMs ?? s.seconds * 1000,
+                s.motionGraphic === "orbit-ring" ? 1 : 0,
+              ].join(":"),
+            ]
+          : [],
+      ),
       "--target-seconds",
       String(body.targetSeconds),
+      ...(body.nativeAudio ? ["--native-audio"] : []),
       // The bed, by MOOD. No file was written for it above and none needs to be: the library is
       // baked into the snapshot, so this is a name the script looks up, not bytes we ship.
       ...(body.music === undefined ? [] : ["--music", body.music]),
@@ -1026,17 +1092,43 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
     if (!checked.ok || !mp4 || !sidecarBytes) {
       return jsonStop(checked.ok ? "missing_output" : checked.code);
     }
+    const expectedFinishing = body.scenes.filter(
+      (s) =>
+        s.overlay !== undefined || s.transitionOut !== undefined || s.motionGraphic !== undefined,
+    ).length;
+    if (expectedFinishing > 0 && checked.report.finishingCueCount !== expectedFinishing)
+      return jsonStop("missing_output");
+    const nativeAudio = body.nativeAudio
+      ? await sandbox.readFileToBuffer({ path: "out/final.mp4.native.wav" })
+      : null;
+    if (body.nativeAudio) {
+      if (!nativeAudio || nativeAudio.byteLength > 6 * 1024 * 1024)
+        return jsonStop("missing_output");
+      if (!isNativeCaptionWav(nativeAudio, body.targetSeconds)) return jsonStop("missing_output");
+    }
 
     // 3. Up through the two single-use, write-only, short-lived URLs Convex minted. **The MIME
     //    type is OURS** — asserted here as a literal, never read from the VM's response.
+    const audioStorageId =
+      nativeAudio && body.uploadUrls.audio
+        ? await uploadTo(deps.fetch, body.uploadUrls.audio, nativeAudio, "audio/wav")
+        : undefined;
+    if (body.nativeAudio && !audioStorageId) return jsonStop("upload_failed");
+    const partialStorageIds: string[] = audioStorageId ? [audioStorageId] : [];
+    const failedUpload = () =>
+      body.nativeAudio
+        ? Response.json({ ok: false, code: "upload_failed", partialStorageIds })
+        : jsonStop("upload_failed");
     const mp4StorageId = await uploadTo(deps.fetch, body.uploadUrls.mp4, mp4, "video/mp4");
+    if (!mp4StorageId) return failedUpload();
+    if (body.nativeAudio) partialStorageIds.push(mp4StorageId);
     const sidecarStorageId = await uploadTo(
       deps.fetch,
       body.uploadUrls.sidecar,
       sidecarBytes,
       "application/json",
     );
-    if (!mp4StorageId || !sidecarStorageId) return jsonStop("upload_failed");
+    if (!sidecarStorageId) return failedUpload();
 
     // Small JSON only. The bytes never travel in this response — 10 MB would meet the platform's
     // response-body limit, and the upload URLs are the shipped ingest idiom anyway.
@@ -1044,6 +1136,7 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
       ok: true,
       mp4StorageId,
       sidecarStorageId,
+      ...(audioStorageId ? { audioStorageId } : {}),
       renderMs: Date.now() - startedAt,
       gates: checked.report.gates,
       sceneCount: checked.report.sceneCount,

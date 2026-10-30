@@ -133,7 +133,9 @@ describe("human website review controls", () => {
     state.versions[0]!.requiresProviderReview = true;
     state.versions[0]!.browserReviewJob = { state: "failed", reason: "PRIVATE_WORKER_DETAILS" };
     await mount(3);
-    expect(container.textContent).toContain("Automatic visual review could not finish. This version remains private.");
+    expect(container.textContent).toContain(
+      "Automatic visual review could not finish. This version remains private.",
+    );
     expect(container.textContent).not.toContain("Visual quality review pending");
     expect(container.textContent).not.toContain("PRIVATE_WORKER_DETAILS");
     expect(button("Approve this version").disabled).toBe(true);
@@ -144,7 +146,10 @@ describe("human website review controls", () => {
     expect(container.textContent).not.toContain("Visual review could not finish");
   });
 
-  test.each(["running", "captured"] as const)("%s review shows active checks while approval stays unavailable", async (stateName) => {
+  test.each([
+    "running",
+    "captured",
+  ] as const)("%s review shows active checks while approval stays unavailable", async (stateName) => {
     state.versions[0]!.requiresProviderReview = true;
     state.versions[0]!.browserReviewJob = { state: stateName };
     await mount(3);
@@ -351,10 +356,18 @@ describe("human website review controls", () => {
     });
     await mount(3);
     await click("Refine layout");
-    expect(state.calls).toEqual([{ name: "presenceVisualRevision:request", args: {
-      projectId: "project-one", expectedProjectRevision: 7, expectedSessionRevision: 5,
-      expectedVersion: 3, expectedContentHash: hash(3),
-    } }]);
+    expect(state.calls).toEqual([
+      {
+        name: "presenceVisualRevision:request",
+        args: {
+          projectId: "project-one",
+          expectedProjectRevision: 7,
+          expectedSessionRevision: 5,
+          expectedVersion: 3,
+          expectedContentHash: hash(3),
+        },
+      },
+    ]);
     expect(button("Approve this version").disabled).toBe(true);
     await mount(2);
     expect(container.textContent).not.toContain("Refine layout");

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  type MerchantCartView,
   renderMerchantCart,
   renderMerchantCommerceLink,
   renderMerchantOrderStatus,
-  type MerchantCartView,
 } from "./merchantBuyer";
 
 const cart: MerchantCartView = {

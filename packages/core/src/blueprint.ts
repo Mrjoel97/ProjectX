@@ -53,9 +53,8 @@ export type BlueprintField = (typeof BLUEPRINT_FIELDS)[number];
 export type BlueprintEntry = {
   readonly values: readonly string[];
   /**
-   * What the USER asserted vs what the SYSTEM inferred. Drives the `[stated]` / `[source: …]`
-   * markers in the spine — the agent must not second-guess a stated fact at the user, and should
-   * cite a derived one when it leans on it.
+   * Document statement vs system inference. Extraction labels do not establish who authored
+   * the source or whether a claim is true; native provenance and review remain separate.
    */
   readonly origin: "stated" | "derived";
   /** Document title backing a derived claim. Present iff `origin === "derived"`. */
@@ -64,6 +63,153 @@ export type BlueprintEntry = {
 
 /** The blueprint itself: every field present, `null` when blank. Total by construction. */
 export type BusinessBlueprint = { readonly [K in BlueprintField]: BlueprintEntry | null };
+
+/** Sidecar metadata binds exact content; a review records a decision, never the truth of a claim. */
+export type BlueprintFieldProvenance = {
+  field: BlueprintField;
+  entryHash: string;
+  sourceDocId: string | null;
+  sourceHash: string | null;
+  sourceCreatedAt: number | null;
+  firstRecordedAt: number;
+  reviewedAt: number | null;
+  reviewAuditId: string | null;
+};
+export type BlueprintProvenance = {
+  version: 1;
+  blueprintHash: string;
+  fields: BlueprintFieldProvenance[];
+};
+export type BlueprintLedgerField = {
+  field: BlueprintField;
+  label: string;
+  values: string[];
+  origin: "stated" | "derived";
+  sourceState: "current" | "changed" | "withdrawn" | "unverified";
+  sourceDocId: string | null;
+  sourceHash: string | null;
+  sourceCreatedAt: number | null;
+  originalObservedAt: null;
+  firstRecordedAt: number | null;
+  reviewedAt: number | null;
+  reviewAuditId: string | null;
+};
+
+/** Stable input to the native SHA-256 helper; markdown/title equality alone is not an identity. */
+export function blueprintEntryIdentity(entry: BlueprintEntry): string {
+  return JSON.stringify([entry.origin, [...entry.values], entry.source ?? null]);
+}
+
+/** Malformed, future or oversized metadata degrades to unverified, never a guessed citation. */
+export function parseBlueprintProvenance(raw: string | undefined): BlueprintProvenance | null {
+  if (!raw || raw.length > 32_000) return null;
+  try {
+    const x = JSON.parse(raw);
+    const exact = (v: unknown, keys: string[]): v is Record<string, unknown> =>
+      !!v &&
+      typeof v === "object" &&
+      !Array.isArray(v) &&
+      Object.keys(v).sort().join("|") === keys.sort().join("|");
+    const hash = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
+    const ref = (v: unknown): v is string =>
+      typeof v === "string" && /^[A-Za-z0-9_:-]{1,128}$/.test(v);
+    const time = (v: unknown): v is number => Number.isSafeInteger(v) && Number(v) >= 0;
+    if (
+      !exact(x, ["version", "blueprintHash", "fields"]) ||
+      x.version !== 1 ||
+      !hash(x.blueprintHash) ||
+      !Array.isArray(x.fields) ||
+      x.fields.length > BLUEPRINT_FIELDS.length * 2
+    )
+      return null;
+    const seen = new Set<string>();
+    for (const row of x.fields) {
+      if (
+        !exact(row, [
+          "field",
+          "entryHash",
+          "sourceDocId",
+          "sourceHash",
+          "sourceCreatedAt",
+          "firstRecordedAt",
+          "reviewedAt",
+          "reviewAuditId",
+        ]) ||
+        !BLUEPRINT_FIELDS.includes(row.field as BlueprintField) ||
+        !hash(row.entryHash) ||
+        !time(row.firstRecordedAt) ||
+        !(
+          (row.sourceDocId === null && row.sourceHash === null && row.sourceCreatedAt === null) ||
+          (ref(row.sourceDocId) && hash(row.sourceHash) && time(row.sourceCreatedAt))
+        ) ||
+        !(
+          (row.reviewedAt === null && row.reviewAuditId === null) ||
+          (time(row.reviewedAt) &&
+            ref(row.reviewAuditId) &&
+            row.reviewedAt >= Number(row.firstRecordedAt))
+        )
+      )
+        return null;
+      const key = `${row.field}:${row.entryHash}`;
+      if (seen.has(key)) return null;
+      seen.add(key);
+    }
+    return x as BlueprintProvenance;
+  } catch {
+    return null;
+  }
+}
+
+/** Native adapters supply owned current snapshots and verified immutable review references. */
+export function projectBlueprintLedger(input: {
+  blueprint: BusinessBlueprint;
+  blueprintHash: string;
+  provenance: string | undefined;
+  entryHashes: Partial<Record<BlueprintField, string>>;
+  sources: readonly { docId: string; hash: string; available: boolean }[];
+  reviewRefs: readonly string[];
+}): BlueprintLedgerField[] {
+  const parsed = parseBlueprintProvenance(input.provenance);
+  const metadata = parsed?.blueprintHash === input.blueprintHash ? parsed : null;
+  return BLUEPRINT_FIELDS.flatMap((field) => {
+    const entry = input.blueprint[field];
+    if (!entry) return [];
+    const record = metadata?.fields.find(
+      (row) => row.field === field && row.entryHash === input.entryHashes[field],
+    );
+    const reviewed =
+      record?.reviewAuditId &&
+      input.reviewRefs.includes(`${field}:${record.entryHash}:${record.reviewAuditId}`)
+        ? record
+        : null;
+    const source = reviewed?.sourceDocId
+      ? input.sources.find((row) => row.docId === reviewed.sourceDocId)
+      : null;
+    const sourceState: BlueprintLedgerField["sourceState"] = !reviewed?.sourceDocId
+      ? "unverified"
+      : !source?.available
+        ? "withdrawn"
+        : source.hash !== reviewed.sourceHash
+          ? "changed"
+          : "current";
+    return [
+      {
+        field,
+        label: FIELD_SPEC[field].label,
+        values: [...entry.values],
+        origin: entry.origin,
+        sourceState,
+        sourceDocId: reviewed?.sourceDocId ?? null,
+        sourceHash: reviewed?.sourceHash ?? null,
+        sourceCreatedAt: reviewed?.sourceCreatedAt ?? null,
+        originalObservedAt: null,
+        firstRecordedAt: reviewed?.firstRecordedAt ?? null,
+        reviewedAt: reviewed?.reviewedAt ?? null,
+        reviewAuditId: reviewed?.reviewAuditId ?? null,
+      },
+    ];
+  });
+}
 
 type FieldSpec = {
   /** Serializer + spine heading. */
@@ -553,8 +699,8 @@ export const SPINE_CHAR_CAP = 2500;
 const SPINE_OPEN = "<business_blueprint>";
 const SPINE_CLOSE = "</business_blueprint>";
 const SPINE_INTRO =
-  "Facts marked [stated] are the user's own words — settled, do not second-guess them. " +
-  "Facts marked [source: X] were inferred from X — cite X when you lean on it.";
+  "[stated] marks a document statement; [source: X] marks an agent inference from X. " +
+  "User review records a proposal decision, not independent fact verification.";
 const SPINE_EMPTY = "- (nothing confirmed about this business yet)";
 /** A long file name must cost the VALUE room, never the block's budget. */
 const SOURCE_TITLE_CAP = 40;

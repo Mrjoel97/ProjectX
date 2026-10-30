@@ -13,6 +13,7 @@
 // must redden a test (the phase-19.1 transposition rule: swap, don't delete).
 
 import retrierTest from "@convex-dev/action-retrier/test";
+import type { MigrationResult } from "@convex-dev/migrations";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -80,7 +81,7 @@ const A = "tenant_sweep_a";
 
 /** One synchronous batch of the mediaJobs sweep (documented one-off mode). */
 const runJobSweep = (t: T) =>
-  t.mutation(internal.reliabilitySweep.sweepStuckMediaJobs, {
+  t.mutation(internal.reliabilitySweep.sweepSubmittedMediaJobs, {
     cursor: null,
     batchSize: 100,
     dryRun: false,
@@ -88,13 +89,25 @@ const runJobSweep = (t: T) =>
   });
 
 /** One synchronous batch of the plans sweep. */
-const runPlanSweep = (t: T) =>
-  t.mutation(internal.reliabilitySweep.sweepStuckPlans, {
-    cursor: null,
-    batchSize: 100,
-    dryRun: false,
-    oneBatchOnly: true,
-  });
+const planSweeps = [
+  internal.reliabilitySweep.sweepPendingRenderPlans,
+  internal.reliabilitySweep.sweepRenderingPlans,
+  internal.reliabilitySweep.sweepTranscribingPlans,
+  internal.reliabilitySweep.sweepCollectingMemoPlans,
+];
+const runPlanSweep = async (t: T) => {
+  const results = [];
+  for (const migration of planSweeps)
+    results.push(
+      await t.mutation(migration, {
+        cursor: null,
+        batchSize: 100,
+        dryRun: false,
+        oneBatchOnly: true,
+      }),
+    );
+  return results;
+};
 
 const seedPlan = (t: T, fields: Partial<Doc<"plans">> = {}): Promise<Id<"plans">> =>
   t.run((ctx) =>
@@ -203,7 +216,7 @@ describe("the cron actually registers the sweep", () => {
     expect((await getJob(t, jobId))?.status).toBe("failed");
   });
 
-  test("crons.ts holds exactly THIRTEEN jobs — additions require a deliberate edit here", () => {
+  test("crons.ts holds exactly SEVENTEEN jobs — additions require a deliberate edit here", () => {
     // A COUNT, not a ">= 1". A cron is unattended spend and unattended writes; the number of them
     // is a fact worth having to change on purpose.
     const jobs = [
@@ -212,8 +225,8 @@ describe("the cron actually registers the sweep", () => {
     // Six operational jobs plus bounded auth, foundation transcript, upload and voice-control retention.
     // ADR-058 adds bounded Buffer report/retention work; existing sweep jobs are preserved.
     // ADR-060 adds the bounded, explicitly opted-in Zernio daily-report dispatcher.
-    // Phase53 adds fixed hourly expired web inquiry retention, never a tenant business routine.
-    expect(jobs).toHaveLength(13);
+    // Includes web/merchant maintenance and social OAuth/API metadata retention.
+    expect(jobs).toHaveLength(17);
   });
 });
 
@@ -685,4 +698,170 @@ describe("sweepStuckPlans — dead specialist dispatch (D4)", () => {
     expect((await getPlan(t, planId))?.status).toBe("collecting");
     expect(await watchdogNotifications(t)).toHaveLength(0);
   });
+});
+
+describe("indexed watchdog candidate reads", () => {
+  test("job batches exclude terminal history, fresh submissions and exact threshold", async () => {
+    const t = harness();
+    const now = Date.now();
+    const plan = await seedPlan(t);
+    for (let i = 0; i < 105; i++)
+      await seedJob(t, plan, { status: "failed", batchId: `historical_${i}` });
+    const fresh = await seedJob(t, plan, { updatedAt: now });
+    const boundary = await seedJob(t, plan, { updatedAt: now - SUBMITTED_STALL_MS });
+    const stale = await seedJob(t, plan);
+    const result = await runJobSweep(t);
+    expect(result.processed).toBe(1);
+    expect(result.isDone).toBe(true);
+    expect((await getJob(t, stale))?.status).toBe("failed");
+    expect((await getJob(t, fresh))?.status).toBe("submitted");
+    expect((await getJob(t, boundary))?.status).toBe("submitted");
+  });
+
+  test("plan batches exclude terminal history, ordinary chats and fresh memos across tenants", async () => {
+    const t = harness();
+    const now = Date.now();
+    for (let i = 0; i < 105; i++)
+      await seedPlan(t, {
+        status: "approved",
+        kind: "memo",
+        renderStatus: "failed",
+        captionStatus: "failed",
+        createdAt: now - 2 * COLLECTING_STALL_MS,
+      });
+    const chat = await seedPlan(t, {
+      status: "collecting",
+      createdAt: now - 2 * COLLECTING_STALL_MS,
+    });
+    const fresh = await seedPlan(t, { status: "collecting", kind: "memo", createdAt: now });
+    const boundary = await seedPlan(t, {
+      status: "collecting",
+      kind: "memo",
+      createdAt: now - COLLECTING_STALL_MS,
+    });
+    const pending = await seedPlan(t, { renderStatus: "pending" });
+    await seedPlan(t, { renderStatus: "rendering" });
+    await seedPlan(t, { captionStatus: "transcribing" });
+    const a = await seedPlan(t, {
+      status: "collecting",
+      kind: "memo",
+      createdAt: now - 2 * COLLECTING_STALL_MS,
+    });
+    const b = await seedPlan(t, {
+      tenantId: "tenant_sweep_b",
+      status: "collecting",
+      kind: "memo",
+      createdAt: now - 2 * COLLECTING_STALL_MS,
+    });
+    const results = await runPlanSweep(t);
+    expect(results.map((result) => result.processed)).toEqual([1, 1, 1, 2]);
+    expect((await getPlan(t, a))?.status).toBe("proposed");
+    expect((await getPlan(t, b))?.status).toBe("proposed");
+    expect((await getPlan(t, pending))?.renderStatus).toBe("pending");
+    for (const id of [chat, fresh, boundary])
+      expect((await getPlan(t, id))?.status).toBe("collecting");
+  });
+
+  test("candidate cursor continues after recovered rows leave the index, and reset finds newly stale work", async () => {
+    const t = harness();
+    const now = Date.now();
+    const ids = [];
+    for (let i = 0; i < 3; i++)
+      ids.push(
+        await seedPlan(t, {
+          status: "collecting",
+          kind: "memo",
+          createdAt: now - 2 * COLLECTING_STALL_MS,
+        }),
+      );
+    const future = await seedPlan(t, { status: "collecting", kind: "memo", createdAt: now });
+    let cursor: string | null = null;
+    let processed = 0;
+    for (let page = 0; page < 5; page++) {
+      const result: MigrationResult = await t.mutation(
+        internal.reliabilitySweep.sweepCollectingMemoPlans,
+        {
+          cursor,
+          batchSize: 1,
+          dryRun: false,
+          oneBatchOnly: true,
+        },
+      );
+      processed += result.processed;
+      cursor = result.continueCursor;
+      if (result.isDone) break;
+    }
+    expect(processed).toBe(3);
+    for (const id of ids) expect((await getPlan(t, id))?.status).toBe("proposed");
+    expect((await getPlan(t, future))?.status).toBe("collecting");
+    vi.setSystemTime(now + COLLECTING_STALL_MS + 1);
+    const result = await t.mutation(internal.reliabilitySweep.sweepCollectingMemoPlans, {
+      cursor: null,
+      batchSize: 1,
+      dryRun: false,
+      oneBatchOnly: true,
+    });
+    expect(result.processed).toBe(1);
+    expect((await getPlan(t, future))?.status).toBe("proposed");
+  });
+});
+
+describe("indexed cron overlapping recovery planes", () => {
+  test("render failure does not sweep its waiting caption or notify twice in the same cron", async () => {
+    const t = harness();
+    const now = Date.now();
+    const plan = await seedPlan(t, {
+      kind: "media",
+      renderStatus: "rendering",
+      captionStatus: "transcribing",
+      createdAt: now - 2 * RENDER_STALL_MS,
+    });
+    await seedJob(t, plan, { status: "succeeded", updatedAt: now - 2 * RENDER_STALL_MS });
+    vi.stubEnv("RELIABILITY_SWEEP_ARMED", "1");
+    await t.mutation(internal.reliabilitySweep.runSweep, {});
+    const row = await getPlan(t, plan);
+    expect(row?.renderStatus).toBe("failed");
+    expect(row?.captionStatus).toBe("transcribing");
+    expect(row?.renderedAt).toBe(now);
+    expect(await watchdogNotifications(t)).toHaveLength(1);
+  });
+
+  test("render and dead collecting memo recover once even when both indexed planes select the row", async () => {
+    const t = harness();
+    const now = Date.now();
+    const plan = await seedPlan(t, {
+      kind: "memo",
+      status: "collecting",
+      renderStatus: "rendering",
+      createdAt: now - 2 * RENDER_STALL_MS,
+    });
+    await seedJob(t, plan, { status: "succeeded", updatedAt: now - 2 * RENDER_STALL_MS });
+    vi.stubEnv("RELIABILITY_SWEEP_ARMED", "1");
+    await t.mutation(internal.reliabilitySweep.runSweep, {});
+    const row = await getPlan(t, plan);
+    expect(row?.renderStatus).toBe("failed");
+    expect(row?.status).toBe("proposed");
+    expect(row?.body).toBe(COLLECTING_FALLBACK_BODY);
+    expect(await watchdogNotifications(t)).toHaveLength(1);
+  });
+});
+
+test("the indexed cron drains scheduled candidate pages past the first batch", async () => {
+  const t = harness();
+  const now = Date.now();
+  for (let i = 0; i < 51; i++)
+    await seedPlan(t, {
+      status: "collecting",
+      kind: "memo",
+      createdAt: now - 2 * COLLECTING_STALL_MS,
+    });
+  vi.stubEnv("RELIABILITY_SWEEP_ARMED", "1");
+  await t.mutation(internal.reliabilitySweep.runSweep, {});
+  await t.finishAllScheduledFunctions(() => vi.runAllTimers());
+  const rows = await t.run((ctx) => ctx.db.query("plans").collect());
+  expect(rows).toHaveLength(51);
+  expect(
+    rows.every((row) => row.status === "proposed" && row.body === COLLECTING_FALLBACK_BODY),
+  ).toBe(true);
+  expect(await watchdogNotifications(t)).toHaveLength(51);
 });

@@ -22,9 +22,8 @@
  *
  * ponytail: a ~120-line `.ass` writer instead of a subtitle library. `.ass` is a plain text format
  * and we emit ONE style and ONE event type; a dependency would be more lines of `package.json`
- * churn than of saved code. The ceiling is that we support exactly the subset ffmpeg's `subtitles=`
- * filter needs — no karaoke, no positioning animation, no multiple styles. Upgrade path if that
- * ever changes: a real library, at which point this file is deleted rather than extended.
+ * churn than of saved code. The ceiling is a closed style and bounded phrase entrance; no
+ * arbitrary model-authored markup, karaoke or downloadable fonts.
  */
 
 import type { AssemblyReport, AssemblyScene } from "./assembly";
@@ -112,6 +111,66 @@ export function groupIntoLines(
   return out;
 }
 
+/** Same cue count and character ceiling as the greedy split, but move whole words between
+ * neighbouring cues to avoid flashes, then minimize the fastest reading rate. Called within ONE verified take.
+ * Every boundary remains an original word boundary; extra display time is never invented. */
+function balanceCaptionLines(
+  words: readonly CaptionLine[],
+  maxChars: number = DEFAULT_LINE_CHARS,
+): CaptionLine[] {
+  const greedy = groupIntoLines(words, maxChars);
+  if (greedy.length < 2 || words.length > 128) return greedy;
+  const speed = (line: CaptionLine): number => line.text.length / (line.endS - line.startS);
+  type Split = { flashes: number; fastest: number; lines: CaptionLine[] };
+  const better = (a: Split, b: Split): boolean =>
+    a.flashes < b.flashes || (a.flashes === b.flashes && a.fastest < b.fastest);
+  let previous = new Map<number, Split>([[0, { flashes: 0, fastest: 0, lines: [] }]]);
+  // ponytail: retain the greedy cue count instead of introducing a configurable subtitle
+  // optimizer. At most128 words enter this bounded search; longer takes retain the linear
+  // greedy path. Slower narration is the upgrade when the whole take itself reads fast.
+  for (let count = 1; count <= greedy.length; count++) {
+    const next = new Map<number, Split>();
+    for (const [start, split] of previous) {
+      let text = "";
+      let clamped = false;
+      for (let end = start; end < words.length; end++) {
+        const first = words[start];
+        const last = words[end];
+        if (!first || !last) break;
+        text = text.length === 0 ? last.text : `${text} ${last.text}`;
+        if (text.length > maxChars && end > start) break;
+        clamped ||= last.clamped === true;
+        const line: CaptionLine = {
+          startS: first.startS,
+          endS: last.endS,
+          text,
+          ...(clamped ? { clamped: true as const } : {}),
+        };
+        if (line.endS <= line.startS || assTime(line.endS) === assTime(line.startS)) continue;
+        // STT word ranges may overlap despite monotonic starts/ends. A new cut must not
+        // turn that overlap into simultaneous cues; keep the original endpoints instead.
+        const following = words[end + 1];
+        if (following && line.endS > following.startS) continue;
+        const candidate = {
+          flashes: split.flashes + (line.endS - line.startS < 0.75 ? 1 : 0),
+          fastest: Math.max(split.fastest, speed(line)),
+          lines: [...split.lines, line],
+        };
+        const existing = next.get(end + 1);
+        if (!existing || better(candidate, existing)) next.set(end + 1, candidate);
+      }
+    }
+    previous = next;
+  }
+  const balanced = previous.get(words.length);
+  const original = {
+    flashes: greedy.filter((line) => line.endS - line.startS < 0.75).length,
+    fastest: Math.max(...greedy.map(speed)),
+    lines: greedy,
+  };
+  return balanced && better(balanced, original) ? balanced.lines : greedy;
+}
+
 // ── the .ass file ───────────────────────────────────────────────────────────────────────────────
 
 /** `H:MM:SS.cc` — centiseconds, exactly two digits, which is the only time format libass accepts
@@ -161,15 +220,31 @@ function escapeAss(text: string): string {
  */
 export function toAss(
   lines: readonly CaptionLine[],
-  opts: { playResX?: number; playResY?: number } = {},
+  opts: { playResX?: number; playResY?: number; treatment?: "smooth" } = {},
 ): string {
   const x = opts.playResX ?? 1080;
   const y = opts.playResY ?? 1920;
+  const marginX = Math.ceil(x * 0.08);
+  const marginY = Math.ceil(y * 0.2);
+  const smooth = opts.treatment === "smooth";
+  const fontSize = smooth ? Math.round(Math.min(x * 0.053, y * 0.03)) : 64;
   const rows: string[] = [];
   for (const line of lines) {
     const text = escapeAss(line.text);
     if (text.length === 0) continue; // a blank Dialogue row is a row libass renders as nothing
-    rows.push(`Dialogue: 0,${assTime(line.startS)},${assTime(line.endS)},Default,,0,0,0,,${text}`);
+    // Animation is generated here, never parsed from narration. Keep each effect inside
+    // its original speech cue, even for a very short cue; do not shift word endpoints.
+    const durationMs = Math.max(0, Math.floor((line.endS - line.startS) * 1000));
+    const fadeIn = Math.min(140, Math.floor(durationMs / 4));
+    const fadeOut = Math.min(180, Math.floor(durationMs / 4));
+    const riseMs = Math.min(220, Math.floor(durationMs / 2));
+    const baseline = y - marginY;
+    const entrance = smooth
+      ? `{\\an2\\move(${Math.round(x / 2)},${baseline},${Math.round(x / 2)},${baseline - Math.round(y * 0.009)},0,${riseMs})\\fad(${fadeIn},${fadeOut})}`
+      : "";
+    rows.push(
+      `Dialogue: 0,${assTime(line.startS)},${assTime(line.endS)},Default,,0,0,0,,${entrance}${text}`,
+    );
   }
   return [
     "[Script Info]",
@@ -187,8 +262,10 @@ export function toAss(
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    // White fill, black outline, bottom-centre, generous MarginV: the readable-on-anything default.
-    "Style: Default,DejaVu Sans,64,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,0,2,80,80,120,1",
+    // White/outlined, above native/social player chrome: bottom 20%, horizontal inset at least 8%.
+    smooth
+      ? `Style: Default,DejaVu Sans,${fontSize},&H00FFFFFF,&H00FFFFFF,&H9014100D,&H9014100D,0,0,0,0,100,100,0,0,3,${Math.round(y * 0.008)},0,2,${marginX},${marginX},${marginY},1`
+      : `Style: Default,DejaVu Sans,64,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,0,2,${marginX},${marginX},${marginY},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -204,7 +281,13 @@ export type WavError = { code: "no_takes" | "not_a_wav" | "format_mismatch" };
 const ascii = (b: Uint8Array, at: number): string =>
   String.fromCharCode(b[at] ?? 0, b[at + 1] ?? 0, b[at + 2] ?? 0, b[at + 3] ?? 0);
 
-type WavParts = { channels: number; sampleRate: number; bits: number; data: Uint8Array };
+type WavParts = {
+  encoding: number;
+  channels: number;
+  sampleRate: number;
+  bits: number;
+  data: Uint8Array;
+};
 
 /** RIFF chunk walk. Deliberately not a general parser: it reads `fmt ` and `data` and ignores
  *  everything else, which is what makes it immune to the LIST/INFO chunks some encoders emit. */
@@ -213,7 +296,7 @@ function parseWav(bytes: Uint8Array): WavParts | null {
     return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let at = 12;
-  let fmt: { channels: number; sampleRate: number; bits: number } | null = null;
+  let fmt: { encoding: number; channels: number; sampleRate: number; bits: number } | null = null;
   let data: Uint8Array | null = null;
   while (at + 8 <= bytes.byteLength) {
     const id = ascii(bytes, at);
@@ -221,6 +304,7 @@ function parseWav(bytes: Uint8Array): WavParts | null {
     const body = at + 8;
     if (id === "fmt " && size >= 16) {
       fmt = {
+        encoding: view.getUint16(body, true),
         channels: view.getUint16(body + 2, true),
         sampleRate: view.getUint32(body + 4, true),
         bits: view.getUint16(body + 14, true),
@@ -231,6 +315,27 @@ function parseWav(bytes: Uint8Array): WavParts | null {
     at = body + size + (size % 2); // chunks are word-aligned
   }
   return fmt && data ? { ...fmt, data } : null;
+}
+
+/** The native caption source is one bounded PCM16/24k/mono track at final timeline zero. */
+export function isNativeCaptionWav(bytes: Uint8Array, durationS: number): boolean {
+  if (!Number.isFinite(durationS) || durationS <= 0 || bytes.byteLength > 6 * 1024 * 1024)
+    return false;
+  let parsed: WavParts | null;
+  try {
+    parsed = parseWav(bytes);
+  } catch {
+    return false;
+  }
+  return (
+    parsed !== null &&
+    parsed.encoding === 1 &&
+    parsed.channels === 1 &&
+    parsed.sampleRate === 24000 &&
+    parsed.bits === 16 &&
+    parsed.data.byteLength % 2 === 0 &&
+    Math.abs(parsed.data.byteLength / 48000 - durationS) <= 0.05
+  );
 }
 
 /**
@@ -358,12 +463,157 @@ export function concatWavTakes(
  * a caption on the wrong shot, not a rounding error: on a 3-scene reel with a silent card the last
  * line lands ~10s early.
  */
-export function buildCaptionLines(a: {
+type CaptionBuildArgs = {
   words: readonly SttWord[];
   report: AssemblyReport;
   offsetsS: readonly number[];
   maxChars?: number;
-}): CaptionLine[] {
+  /** Exact submitted scripts in narrated ordinal order; never an unverified edited deck. */
+  expectedTakeTexts?: readonly string[];
+  /** Rebalance whole words within verified takes; preserve cue count, width and word times. */
+  balanceReadability?: boolean;
+};
+export type CaptionBuildError = {
+  code:
+    | "caption_take_count_mismatch"
+    | "caption_expected_text_mismatch"
+    | "caption_invalid_word_time"
+    | "caption_word_outside_take"
+    | "caption_nonpositive_cue";
+};
+
+const alignmentTokens = (text: string): string[] =>
+  (
+    text
+      .normalize("NFKC")
+      .toLowerCase()
+      .match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu) ?? []
+  ).map((token) => token.replaceAll("’", "'"));
+
+/** STT may round a boundary word slightly into its preceding take. Exact submitted scripts
+ * disambiguate ownership, never timestamps. A half-second window bounds tolerated STT drift;
+ * it is a refusal threshold, not synthetic word duration or a request to stretch speech. */
+export function buildCaptionLinesChecked(
+  a: CaptionBuildArgs & { expectedTakeTexts: readonly string[] },
+): Result<CaptionLine[], CaptionBuildError> {
+  const narrated = a.report.scenes.filter((s) => s.speechDurS > 0);
+  if (
+    a.expectedTakeTexts.length !== narrated.length ||
+    a.offsetsS.length !== narrated.length ||
+    a.offsetsS.some(
+      (offset, i) =>
+        !Number.isFinite(offset) || offset < 0 || (i > 0 && offset <= (a.offsetsS[i - 1] ?? 0)),
+    )
+  )
+    return err({ code: "caption_take_count_mismatch" });
+  if (a.words.some((w) => !w || typeof w !== "object"))
+    return err({ code: "caption_invalid_word_time" });
+  const words = a.words.filter((w) => w.type === "word");
+  if (
+    words.some(
+      (w, i) =>
+        typeof w.text !== "string" ||
+        !Number.isFinite(w.start) ||
+        !Number.isFinite(w.end) ||
+        w.start < 0 ||
+        w.end < w.start ||
+        (i > 0 && (w.start < (words[i - 1]?.start ?? 0) || w.end < (words[i - 1]?.end ?? 0))),
+    )
+  )
+    return err({ code: "caption_invalid_word_time" });
+  const expected = a.expectedTakeTexts.map(alignmentTokens);
+  const actual = words.map((w) => alignmentTokens(w.text));
+  const flat = expected.flat();
+  if (
+    expected.some((tokens) => tokens.length === 0) ||
+    actual.length !== flat.length ||
+    actual.some((tokens, i) => tokens.length !== 1 || tokens[0] !== flat[i])
+  )
+    return err({ code: "caption_expected_text_mismatch" });
+  let cursor = 0;
+  const byTake: SttWord[][] = [];
+  for (const [ordinal, scene] of narrated.entries()) {
+    const selected = words.slice(cursor, cursor + (expected[ordinal]?.length ?? 0));
+    cursor += selected.length;
+    const takeStart = a.offsetsS[ordinal] as number;
+    const takeEnd = a.offsetsS[ordinal + 1] ?? takeStart + scene.leadSilenceS + scene.speechDurS;
+    if (selected.some((w) => w.start < takeStart - 0.5 || w.end > takeEnd + 0.5))
+      return err({ code: "caption_word_outside_take" });
+    byTake.push(selected);
+  }
+  const lines = captionLinesInner(a, byTake);
+  if (
+    lines.length === 0 ||
+    lines.some(
+      (line) =>
+        !Number.isFinite(line.startS) ||
+        !Number.isFinite(line.endS) ||
+        line.endS <= line.startS ||
+        assTime(line.endS) === assTime(line.startS),
+    )
+  )
+    return err({ code: "caption_nonpositive_cue" });
+  return ok(lines);
+}
+
+/** Native audio is transcribed from one full rendered soundtrack. Its word timestamps already
+ * use the final timeline; project that audio track as one zero-anchored window instead of applying
+ * the clean-TTS take centering recorded by the picture sidecar. The reviewed script still must
+ * match exactly, and no returned word timestamp is changed to repair a mismatch. */
+export function buildTimelineCaptionLinesChecked(a: {
+  words: readonly SttWord[];
+  durationS: number;
+  expectedText: string;
+  balanceReadability?: boolean;
+}): Result<CaptionLine[], CaptionBuildError> {
+  if (!Number.isFinite(a.durationS) || a.durationS <= 0)
+    return err({ code: "caption_invalid_word_time" });
+  if (a.words.some((word) => !word || typeof word !== "object"))
+    return err({ code: "caption_invalid_word_time" });
+  if (a.words.some((word) => word.type === "word" && word.end > a.durationS))
+    return err({ code: "caption_word_outside_take" });
+  return buildCaptionLinesChecked({
+    words: a.words,
+    expectedTakeTexts: [a.expectedText],
+    offsetsS: [0],
+    balanceReadability: a.balanceReadability,
+    report: {
+      sceneCount: 1,
+      targetDurationS: a.durationS,
+      totalDurationS: a.durationS,
+      actualDurationS: a.durationS,
+      gates: [],
+      scenes: [
+        {
+          index: 0,
+          startS: 0,
+          durationS: a.durationS,
+          visual: "video",
+          leadSilenceS: 0,
+          speechAbsS: 0,
+          speechDurS: a.durationS,
+          overrun: false,
+        },
+      ],
+    },
+  });
+}
+
+/** Legacy callers preserve timestamp partitioning. Supplying verified scripts opts into strict
+ * alignment; invalid alignment yields no track, never a silently timestamp-partitioned result.
+ * Adapters use the checked entry point above to retain its explicit failure reason. */
+export function buildCaptionLines(a: CaptionBuildArgs): CaptionLine[] {
+  if (a.expectedTakeTexts !== undefined) {
+    const checked = buildCaptionLinesChecked({ ...a, expectedTakeTexts: a.expectedTakeTexts });
+    return checked.ok ? checked.value : [];
+  }
+  return captionLinesInner(a);
+}
+
+function captionLinesInner(
+  a: CaptionBuildArgs,
+  wordsByTake?: readonly (readonly SttWord[])[],
+): CaptionLine[] {
   const out: CaptionLine[] = [];
   // The scenes that DECLARE narration, in reel order. This is the take list the STT stage was
   // handed, so its position is the key into `offsetsS`.
@@ -372,13 +622,18 @@ export function buildCaptionLines(a: {
     const takeStart = a.offsetsS[ordinal];
     if (takeStart === undefined) continue; // fewer takes than narrated scenes: no words for this one
     const takeEnd = a.offsetsS[ordinal + 1] ?? Number.POSITIVE_INFINITY;
-    const inTake = a.words
-      .filter((w) => w.start >= takeStart && w.start < takeEnd)
-      .map((w) => ({ ...w, start: w.start - takeStart, end: w.end - takeStart }));
+    const inTake = (
+      wordsByTake?.[ordinal] ?? a.words.filter((w) => w.start >= takeStart && w.start < takeEnd)
+    ).map((w) => ({ ...w, start: w.start - takeStart, end: w.end - takeStart }));
     // A line may run past its own scene but never into the next line — the same bound the
     // assembler enforces on the audio, applied to the captions so the two cannot disagree.
     const bound = narrated[ordinal + 1]?.speechAbsS ?? a.report.totalDurationS;
-    out.push(...groupIntoLines(rebaseWords(inTake, scene, bound), a.maxChars));
+    const rebased = rebaseWords(inTake, scene, bound);
+    out.push(
+      ...(wordsByTake && a.balanceReadability
+        ? balanceCaptionLines(rebased, a.maxChars)
+        : groupIntoLines(rebased, a.maxChars)),
+    );
   }
   return out.sort((l, r) => l.startS - r.startS);
 }

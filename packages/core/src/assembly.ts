@@ -58,6 +58,7 @@ export type AssemblyScene = {
 
 export type AssemblyReport = {
   sceneCount: number;
+  finishingCueCount?: number;
   /** The DECLARED reel length the deck was priced and written against. */
   targetDurationS: number;
   totalDurationS: number;
@@ -121,6 +122,15 @@ export function parseAssemblySidecar(raw: string): Result<AssemblyReport, Assemb
     return err({ code: "not_an_object" });
   }
   const o = parsed as Record<string, unknown>;
+  if (
+    o.finishing_cue_count !== undefined &&
+    (o.finishing_version !== 2 ||
+      typeof o.finishing_cue_count !== "number" ||
+      !Number.isInteger(o.finishing_cue_count) ||
+      o.finishing_cue_count < 0 ||
+      o.finishing_cue_count > Number(o.scene_count))
+  )
+    return err({ code: "missing_field" });
 
   // THE V1 SHAPE, NAMED. Falling through to `missing_field` would be technically correct and
   // operationally useless: "a field is missing" sends someone looking for a corrupted write, where
@@ -223,6 +233,9 @@ export function parseAssemblySidecar(raw: string): Result<AssemblyReport, Assemb
 
   return ok({
     sceneCount,
+    ...(o.finishing_cue_count === undefined
+      ? {}
+      : { finishingCueCount: o.finishing_cue_count as number }),
     targetDurationS,
     totalDurationS: o.total_duration_s,
     actualDurationS: o.actual_duration_s,

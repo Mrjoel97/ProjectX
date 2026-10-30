@@ -5,8 +5,8 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import Link from "next/link";
 import { useState } from "react";
-import { formatMerchantMoney } from "./merchantPresentation";
 import styles from "./merchant.module.css";
+import { formatMerchantMoney } from "./merchantPresentation";
 
 type ProjectId = FunctionArgs<typeof api.webProjects.getProject>["projectId"];
 const region = (code: string) => new Intl.DisplayNames("en", { type: "region" }).of(code) ?? code;
@@ -204,14 +204,18 @@ export function ShopSetupReview({ projectId }: { projectId: string }) {
           </div>
           <details className={styles.evidence}>
             <summary>Business information behind this proposal</summary>
-            {[...setup.evidence, ...setup.products.flatMap((product) => product.evidence)].map(
-              (entry, index) => (
-                <blockquote key={`${entry.sourceRef}:${index}`}>
-                  <p>{entry.quote}</p>
-                  <cite>Selected business source</cite>
-                </blockquote>
-              ),
-            )}
+            {[
+              ...new Map(
+                [...setup.evidence, ...setup.products.flatMap((product) => product.evidence)].map(
+                  (entry) => [JSON.stringify([entry.sourceRef, entry.quote]), entry],
+                ),
+              ).values(),
+            ].map((entry) => (
+              <blockquote key={JSON.stringify([entry.sourceRef, entry.quote])}>
+                <p>{entry.quote}</p>
+                <cite>Selected business source</cite>
+              </blockquote>
+            ))}
             <p>
               Policy references:{" "}
               {[setup.policy.sellerOfRecordRef, setup.automation.policyRef].join(" · ")}

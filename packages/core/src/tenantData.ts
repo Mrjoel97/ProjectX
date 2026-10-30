@@ -57,6 +57,10 @@ export const TENANT_TABLE_CLASSIFICATION = {
   skills: "global",
   tenantSkills: "tenant_owned",
   savedPrompts: "tenant_owned",
+  managedServices: "tenant_owned", // Inert setup and goal text export/erase with their owner.
+  managedServiceRuns: "tenant_owned", // Attended run refs; authoritative costs stay in spendEvents.
+  managedServiceStandingApprovals: "tenant_owned", // Inert structured permission; no credential/arming.
+  managedServiceOccurrences: "tenant_owned", // Inert occurrence refs; costs remain in spendEvents.
   // Workflow-engine correlation bookkeeping has no tenant key and is not tenant content.
   pendingTimeouts: "global",
   // Singleton WORM cursor bookkeeping belongs to the deployment, not a tenant.
@@ -78,9 +82,14 @@ export const TENANT_TABLE_CLASSIFICATION = {
   telemetry: "tenant_owned",
   notifications: "tenant_owned",
   gmailTokens: "tenant_credential",
+  socialWebhookReceipts: "global", // Last app delivery timestamp/hash only; no user ids, tokens or event content.
+  socialConnections: "tenant_credential",
+  socialPosts: "tenant_owned",
+  socialOAuthStates: "tenant_credential",
   bufferConnections: "tenant_credential",
   zernioConnections: "tenant_credential",
   zernioReports: "tenant_owned",
+  serviceOutcomeObservations: "tenant_owned", // Bounded native report history; never credentials.
   bufferOAuthStates: "tenant_credential",
   bufferPosts: "tenant_owned",
   bufferReports: "tenant_owned",
@@ -94,6 +103,7 @@ export const TENANT_TABLE_CLASSIFICATION = {
   // Phase 40 (DOC-01): a workbook's capped grid, one row per spreadsheet document. Cell text, so
   // it is tenant data in the fullest sense — it exports and deletes with its document.
   vaultSheets: "tenant_owned",
+  vaultPresentations: "tenant_owned",
   graphNodes: "tenant_owned",
   graphEdges: "tenant_owned",
   voiceSessions: "tenant_owned",
@@ -103,11 +113,13 @@ export const TENANT_TABLE_CLASSIFICATION = {
   feedback: "tenant_owned",
   // One deployment-wide optimizer switch/threshold row; it contains no tenant data.
   optimizerConfig: "global",
+  brandKits: "tenant_owned",
   tenantProfiles: "tenant_owned",
   goals: "tenant_owned",
   spendEvents: "tenant_owned",
   spendCoverage: "tenant_owned",
   mediaJobs: "tenant_owned",
+  mediaCampaigns: "tenant_owned",
   contacts: "tenant_owned",
   funnels: "tenant_owned", // Link/source/counters belong in export and erasure, never immutable audit.
   followUps: "tenant_owned",
@@ -334,7 +346,15 @@ export function deletableTables(): readonly DeletableTenantTable[] {
  */
 export const STORAGE_ID_FIELDS = {
   uploadReceipts: ["storageId"],
-  plans: ["renderStorageId", "sidecarStorageId", "attachments[].storageId"],
+  socialPosts: ["storageId"],
+  plans: [
+    "renderStorageId",
+    "sidecarStorageId",
+    "nativeCaptionAudioStorageId",
+    "mediaProductReferences[].storageId",
+    "nativeCaptionRenderStorageId",
+    "attachments[].storageId",
+  ],
   attachments: ["storageId"],
   intakeArtifacts: ["storageId"],
   vaultDocuments: ["storageId", "transcriptionStorageId"],

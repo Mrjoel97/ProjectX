@@ -1,0 +1,118 @@
+{
+  "schema": "phase23-startup-abort-public.v1",
+  "observedAt": "2026-10-21T19:10:30.364Z",
+  "target": "woozy-wren-368",
+  "sourceSha": "cafde7c6c7d65924b7a48433cf4938983d91707c",
+  "candidateId": "qn73f3q6zcs1fsjpm9x2vwykc58gm09j",
+  "authorizationSha256": "c663e7a1b3dbe2f6060a41d2beb152de4578b0e12a86839419a456041ce2de1d",
+  "authorizationAnswer": "Approve this new $2 PR81 staging evaluation",
+  "authorizationConsumed": true,
+  "checkpointSha256": "deb8215f29b273c0d7a5509b25b41c75cf209c9fba0ff5c7b58f0123323172d4",
+  "handoffSha256": "39dfb14558a96cdbede3ca7d0641ee33ed09edaec0526510950528a19a48a930",
+  "suite": {
+    "revision": "2026-09-11.budgeted-evaluator.5867c6e86ad02677493c5b238d206965704761cf7eac8b7561078afac91d8d4d",
+    "sha256": "5dbe6fdbd447ab2a152ccf928d195ed404ca3bf431f5240397f6be3b627e55fd",
+    "caseCount": 46
+  },
+  "runnerStartedAt": "2026-10-21T17:11:44.900Z",
+  "finishedAt": "2026-10-21T17:12:01.367Z",
+  "startupStage": "first_readonly_candidate_inspection",
+  "terminalReason": "readonly_cli_transport_fetch_failed",
+  "completedCases": 0,
+  "semanticVerdicts": 0,
+  "budgetId": null,
+  "runId": null,
+  "rootTenantId": null,
+  "financialObservation": {
+    "completeBoundedWindow": true,
+    "windowStart": "2026-10-21T17:09:44.900Z",
+    "windowEnd": "2026-10-21T17:30:20.743Z",
+    "rowLimit": 501,
+    "sentinelLimit": 500,
+    "rowCount": 0,
+    "newEnvelopes": 0,
+    "evalMovements": 0,
+    "newEvalSpendUsd": 0
+  },
+  "historicalBudgets": [
+    {
+      "actualUsd": 0.06160618000000002,
+      "breached": false,
+      "budgetId": "p57067hpjwen71yc4vhx5txav98gmnat",
+      "callCount": 89,
+      "capCents": 200,
+      "closed": true,
+      "expired": true,
+      "remainingCents": 0,
+      "settledCount": 89,
+      "unresolvedCents": 0,
+      "unsettledCount": 0
+    },
+    {
+      "actualUsd": 0.14551101,
+      "breached": false,
+      "budgetId": "p5763r5x30jrpfkbqf94zv75ps8gpbdh",
+      "callCount": 198,
+      "capCents": 200,
+      "closed": true,
+      "expired": true,
+      "remainingCents": 0,
+      "settledCount": 198,
+      "unresolvedCents": 0,
+      "unsettledCount": 0
+    }
+  ],
+  "postcheck": {
+    "observedAt": "2026-10-21T17:53:55.749Z",
+    "matchingReads": 6,
+    "candidatePreserved": true,
+    "sourceProvenancePreserved": true,
+    "registrySha256": "faac155d8c90d9205f2aa95072a520e50e727964974e64a6f62676bea73480e3",
+    "protectedRetentionSha256": "2ecc1945e018a9af66614a2dfceb8a71209f8b480c8015e73eed9b08d9590163",
+    "ownerVerified": true,
+    "foreignNonOwnerVerified": true,
+    "evidenceAbsent": true,
+    "approvalAbsent": true
+  },
+  "nativeUi": {
+    "observedAt": "2026-10-21T18:04:35.321Z",
+    "activationDisabled": true,
+    "evidenceAbsent": true,
+    "ownerApprovalAbsent": true,
+    "foreignResult": "B_IDENTITY_MATCH",
+    "publicCheckResult": "NOT_STARTED",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "screenshotSha256": "620b90a24a5537667a9b8375d8d79380fc8b64fe715d1aa93a009850433a7067"
+  },
+  "privateReceiptHashes": {
+    "attempt.json": "26da7ae058ac3ebd03abe82398cf057d8e6fe54e4a40ea631c8d1462d63d0873",
+    "process-result.json": "f5b0bfa0c9271f5d37101519679b913df2ce5f0a8e3b92bc4398391931e3b888",
+    "startup-abort-native.json": "3e28b1d22a8a3c959ce241d8891f93a0f1c574ebcba15152f5322fbe93da6f79",
+    "post-startup-readiness.json": "b7d00e8743478142b438f7c0e43b3c9964e1673173ec08a65da429a5b5589eda",
+    "native-after-startup.json": "6bb739fc7f1d0c9d4aa4f4d34777ba9e203a37736e91406470e05a7dbbc2a8ee"
+  },
+  "disposition": {
+    "passingEvaluation": false,
+    "evidenceRecorded": false,
+    "foreignPublicMutation": false,
+    "activation": false,
+    "cleanup": false,
+    "productionChange": false,
+    "automaticFullRerunAllowed": false,
+    "onceLockPreserved": true,
+    "phase23CompletedPlans": 6,
+    "phase48": "partial",
+    "phase49": "not_started"
+  },
+  "offlineRepair": {
+    "goldenRevision": "2026-09-11.budgeted-evaluator.825ef5cab4634d8560249094e8e6db1ad841732d72545bcf8fa57214f5965b51",
+    "verticalRevision": "01d6d6908bd0eecac14bc30b1f90a88edb0db8f14c4cc46fc8fa2f036a724425",
+    "deployed": false,
+    "qualified": false,
+    "focusedTestsPassed": 20,
+    "independentReviewPassed": true
+  }
+}

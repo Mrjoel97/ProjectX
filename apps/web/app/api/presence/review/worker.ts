@@ -1,5 +1,5 @@
-import { WEB_CAROUSEL_SCRIPT_POLICY } from "@pikar/core/webCarouselRuntime";
 import { inspectRenderedPage } from "@pikar/core/webBrowserQuality";
+import { WEB_CAROUSEL_SCRIPT_POLICY } from "@pikar/core/webCarouselRuntime";
 
 /** Code-owned script only. Snapshot contract: playwright@1.61.1 in /opt/pikar-browser/node_modules
  * and its installed Chromium at PLAYWRIGHT_BROWSERS_PATH=/opt/pikar-browser/browsers.

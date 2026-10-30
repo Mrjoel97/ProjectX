@@ -1,11 +1,11 @@
-import { sha256Bytes } from "@pikar/core/webRuntime";
-import type { Id } from "./_generated/dataModel";
 import { inspectWebAssetBytes } from "@pikar/core/webAssets";
 import type { WebBrowserPageReport } from "@pikar/core/webBrowserQuality";
 import { materializeWebRecipeWithProvenance } from "@pikar/core/webRecipes";
+import { sha256Bytes } from "@pikar/core/webRuntime";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
+import type { Id } from "./_generated/dataModel";
 import {
   artifactHashes,
   presencePublicationReady,
@@ -23,55 +23,146 @@ const recordCapture = makeFunctionReference<"mutation">("presenceBrowserReview:r
 async function retryFixture() {
   const f = await fixture();
   const startedAt = Date.now() - 5000;
-  const stored = await f.t.run(async ctx => {
+  const stored = await f.t.run(async (ctx) => {
     const ids: Id<"_storage">[] = [];
     for (let n = 0; n < 4; n++) {
       const storageId = await ctx.storage.store(new Blob(["offline capture"]));
-      await ctx.db.insert("uploadReceipts", { tenantId: f.args.tenantId, ticketHash: `retry-${n}`, expiresAt: Date.now()+60000, state: "complete", storageId });
+      await ctx.db.insert("uploadReceipts", {
+        tenantId: f.args.tenantId,
+        ticketHash: `retry-${n}`,
+        expiresAt: Date.now() + 60000,
+        state: "complete",
+        storageId,
+      });
       ids.push(storageId);
     }
-    const screenshots = reports().map((report, n) => ({storageId: ids[n+1]!, pageSlug: "home", viewportWidth: report.viewportWidth, reducedMotion: report.reducedMotion, sha256: String(n+1).repeat(64), mimeType: "image/jpeg"}));
-    await ctx.db.patch(f.args.versionId, {browserReviewJob: {runRef: "original", state: "failed", startedAt, reason: "browser_review_incomplete"}, browserReviewReportStorageId: ids[0]!, browserReviewScreenshots: screenshots});
-    return {reportStorageId: ids[0]!, screenshots};
+    const screenshots = reports().map((report, n) => ({
+      storageId: ids[n + 1]!,
+      pageSlug: "home",
+      viewportWidth: report.viewportWidth,
+      reducedMotion: report.reducedMotion,
+      sha256: String(n + 1).repeat(64),
+      mimeType: "image/jpeg",
+    }));
+    await ctx.db.patch(f.args.versionId, {
+      browserReviewJob: {
+        runRef: "original",
+        state: "failed",
+        startedAt,
+        reason: "browser_review_incomplete",
+      },
+      browserReviewReportStorageId: ids[0]!,
+      browserReviewScreenshots: screenshots,
+    });
+    return { reportStorageId: ids[0]!, screenshots };
   });
-  const args = {tenantId: f.args.tenantId, versionId: f.args.versionId, runRef: sha256Bytes(new TextEncoder().encode(JSON.stringify({priorRunRef:"original",attempt:1}))).slice(0,16), contentHash: f.args.contentHash, providerReceiptHash: f.args.providerReceiptHash, retryEvidence: {reportStorageId: stored.reportStorageId, capture: {status: "captured", contentHash: f.args.contentHash, providerReceiptHash: f.args.providerReceiptHash, artifactHashes: f.args.artifactHashes, reports: reports(), screenshots: stored.screenshots}}};
-  return {...f, retryArgs: args, startedAt, stored};
+  const args = {
+    tenantId: f.args.tenantId,
+    versionId: f.args.versionId,
+    runRef: sha256Bytes(
+      new TextEncoder().encode(JSON.stringify({ priorRunRef: "original", attempt: 1 })),
+    ).slice(0, 16),
+    contentHash: f.args.contentHash,
+    providerReceiptHash: f.args.providerReceiptHash,
+    retryEvidence: {
+      reportStorageId: stored.reportStorageId,
+      capture: {
+        status: "captured",
+        contentHash: f.args.contentHash,
+        providerReceiptHash: f.args.providerReceiptHash,
+        artifactHashes: f.args.artifactHashes,
+        reports: reports(),
+        screenshots: stored.screenshots,
+      },
+    },
+  };
+  return { ...f, retryArgs: args, startedAt, stored };
 }
 
 test("one no-spend retry retains original history through capture and finish and cannot repeat", async () => {
   const f = await retryFixture();
   expect(await f.t.mutation(claim, f.retryArgs)).toBe(true);
-  const scope = {tenantId: f.args.tenantId, versionId: f.args.versionId, runRef: f.retryArgs.runRef};
-  await f.t.mutation(recordCapture, {...scope, ...f.stored});
-  await f.t.mutation(finishJob, {...scope, state: "failed", reason: "browser_review_incomplete"});
-  const saved = await f.t.run(ctx => ctx.db.get(f.args.versionId));
-  expect(saved?.browserReviewJob?.preProviderRetry).toMatchObject({attempt:1,priorRunRef:"original",priorStartedAt:f.startedAt,priorReason:"browser_review_incomplete"});
-  expect(await f.t.mutation(claim, {...f.retryArgs,runRef:f.retryArgs.runRef+"-pre-provider-retry-1"})).toBe(false);
-  await expect(f.t.mutation(finishJob, {...scope,runRef:"original",state:"failed"})).rejects.toThrow("JOB_UNAVAILABLE");
+  const scope = {
+    tenantId: f.args.tenantId,
+    versionId: f.args.versionId,
+    runRef: f.retryArgs.runRef,
+  };
+  await f.t.mutation(recordCapture, { ...scope, ...f.stored });
+  await f.t.mutation(finishJob, { ...scope, state: "failed", reason: "browser_review_incomplete" });
+  const saved = await f.t.run((ctx) => ctx.db.get(f.args.versionId));
+  expect(saved?.browserReviewJob?.preProviderRetry).toMatchObject({
+    attempt: 1,
+    priorRunRef: "original",
+    priorStartedAt: f.startedAt,
+    priorReason: "browser_review_incomplete",
+  });
+  expect(
+    await f.t.mutation(claim, {
+      ...f.retryArgs,
+      runRef: f.retryArgs.runRef + "-pre-provider-retry-1",
+    }),
+  ).toBe(false);
+  await expect(
+    f.t.mutation(finishJob, { ...scope, runRef: "original", state: "failed" }),
+  ).rejects.toThrow("JOB_UNAVAILABLE");
 });
 
 test("any tenant event since original start blocks retry, including zero amounts and estimates", async () => {
-  for (const phase of ["estimated","reserved","actual","refunded","adjustment"] as const) {
+  for (const phase of ["estimated", "reserved", "actual", "refunded", "adjustment"] as const) {
     const f = await retryFixture();
-    await f.t.run(ctx => ctx.db.insert("spendEvents", {tenantId:f.args.tenantId,rail:"media",phase,amountCents:0,correlationId:"unrelated-random-paid-id",createdAt:f.startedAt}));
-    expect(await f.t.mutation(claim,f.retryArgs)).toBe(false);
+    await f.t.run((ctx) =>
+      ctx.db.insert("spendEvents", {
+        tenantId: f.args.tenantId,
+        rail: "media",
+        phase,
+        amountCents: 0,
+        correlationId: "unrelated-random-paid-id",
+        createdAt: f.startedAt,
+      }),
+    );
+    expect(await f.t.mutation(claim, f.retryArgs)).toBe(false);
   }
 });
 
 test("retry refuses ambiguous capture identity, hard failures, ownership and future job starts", async () => {
-  for (const fault of ["identity","hard-fail","foreign","future","vision","missing-view","reason"] as const) {
-    const f=await retryFixture();
-    if(fault==="identity") f.retryArgs.retryEvidence.capture.providerReceiptHash="0".repeat(64);
-    if(fault==="hard-fail") f.retryArgs.retryEvidence.capture.reports[0]!.touchTargets.tooSmall=1;
-    if(fault==="missing-view") f.retryArgs.retryEvidence.capture.screenshots.pop();
-    await f.t.run(async ctx => {
-      const row=await ctx.db.get(f.args.versionId);
-      if(fault==="foreign") {const receipt=await ctx.db.query("uploadReceipts").withIndex("by_storage",q=>q.eq("storageId",f.stored.reportStorageId)).unique();await ctx.db.patch(receipt!._id,{tenantId:"other"});}
-      if(fault==="future") await ctx.db.patch(f.args.versionId,{browserReviewJob:{...row!.browserReviewJob!,startedAt:Date.now()+60000}});
-      if(fault==="vision") await ctx.db.patch(f.args.versionId,{browserReviewVisionStorageId:f.stored.reportStorageId});
-      if(fault==="reason") await ctx.db.patch(f.args.versionId,{browserReviewJob:{...row!.browserReviewJob!,reason:"visual_quality_requires_repair"}});
+  for (const fault of [
+    "identity",
+    "hard-fail",
+    "foreign",
+    "future",
+    "vision",
+    "missing-view",
+    "reason",
+  ] as const) {
+    const f = await retryFixture();
+    if (fault === "identity")
+      f.retryArgs.retryEvidence.capture.providerReceiptHash = "0".repeat(64);
+    if (fault === "hard-fail")
+      f.retryArgs.retryEvidence.capture.reports[0]!.touchTargets.tooSmall = 1;
+    if (fault === "missing-view") f.retryArgs.retryEvidence.capture.screenshots.pop();
+    await f.t.run(async (ctx) => {
+      const row = await ctx.db.get(f.args.versionId);
+      if (fault === "foreign") {
+        const receipt = await ctx.db
+          .query("uploadReceipts")
+          .withIndex("by_storage", (q) => q.eq("storageId", f.stored.reportStorageId))
+          .unique();
+        await ctx.db.patch(receipt!._id, { tenantId: "other" });
+      }
+      if (fault === "future")
+        await ctx.db.patch(f.args.versionId, {
+          browserReviewJob: { ...row!.browserReviewJob!, startedAt: Date.now() + 60000 },
+        });
+      if (fault === "vision")
+        await ctx.db.patch(f.args.versionId, {
+          browserReviewVisionStorageId: f.stored.reportStorageId,
+        });
+      if (fault === "reason")
+        await ctx.db.patch(f.args.versionId, {
+          browserReviewJob: { ...row!.browserReviewJob!, reason: "visual_quality_requires_repair" },
+        });
     });
-    expect(await f.t.mutation(claim,f.retryArgs)).toBe(false);
+    expect(await f.t.mutation(claim, f.retryArgs)).toBe(false);
   }
 });
 // Synthetic browser measurements exercise admission only, never deployed visual evidence.

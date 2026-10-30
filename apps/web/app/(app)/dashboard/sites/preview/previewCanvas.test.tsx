@@ -175,7 +175,11 @@ describe("exact stored website preview", () => {
     expect(frame?.getAttribute("sandbox")).toBe("allow-scripts");
     expect(frame?.getAttribute("srcdoc")).toContain("script-src 'sha256-");
     expect(frame?.getAttribute("srcdoc")).toContain("connect-src 'none'; form-action 'none'");
-    expect(inertPreviewHtml('<!doctype html><html><head></head><body><script>alert(1)</script></body></html>')).toBeNull();
+    expect(
+      inertPreviewHtml(
+        "<!doctype html><html><head></head><body><script>alert(1)</script></body></html>",
+      ),
+    ).toBeNull();
     expect(frame?.getAttribute("referrerpolicy")).toBe("no-referrer");
     const rendered = new DOMParser().parseFromString(
       frame?.getAttribute("srcdoc") ?? "",
