@@ -37,7 +37,12 @@ function positiveCount(value: number, max: number): void {
     throw new Error("GOLDEN_PROVIDER_INPUT_LIMIT");
 }
 
-function chatBound(model: string) {
+function chatBound(model: string): {
+  contextTokens: number;
+  promptPerMillion: number;
+  completionPerMillion: number;
+  cacheWritePerMillion?: number;
+} {
   // Own-property lookup is intentional: arbitrary model identifiers must not resolve prototypes.
   const existing = EVAL_MODEL_BOUNDS[model];
   if (existing && Object.hasOwn(EVAL_MODEL_BOUNDS, model)) return existing;
@@ -52,7 +57,7 @@ export function goldenProviderCeilingCents(call: GoldenProviderCall): number {
       const bound = chatBound(call.model);
       positiveCount(call.maxOutputTokens, EVAL_MAX_OUTPUT_TOKENS);
       return Math.ceil(
-        (bound.contextTokens * bound.promptPerMillion +
+        (bound.contextTokens * (bound.promptPerMillion + (bound.cacheWritePerMillion ?? 0)) +
           call.maxOutputTokens * bound.completionPerMillion) /
           10_000,
       );
@@ -80,10 +85,10 @@ export function goldenProviderCeilingCents(call: GoldenProviderCall): number {
 }
 
 /** Replace routing options; never merge caller-controlled options after these constraints. */
-function openRouterProvider(prompt: number, completion: number) {
+function openRouterProvider(prompt: number, completion: number, provider = "openai") {
   return {
-    only: ["openai"],
-    order: ["openai"],
+    only: [provider],
+    order: [provider],
     allow_fallbacks: false,
     require_parameters: true,
     max_price: {
@@ -104,7 +109,11 @@ export function goldenChatWireOptions(call: Extract<GoldenProviderCall, { kind: 
     n: 1,
     plugins: [],
     transforms: [],
-    provider: openRouterProvider(bound.promptPerMillion, bound.completionPerMillion),
+    provider: openRouterProvider(
+      bound.promptPerMillion,
+      bound.completionPerMillion,
+      call.model === "or/moonshotai/kimi-k3.1-pro" ? "moonshotai" : "openai",
+    ),
   };
 }
 

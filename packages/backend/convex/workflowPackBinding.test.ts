@@ -28,6 +28,7 @@ import { packCustomerComplaintSkillBody } from "@pikar/contracts/skills/packCust
 import { packOfferAndLeadPlanSkillBody } from "@pikar/contracts/skills/packOfferAndLeadPlan";
 import { packProcessSopSkillBody } from "@pikar/contracts/skills/packProcessSop";
 import { packSalesCallPrepSkillBody } from "@pikar/contracts/skills/packSalesCallPrep";
+import { packShopPreparationSkillBody } from "@pikar/contracts/skills/packShopPreparation";
 import {
   PACK_UNREACHABLE_TOOLS,
   packPreflight,
@@ -68,6 +69,7 @@ const PACK_BODIES: Record<string, string> = {
   "pack-process-sop": packProcessSopSkillBody,
   "pack-brand-review": packBrandReviewSkillBody,
   "pack-offer-and-lead-plan": packOfferAndLeadPlanSkillBody,
+  "pack-shop-preparation": packShopPreparationSkillBody,
 };
 
 const provUsage = (input: number, output: number) => ({
@@ -994,5 +996,45 @@ describe("a tenant pack candidate can be RUN before it is activated (29-05)", ()
         `${tenantId} was accepted as a sandbox tenant`,
       ).rejects.toThrow(/TENANT_SKILL_PIN_FOREIGN/);
     }
+  });
+});
+
+describe("private shop preparation uses the normal document runner", () => {
+  test("saves the complete sourced preparation verbatim and creates no live shop or outbound operation", async () => {
+    const { t, planId } = await setup();
+    const reply = [
+      "# Private shop-preparation document; no shop is live.",
+      "## Source register",
+      "Human statement, current turn: cotton tote bags for commuters. Current; owner review before disclosure.",
+      "## Offer and listing drafts",
+      "Physical goods — cotton tote bag. Proposed title: Everyday cotton tote. Buyer question: what is it for? Carrying everyday items. Source: human statement, current turn.",
+      "## Images",
+      "No owned image reference was supplied; selection unresolved.",
+      "## Missing commercial facts",
+      "Current price, currency, stock, dimensions, shipping area and returns policy: unknown; owner decision required.",
+      "## Launch and ongoing operations",
+      "Supported: this private document. Blocked: checkout, stock sync, orders, refunds, support messaging and marketing sends; no trusted commerce integration is connected or approved.",
+      "I could not read your connected sales and accounting systems, your contact and pipeline records, or your connected support inbox.",
+    ].join("\n");
+    await t.action(internal.workflowPackBinding.__runWorkflowPackWithScript, {
+      ...runArgs(planId, "shop-preparation"),
+      text: "We sell cotton tote bags for commuters. Prepare my online shop privately.",
+      primary: [
+        toolStep("searchVault", { query: "cotton tote product specifications policies" }),
+        toolStep("saveAsDocument", { title: "Shop preparation — tote bags" }),
+        textStep(reply),
+      ],
+    });
+    const docs = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());
+    expect(docs).toHaveLength(1);
+    expect(docs[0]?.text).toBe(reply);
+    expect(docs[0]?.tenantId).toBe(TENANT);
+    expect(docs[0]?.title).toBe("Shop preparation — tote bags");
+    const sources = await t.run((ctx) => ctx.db.query("vaultSources").collect());
+    expect(sources.at(-1)?.docIds).toEqual([docs[0]?._id]);
+    expect(await t.run((ctx) => ctx.db.query("webProjects").collect())).toEqual([]);
+    expect(await t.run((ctx) => ctx.db.query("requests").collect())).toEqual([]);
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("collecting");
   });
 });

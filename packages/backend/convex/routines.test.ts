@@ -182,10 +182,17 @@ const CONVEX_MODULES = [
   "lib/managedServiceBudget.ts",
   "lib/markdownPdf.ts",
   "lib/mediaRead.ts",
+  "lib/merchantProviderClient.ts",
   "lib/models.ts",
+  "lib/onlinePresenceTools.ts",
   "lib/paidBudgetModel.ts",
   "lib/planRow.ts",
+  "lib/presenceModelLimits.ts",
+  "lib/presencePublication.ts",
+  "lib/presenceRequiredPipeline.ts",
+  "lib/presenceVisionReview.ts",
   "lib/presentationPptx.ts",
+  "lib/stitchDesignClient.ts",
   "lib/tenantLifecycle.ts",
   "lib/toolContextArgs.ts",
   "lib/webResearchTools.ts",
@@ -201,12 +208,20 @@ const CONVEX_MODULES = [
   "mediaCampaign.ts",
   "mediaComplete.ts",
   "mediaIntent.ts",
+  "merchantCommerce.ts",
+  "merchantHttp.ts",
+  "merchantOperations.ts",
+  "merchantProvider.ts",
   "microsoftAuth.ts",
   "microsoftCalendar.ts",
   "migrations.ts",
   "notifications.ts",
   "notifyExternal.ts",
   "onboarding.ts",
+  "onlinePresence.ts",
+  "onlinePresenceDesign.ts",
+  "onlinePresenceRun.ts",
+  "onlinePresenceShop.ts",
   "ops.ts",
   "opsSignals.ts",
   "optimizerConfig.ts",
@@ -217,6 +232,15 @@ const CONVEX_MODULES = [
   "pinnedWorkflows.ts",
   "pipeline.ts",
   "plans.ts",
+  "presenceBrowserRepair.ts",
+  "presenceBrowserReview.ts",
+  "presenceBrowserRun.ts",
+  "presenceComparisonControl.ts",
+  "presenceComparisonRun.ts",
+  "presenceDesignControl.ts",
+  "presenceDesignProbe.ts",
+  "presenceRequiredRun.ts",
+  "presenceVisualRevision.ts",
   "proactiveReview.ts",
   "proposals.ts",
   "providerGates.ts",
@@ -261,8 +285,10 @@ const CONVEX_MODULES = [
   "stripeAuth.ts",
   "stripeConnector.ts",
   "telemetry.ts",
+  "tenantCatalogue.ts",
   "tenantDelete.ts",
   "tenantExport.ts",
+  "tenantOrders.ts",
   "tenantProfile.ts",
   "uploads.ts",
   "vault.ts",
@@ -291,6 +317,13 @@ const CONVEX_MODULES = [
   "voiceControl.ts",
   "voiceDoc.ts",
   "voiceToken.ts",
+  "webAssets.ts",
+  "webForms.ts",
+  "webHttp.ts",
+  "webProjects.ts",
+  "webRecipeEvals.ts",
+  "webRecipes.ts",
+  "webRuntime.ts",
   "workflowPackBinding.ts",
   "workflowPackDiscovery.ts",
   "workflowPackEventLog.ts",
@@ -314,6 +347,9 @@ const CONVEX_MODULES = [
 // page of a folder walk. None re-arms itself on a cadence.
 // Readiness additions: one delivery watchdog; bounded foundation transcript/graph cleanup
 // and publication ingestion; bounded graph cleanup continuation. None adds user routines.
+// Presence additions schedule only exact-version review/one bounded repair or explicit visual
+// revision. Commerce additions schedule finite stock/order TTL and one verified payment
+// delivery follow-up; fixed maintenance jobs remain named separately in the cron inventory.
 const SCHEDULER_CALL_SITES = [
   "billingRollup.ts",
   // ADR-058: explicitly approved Buffer writes and opt-in daily metric reads only.
@@ -341,8 +377,13 @@ const SCHEDULER_CALL_SITES = [
   // queued starts; no future occurrence, standing approval or calendar cadence is created.
   "mediaCampaign.ts",
   "mediaComplete.ts",
+  "merchantCommerce.ts",
+  "merchantOperations.ts",
   "notifications.ts",
   "onboarding.ts",
+  "onlinePresence.ts",
+  "presenceBrowserRepair.ts",
+  "presenceVisualRevision.ts",
   "proactiveReview.ts",
   // Native erasure continuation only; stalled component observation stops after 60 polls.
   "ragErasure.ts",
@@ -355,6 +396,8 @@ const SCHEDULER_CALL_SITES = [
   "social.ts",
   // Explicit customer approval schedules one immutable native social post; no recurrence.
   "socialPublishing.ts",
+  "tenantCatalogue.ts",
+  "tenantOrders.ts",
   "vault.ts",
   "vaultDrive.ts",
   "vaultFolders.ts",
@@ -362,6 +405,9 @@ const SCHEDULER_CALL_SITES = [
   "voice.ts",
   // Server-owned voice control starts once per explicitly admitted browser session.
   "voiceToken.ts",
+  // Phase53: bounded expiry-backlog deletion, recovered by a fixed hourly privacy sweep.
+  // The continuation stops when the expired batch drains; it never starts tenant work.
+  "webForms.ts",
   // ADR-060: bounded daily read-only reports explicitly enabled by the tenant.
   "zernio.ts",
 ];
@@ -461,6 +507,10 @@ describe("the scheduling primitives have a CLOSED, PINNED call-site set", () => 
       // Owner-authorized, selected-channel reporting; it never approves or repeats posts.
       "buffer-engagement-reports",
       "zernio-engagement-reports",
+      // Fixed deployment-wide privacy retention; no user-authored recurring work.
+      "web-form-retention",
+      "merchant-capability-refresh",
+      "merchant-buyer-retention",
       // Expired OAuth receipts and gated API metadata erasure only; neither starts customer work.
       "social-oauth-retention",
       "youtube-api-metadata-retention",

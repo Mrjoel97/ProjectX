@@ -1,0 +1,228 @@
+{
+  "recordedAt": "2026-10-24T12:07:20.825674+00:00",
+  "scope": "Dedicated staging source deployment, fresh service recipe qualification and partial native website build; full lifecycle remains incomplete",
+  "sourceCommit": "8b9064cd9bef38ecaf80eec24bd542582b79e39e",
+  "deployment": "third-gecko-977",
+  "frontendOrigin": "https://pikar-presence-stg.vercel.app",
+  "backendHttpOrigin": "https://third-gecko-977.convex.site",
+  "release": {
+    "backendApplied": true,
+    "backendReadyDuration": "1.6m",
+    "frontendDeploymentId": "dpl_4tBtnJ9SZXn99PT3XSgJCw4eX73u",
+    "frontendStrictTypeScriptPassed": true,
+    "frontendBuildPages": 40,
+    "frontendReadyAndPromoted": true,
+    "sourceVerificationBasis": "Root explicitly confirmed reviewed source 8b9064 deployed; local backend/frontend/promotion logs inspected. This record is operator evidence, not automatic remote git-source detection."
+  },
+  "sourceIdentities": {
+    "recipeImplementationHash": "020145277a86e1023eadb14b02d95f730a45bad959912e5547d8f087e38d69ff",
+    "goldenRevision": "2026-09-11.budgeted-evaluator.4bd4583fafc728a67599750d6faf22d77511d888070e9f952c9f056d8314c60f",
+    "verticalImplementationHash": "ed197a084b072554deb8c0648df2d0445cf0f2d6b172fc335c5a815e3da072cb",
+    "rendererVersion": "web-design-renderer-v5",
+    "compilerId": "web-recipes-v5"
+  },
+  "nativeNavigation": {
+    "actualDriver": "CUA documented Playwright API",
+    "rootObservedSidebarCollapse": true,
+    "rootObservedMobileSitesNavigation": true,
+    "rootObservedMobileSitePage": true,
+    "supportingScreenshots": [
+      {
+        "path": ".tmp/presence-native-sites-20261024/sites-sidebar-desktop.jpg",
+        "sha256": "6ee778dccb14a510004dabd687e0ecd0c776976c97a6dad0e5b1cf691ad08a3a"
+      },
+      {
+        "path": ".tmp/presence-native-sites-20261024/sites-mobile-menu.jpg",
+        "sha256": "b176c2e49ccb9090687f3181e8783e6924fd35815eff79b7a50b7670210140eb"
+      },
+      {
+        "path": ".tmp/presence-native-sites-20261024/sites-mobile-page.jpg",
+        "sha256": "f400f586de9d5e1fbe4dacc7af29578eddc10296e5290e1b3e1673d3e1a999bb"
+      }
+    ]
+  },
+  "recipeQualification": {
+    "actualDriver": "CUA documented Playwright API",
+    "closedProtocolRunnerId": "playwright:web-recipe",
+    "nativeRoute": "/ops?view=web-recipes",
+    "nativeAuthenticatedOwnerSessionObserved": true,
+    "independentAuditCompletedAt": "2026-10-24T11:35:21.671Z",
+    "nativeOutcomes": 24,
+    "serviceRecipeCount": 2,
+    "outcomesPerRecipe": 12,
+    "nativeDesktopWidth": 1280,
+    "nativeMobileWidth": 480,
+    "orderedOutcomes": ["selected", "partial", "refusal", "recovery", "edit", "preview"],
+    "recipes": [
+      {
+        "name": "web-recipe-business-site",
+        "version": 3,
+        "bodyHash": "1cc9754591a584a32e9518789afbb69e07a2cfb5b36bb24d68460f21209904f0",
+        "definitionHash": "sha256:23bb19c0b6305ec0f5c34ee978cd996097ca98144ab2a861c6f66db75d3807f6",
+        "frozenTranscriptHash": "13297dfb6c9b82384f4399e7a95a7248d619dd8d18d36ead4c494e7704832263",
+        "deterministicValid": true,
+        "provenanceValid": true
+      },
+      {
+        "name": "web-recipe-campaign-landing",
+        "version": 3,
+        "bodyHash": "5463d55b930d04053da5d3a7ab72c704dcc197b3a52a6dfc08390fa0ebfc2b4c",
+        "definitionHash": "sha256:eb3fb1e997d36244c3388b344e9da3dfc3f86d7aeacba84da6866e03ef35b0bd",
+        "frozenTranscriptHash": "ff129a3ea75bbbfc9fba337308bfe81bde85cbaf6a498dfe987d02e6255d59bb",
+        "deterministicValid": true,
+        "provenanceValid": true
+      }
+    ],
+    "issuerReadbackConfirmed": true,
+    "issuerCompletedAt": "2026-10-24T11:36:57.845Z",
+    "activationActor": "Trusted existing internal operator; not native owner activation UI and no owner impersonation",
+    "activated": [
+      {
+        "name": "web-recipe-business-site",
+        "version": 3
+      },
+      {
+        "name": "web-recipe-campaign-landing",
+        "version": 3
+      }
+    ],
+    "activationReadbackConfirmed": true,
+    "activationCompletedAt": "2026-10-24T11:44:46.999Z",
+    "catalogueRemainsCandidate": true,
+    "catalogueBodyAndEvidenceUnchanged": true,
+    "catalogueFreshQualificationClaimed": false,
+    "qualificationAndActivationProviderCalls": 0
+  },
+  "nativeWebsite": {
+    "requestedPageCount": 4,
+    "actualPrivateVersionCount": 2,
+    "ownerReviewedPrivateArtifact": true,
+    "versions": [
+      {
+        "version": 1,
+        "contentHash": "805922b1addf668cb6f2e1a766a4a69acf7f9ad9e1f72948d04d023529bc4003",
+        "pageSlugs": ["home", "about", "services", "contact"],
+        "assetCount": 1,
+        "unsupportedThirdServicePresent": true
+      },
+      {
+        "version": 2,
+        "contentHash": "a5568727b4d0dd70769466515cd6f056777315c1be395e8f8dc4029035320989",
+        "pageSlugs": ["home", "services", "contact"],
+        "assetCount": 1,
+        "unsupportedThirdServicePresent": false
+      }
+    ],
+    "v1": {
+      "realFourPagesBuilt": true,
+      "ownedPreparedHeroImageAttached": true,
+      "inquiryFormAndConsentObserved": true,
+      "unsupportedThirdServiceCaughtDuringOwnerReview": true,
+      "approved": false,
+      "published": false
+    },
+    "intermediateCorrection": {
+      "savedSupportedTwoServices": true,
+      "omittedMediaFromSavedBrief": true,
+      "buildNotCalled": true,
+      "assistantImageUnavailableClaimSupportedByCurrentRecords": false,
+      "readbackFoundImageStillAvailable": true,
+      "readbackImageSizeBytes": 3357434
+    },
+    "v2": {
+      "unsupportedThirdServiceRemoved": true,
+      "ownedHeroImageRetained": true,
+      "actualPageCount": 3,
+      "missingRequestedPage": "about",
+      "modelRevisionDroppedPreviouslySuppliedAboutContent": true,
+      "approved": false,
+      "published": false
+    },
+    "imageProvenance": {
+      "ownedVaultRasterPreparedBeforeRepairContinuation": true,
+      "preparedAssetCreatedAt": "2026-10-24T10:54:50.994Z",
+      "currentSourceRevisionMatchedFrozenSnapshot": true,
+      "continuationReusedPreparedAsset": true,
+      "limits": "Asset row and immutable snapshot establish owned prepared media. Visible trace lacks an asset-preparation tool record, so this receipt does not certify the original tool invocation path."
+    },
+    "publicationEverObserved": false,
+    "currentApprovedVersion": null,
+    "currentPublishedVersion": null,
+    "fullWebsiteLifecycleAcceptance": false
+  },
+  "budgetAndClosure": {
+    "authorizedAggregateUsd": 5,
+    "startedAt": "2026-10-24T11:46:30.322Z",
+    "closedAt": "2026-10-24T11:59:49.659Z",
+    "reason": "root-stop",
+    "repairAdditionalUsdUpperBound": 0.007956449999999997,
+    "allTimeCumulativeUsdUpperBound": 0.05464496000000002,
+    "unknownHolds": 0,
+    "heldCents": 0,
+    "legacyRoundedRows": 0,
+    "breached": false,
+    "originalRestorationCommandUncertain": ["guardrails:setMediaKillSwitch"],
+    "originalReceiptPreserved": true,
+    "freshReadOnlyReconciliationAt": "2026-10-24T12:05:34.268Z",
+    "freshKillSwitch": true,
+    "freshMediaKillSwitch": true,
+    "bothProviderPathsOff": true,
+    "freshLedgerMatchesClosedWindow": true,
+    "noAutomaticRetryOrReplacement": true,
+    "newProviderWindowAuthorizedByThisReceipt": false
+  },
+  "pending": [
+    "Review and apply the narrow backend source repair preserving omitted optional brief fields and supporting explicit clearing.",
+    "Verify correction/build behavior on the reviewed new source before any further attended paid window.",
+    "Reconcile fresh budget and closed receipts and obtain explicit manual window decision; never automatically reopen or retry.",
+    "Complete a faithful four-page private website before exact-version approval, publication, revision, rollback and unpublication can be accepted."
+  ],
+  "historicalReceiptsPreserved": [
+    "2026-10-24-native-recipe-qualification.json",
+    "2026-10-24-native-lifecycle.json"
+  ],
+  "evidence": [
+    {
+      "privatePath": ".tmp/presence-native-sites-20261024/all-recipes-independent-audit.json",
+      "sha256": "45e9d2930965dc6037958f27cfbc4bfd640fadbf93e7dcf088dd17fcc77d4cd9"
+    },
+    {
+      "privatePath": ".tmp/presence-native-sites-20261024/sealed-protocol-witness.private.json",
+      "sha256": "e00f4f00e960c9746ba3ce707a5a8c538532f69a46fe5fad5e6291c1881371dc"
+    },
+    {
+      "privatePath": ".tmp/presence-native-sites-20261024/browser-evidence-issuance.private.json",
+      "sha256": "d6c28b9b0e04e3194b5f6a545366bf873aa397fff15a11af1cb14f954057ece5"
+    },
+    {
+      "privatePath": ".tmp/presence-native-sites-20261024/service-recipe-activation.private.json",
+      "sha256": "46bf2b0dab5828af8efabfe3b0e0ed1c6ef66a32cef4d4c0c15e6286d6d41737"
+    },
+    {
+      "privatePath": ".tmp/presence-native-sites-20261024/lifecycle-witness.private.json",
+      "sha256": "1a613638dd5fee23844639a56508c16e66da970e5096c70508c8d9e9a1ba704c"
+    },
+    {
+      "privatePath": ".tmp/presence-native-sites-20261024/corrected-website-readback.private.json",
+      "sha256": "164aebed070e00ff3b8a1c14f74606351fa07970f66eb24827dba6c9458ace77"
+    },
+    {
+      "privatePath": ".tmp/presence-native-sites-20261024/repair-closure-reconciliation.private.json",
+      "sha256": "5d64819eb2b0443751528ebc4dc8f97c9b91659fa7b7a77e3b19276f84082df6"
+    },
+    {
+      "privatePath": ".tmp/presence-native-window-20261024-repair.private.receipt.json",
+      "sha256": "61e7c84aec5bddff0cb7a263afdfd1a64d97336f8872eccd1fc892c44cb117b7"
+    },
+    {
+      "privatePath": ".tmp/presence-native-20261024-repair/deployment-reviewed.private.json",
+      "sha256": "c75c325d2abdf29c77f8a7730515325f1e27b23ef0205f6eb580e4adf4306a91"
+    }
+  ],
+  "limits": [
+    "Native protocol qualification is distinct from full website lifecycle acceptance and does not prove all narrative claims.",
+    "Local checks and source identity do not establish a successful hosted retry of the follow-up fix.",
+    "The native paid-window cost is aggregate ledger usage, not a claim of exact per-thread attribution.",
+    "No private business facts, raw source text, user identifiers, emails or DOM snapshots are included in this receipt."
+  ]
+}

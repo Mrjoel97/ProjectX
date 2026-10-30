@@ -1,0 +1,743 @@
+import type { AuditPayload } from "@pikar/contracts/audit";
+import type { PublicationAuditPayload } from "@pikar/contracts/webPublication";
+import type { WebRecipeSkillName } from "@pikar/contracts/webRecipeSkill";
+import type { ProjectKind, WebDocument } from "@pikar/contracts/webRuntime";
+import { validateDesignProfileRef } from "@pikar/core/designKnowledge";
+import {
+  designedWebDocumentHash,
+  renderDesignedWebDocumentBytes,
+  WEB_DESIGN_RENDERER_VERSION,
+} from "@pikar/core/webDesignRenderer";
+import type { WebLayoutPlan } from "@pikar/core/webLayoutPlan";
+import {
+  canonicalWebDocument,
+  hashWebDocument,
+  renderWebDocumentBytes,
+  validateWebDocument,
+  WEB_RENDERER_VERSION,
+} from "@pikar/core/webRuntime";
+import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+import { internalQuery, type MutationCtx } from "./_generated/server";
+import { appendAudit } from "./audit";
+import { tenantMutation, tenantQuery } from "./lib/functions";
+import {
+  type PresenceProviderReceipt,
+  presencePublicationReady,
+  validateProviderReceipt,
+} from "./lib/presencePublication";
+import { assertTenantWritable } from "./lib/tenantLifecycle";
+export type WebProviderReceipt = PresenceProviderReceipt;
+
+import { merchantReadiness } from "./merchantCommerce";
+import { resolveDocumentAssets } from "./webAssets";
+
+const projectKind = v.union(v.literal("site"), v.literal("landing"), v.literal("storefront"));
+const documentInput = v.any();
+type ProjectRow = {
+  _id: Id<"webProjects">;
+  tenantId: string;
+  kind: ProjectKind;
+  slug: string;
+  title: string;
+  publicHost: string;
+  domainMode: "platform_path" | "custom_pending" | "custom_active";
+  hostingDeclaration: {
+    hosting:
+      | "pikar_platform_path"
+      | "tenant_custom_domain_pending"
+      | "tenant_custom_domain_verified";
+    source: "tenant_structured_content";
+  };
+  draftVersion?: number;
+  approvedVersion?: number;
+  approvedContentHash?: string;
+  publishedVersion?: number;
+  publishedContentHash?: string;
+  recipeRef?: RecipeRef;
+  revision: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
+type ScopedMutationCtx = MutationCtx & { tenantId: string; userId: string };
+
+export type RecipeRef = {
+  name: WebRecipeSkillName;
+  version: number;
+  skillId: string;
+  bodyHash: string;
+  definitionHash: string;
+  inputHash: string;
+  rendererVersion?: string;
+  designProfile: {
+    layoutPlan?: WebLayoutPlan;
+    artDirection?: "editorial" | "studio" | "technical";
+    surfaceStyle?: "minimal" | "glass" | "clay";
+    bundleHash: string;
+    compilerHash: string;
+    patternId: string;
+    styleId: string;
+    paletteId: string;
+    typographyId: string;
+    formProfileId: string;
+    dials: { variance: number; motion: number; density: number };
+    pageOverride?: string;
+  };
+};
+
+function validSlug(slug: string): boolean {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) && slug.length <= 64;
+}
+
+function validatedDocument(document: unknown, kind?: ProjectKind): WebDocument {
+  const result = validateWebDocument(document);
+  if (!result.ok || (kind !== undefined && result.value.kind !== kind))
+    throw new Error("INVALID_WEB_DOCUMENT");
+  // Canonical serialization is an intentional second boundary: it ensures the object persisted
+  // in the document plane is the same closed AST that produced the artifact bytes.
+  return JSON.parse(canonicalWebDocument(result.value)) as WebDocument;
+}
+
+function publicationPayload(args: {
+  action: PublicationAuditPayload["action"];
+  status: PublicationAuditPayload["status"];
+  projectId: string;
+  version?: number;
+  contentHash?: string;
+  previousVersion?: number;
+  resultingVersion?: number;
+  failure?: PublicationAuditPayload["failure"];
+  actor: string;
+  revision: number;
+}): PublicationAuditPayload {
+  return {
+    action: args.action,
+    status: args.status,
+    projectId: args.projectId,
+    ...(args.version === undefined ? {} : { version: args.version }),
+    ...(args.contentHash === undefined ? {} : { contentHash: args.contentHash }),
+    ...(args.previousVersion === undefined ? {} : { previousVersion: args.previousVersion }),
+    ...(args.resultingVersion === undefined ? {} : { resultingVersion: args.resultingVersion }),
+    ...(args.failure === undefined ? {} : { failure: args.failure }),
+    actor: args.actor,
+    revision: args.revision,
+  };
+}
+
+async function receipt(
+  ctx: MutationCtx,
+  tenantId: string,
+  action: PublicationAuditPayload["action"],
+  payload: PublicationAuditPayload,
+): Promise<void> {
+  await appendAudit(ctx, {
+    tenantId,
+    correlationId: `web-publication:${payload.projectId}:${String(payload.revision)}`,
+    eventType: `web.project.${action}`,
+    actor: payload.actor,
+    payload: payload as AuditPayload,
+  });
+}
+
+export function runtimeReady(project: ProjectRow): boolean {
+  // Hosting is necessary but not commerce authority. Storefront publication and serving also
+  // require current server-verified merchant accounts, policies, mappings and sandbox proof.
+  return (
+    ((project.domainMode === "platform_path" &&
+      project.hostingDeclaration.hosting === "pikar_platform_path") ||
+      (project.domainMode === "custom_active" &&
+        project.hostingDeclaration.hosting === "tenant_custom_domain_verified")) &&
+    project.hostingDeclaration.source === "tenant_structured_content"
+  );
+}
+
+function platformRuntimeHost(): string {
+  try {
+    const configured = new URL(process.env.CONVEX_SITE_URL ?? "");
+    const local = ["localhost", "127.0.0.1", "[::1]"].includes(configured.hostname);
+    if (
+      (configured.protocol !== "https:" && !(configured.protocol === "http:" && local)) ||
+      configured.username ||
+      configured.password ||
+      configured.pathname !== "/" ||
+      configured.search ||
+      configured.hash
+    )
+      return "";
+    return configured.host.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+async function appendVersion(
+  ctx: MutationCtx,
+  project: ProjectRow,
+  document: unknown,
+  createdBy: string,
+  originRecipeRef?: RecipeRef,
+  sourceRefs?: readonly string[],
+  sourceWarnings?: readonly { code: string; sourceRef?: string }[],
+  providerReceipt?: PresenceProviderReceipt,
+): Promise<{ version: number; contentHash: string; byteLength: number }> {
+  const validated = validatedDocument(document, project.kind);
+  const assetSnapshots = await resolveDocumentAssets(ctx, project.tenantId, validated);
+  const previous = await ctx.db
+    .query("webProjectVersions")
+    .withIndex("by_tenant_project_version", (q) =>
+      q.eq("tenantId", project.tenantId).eq("projectId", project._id),
+    )
+    .order("desc")
+    .first();
+  const recipeRef = originRecipeRef ?? previous?.recipeRef;
+  // Origin refs stay immutable; a new edit is rendered with the current artifact renderer.
+  // Already stored versions keep their exact old bytes and renderer identity.
+  const designed =
+    recipeRef?.rendererVersion !== undefined &&
+    [
+      "web-design-renderer-v1",
+      "web-design-renderer-v2",
+      "web-design-renderer-v3",
+      "web-design-renderer-v4",
+      "web-design-renderer-v5",
+      "web-design-renderer-v6",
+      "web-design-renderer-v7",
+      "web-design-renderer-v8",
+      "web-design-renderer-v9",
+      "web-design-renderer-v10",
+      "web-design-renderer-v11",
+      "web-design-renderer-v12",
+      "web-design-renderer-v13",
+      "web-design-renderer-v14",
+      "web-design-renderer-v15",
+      WEB_DESIGN_RENDERER_VERSION,
+    ].includes(recipeRef.rendererVersion);
+  if (recipeRef?.rendererVersion !== undefined && !designed)
+    throw new Error("WEB_RENDERER_UNAVAILABLE");
+  const profile = recipeRef?.designProfile;
+  if (designed && !validateDesignProfileRef(profile)) throw new Error("WEB_DESIGN_PROFILE_INVALID");
+  const contentHash = designed
+    ? designedWebDocumentHash(validated, profile as Parameters<typeof designedWebDocumentHash>[1])
+    : hashWebDocument(validated);
+  const artifacts = validated.pages.map((page) => {
+    const route = { slug: project.slug, page: page.slug };
+    const bytes = designed
+      ? renderDesignedWebDocumentBytes(
+          validated,
+          profile as Parameters<typeof renderDesignedWebDocumentBytes>[1],
+          route,
+        )
+      : renderWebDocumentBytes(validated, route);
+    return {
+      pageSlug: page.slug,
+      html: new TextDecoder().decode(bytes),
+      byteLength: bytes.byteLength,
+    };
+  });
+  const totalBytes = artifacts.reduce((sum, artifact) => sum + artifact.byteLength, 0);
+  if (providerReceipt) validateProviderReceipt(providerReceipt, artifacts);
+  if (totalBytes > 256 * 1024) throw new Error("INVALID_WEB_DOCUMENT");
+  const version = (previous?.version ?? 0) + 1;
+  await ctx.db.insert("webProjectVersions", {
+    tenantId: project.tenantId,
+    projectId: project._id,
+    version,
+    document: validated,
+    contentHash,
+    rendererVersion: designed ? WEB_DESIGN_RENDERER_VERSION : WEB_RENDERER_VERSION,
+    artifactHtml: artifacts[0]?.html,
+    artifacts,
+    artifactByteLength: totalBytes,
+    createdBy,
+    createdAt: Date.now(),
+    ...(providerReceipt
+      ? { providerReceipt, requiresProviderReview: true }
+      : previous?.requiresProviderReview || previous?.providerReceipt
+        ? { requiresProviderReview: true }
+        : {}),
+    ...(previous ? { basedOnVersion: previous.version } : {}),
+    sourceRefs: sourceRefs ? [...sourceRefs] : (previous?.sourceRefs ?? []),
+    assetSnapshots,
+    sourceWarnings: sourceWarnings ? [...sourceWarnings] : (previous?.sourceWarnings ?? []),
+    ...(originRecipeRef !== undefined
+      ? { recipeRef: originRecipeRef }
+      : previous?.recipeRef !== undefined
+        ? { recipeRef: previous.recipeRef }
+        : {}),
+  });
+  return { version, contentHash, byteLength: totalBytes };
+}
+
+/** Shared server-only project/version write seam for recipe-created projects. */
+export async function createProjectWithVersion(
+  ctx: ScopedMutationCtx,
+  args: {
+    kind: ProjectKind;
+    slug: string;
+    title: string;
+    document: unknown;
+    recipeRef?: RecipeRef;
+    createdBy: string;
+    sourceRefs?: readonly string[];
+    sourceWarnings?: readonly { code: string; sourceRef?: string }[];
+    providerReceipt?: PresenceProviderReceipt;
+  },
+): Promise<{
+  projectId: Id<"webProjects">;
+  version: number;
+  contentHash: string;
+  revision: number;
+}> {
+  await assertTenantWritable(ctx, ctx.tenantId);
+  if (!validSlug(args.slug) || args.title.trim().length === 0 || args.title.length > 160)
+    throw new Error("INVALID_WEB_PROJECT");
+  validateSourceRefs(args.sourceRefs);
+  const existing = await ctx.db
+    .query("webProjects")
+    .withIndex("by_tenant_slug", (q) => q.eq("tenantId", ctx.tenantId).eq("slug", args.slug))
+    .first();
+  if (existing) throw new Error("WEB_PROJECT_EXISTS");
+  const now = Date.now();
+  const publicHost = platformRuntimeHost();
+  const projectId = await ctx.db.insert("webProjects", {
+    tenantId: ctx.tenantId,
+    kind: args.kind,
+    slug: args.slug,
+    title: args.title.trim(),
+    publicHost,
+    domainMode: "platform_path",
+    hostingDeclaration: { hosting: "pikar_platform_path", source: "tenant_structured_content" },
+    revision: 1,
+    createdAt: now,
+    updatedAt: now,
+  });
+  const version = await appendVersion(
+    ctx,
+    {
+      _id: projectId,
+      tenantId: ctx.tenantId,
+      kind: args.kind,
+      slug: args.slug,
+      title: args.title.trim(),
+      publicHost,
+      domainMode: "platform_path",
+      hostingDeclaration: {
+        hosting: "pikar_platform_path",
+        source: "tenant_structured_content",
+      },
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+    },
+    args.document,
+    args.createdBy,
+    args.recipeRef,
+    args.sourceRefs,
+    args.sourceWarnings,
+    args.providerReceipt,
+  );
+  await ctx.db.patch(projectId, {
+    draftVersion: version.version,
+    revision: 2,
+    updatedAt: Date.now(),
+  });
+  return { projectId, ...version, revision: 2 };
+}
+
+function validateSourceRefs(refs: readonly string[] | undefined): void {
+  if (refs && (refs.length > 32 || refs.some((ref) => ref.length === 0 || ref.length > 256)))
+    throw new Error("INVALID_WEB_SOURCE_REFS");
+}
+
+/** Trusted orchestration seam. It only appends a draft; approval and publication remain human actions. */
+export async function reviseProjectWithVersion(
+  ctx: ScopedMutationCtx,
+  args: {
+    projectId: Id<"webProjects">;
+    document: unknown;
+    expectedRevision: number;
+    createdBy: string;
+    sourceRefs?: readonly string[];
+    recipeRef?: RecipeRef;
+    sourceWarnings?: readonly { code: string; sourceRef?: string }[];
+    providerReceipt?: PresenceProviderReceipt;
+  },
+) {
+  await assertTenantWritable(ctx, ctx.tenantId);
+  const project = await ctx.db.get(args.projectId);
+  if (!project || project.tenantId !== ctx.tenantId) throw new Error("WEB_PROJECT_UNAVAILABLE");
+  if (args.expectedRevision !== project.revision) throw new Error("STALE_REVISION");
+  validateSourceRefs(args.sourceRefs);
+  const version = await appendVersion(
+    ctx,
+    project,
+    args.document,
+    args.createdBy,
+    args.recipeRef,
+    args.sourceRefs,
+    args.sourceWarnings,
+    args.providerReceipt,
+  );
+  const revision = project.revision + 1;
+  await ctx.db.patch(args.projectId, {
+    draftVersion: version.version,
+    approvedVersion: undefined,
+    approvedContentHash: undefined,
+    revision,
+    updatedAt: Date.now(),
+  });
+  return { projectId: args.projectId, ...version, revision };
+}
+
+export const createDraft = tenantMutation({
+  args: {
+    kind: projectKind,
+    slug: v.string(),
+    title: v.string(),
+    document: documentInput,
+  },
+  handler: async (ctx, args) => {
+    return createProjectWithVersion(ctx, {
+      kind: args.kind,
+      slug: args.slug,
+      title: args.title,
+      document: args.document,
+      createdBy: ctx.userId,
+    });
+  },
+});
+
+export const saveDraft = tenantMutation({
+  args: {
+    projectId: v.id("webProjects"),
+    document: documentInput,
+    expectedRevision: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const project = (await ctx.db.get(args.projectId)) as ProjectRow | null;
+    if (!project || project.tenantId !== ctx.tenantId) throw new Error("WEB_PROJECT_UNAVAILABLE");
+    if (args.expectedRevision !== undefined && args.expectedRevision !== project.revision)
+      throw new Error("STALE_REVISION");
+    return reviseProjectWithVersion(ctx, {
+      projectId: args.projectId,
+      document: args.document,
+      expectedRevision: args.expectedRevision ?? project.revision,
+      createdBy: ctx.userId,
+    });
+  },
+});
+
+export const approveVersion = tenantMutation({
+  args: { projectId: v.id("webProjects"), version: v.number(), contentHash: v.string() },
+  handler: async (ctx, args) => {
+    const project = (await ctx.db.get(args.projectId)) as ProjectRow | null;
+    if (!project || project.tenantId !== ctx.tenantId) throw new Error("WEB_PROJECT_UNAVAILABLE");
+    const version = await ctx.db
+      .query("webProjectVersions")
+      .withIndex("by_tenant_project_version", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("projectId", args.projectId).eq("version", args.version),
+      )
+      .first();
+    if (!version || version.contentHash !== args.contentHash)
+      throw new Error("VERSION_HASH_MISMATCH");
+    if (!presencePublicationReady(version)) throw new Error("DESIGN_REVIEW_REQUIRED");
+    await ctx.db.patch(args.projectId, {
+      approvedVersion: args.version,
+      approvedContentHash: args.contentHash,
+      revision: project.revision + 1,
+      updatedAt: Date.now(),
+    });
+    return {
+      ok: true,
+      version: args.version,
+      contentHash: args.contentHash,
+      revision: project.revision + 1,
+    };
+  },
+});
+
+async function publish(
+  ctx: MutationCtx,
+  project: ProjectRow,
+  args: {
+    version: number;
+    contentHash: string;
+    expectedRevision: number;
+    action: "publish" | "update" | "rollback";
+  },
+  actor: string,
+): Promise<{
+  ok: boolean;
+  code?: string;
+  version?: number;
+  contentHash?: string;
+  revision: number;
+}> {
+  const fail = async (failure: PublicationAuditPayload["failure"], code: string) => {
+    await receipt(
+      ctx,
+      project.tenantId,
+      args.action,
+      publicationPayload({
+        action: args.action,
+        status: "failed",
+        projectId: project._id,
+        version: args.version,
+        contentHash: args.contentHash,
+        failure,
+        actor,
+        revision: project.revision,
+      }),
+    );
+    return { ok: false, code, revision: project.revision };
+  };
+  if (
+    project.kind === "storefront" &&
+    !(await merchantReadiness(ctx, project.tenantId, project._id, args.version)).publicCheckoutReady
+  )
+    return fail("unavailable", "COMMERCE_UNAVAILABLE");
+  if (
+    project.domainMode === "platform_path" &&
+    (!platformRuntimeHost() || project.publicHost !== platformRuntimeHost())
+  )
+    return fail("unavailable", "RUNTIME_UNAVAILABLE");
+  if (args.expectedRevision !== project.revision) return fail("stale_revision", "STALE_REVISION");
+  if (!runtimeReady(project)) return fail("unavailable", "RUNTIME_UNAVAILABLE");
+  const competingBindings = await ctx.db
+    .query("webProjects")
+    .withIndex("by_host_slug", (q) =>
+      q.eq("publicHost", project.publicHost).eq("slug", project.slug),
+    )
+    .take(2);
+  if (competingBindings.some((candidate) => candidate._id !== project._id))
+    return fail("unavailable", "AMBIGUOUS_PUBLIC_BINDING");
+  if (project.approvedVersion !== args.version || project.approvedContentHash !== args.contentHash)
+    return fail("not_approved", "NOT_APPROVED");
+  const version = await ctx.db
+    .query("webProjectVersions")
+    .withIndex("by_tenant_project_version", (q) =>
+      q.eq("tenantId", project.tenantId).eq("projectId", project._id).eq("version", args.version),
+    )
+    .first();
+  if (!version || version.contentHash !== args.contentHash)
+    return fail("render_failed", "VERSION_UNAVAILABLE");
+  if (!presencePublicationReady(version)) return fail("unavailable", "DESIGN_REVIEW_REQUIRED");
+  const revision = project.revision + 1;
+  await ctx.db.patch(project._id, {
+    publishedVersion: args.version,
+    publishedContentHash: args.contentHash,
+    revision,
+    updatedAt: Date.now(),
+  });
+  await receipt(
+    ctx,
+    project.tenantId,
+    args.action,
+    publicationPayload({
+      action: args.action,
+      status: "published",
+      projectId: project._id,
+      version: args.version,
+      contentHash: args.contentHash,
+      previousVersion: project.publishedVersion,
+      resultingVersion: args.version,
+      actor,
+      revision,
+    }),
+  );
+  return { ok: true, version: args.version, contentHash: args.contentHash, revision };
+}
+
+export const publishVersion = tenantMutation({
+  args: {
+    projectId: v.id("webProjects"),
+    version: v.number(),
+    contentHash: v.string(),
+    expectedRevision: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const project = (await ctx.db.get(args.projectId)) as ProjectRow | null;
+    if (!project || project.tenantId !== ctx.tenantId) throw new Error("WEB_PROJECT_UNAVAILABLE");
+    return publish(ctx, project, { ...args, action: "publish" }, String(ctx.userId));
+  },
+});
+
+export const updateVersion = tenantMutation({
+  args: {
+    projectId: v.id("webProjects"),
+    version: v.number(),
+    contentHash: v.string(),
+    expectedRevision: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const project = (await ctx.db.get(args.projectId)) as ProjectRow | null;
+    if (!project || project.tenantId !== ctx.tenantId) throw new Error("WEB_PROJECT_UNAVAILABLE");
+    return publish(ctx, project, { ...args, action: "update" }, String(ctx.userId));
+  },
+});
+
+export const unpublish = tenantMutation({
+  args: { projectId: v.id("webProjects"), expectedRevision: v.number() },
+  handler: async (ctx, args) => {
+    const project = (await ctx.db.get(args.projectId)) as ProjectRow | null;
+    if (!project || project.tenantId !== ctx.tenantId) throw new Error("WEB_PROJECT_UNAVAILABLE");
+    const actor = String(ctx.userId);
+    if (project.revision !== args.expectedRevision) {
+      await receipt(
+        ctx,
+        ctx.tenantId,
+        "unpublish",
+        publicationPayload({
+          action: "unpublish",
+          status: "failed",
+          projectId: String(args.projectId),
+          failure: "stale_revision",
+          actor,
+          revision: project.revision,
+        }),
+      );
+      return { ok: false, code: "STALE_REVISION", revision: project.revision };
+    }
+    const revision = project.revision + 1;
+    await ctx.db.patch(args.projectId, {
+      publishedVersion: undefined,
+      publishedContentHash: undefined,
+      revision,
+      updatedAt: Date.now(),
+    });
+    await receipt(
+      ctx,
+      ctx.tenantId,
+      "unpublish",
+      publicationPayload({
+        action: "unpublish",
+        status: "unpublished",
+        projectId: String(args.projectId),
+        previousVersion: project.publishedVersion,
+        actor,
+        revision,
+      }),
+    );
+    return { ok: true, revision };
+  },
+});
+
+export const rollback = tenantMutation({
+  args: {
+    projectId: v.id("webProjects"),
+    version: v.number(),
+    contentHash: v.string(),
+    expectedRevision: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const project = (await ctx.db.get(args.projectId)) as ProjectRow | null;
+    if (!project || project.tenantId !== ctx.tenantId) throw new Error("WEB_PROJECT_UNAVAILABLE");
+    return publish(ctx, project, { ...args, action: "rollback" }, String(ctx.userId));
+  },
+});
+
+export const getProject = tenantQuery({
+  args: { projectId: v.id("webProjects") },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!project || project.tenantId !== ctx.tenantId) return null;
+    return project;
+  },
+});
+
+export const listProjects = tenantQuery({
+  args: {},
+  handler: async (ctx) =>
+    ctx.db
+      .query("webProjects")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .order("desc")
+      .take(100),
+});
+
+export const getVersion = tenantQuery({
+  args: { projectId: v.id("webProjects"), version: v.number() },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!project || project.tenantId !== ctx.tenantId) return null;
+    const version = await ctx.db
+      .query("webProjectVersions")
+      .withIndex("by_tenant_project_version", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("projectId", args.projectId).eq("version", args.version),
+      )
+      .first();
+    return version ? { ...version, browserQualityReady: presencePublicationReady(version) } : null;
+  },
+});
+
+export const listVersions = tenantQuery({
+  args: { projectId: v.id("webProjects") },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!project || project.tenantId !== ctx.tenantId) return [];
+    return ctx.db
+      .query("webProjectVersions")
+      .withIndex("by_tenant_project_version", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("projectId", args.projectId),
+      )
+      .order("desc")
+      .take(50);
+  },
+});
+
+/** Internal server-owned host resolver; no caller-selected tenant id crosses this boundary. */
+export const resolvePublished = internalQuery({
+  args: { host: v.string(), slug: v.string() },
+  handler: async (ctx, args) => {
+    const host = args.host.trim().toLowerCase();
+    const matches = await ctx.db
+      .query("webProjects")
+      .withIndex("by_host_slug", (q) => q.eq("publicHost", host).eq("slug", args.slug))
+      .take(2);
+    if (matches.length > 1) return { state: "invalid_host" as const };
+    if (matches.length === 0) {
+      const sameSlug = await ctx.db
+        .query("webProjects")
+        .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+        .first();
+      return { state: sameSlug ? ("invalid_host" as const) : ("not_found" as const) };
+    }
+    const project = matches[0];
+    if (project) {
+      const lifecycle = await ctx.db
+        .query("authRevocations")
+        .withIndex("by_userId", (q) => q.eq("userId", project.tenantId))
+        .unique();
+      if (lifecycle?.state !== undefined) return { state: "not_found" as const };
+    }
+    if (!project || !runtimeReady(project)) return { state: "invalid_host" as const };
+    if (
+      project.kind === "storefront" &&
+      !(await merchantReadiness(ctx, project.tenantId, project._id)).publicCheckoutReady
+    )
+      return { state: "invalid_host" as const };
+    if (project.publishedVersion === undefined) return { state: "unpublished" as const };
+    const version = await ctx.db
+      .query("webProjectVersions")
+      .withIndex("by_tenant_project_version", (q) =>
+        q
+          .eq("tenantId", project.tenantId)
+          .eq("projectId", project._id)
+          .eq("version", project.publishedVersion!),
+      )
+      .first();
+    if (
+      !version ||
+      version.contentHash !== project.publishedContentHash ||
+      !version.artifacts ||
+      version.artifacts.length !== (version.document as WebDocument).pages.length
+    )
+      return { state: "render_failed" as const };
+    return { state: "published" as const, project, version };
+  },
+});
+
+// Retention constants are exported for the form adapter and playbook checks; lifecycle code never
+// treats them as proof of unique visitors or a provider/domain readiness claim.
+export { ABUSE_BUCKET_RETENTION_MS, IDEMPOTENCY_RETENTION_MS } from "@pikar/core/webRuntime";

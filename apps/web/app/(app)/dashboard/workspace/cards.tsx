@@ -33,6 +33,7 @@ import { PreviewModal } from "../vault/PreviewModal";
 import { DeliveryReview } from "./DeliveryReview";
 import { MediaCampaign } from "./MediaCampaign";
 import { MediaCanvas, ProposalFailureCanvas } from "./MediaCanvas";
+import { OnlinePresenceCard } from "./OnlinePresenceCard";
 import { RevenuePackPanel } from "./RevenuePackPanel";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
@@ -2193,6 +2194,9 @@ function BriefingCard({ briefing, demoted }: { briefing: Briefing; demoted?: boo
 // (§4 enforced by schema absence, 03.9-01) — there is nowhere for a subject line to hide.
 // An unknown key falls back to "Working…", so a tool added later can never crash the card.
 const VERB: Record<string, [running: string, done: string]> = {
+  readOnlinePresenceContext: ["Reading your business foundation…", "Read your business foundation"],
+  saveOnlinePresenceBrief: ["Preparing your website brief…", "Prepared your website brief"],
+  buildOnlinePresenceProject: ["Building your website…", "Built a website version for review"],
   thinking: ["Thinking…", "Thought it through"],
   resolveContacts: ["Looking up a contact…", "Looked up a contact"],
   addRecipients: ["Adding recipients…", "Added recipients"],
@@ -3385,8 +3389,10 @@ export function CardList({
       <SourceCard threadId={threadId} />
       {/* Same footing as SourceCard (ACTN-04 SC#6): createDocument saves and never sends, so a
           creating turn carries no plan row at all — the Output card must not sit under a plan gate. */}
+      {threadId && <OnlinePresenceCard threadId={threadId} />}
       {!hideArtifacts && <OutputCard threadId={threadId} />}
       <MediaCampaign threadId={threadId ?? null} budgetRequestsOnly={hideArtifacts} />
+
       {/* Like SourceCard: evaluation happens on advice turns that may carry no plan row, so it
           renders above the plan-status branches and self-reads its own latest-row data. */}
       <EvaluationCard threadId={threadId} />

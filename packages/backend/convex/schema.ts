@@ -1,5 +1,6 @@
 import { authTables } from "@convex-dev/auth/server";
 import { CONTRACTS_PACKAGE_NAME } from "@pikar/contracts";
+import { WEB_RECIPE_SKILL_NAMES } from "@pikar/contracts/webRecipeSkill";
 import {
   AUTHORITY_CLASSES,
   CONFIDENCE_LABELS,
@@ -34,8 +35,10 @@ void CONTRACTS_PACKAGE_NAME;
 const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
+const webRecipeName = literals(WEB_RECIPE_SKILL_NAMES);
+
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 85 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 92 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -50,7 +53,8 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │                                                                            │
 // │ ── Content & Pipeline ──────────────────────────────────── ~L334           │
 // │   requests, plans, briefings, intakeArtifacts, attachments,                │
-// │   telemetry, demoItems, funnels                                            │
+// │   webProjects, webProjectVersions, webAssets, webMetrics, webSubmissions,  │
+// │   onlinePresenceSessions, telemetry, demoItems, funnels                                            │
 // │                                                                            │
 // │ ── Agent ───────────────────────────────────────────────── ~L998           │
 // │   evaluations, agenda, agentSteps, researchControls                        │
@@ -79,6 +83,12 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │   feedback, optimizerConfig, tenantProfiles, goals,                        │
 // │   foundationInterviews, foundationTranscripts, foundationRevisions          │
 // │   inboxFixtures                                                            │
+// │                                                                            │
+// │ ── Tenant commerce and merchant operations ────────────────────────────── │
+// │   tenantProducts, tenantStock, tenantReservations, tenantCommercePolicies, │
+// │   tenantCommerceMappings, tenantCarts, tenantOrders, tenantOrderAttempts, │
+// │   tenantMerchantAccounts, tenantMerchantPayments, tenantMerchantEvents,  │
+// │   tenantMerchantOperations, tenantMerchantAutomation                     │
 // │                                                                            │
 // │ ── Finance ─────────────────────────────────────────────── ~L1981          │
 // │   spendEvents, spendCoverage, financeInputs                                │
@@ -991,6 +1001,44 @@ export default defineSchema({
     // only `isWorkflowPackSkill` names ever require them.
     provenance: v.optional(v.string()),
     browserEvidence: v.optional(v.string()),
+    browserQualification: v.optional(
+      v.object({
+        runId: v.string(),
+        challengeHash: v.string(),
+        ownerId: v.string(),
+        route: v.string(),
+        revision: v.number(),
+        candidateName: v.string(),
+        candidateVersion: v.number(),
+        bodyHash: v.string(),
+        definitionHash: v.string(),
+        bundleHash: v.string(),
+        rendererVersion: v.string(),
+        lanes: v.array(
+          v.object({
+            viewport: v.union(v.literal("desktop"), v.literal("mobile")),
+            observations: v.array(
+              v.object({
+                outcome: v.union(
+                  v.literal("selected"),
+                  v.literal("partial"),
+                  v.literal("refusal"),
+                  v.literal("recovery"),
+                  v.literal("edit"),
+                  v.literal("preview"),
+                ),
+                inputHash: v.optional(v.string()),
+                documentHash: v.optional(v.string()),
+                artifactHash: v.optional(v.string()),
+                byteLength: v.optional(v.number()),
+              }),
+            ),
+          }),
+        ),
+        finalizedHash: v.optional(v.string()),
+        updatedAt: v.number(),
+      }),
+    ),
     createdAt: v.number(),
   })
     .index("by_name_status", ["name", "status"])
@@ -2342,6 +2390,9 @@ export default defineSchema({
       // NoSuchToolError before execute on a hallucinated name), so this can never legitimately
       // fail — and it turns "the model can't inject a label" from an argument into a constraint.
       // Precedent: the PINNED status enum on `plans` (03.1-01).
+      v.literal("readOnlinePresenceContext"),
+      v.literal("saveOnlinePresenceBrief"),
+      v.literal("buildOnlinePresenceProject"),
       v.literal("thinking"),
       v.literal("resolveContacts"),
       v.literal("addRecipients"),
@@ -3008,6 +3059,7 @@ export default defineSchema({
     // (§2.5), never by a status query. ⚠ Read it with a bounded `.take()` and project `text` away;
     // see the `folderId` comment above for why a `.collect()` here is a 16 MiB read-cap fault.
     .index("by_tenant_folder", ["tenantId", "folderId"])
+    .index("by_tenant_mime_status", ["tenantId", "mimeType", "status"])
     // Phase-15.3. The Drive re-import primary key: "have I already imported this Drive file for
     // this tenant?" — answered without scanning the partition.
     .index("by_tenant_driveFileId", ["tenantId", "driveFileId"])
@@ -3512,6 +3564,7 @@ export default defineSchema({
         tenantIds: v.array(v.string()),
         expiresAt: v.number(),
         accountingMode: v.optional(v.literal("ledger-nanos-v1")),
+        purpose: v.optional(v.literal("shop-preparation")),
       }),
     ),
     evalAuthoringProbe: v.optional(
@@ -3915,6 +3968,7 @@ export default defineSchema({
       v.literal("process-sop"),
       v.literal("brand-review"),
       v.literal("offer-and-lead-plan"),
+      v.literal("shop-preparation"),
       // Measurement-only Phase 28 stream; not a discoverable Phase 27 workflow pack.
       v.literal("revenue"),
     ),
@@ -4582,4 +4636,704 @@ export default defineSchema({
     // `isolation.test.ts`: the rollup is deployment-wide and has no tenant in hand until it reads
     // a row. Every consumer is an internalMutation reached only from the cron.
     .index("by_status_dueAt", ["status", "dueAt"]),
+  /** Immutable raster copies explicitly selected for private website preparation. */
+  webAssets: defineTable({
+    tenantId: v.string(),
+    vaultDocumentId: v.id("vaultDocuments"),
+    sourceRevision: v.string(),
+    storageId: v.id("_storage"),
+    contentHash: v.string(),
+    mimeType: v.union(v.literal("image/png"), v.literal("image/jpeg"), v.literal("image/webp")),
+    byteLength: v.number(),
+    width: v.number(),
+    height: v.number(),
+    title: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_source", ["tenantId", "vaultDocumentId", "sourceRevision"]),
+  tenantMerchantAccounts: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    provider: v.union(v.literal("stripe"), v.literal("paypal")),
+    environment: v.literal("test"),
+    sellerCountry: v.string(),
+    currency: v.string(),
+    revision: v.number(),
+    status: v.union(
+      v.literal("connecting"),
+      v.literal("ready"),
+      v.literal("unavailable"),
+      v.literal("revoked"),
+    ),
+    providerAccountId: v.optional(v.string()),
+    trackingId: v.string(),
+    capability: v.optional(v.any()),
+    onboardingUrl: v.optional(v.string()),
+    lastFailure: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_updated", ["updatedAt"])
+    .index("by_status_provider_updated", ["status", "provider", "updatedAt"])
+    .index("by_tenant_project_provider", ["tenantId", "projectId", "provider"])
+    .index("by_provider_account", ["provider", "providerAccountId"]),
+  tenantMerchantPayments: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    orderId: v.id("tenantOrders"),
+    localAttemptId: v.id("tenantOrderAttempts"),
+    merchantAccountId: v.id("tenantMerchantAccounts"),
+    provider: v.union(v.literal("stripe"), v.literal("paypal")),
+    state: v.any(),
+    providerOrderId: v.optional(v.string()),
+    checkoutUrl: v.optional(v.string()),
+    buyerTokenHash: v.optional(v.string()),
+    buyerEmail: v.optional(v.string()),
+    buyerPurgeAt: v.optional(v.number()),
+    buyerAddress: v.optional(
+      v.object({
+        name: v.string(),
+        line1: v.string(),
+        line2: v.optional(v.string()),
+        city: v.string(),
+        region: v.optional(v.string()),
+        postalCode: v.string(),
+        country: v.string(),
+      }),
+    ),
+    deliveryReviewReason: v.optional(
+      v.union(v.literal("buyer_address_missing"), v.literal("buyer_country_mismatch")),
+    ),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_order", ["tenantId", "orderId"])
+    .index("by_buyer_purge", ["buyerPurgeAt"])
+    .index("by_provider_order", ["provider", "providerOrderId"])
+    .index("by_tenant_project", ["tenantId", "projectId"]),
+  tenantMerchantEvents: defineTable({
+    tenantId: v.string(),
+    provider: v.union(v.literal("stripe"), v.literal("paypal")),
+    eventRef: v.string(),
+    paymentId: v.id("tenantMerchantPayments"),
+    fingerprint: v.string(),
+    outcome: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_provider_event", ["provider", "eventRef"]),
+  tenantMerchantOperations: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    orderId: v.id("tenantOrders"),
+    paymentId: v.id("tenantMerchantPayments"),
+    kind: v.union(
+      v.literal("refund"),
+      v.literal("physical_shipment"),
+      v.literal("digital_entitlement"),
+      v.literal("buyer_notice"),
+    ),
+    state: v.any(),
+    idempotencyKey: v.string(),
+    storageId: v.optional(v.id("_storage")),
+    sourceDocumentId: v.optional(v.id("vaultDocuments")),
+    sourceHash: v.optional(v.string()),
+    shipmentDetails: v.optional(v.object({ carrier: v.string(), trackingReference: v.string() })),
+    expiresAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_order", ["tenantId", "orderId"])
+    .index("by_expiry", ["expiresAt"])
+    .index("by_tenant_key", ["tenantId", "idempotencyKey"]),
+  tenantMerchantAutomation: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    revision: v.number(),
+    autoDigitalDelivery: v.boolean(),
+    digitalValidityDays: v.number(),
+    policyRef: v.string(),
+    buyerRetentionDays: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project", ["tenantId", "projectId"]),
+
+  tenantProducts: defineTable({
+    tenantId: v.string(),
+    digitalDeliveryDocumentId: v.optional(v.id("vaultDocuments")),
+    digitalDeliverySourceHash: v.optional(v.string()),
+    goodsKind: v.optional(v.union(v.literal("physical"), v.literal("digital"))),
+    sku: v.string(),
+    variant: v.string(),
+    currency: v.string(),
+    priceMinor: v.number(),
+    status: v.union(v.literal("draft"), v.literal("active"), v.literal("retired")),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_sku_variant", ["tenantId", "sku", "variant"]),
+
+  tenantStock: defineTable({
+    tenantId: v.string(),
+    productId: v.id("tenantProducts"),
+    kind: v.union(v.literal("finite"), v.literal("untracked")),
+    onHand: v.optional(v.number()),
+    reserved: v.optional(v.number()),
+    reservationTtlMs: v.optional(v.number()),
+    approvedUntracked: v.optional(v.boolean()),
+    revision: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_product", ["tenantId", "productId"]),
+
+  tenantReservations: defineTable({
+    tenantId: v.string(),
+    productId: v.id("tenantProducts"),
+    quantity: v.number(),
+    status: v.union(
+      v.literal("held"),
+      v.literal("released"),
+      v.literal("expired"),
+      v.literal("consumed"),
+    ),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    orderId: v.optional(v.id("tenantOrders")),
+    attemptId: v.optional(v.id("tenantOrderAttempts")),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_product", ["tenantId", "productId"])
+    .index("by_tenant_order", ["tenantId", "orderId"])
+    .index("by_tenant_product_status_expiry", ["tenantId", "productId", "status", "expiresAt"])
+    .index("by_tenant_status_expiry", ["tenantId", "status", "expiresAt"]),
+
+  tenantCommercePolicies: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    revision: v.number(),
+    sellerOfRecordRef: v.string(),
+    taxSourceRef: v.optional(v.string()),
+    shippingSourceRef: v.optional(v.string()),
+    refundPolicyId: v.optional(v.string()),
+    currency: v.string(),
+    countries: v.array(v.string()),
+    taxBasisPoints: v.optional(v.number()),
+    taxRounding: v.optional(v.literal("half_up")),
+    shippingMinor: v.optional(v.number()),
+    physical: v.optional(
+      v.object({
+        shippingSourceRef: v.string(),
+        shippingMinor: v.number(),
+        returnsPolicyRef: v.string(),
+        taxSourceRef: v.string(),
+        taxBasisPoints: v.number(),
+        refundPolicyRef: v.string(),
+        buyerRetentionRef: v.string(),
+      }),
+    ),
+    digital: v.optional(
+      v.object({
+        deliveryRef: v.string(),
+        revocationRef: v.string(),
+        noShipping: v.literal(true),
+        taxSourceRef: v.string(),
+        taxBasisPoints: v.number(),
+        refundPolicyRef: v.string(),
+        buyerRetentionRef: v.string(),
+      }),
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project_revision", ["tenantId", "projectId", "revision"]),
+
+  tenantCommerceMappings: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    presentationItemId: v.string(),
+    productId: v.id("tenantProducts"),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project_item", ["tenantId", "projectId", "presentationItemId"]),
+
+  tenantCarts: defineTable({
+    tenantId: v.string(),
+    buyerTokenHash: v.optional(v.string()),
+    buyerRequestHash: v.optional(v.string()),
+    projectId: v.id("webProjects"),
+    lines: v.array(
+      v.object({
+        presentationItemId: v.string(),
+        productId: v.id("tenantProducts"),
+        quantity: v.number(),
+        expectedProductRevision: v.number(),
+        expectedUnitMinor: v.number(),
+      }),
+    ),
+    addressCountry: v.string(),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project", ["tenantId", "projectId"])
+    .index("by_tenant_project_buyer", ["tenantId", "projectId", "buyerTokenHash"])
+    .index("by_tenant_expiry", ["tenantId", "expiresAt"]),
+
+  tenantOrders: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    cartId: v.id("tenantCarts"),
+    cartRevision: v.number(),
+    snapshot: v.object({
+      tenantId: v.string(),
+      projectId: v.string(),
+      currency: v.string(),
+      country: v.string(),
+      policyId: v.string(),
+      policyRevision: v.number(),
+      sellerOfRecordRef: v.string(),
+      taxRounding: v.optional(v.literal("half_up")),
+      taxSourceRef: v.optional(v.string()),
+      shippingSourceRef: v.optional(v.string()),
+      refundPolicyId: v.optional(v.string()),
+      physicalPolicy: v.optional(
+        v.object({
+          shippingSourceRef: v.string(),
+          shippingMinor: v.number(),
+          returnsPolicyRef: v.string(),
+          taxSourceRef: v.string(),
+          taxBasisPoints: v.number(),
+          refundPolicyRef: v.string(),
+          buyerRetentionRef: v.string(),
+        }),
+      ),
+      digitalPolicy: v.optional(
+        v.object({
+          deliveryRef: v.string(),
+          revocationRef: v.string(),
+          noShipping: v.literal(true),
+          taxSourceRef: v.string(),
+          taxBasisPoints: v.number(),
+          refundPolicyRef: v.string(),
+          buyerRetentionRef: v.string(),
+        }),
+      ),
+      lines: v.array(
+        v.object({
+          presentationItemId: v.string(),
+          productId: v.string(),
+          sku: v.string(),
+          goodsKind: v.optional(v.union(v.literal("physical"), v.literal("digital"))),
+          taxSourceRef: v.optional(v.string()),
+          refundPolicyRef: v.optional(v.string()),
+          buyerRetentionRef: v.optional(v.string()),
+          productRevision: v.number(),
+          stockRevision: v.number(),
+          unitMinor: v.number(),
+          quantity: v.number(),
+          lineMinor: v.number(),
+        }),
+      ),
+      subtotalMinor: v.number(),
+      taxMinor: v.number(),
+      shippingMinor: v.number(),
+      totalMinor: v.number(),
+      hash: v.string(),
+    }),
+    snapshotHash: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("expired"),
+      v.literal("cancelled"),
+      v.literal("cancel_requested"),
+      v.literal("paid"),
+      v.literal("paid_needs_review"),
+    ),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_cart", ["tenantId", "cartId"]),
+
+  tenantOrderAttempts: defineTable({
+    tenantId: v.string(),
+    orderId: v.id("tenantOrders"),
+    cartId: v.id("tenantCarts"),
+    cartRevision: v.number(),
+    retryKeyHash: v.string(),
+    snapshotHash: v.string(),
+    status: v.union(v.literal("local_pending"), v.literal("refused"), v.literal("expired")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_order", ["tenantId", "orderId"])
+    .index("by_tenant_cart_revision", ["tenantId", "cartId", "cartRevision"])
+    .index("by_tenant_cart_retry", ["tenantId", "cartId", "retryKeyHash"]),
+
+  webProjects: defineTable({
+    tenantId: v.string(),
+    kind: v.union(v.literal("site"), v.literal("landing"), v.literal("storefront")),
+    slug: v.string(),
+    title: v.string(),
+    publicHost: v.string(),
+    domainMode: v.union(
+      v.literal("platform_path"),
+      v.literal("custom_pending"),
+      v.literal("custom_active"),
+    ),
+    hostingDeclaration: v.object({
+      hosting: v.union(
+        v.literal("pikar_platform_path"),
+        v.literal("tenant_custom_domain_pending"),
+        v.literal("tenant_custom_domain_verified"),
+      ),
+      source: v.literal("tenant_structured_content"),
+    }),
+    draftVersion: v.optional(v.number()),
+    approvedVersion: v.optional(v.number()),
+    approvedContentHash: v.optional(v.string()),
+    publishedVersion: v.optional(v.number()),
+    publishedContentHash: v.optional(v.string()),
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_slug", ["tenantId", "slug"])
+    .index("by_tenant_host_slug", ["tenantId", "publicHost", "slug"])
+    // Public routing begins with no tenant identity. These two indexes are the declared exception:
+    // they resolve a host/path to one tenant-owned coordination head before any content is read.
+    .index("by_host_slug", ["publicHost", "slug"])
+    .index("by_slug", ["slug"]),
+  /** Immutable structured version and its deterministic rendered artifact. */
+
+  webProjectVersions: defineTable({
+    browserReviewJob: v.optional(
+      v.object({
+        runRef: v.string(),
+        state: v.union(
+          v.literal("running"),
+          v.literal("captured"),
+          v.literal("completed"),
+          v.literal("failed"),
+        ),
+        startedAt: v.number(),
+        reason: v.optional(v.string()),
+        preProviderRetry: v.optional(
+          v.object({
+            attempt: v.literal(1),
+            priorRunRef: v.string(),
+            priorStartedAt: v.number(),
+            priorReason: v.string(),
+            retriedAt: v.number(),
+          }),
+        ),
+      }),
+    ),
+    browserReviewReportStorageId: v.optional(v.id("_storage")),
+    browserReviewVisionStorageId: v.optional(v.id("_storage")),
+    browserReviewScreenshots: v.optional(
+      v.array(
+        v.object({
+          storageId: v.id("_storage"),
+          pageSlug: v.string(),
+          viewportWidth: v.number(),
+          reducedMotion: v.boolean(),
+          sha256: v.string(),
+          mimeType: v.string(),
+        }),
+      ),
+    ),
+    requiresProviderReview: v.optional(v.boolean()),
+    providerReceipt: v.optional(
+      v.object({
+        pipelineVersion: v.literal("stitch-kimi-required-v1"),
+        runRef: v.string(),
+        stitchHash: v.string(),
+        kimiHash: v.string(),
+        sourceFingerprint: v.string(),
+        briefHash: v.string(),
+        layoutHash: v.string(),
+        artifactHashes: v.array(v.object({ pageSlug: v.string(), contentHash: v.string() })),
+        pendingBrowser: v.literal(true),
+        stitchHtmlStorageId: v.optional(v.id("_storage")),
+        stitchImageStorageId: v.optional(v.id("_storage")),
+        repair: v.optional(
+          v.object({
+            priorVersion: v.number(),
+            visionEvidenceHash: v.string(),
+            attempt: v.literal(1),
+          }),
+        ),
+        rendererRevision: v.optional(
+          v.object({
+            priorVersion: v.number(),
+            priorContentHash: v.string(),
+            priorProviderReceiptHash: v.string(),
+            rendererVersion: v.string(),
+            requestedBy: v.string(),
+          }),
+        ),
+        rendererRepair: v.optional(
+          v.object({
+            priorVersion: v.number(),
+            browserEvidenceHash: v.string(),
+            rendererVersion: v.string(),
+            attempt: v.union(v.literal(1), v.literal(2)),
+          }),
+        ),
+      }),
+    ),
+    browserReview: v.optional(
+      v.object({
+        contentHash: v.string(),
+        artifactHashes: v.array(v.object({ pageSlug: v.string(), contentHash: v.string() })),
+        providerReceiptHash: v.string(),
+        status: v.union(v.literal("passed"), v.literal("failed")),
+        reportHash: v.string(),
+        checkedAt: v.number(),
+      }),
+    ),
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    version: v.number(),
+    document: v.any(),
+    contentHash: v.string(),
+    rendererVersion: v.string(),
+    artifactStorageId: v.optional(v.id("_storage")),
+    artifactHtml: v.optional(v.string()),
+    artifacts: v.optional(
+      v.array(
+        v.object({
+          pageSlug: v.string(),
+          html: v.string(),
+          byteLength: v.number(),
+        }),
+      ),
+    ),
+    artifactByteLength: v.number(),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    basedOnVersion: v.optional(v.number()),
+    sourceRefs: v.array(v.string()),
+    assetSnapshots: v.optional(
+      v.array(
+        v.object({
+          assetId: v.id("webAssets"),
+          assetRef: v.string(),
+          contentHash: v.string(),
+          mimeType: v.union(
+            v.literal("image/png"),
+            v.literal("image/jpeg"),
+            v.literal("image/webp"),
+          ),
+          byteLength: v.number(),
+          width: v.number(),
+          height: v.number(),
+          sourceRef: v.string(),
+        }),
+      ),
+    ),
+    // Immutable disclosure warnings belong to this exact rendered version, never today's brief.
+    sourceWarnings: v.optional(
+      v.array(v.object({ code: v.string(), sourceRef: v.optional(v.string()) })),
+    ),
+    /**
+     * Server-owned origin identity. This is optional for legacy/manual versions and immutable
+     * once written; later edits copy it while `contentHash` follows the edited document.
+     */
+    recipeRef: v.optional(
+      v.object({
+        name: webRecipeName,
+        version: v.number(),
+        skillId: v.string(),
+        bodyHash: v.string(),
+        definitionHash: v.string(),
+        inputHash: v.string(),
+        rendererVersion: v.optional(v.string()),
+        designProfile: v.object({
+          layoutPlan: v.optional(
+            v.union(
+              v.object({
+                version: v.literal(1),
+                hero: v.union(
+                  v.literal("overlay-left"),
+                  v.literal("overlay-centered"),
+                  v.literal("split"),
+                ),
+                sectionLayout: v.union(v.literal("editorial-columns"), v.literal("stacked")),
+                services: v.union(v.literal("rows"), v.literal("columns")),
+                gallery: v.union(v.literal("grid"), v.literal("carousel")),
+                spacing: v.union(v.literal("relaxed"), v.literal("compact")),
+                headingScale: v.union(v.literal("balanced"), v.literal("display")),
+                motion: v.union(v.literal("none"), v.literal("subtle")),
+              }),
+              v.object({
+                version: v.literal(2),
+                designTokens: v.object({
+                  colors: v.object({
+                    paper: v.string(),
+                    card: v.string(),
+                    ink: v.string(),
+                    muted: v.string(),
+                    accent: v.string(),
+                    rule: v.string(),
+                  }),
+                  typography: v.object({
+                    heading: v.union(
+                      v.literal("editorial-serif"),
+                      v.literal("modern-serif"),
+                      v.literal("humanist-sans"),
+                      v.literal("geometric-sans"),
+                    ),
+                    body: v.union(v.literal("humanist-sans"), v.literal("geometric-sans")),
+                  }),
+                  spacing: v.object({
+                    contentWidth: v.number(),
+                    sectionGap: v.number(),
+                    copyMeasure: v.number(),
+                    heroMinHeight: v.number(),
+                  }),
+                  footer: v.union(v.literal("light"), v.literal("dark")),
+                }),
+                hero: v.union(
+                  v.literal("overlay-left"),
+                  v.literal("overlay-centered"),
+                  v.literal("split"),
+                ),
+                sectionLayout: v.union(v.literal("editorial-columns"), v.literal("stacked")),
+                services: v.union(v.literal("rows"), v.literal("columns")),
+                gallery: v.union(v.literal("grid"), v.literal("carousel")),
+                spacing: v.union(v.literal("relaxed"), v.literal("compact")),
+                headingScale: v.union(v.literal("balanced"), v.literal("display")),
+                motion: v.union(v.literal("none"), v.literal("subtle")),
+              }),
+            ),
+          ),
+          artDirection: v.optional(
+            v.union(v.literal("editorial"), v.literal("studio"), v.literal("technical")),
+          ),
+          surfaceStyle: v.optional(
+            v.union(v.literal("minimal"), v.literal("glass"), v.literal("clay")),
+          ),
+          bundleHash: v.string(),
+          compilerHash: v.string(),
+          patternId: v.string(),
+          styleId: v.string(),
+          paletteId: v.string(),
+          typographyId: v.string(),
+          formProfileId: v.string(),
+          dials: v.object({
+            variance: v.number(),
+            motion: v.number(),
+            density: v.number(),
+          }),
+          pageOverride: v.optional(v.string()),
+        }),
+      }),
+    ),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project_version", ["tenantId", "projectId", "version"])
+    .index("by_tenant_project_hash", ["tenantId", "projectId", "contentHash"]),
+  /** Aggregate raw-request counters; never unique-person or conversion claims. */
+
+  webMetrics: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    version: v.number(),
+    kind: v.union(
+      v.literal("page_view"),
+      v.literal("cta_click"),
+      v.literal("form_accepted"),
+      v.literal("form_rejected"),
+    ),
+    count: v.number(),
+    windowStartedAt: v.number(),
+    windowEndsAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_project_kind_window", ["tenantId", "projectId", "kind", "windowStartedAt"]),
+  /** Short-lived idempotency and abuse state; no raw IP, user-agent, email, or form body. */
+
+  webSubmissions: defineTable({
+    tenantId: v.string(),
+    projectId: v.id("webProjects"),
+    version: v.number(),
+    formId: v.string(),
+    idempotencyKeyHash: v.string(),
+    outcome: v.union(
+      v.literal("accepted"),
+      v.literal("duplicate"),
+      v.literal("invalid"),
+      v.literal("consent_required"),
+      v.literal("suppressed"),
+      v.literal("rate_limited"),
+      v.literal("unavailable"),
+    ),
+    outcomeRef: v.optional(v.string()),
+    /** Bounded, publisher-authored campaign metadata copied from the immutable form version. */
+    attribution: v.optional(
+      v.object({
+        source: v.optional(v.string()),
+        medium: v.optional(v.string()),
+        campaign: v.optional(v.string()),
+      }),
+    ),
+    abuseBucketHash: v.optional(v.string()),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    abuseWindowExpiresAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_expires_at", ["tenantId", "expiresAt"])
+    .index("by_expires_at", ["expiresAt"])
+    .index("by_tenant_idempotency", ["tenantId", "projectId", "formId", "idempotencyKeyHash"])
+    .index("by_tenant_abuse_bucket", ["tenantId", "abuseBucketHash", "abuseWindowExpiresAt"]),
+  /** Tenant-owned product/variant authority; display text is never payment authority. */
+
+  onlinePresenceSessions: defineTable({
+    tenantId: v.string(),
+    threadId: v.string(),
+    planId: v.id("plans"),
+    revision: v.number(),
+    humanMessages: v.array(v.object({ ref: v.string(), text: v.string(), sequence: v.number() })),
+    status: v.union(
+      v.literal("collecting"),
+      v.literal("ready"),
+      v.literal("awaiting_review"),
+      v.literal("blocked"),
+    ),
+    brief: v.optional(v.any()),
+    sourceSnapshots: v.optional(v.array(v.object({ ref: v.string(), revision: v.string() }))),
+    builtBriefHash: v.optional(v.string()),
+    projectId: v.optional(v.id("webProjects")),
+    projectVersion: v.optional(v.number()),
+    projectContentHash: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant_thread", ["tenantId", "threadId"])
+    .index("by_tenant_plan", ["tenantId", "planId"])
+    .index("by_tenant_project", ["tenantId", "projectId"])
+    .index("by_tenant", ["tenantId"]),
 });

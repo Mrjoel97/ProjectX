@@ -17,6 +17,98 @@ progress:
 
 # Project State
 
+## Release integration record — 2026-10-30
+
+The primary frontmatter retains the latest main execution checkpoint and its counters; those counters are not a recomputed total for this merge. Both independently named Phase 53 lanes remain in their original directories and keep their historical identifiers: `53-agentic-online-presence` and `53-media-and-document-production`. Their records and dated acceptance claims do not qualify the combined release. The online-presence branch also recorded the following historical frontmatter before integration:
+
+```yaml
+stopped_at: "2026-10-21 — separately approved23-07 run31a81b38 exited2 after28passes/0fails/0retries. ServerconfirmedEVAL_BUDGET_EXHAUSTED; normalclose13:47:31.744Z,198settled/0holds/$0.14551101. Noeval-result/Bmutation/activation/cleanup/rerun. Phase23 sixofnine/48partial/49notstarted."
+last_updated: "2026-10-24"
+progress:
+  total_phases: 80
+  completed_phases: 54
+  total_plans: 483
+  completed_plans: 424
+```
+
+## Merchant runtime and design closeout — 2026-10-24
+
+The isolated cut implements source-backed shop setup, test-mode merchant adapters,
+authoritative carts/stock/payment reconciliation, native refunds and bounded digital
+access, plus three real-renderer examples with minimal/glass/clay directions and
+image-overlay copy/actions. Focused authority, privacy and UI checks passed. The final
+dedicated Vercel candidate passed contracts/core/backend/web strict checking and Next
+build. Source identities were refreshed without awarding evaluation or browser evidence.
+See [the closeout](../docs/releases/2026-10-24-merchant-design-closeout.md).
+
+Real provider checkout and v6 browser/recipe qualification remain unearned. Browser and
+desktop controls failed; the explicitly approved Stripe CLI configuration contains no
+usable test-key entry. Physical carrier dispatch and outbound buyer email are not
+implemented. No new paid model window opened; production, phase counters and previous
+native receipts are unchanged. This is not a completed commerce acceptance claim.
+
+## Native website lifecycle continuation — 2026-10-24
+
+Dedicated staging runtime `bea65ebf0f3e3efb016e77ee56bf9eefba5b12b6` now has an
+observed owner website lifecycle. Service recipes business-site/campaign-landing v3
+earned current-source native qualification and were activated through the trusted
+operator; catalogue v2 remains a candidate with ordering unavailable. The native v3
+website served all four pages, its owned illustration and mobile layout. An unchecked
+consent form was blocked; a consented inquiry was accepted and stored. A headline-only
+v4 revision preserved all four pages, the asset, services and consent, then received
+test-operator approval/publication. Codex exercised the authenticated owner UI to restore
+historical v3, verify its old public headline and take the site offline. The user signed
+in; these authorized synthetic staging actions are not human production approval.
+Final readback at13:04:21.843Z confirms
+draft4/approved3/publishedVersion null and the public route showed not found.
+
+Both provider paths are off, with zero unknown holds/held cents and no breach. The final
+window added an upper bound of$0.00436575; cumulative dedicated-stage ledger upper spend
+is$0.05901071. Historical failed shop verdicts and earlier receipts remain unchanged.
+53-02/53-06 remain partial: ordinary-account tenant denial, complete Foundation acceptance,
+erasure and merchant checkout are not established. Stored inquiry acceptance does not
+prove email delivery. Phase48, production scope, requirements and progress counters are
+unchanged. See the [current staging continuation](../docs/online-presence-staging.md).
+
+## Online-presence quality continuation — 2026-10-23
+
+53-06 delivers improved page composition, sixteen reviewed developer skills, private shop
+preparation, bounded100-cent evaluation and owner qualification UI. See the
+[actual continuation](phases/53-agentic-online-presence/53-06-SUMMARY.md) and
+[dated staging release](../docs/releases/2026-10-23-online-presence-staging.json).
+New budget33 and Shell13 tests pass with independent review; final changed-cut web
+typecheck passed. Actual source `df0286d53a09c055572e14aa982a6d3361111b1f` passed backend
+strict checking/apply and frontend cloud TypeScript/build/promotion on the dedicated stage.
+Both separate accounts are verified, exactly A is owner after explicit consent, and native
+browser access recovered. Standard OpenRouter billing is confirmed/configured under the
+approved$5 aggregate test limit.
+
+Backend repair `84d005d1dce664c3895d530aaf9a5455f600a359` was separately applied. Two
+bounded shop-preparation attempts both exited2; their original failed verdicts remain.
+The first closed43 settled calls/$0.01474832 and the second45/$0.02033942, for88 calls
+and$0.03508774 total, zero holds and no breach. Both kill switches are restored true.
+All five second-run cases have saved artifacts; scorer-grammar false positives were
+identified and model-prefix comparison was corrected locally, without passing evidence
+or retrospective qualification. No further paid attempt is planned.
+
+Auth UI fix `7e86189009f4aafd9c9d7604d68ecd3da33fa2fd` passed15 focused tests and a
+fresh40-page cloud strict build, then deployed/promoted to dedicated staging. Actual
+fresh browser sign-in shows email/password and no unconfigured Google button or OR
+separator. The user's owner login remains pending. See the
+[follow-up receipt](../docs/releases/2026-10-23-online-presence-followup.json).
+The implementation and dedicated-stage releases are delivered, but53-06 stays partial
+with native owner/recipe/model workflow acceptance open;53-02/53-03 and OPRES requirements
+remain open. No activation or publication occurred. Phase48/production scopes, historical
+receipts and state counters are unchanged.
+
+## Isolated online-presence lane — 2026-10-22
+
+53-05 is complete locally: the specialist prepares real owned images and builds image-backed sites; exact-version private previews and published asset delivery preserve tenant/source/version authority. Final97 native integration tests,18 review UI tests,23 browser tests, package typechecks and production build passed. Pure goods foundations passed22 tests under partial53-03; working merchant checkout remains open. The owner requested a separate staging environment:53-02 is now partial, with a dedicated deployed frontend/backend and passing anonymous/browser/deterministic checks. Native account/model/recipe-browser qualification remains open; see [staging summary](phases/53-agentic-online-presence/53-02-SUMMARY.md). See [imagery summary](phases/53-agentic-online-presence/53-05-SUMMARY.md). The separate readiness programme below is unchanged.
+
+53-04 is complete locally: installed Taste and UI/UX Pro Max; business-directed rendering, source-backed brand colour and offline visual review added. Final145 native tests,14 browser checks,24 free gates, typechecks and production frontend build passed. See [quality summary](phases/53-agentic-online-presence/53-04-SUMMARY.md). This does not complete hosted qualification or merchant commerce, or alter the separate readiness programme.
+
+The owner authorized discovery, a separate folder/GitHub branch, then implementation with multiple agents. Phase53 at `codex/online-presence-discovery-20261021` selectively recovers PR36 website source and adds an attended agent workflow. This local lane does not change the readiness programme or close phases48–52. See [design](design/online-presence-service-recovery.md), [discovery](audits/2026-10-21-online-presence-discovery.md), and [validation](phases/53-agentic-online-presence/53-VALIDATION.md). Hosted qualification and merchant commerce remain open. No shared deployment, live activation, paid call or publication follows from this source work.
+
 ## Current execution order
 
 October 29 integration checkpoint: the isolated release candidate combines main and media PR93 with recurring commit `ca94182648f69a95f6e4cbee45d2850675cd7053`. The dated checkpoints below describe their original source and scope. Neither this documentation reconciliation nor prior branch checks certify the combined candidate. Remaining authenticated acceptance, exact combined-source CI and production merge/deployment stay open; phase and plan completion counts are unchanged. The separately prepared database reliability fix still requires integration. Meta company-document verification and external platform approvals remain separate release constraints; X and the optional review subdomain remain deferred.
@@ -154,3 +246,29 @@ Phase49 now includes native interruption reconciliation: only authoritative work
 ADR066 replaces the blanket placeholder admission with the existing attended built-in social draft/report slice, using actual native registry/account/budget/control readiness. The ordinary loader's already-active global authority includes supported bootstrap/rollback versions; no new evaluation is required merely to wrap an unchanged live body. Candidate activation and all authored/pack/vertical gates remain unchanged. Exact one-global-cockpit scope, current pins and no overlay are still required. This is independent capability delivery rather than a Phase48 composite qualification stamp. Current-source CI, joined native public-start proof and authenticated release checks remain required before release. The recurring adapter remains disabled.
 
 The same continuation adds a field-level Business Ledger and shared standing context under ADR065, with exact native source/review binding, source-race refusal and legacy/withdrawn exclusion from assured context. Phases and requirements are not marked complete by these local source changes.
+
+## Online-presence native checkpoint — 2026-10-24
+
+This dated continuation supersedes only October23's pending owner/recipe statements.
+The native owner signed in, three exact v2 recipes earned36 observed outcomes and sealed
+browser evidence, and a trusted operator activated business/campaign v2 through existing
+gates. Catalogue v2 remains a private candidate with ordering unavailable. See the
+[native recipe receipt](../docs/releases/2026-10-24-native-recipe-qualification.json).
+
+Legacy onboarding and ready/reviewed Vault illustration succeeded. The first website
+attempt produced no artifact: the model supplied an unsupported mailto CTA despite stored
+contact consent; the URL gate correctly refused it. No build tool was called. A consent-only
+inquiry form is supported. Early closure at11:10:07.314Z restored both kill switches true,
+with0unknown holds/held cents and no breach. Incremental native-window upper spend is
+$0.01160077 and cumulative dedicated-stage upper spend$0.04668851; the website-owner/time
+subset of8settled calls/$0.00465075 is not the whole window. See the
+[partial lifecycle receipt](../docs/releases/2026-10-24-native-lifecycle.json).
+
+Navigation/form guidance repairs are source-frozen, pending reviewed deployment and fresh
+native qualification: recipe`020145277a86e1023eadb14b02d95f730a45bad959912e5547d8f087e38d69ff`,
+golden`2026-09-11.budgeted-evaluator.4bd4583fafc728a67599750d6faf22d77511d888070e9f952c9f056d8314c60f`,
+vertical`ed197a084b072554deb8c0648df2d0445cf0f2d6b172fc335c5a815e3da072cb`. Preserve the v2 receipt as historical, not admission for the
+changed source. No new model window, completed website lifecycle, publication or working
+checkout is claimed.53-02/53-06/53-03 and OPRES acceptance remain partial/open. Existing
+Phase48/production scopes, historical failed paid attempts and progress counters remain
+unchanged.

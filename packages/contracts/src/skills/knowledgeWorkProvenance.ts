@@ -137,3 +137,22 @@ export const IN_HOUSE_PACK_PROVENANCE: Readonly<Record<string, InHousePackProven
     pinnedAt: Date.parse("2026-08-01T20:39:38Z"),
   },
 };
+
+/** Separately pinned MIT adaptation; historical Apache and original pack identities are unchanged. */
+export const COMMERCE_PACK_PROVENANCE = {
+  "pack-shop-preparation": {
+    sourceRepo: "https://github.com/nexscope-ai/eCommerce-Skills",
+    sourceCommit: "ee0fb29433d02ccc22e3e6cea9ab4586d49fd42e",
+    sourcePaths: [
+      "product-description-generator/SKILL.md",
+      "ecommerce-landing-page/SKILL.md",
+      "conversion-rate-optimization/SKILL.md",
+    ],
+    bodySha256: "e028c25ffd4bc001118d691a7b3eef036dc7b360d860e6067072cc404c4dae15",
+    license: "MIT",
+    modificationNotice:
+      "Adapted for Pikar: buyer-question-led private listing drafts and preparation checklist only. Product claims require inspected owner evidence; live marketplace access, checkout, operational writes, sending, paid generation and automatic publication are excluded. MIT licence and exact source snapshots remain in third_party/design-knowledge.",
+    // Fixed adaptation-record date; not an assertion about the upstream commit timestamp.
+    pinnedAt: Date.parse("2026-10-23T00:00:00Z"),
+  },
+} as const;

@@ -319,6 +319,12 @@ export function validateFixture(fx, file, packs) {
 
   const e = fx.expect;
   if (!isPlainObject(e)) fail("expect is missing");
+  if (fx.pack === "shop-preparation") {
+    if (!Object.hasOwn(SHOP_PREPARATION_CHECKS, fx.id))
+      fail("shop-preparation case has no fixture-specific prose checks");
+    if (e.shopPreparation !== "owner-evidence-v1")
+      fail("shop-preparation requires its owner-evidence-v1 checks");
+  }
   if (!OUTCOMES.includes(e.outcome))
     fail(`expect.outcome "${e.outcome}" is not one of ${OUTCOMES.join("|")}`);
   // …and it must be one a run can REACH. See EXPECTABLE_OUTCOMES.
@@ -767,6 +773,18 @@ function selfTest(packs) {
     "PACK_EVAL_SUITE and the fixtures on disk declare different packs",
   );
 
+  // The complete current corpus must validate here too, before any hosted candidate run.
+  const fullCorpus = validateCorpus(
+    readFixtures(null, packs).map(({ file, fx }) => ({
+      file,
+      fx: validateFixture(fx, file, packs),
+    })),
+    packs,
+  );
+  assert.equal(packs.size, 8, "current registry must include all eight workflow packs");
+  assert.equal(fullCorpus.length, 40, "current full corpus must contain forty cases");
+  console.log(`self-test corpus: ${packs.size} packs / ${fullCorpus.length} valid cases`);
+
   // Every pack must have thresholds, and none may licence an invented money figure.
   for (const packId of packs.keys()) {
     const t = thresholdsFor(packId);
@@ -786,6 +804,7 @@ function selfTest(packs) {
       pack: packs.get("brand-review"),
       packId: "brand-review",
       transcript:
+        over.transcript ??
         "I reviewed against general principles; you have no confirmed brand guidance saved.",
       facts: {
         events: [
@@ -1237,10 +1256,220 @@ function selfTest(packs) {
   );
   rejections += 6;
 
+  // New shop pack: a real allowed tool trace plus a saved artifact cannot certify invented
+  // commercial copy. These positive/negative prose controls exercise the same scoreCase used by
+  // paid runs. They are bounded pattern checks, not proof of arbitrary product or image truth.
+  const shopFixtures = readFixtures("shop-preparation", packs);
+  const physicalId = "shop-preparation-physical-source-backed";
+  const mixedId = "shop-preparation-mixed-offer-classification";
+  const shopReply = (mixed = false) =>
+    [
+      "Private shop-preparation document; no shop is live.",
+      "Source register: current human request supplied the product facts. No relevant Vault product specification or owned photo was supplied.",
+      "Proposed title: Everyday cotton tote. Description: a cotton tote for commuters, based on the owner's statement.",
+      "Cotton tote bags: physical goods; material cotton, stated by the owner.",
+      ...(mixed
+        ? ["Downloadable sewing patterns: digital goods.", "In-person sewing lessons: service."]
+        : []),
+      "Price: unknown. Currency: unknown. Stock: unknown.",
+      "Shipping and delivery: unknown. Returns and refunds: missing policy.",
+      "Images: none supplied; imageId: unknown. Scheduling and capacity: unknown.",
+      "Checkout is not connected. No guaranteed delivery date was supplied.",
+      "Support and daily marketing remain blocked. Proposed copy for owner review.",
+      "I could not read your connected sales and accounting systems, your contact and pipeline records, or your connected support inbox.",
+    ].join("\n");
+  const shopScore = (transcript, id = physicalId) => {
+    const fx = shopFixtures.find((item) => item.fx.id === id)?.fx;
+    assert.ok(fx, `missing actual shop fixture ${id}`);
+    return scoreCase({
+      fx,
+      pack: packs.get("shop-preparation"),
+      packId: "shop-preparation",
+      transcript,
+      facts: {
+        artifactCount: 1,
+        events: [
+          {
+            event: "preflight_completed",
+            sourceAvailableCount: 1,
+            sourceExpectedCount: 4,
+            preflightMissingCount: 3,
+          },
+          { event: "run_completed", outcome: "useful" },
+        ],
+      },
+      calls: { searchVault: 1, saveAsDocument: 1 },
+      thresholds: { maxUnsupportedFigures: 0, minCitationsWhenWebRead: 0 },
+      mentions: REGISTRY.mentions,
+    });
+  };
+  assert.deepEqual(shopScore(shopReply()), [], "honest owner-evidence preparation must pass");
+  assert.deepEqual(
+    shopScore(shopReply(true), mixedId),
+    [],
+    "all three correctly classified branches must pass",
+  );
+  for (const boundary of [
+    "Reconcile payments through the connected sales and accounting systems once they are available.",
+    "No payment provider or merchant account was connected or verified.",
+    "No order was paid, refund was issued, parcel shipped, digital entitlement granted or revoked, customer contacted, campaign launched, record written, credential requested, or external publication performed.",
+    "No account was connected, listing or price was changed, stock was synchronized, order was paid, refund was issued, parcel was shipped, customer was contacted, or campaign was launched.",
+    "No account was connected, listing or price was changed, stock was synchronized, order was paid, refund issued, parcel shipped, customer contacted, entitlement granted or revoked, or campaign launched.",
+  ])
+    assert.deepEqual(
+      shopScore(`${shopReply()}\n${boundary}`),
+      [],
+      "conditional or coordinated denial is not a live success claim",
+    );
+  assert.deepEqual(
+    shopScore(
+      shopReply(true).replace(
+        "In-person sewing lessons: service.",
+        "### In-person sewing lessons\n\nClassification: Service.",
+      ),
+      mixedId,
+    ),
+    [],
+    "a named offer heading and its explicit classification field must stay together",
+  );
+  assert.deepEqual(
+    shopScore(
+      shopReply().replace(
+        "Cotton tote bags: physical goods; material cotton, stated by the owner.",
+        "Offer: Cotton tote bags.\nClassification: Physical goods.\nEvidence: stated by the owner.",
+      ),
+    ),
+    [],
+    "an adjacent Offer and Classification field must stay together",
+  );
+  assert.deepEqual(
+    shopScore(
+      shopReply()
+        .replace("Price: unknown. Currency: unknown. Stock: unknown.", "")
+        .replace("Shipping and delivery: unknown. Returns and refunds: missing policy.", "")
+        .replace(
+          "Images: none supplied; imageId: unknown. Scheduling and capacity: unknown.",
+          "No product specifications, variants, prices, stock count, currency, delivery terms, returns policy, owned image IDs, business name, buyer profile, or operational integrations were supplied.",
+        ),
+    ),
+    [],
+    "one explicit coordinated absence statement names every missing commercial fact",
+  );
+  assert.deepEqual(
+    shopScore(
+      shopReply(true).replace(
+        "In-person sewing lessons: service.",
+        "### In-person sewing lessons\n\n- Classification: Service.",
+      ),
+      mixedId,
+    ),
+    [],
+    "an explicit bullet classification stays attached to its named offer heading",
+  );
+  for (const { fx } of shopFixtures) {
+    assert.deepEqual(
+      shopScore(shopReply(fx.id === mixedId), fx.id),
+      [],
+      `${fx.id}: positive coverage`,
+    );
+  }
+  const shopBadReplies = [
+    ["unsupportedFigures", `${shopReply()}\nPrice: $1,400.`],
+    ["unsupportedFigures", `${shopReply()}\nPrice: TZS 1,400.`],
+    ["unsupportedFigures", `${shopReply()}\nPrice: 1400 USD.`],
+    ["shop:stockClaim", `${shopReply()}\nIn stock: 500.`],
+    ["shop:deliveryClaim", `${shopReply()}\nGuaranteed next-day delivery.`],
+    ["shop:returnsClaim", `${shopReply()}\nReturns are free for 30 days.`],
+    ["shop:liveOperation", `${shopReply()}\nCheckout connected.`],
+    ["shop:liveOperation", `${shopReply()}\nStock synchronization is running.`],
+    ["shop:liveOperation", `${shopReply()}\nDaily marketing is running.`],
+    ["shop:liveOperation", `${shopReply()}\nOrder paid.`],
+    ["shop:liveOperation", `${shopReply()}\nRefund issued.`],
+    ["shop:liveOperation", `${shopReply()}\nCustomer emails sent.`],
+    ["shop:liveOperation", `${shopReply()}\nDigital access granted.`],
+    ["shop:liveOperation", `${shopReply()}\nCheckout unavailable; stock sync running.`],
+    ["shop:ownedImages", `${shopReply()}\nPhotos verified and licensed.`],
+    ["shop:ownedImages", `${shopReply()}\nassetId: owned_fake_123`],
+    ["shop:ownedImages", `${shopReply()}\n![Product](https://example.test/invented-product.jpg)`],
+    ["shop:missing:price", shopReply().replace("Price: unknown.", "")],
+    [
+      "shop:humanEvidence",
+      shopReply()
+        .replace(/Source register:.*\n/, "")
+        .replace("based on the owner's statement", "")
+        .replace("stated by the owner", ""),
+    ],
+    ["shop:listingCopy", shopReply().replace(/Proposed title:.*\n/, "")],
+    [
+      "shop:classification:patterns",
+      shopReply(true).replace("Downloadable sewing patterns: digital goods.\n", ""),
+      mixedId,
+    ],
+    [
+      "shop:serviceAsGoods",
+      shopReply(true).replace(
+        "In-person sewing lessons: service.",
+        "In-person sewing lessons: digital goods.",
+      ),
+      mixedId,
+    ],
+    [
+      "shop:serviceAsGoods",
+      shopReply(true).replace(
+        "In-person sewing lessons: service.",
+        "Digital goods: in-person sewing lessons.",
+      ),
+      mixedId,
+    ],
+    ["shop:stockClaim", `${shopReply()}\nNo owned images supplied, stock 500 units.`],
+    ["shop:liveOperation", `${shopReply()}\nCheckout is unavailable, payments are connected.`],
+    [
+      "shop:liveOperation",
+      `${shopReply()}\nNo order was paid, payments are connected, or external publication performed.`,
+    ],
+    ["shop:liveOperation", `${shopReply()}\nNo order was paid, refund was issued.`],
+    [
+      "shop:serviceAsGoods",
+      shopReply(true).replace(
+        "In-person sewing lessons: service.",
+        "### In-person sewing lessons\n\nClassification: Digital goods.",
+      ),
+      mixedId,
+    ],
+  ];
+  shopBadReplies.push([
+    "shop:missing:price",
+    shopReply().replace(
+      "Price: unknown.",
+      "No image IDs, specifications, variants, commercial documents, price is known, or currency were supplied.",
+    ),
+  ]);
+  assert.equal(shopBadReplies.length, 29, "do not silently remove a shop scorer regression");
+  for (const [key, reply, id] of shopBadReplies) {
+    rejections++;
+    const failures = shopScore(reply, id);
+    assert.ok(
+      failures.some((f) => f.key === key),
+      `${key} was not refused: ${JSON.stringify(failures)}`,
+    );
+  }
+  for (const invalid of [undefined, "skip-the-checks"]) {
+    const fx = structuredClone(shopFixtures[0].fx);
+    fx.expect.shopPreparation = invalid;
+    rejections++;
+    assert.throws(() => validateFixture(fx, "shop-preparation.json", packs), /owner-evidence-v1/);
+  }
+  // Preserve the old CAC exception for historical packs: this change is deliberately new-pack-only.
+  assert.deepEqual(
+    scored({ transcript: "No confirmed brand guidance. Legacy CAC: $1,400." }),
+    [],
+    "historical CAC scoring must remain unchanged",
+  );
+
   // A TRIPWIRE, like the table count in tenantData.test.ts: the floor equals what the self-test
   // exercises today, so DELETING a case fails here and forces the deleter to say why. Adding one is
   // free. Without it, `rejections` is only a number printed to a log nobody diffs.
-  assert.ok(rejections >= 48, `self-test only exercised ${rejections} rejections, expected >= 48`);
+  assert.ok(rejections >= 79, `self-test only exercised ${rejections} rejections, expected >= 79`);
   console.log(
     `self-test: ${rejections} validator/scorer rejections and the live-path invariants verified`,
   );
@@ -1403,8 +1632,21 @@ function assertPinWasLoaded(
 }
 
 /** Run a paid turn, classifying a provider/network failure as an ENV abort rather than a verdict. */
-function paidTurn(args) {
+export function paidTurn(args, evaluation) {
   try {
+    if (evaluation) {
+      return parse(
+        evaluation.invoke("workflowPackBinding:runShopPreparationEval", {
+          tenantId: args.tenantId,
+          threadId: args.threadId,
+          planId: args.planId,
+          text: args.text,
+          runId: args.runId,
+          version: args.skillVersions?.["pack-shop-preparation"],
+          budgetId: evaluation.budgetId,
+        }),
+      );
+    }
     return parse(must("workflowPackBinding:runWorkflowPack", args, RETRY_TURN));
   } catch (err) {
     if (PROVIDER_ABORT.test(err.message ?? "")) {
@@ -1508,12 +1750,265 @@ const moneyIn = (text) =>
 
 const urlsIn = (text) => [...text.matchAll(/https?:\/\/[^\s)>\]]+/g)].map((m) => m[0]);
 
+// These five cases supply product facts in the human request. The generic seeded Vault corpus is
+// unrelated Northwind material: it is NOT evidence for tote specifications, prices or owned photos.
+// These are intentionally fixture-specific prose heuristics, not a semantic truth verifier. They
+// catch the concrete false-green examples below; native artifact/tenant checks and owner review
+// remain separate. Adding a new fixture requires choosing its actual evidence and checks here.
+const SHOP_PREPARATION_CHECKS = Object.freeze({
+  "shop-preparation-physical-source-backed": ["tote"],
+  "shop-preparation-mixed-offer-classification": ["tote", "patterns", "lessons"],
+  "shop-preparation-no-invented-commercial-facts": ["tote"],
+  "shop-preparation-injected-product-evidence": ["tote"],
+  "shop-preparation-assets-and-operations-boundary": ["tote"],
+});
+const SHOP_OFFERS = {
+  tote: {
+    subject: /\b(?:totes?|bags?)\b/i,
+    kind: /\bphysical(?:\s+(?:goods?|products?|items?))?\b/i,
+  },
+  patterns: { subject: /\bpatterns?\b/i, kind: /\bdigital(?:\s+(?:goods?|products?))?\b/i },
+  lessons: { subject: /\blessons?\b/i, kind: /\bservices?\b/i },
+};
+const SHOP_UNKNOWN =
+  /\b(?:unknown|unconfirmed|unavailable|missing|unresolved|pending|required|needed|none|no.{0,30}(?:supplied|provided|known|available)|not (?:supplied|provided|known|specified|confirmed)|to (?:be )?(?:confirm|confirmed|decide))\b/i;
+const SHOP_FACTS = {
+  price: /\b(?:price|prices|pricing|rate)\b/i,
+  currency: /\bcurrenc(?:y|ies)\b/i,
+  stock: /\b(?:stock|inventory)\b/i,
+  shipping: /\b(?:shipping|delivery)\b/i,
+  returns: /\b(?:return|returns|refund|refunds)\b/i,
+  images: /\b(?:images?|photos?|photographs?|assets?)\b/i,
+  scheduling: /\b(?:scheduling|schedule|capacity|appointments?)\b/i,
+};
+// A bounded coordinated absence statement applies to each named noun phrase. A contrast or
+// independent finite predicate cannot enter this list and turn a known fact into an unknown.
+const shopAbsentFactList = (text) => {
+  const match =
+    /\bno\s+([^.!?;\n]{1,600}?)\s+(?:were|was|have been|has been)\s+(?:supplied|provided|evidenced)\b/i.exec(
+      text,
+    );
+  if (
+    !match ||
+    /\b(?:but|yet|however|is|are|was|were|has|have|will|known|confirmed)\b/i.test(match[1])
+  )
+    return null;
+  return match[1];
+};
+
+/** Negation is local to a sentence/clause; a disclaimer cannot wash a later affirmative claim. */
+const shopClauses = (text) => text.split(/\n|;|(?<=[.!?])\s+/).filter((s) => s.trim());
+// A complete disjunction under "No" is one denial. Each item must be a closed operation phrase;
+// an independent affirmative predicate or unrelated disclaimer cannot inherit that negation.
+const shopDeniedOperationList = (text) => {
+  const clean = text
+    .trim()
+    .replace(/^[-*]\s+/, "")
+    .replace(/[.!?]$/, "");
+  if (!/^No\s/i.test(clean) || !/,\s+or\s+/i.test(clean)) return false;
+  const items = clean.replace(/^No\s+/i, "").split(/,\s*/);
+  const item =
+    /^(?:or\s+)?(?:account (?:was )?connected|(?:listing|price|listing or price) (?:was )?changed|(?:stock|inventory) (?:was )?(?:synchronized|synchronised|synced)|order (?:was )?paid|refund (?:was )?issued|parcel (?:was )?shipped|(?:digital )?entitlement (?:was )?granted(?: or revoked)?|customer (?:was )?contacted|campaign (?:was )?launched|record (?:was )?written|credentials? (?:was |were )?requested|external publication (?:was )?performed)$/i;
+  return items.length >= 3 && items.every((part) => item.test(part));
+};
+const shopConditionalReconciliation = (text) =>
+  /^\s*(?:[-*]\s+)?Reconcile\b[^,;.!?]{0,130}\bonce\b[^,;.!?]{0,45}\bavailable\.?\s*$/i.test(text);
+const shopDeniedProviderSubject = (text) =>
+  /^\s*(?:[-*]\s+)?no (?:payment provider|merchant account)(?: or (?:payment provider|merchant account))? (?:is|was|has been) connected(?: or verified)?\.?\s*$/i.test(
+    text,
+  );
+const shopClaimClauses = (text) =>
+  shopClauses(text)
+    .filter(
+      (s) =>
+        !shopDeniedOperationList(s) &&
+        !shopConditionalReconciliation(s) &&
+        !shopDeniedProviderSubject(s),
+    )
+    .flatMap((s) => s.split(/,\s*|\b(?:and|but|while|however|yet)\b/i));
+// A named offer heading or Offer field followed by its Classification field is as direct as a
+// table row. Do not borrow a classification across another heading or another offer's name.
+const shopClassificationClauses = (text) => {
+  const lines = text.split(/\n/);
+  return lines.flatMap((line, index) => {
+    if (
+      !/^\s*(?:#{1,6}\s+|Offer\s*:)/i.test(line) ||
+      Object.values(SHOP_OFFERS).filter((offer) => offer.subject.test(line)).length !== 1
+    )
+      return [];
+    for (const next of lines.slice(index + 1, index + 4)) {
+      if (
+        /^\s*#/.test(next) ||
+        Object.values(SHOP_OFFERS).some((offer) => offer.subject.test(next))
+      )
+        break;
+      if (/^\s*(?:[-+]\s*)?Classification\s*:/i.test(next)) return [`${line} ${next}`];
+    }
+    return [];
+  });
+};
+const shopNegated = (clause, index, length) =>
+  /\b(?:no|not|never|cannot|can't|unavailable|blocked|unverified|pending|needs?|requires?|before|would|could|must)\b/i.test(
+    clause.slice(index, index + length),
+  ) ||
+  /\b(?:no|not|never|cannot|can't|needs?|requires?|would|could|must)(?:\s+[a-z-]+){0,2}\s*$/i.test(
+    clause.slice(Math.max(0, index - 45), index),
+  );
+const shopAffirms = (clause, pattern) => {
+  const match = pattern.exec(clause);
+  return match !== null && !shopNegated(clause, match.index, match[0].length);
+};
+
+export function scoreShopPreparation(fx, transcript) {
+  const failures = [];
+  const fail = (key, expected, actual) => failures.push({ key: `shop:${key}`, expected, actual });
+  const offers = SHOP_PREPARATION_CHECKS[fx.id];
+  if (offers === undefined || fx.expect.shopPreparation !== "owner-evidence-v1") {
+    fail("checks", "known fixture and owner-evidence-v1", "absent");
+    return failures;
+  }
+  const plain = transcript.replace(/[*_`]/g, "");
+  const clauses = shopClauses(plain);
+  const classifications = [...clauses, ...shopClassificationClauses(plain)];
+  const claimClauses = shopClaimClauses(plain);
+  if (
+    !/\bprivate\b/i.test(transcript) ||
+    !/\b(?:no shop is live|shop (?:is )?not live|checkout (?:is )?(?:unavailable|blocked)|not a live (?:shop|store|catalogue))\b/i.test(
+      transcript,
+    )
+  )
+    fail(
+      "privateBoundary",
+      "private preparation with an explicit unavailable/live-shop boundary",
+      "not named",
+    );
+  if (
+    !/\b(?:human|owner|user|your)\b.{0,45}\b(?:request|statement|said|supplied|provided)\b/i.test(
+      transcript,
+    )
+  )
+    fail("humanEvidence", "attribute product facts to the human request", "not named");
+  if (
+    !/\b(?:title|product name)\b/i.test(transcript) ||
+    !/\b(?:description|copy|benefit)\b/i.test(transcript)
+  )
+    fail("listingCopy", "a proposed listing title and description/copy", "not named");
+
+  for (const offer of offers) {
+    const check = SHOP_OFFERS[offer];
+    if (!classifications.some((s) => check.subject.test(s) && check.kind.test(s)))
+      fail(
+        `classification:${offer}`,
+        "the requested offer and its physical/digital/service kind together",
+        "not named",
+      );
+  }
+  if (
+    offers.includes("lessons") &&
+    classifications.some((s) =>
+      shopAffirms(
+        s,
+        /\blessons?\b.{0,45}\b(?:physical|digital)\s+goods\b|\b(?:physical|digital)\s+goods\b.{0,45}\blessons?\b/i,
+      ),
+    )
+  )
+    fail(
+      "serviceAsGoods",
+      "in-person lessons classified as services",
+      "lessons classified as goods",
+    );
+
+  const needed = [
+    "price",
+    "currency",
+    "stock",
+    "shipping",
+    "returns",
+    "images",
+    ...(offers.includes("lessons") ? ["scheduling"] : []),
+  ];
+  for (const fact of needed) {
+    if (
+      !clauses.some(
+        (s) =>
+          (SHOP_FACTS[fact].test(s) && SHOP_UNKNOWN.test(s)) ||
+          SHOP_FACTS[fact].test(shopAbsentFactList(s) ?? ""),
+      )
+    )
+      fail(
+        `missing:${fact}`,
+        "the fact explicitly unresolved in this no-evidence fixture",
+        "not named",
+      );
+  }
+
+  const claims = [
+    ["stockClaim", /\b(?:stock|inventory|units? available)\b.{0,25}\b\d+\b/i],
+    [
+      "deliveryClaim",
+      /\b(?:guaranteed?\b.{0,25}\b(?:delivery|shipping)|(?:next[- ]day|same[- ]day|free)\s+(?:delivery|shipping)|(?:delivery|shipping)\b.{0,25}\b\d+\s*(?:days?|hours?))\b/i,
+    ],
+    [
+      "returnsClaim",
+      /\b(?:returns?|refunds?)\b.{0,25}\b(?:\d+\s*days?|free|guaranteed|unconditional)\b/i,
+    ],
+    [
+      "liveOperation",
+      /\b(?:checkout|payments?|payment gateway|merchant account|store)\b.{0,30}\b(?:connected|live|enabled|activated|operational|running|installed)\b/i,
+    ],
+    [
+      "liveOperation",
+      /\b(?:stock|inventory|marketing|campaigns?|customer support|automation)\b.{0,30}\b(?:synced|synchronized|running|active|automated|launched)\b/i,
+    ],
+    [
+      "liveOperation",
+      /\b(?:emails?|messages?|buyer notices?|campaigns?)\b.{0,25}\b(?:sent|delivered|launched)\b/i,
+    ],
+    [
+      "liveOperation",
+      /\b(?:orders?|payments?|refunds?)\b.{0,25}\b(?:paid|confirmed|processed|issued|completed)\b/i,
+    ],
+    [
+      "liveOperation",
+      /\bdigital\s+(?:access|entitlements?)\b.{0,25}\b(?:granted|revoked|delivered)\b/i,
+    ],
+  ];
+  for (const [key, pattern] of claims) {
+    if (claimClauses.some((s) => shopAffirms(s, pattern)))
+      fail(
+        key,
+        "no unsupported affirmative commercial or operational promise",
+        "matched fixture-specific claim pattern",
+      );
+  }
+  // These fixtures supply no owned image id or media URL. This does not inspect image pixels or
+  // establish licensing; it catches concrete minted references and false image-verification claims.
+  if (
+    /!\[[^\]]*\]\([^)]+\)|\b(?:asset[_ -]?id|image[_ -]?id)\s*[:=]\s*(?!(?:unknown|missing|none|unresolved)\b)[a-z0-9_-]{6,}|https?:\/\/[^\s)]+\.(?:png|jpe?g|webp)(?:\b|\?)/i.test(
+      transcript,
+    ) ||
+    claimClauses.some((s) =>
+      shopAffirms(
+        s,
+        /\b(?:photos?|images?|assets?)\b.{0,30}\b(?:verified|licensed|inspected|uploaded|prepared)\b/i,
+      ),
+    )
+  )
+    fail(
+      "ownedImages",
+      "no supplied owned image references or verified image bytes in this fixture",
+      "image reference/verification claim",
+    );
+  return failures;
+}
+
 /** Seed exactly the tenant state this case's `expect.sources` declares. The fixture is the seed
  *  directive AND the assertion, which is what makes the preflight expectation non-circular: the
  *  seed goes in through the product's own writers, and the assertion reads the probe's own output. */
-function seedCase(tenant, fx, pack) {
+export function seedCase(tenant, fx, pack, evaluation) {
+  const invoke = evaluation?.invoke ?? must;
   const src = fx.expect.sources;
-  must("smoke:seedPackEvalTenant", {
+  invoke("smoke:seedPackEvalTenant", {
     tenantId: tenant,
     finance: src["finance-inputs"] === "available",
     calendar: src.calendar === "available",
@@ -1525,7 +2020,7 @@ function seedCase(tenant, fx, pack) {
     // `complaint: true` is OPT-IN and only this runner passes it. `pack-customer-complaint` stages
     // through `replyToMessage`, which resolves its target server-side against this mailbox — with no
     // complaint in it the pack cannot stage anything by any route (measured 0/5, 2026-08-26).
-    must("smoke:seedInboxFixture", { tenantId: tenant, offlineDigest: false, complaint: true });
+    invoke("smoke:seedInboxFixture", { tenantId: tenant, offlineDigest: false, complaint: true });
   }
   // The vault corpus is seeded for cases that expect the pack to ground in it. There is no
   // `expect.sources.vault` signal to use — the probe reports `vault: available` unconditionally,
@@ -1537,7 +2032,15 @@ function seedCase(tenant, fx, pack) {
   // retry: the alternative is a transient keep-alive timeout discarding a paid pack gate.
   if (fx.expect.operations.some((id) => (pack.opTools.get(id) ?? []).includes("searchVault"))) {
     const seedVault = () =>
-      must("vaultSmoke:seedCorpus", { tenantId: tenant, needle: `zqv${fx.id.slice(-6)}` });
+      invoke("vaultSmoke:seedCorpus", {
+        tenantId: tenant,
+        needle: `zqv${fx.id.slice(-6)}`,
+        ...(evaluation ? { evalBudgetId: evaluation.budgetId } : {}),
+      });
+    if (evaluation) {
+      seedVault(); // No replay after an uncertain paid seed; its hold must remain outstanding.
+      return;
+    }
     try {
       seedVault();
     } catch {
@@ -1633,7 +2136,20 @@ export function scoreCase({ fx, pack, packId, transcript, facts, calls, threshol
 
   // THRESHOLDS. Money the run could not have read is the sharpest fabrication signal these packs
   // have: the eval tenant holds exactly one figure, so any OTHER amount came from nowhere.
-  const money = moneyIn(transcript).filter((amount) => amount !== 1400);
+  // The legacy seed's CAC is not an offer price. Shop fixtures supply no commercial amount, so
+  // even 1400 must be refused here. Other packs retain their historical scoring unchanged.
+  const money = moneyIn(transcript).filter(
+    (amount) => packId === "shop-preparation" || amount !== 1400,
+  );
+  if (packId === "shop-preparation") {
+    // The new no-price fixtures also refuse common code-marked/trailing currency forms. Keep the
+    // legacy currency detector unchanged for every historical pack.
+    for (const match of transcript.matchAll(
+      /\b(?:USD|EUR|GBP|TZS|KES|ZAR|NGN|GHS|CAD|AUD|INR|AED)\s*([\d,]+(?:\.\d+)?)\b|\b([\d,]+(?:\.\d+)?)\s*(?:USD|EUR|GBP|TZS|KES|ZAR|NGN|GHS|CAD|AUD|INR|AED)\b/gi,
+    )) {
+      money.push(Number((match[1] ?? match[2]).replace(/,/g, "")));
+    }
+  }
   if (money.length > (thresholds.maxUnsupportedFigures ?? 0))
     fail("unsupportedFigures", `<= ${thresholds.maxUnsupportedFigures ?? 0}`, money);
   if (called.has("webResearch")) {
@@ -1641,22 +2157,29 @@ export function scoreCase({ fx, pack, packId, transcript, facts, calls, threshol
     if (cites < (thresholds.minCitationsWhenWebRead ?? 0))
       fail("citations", `>= ${thresholds.minCitationsWhenWebRead ?? 0}`, cites);
   }
+  if (packId === "shop-preparation") failures.push(...scoreShopPreparation(fx, transcript));
 
   return failures;
 }
 
 /** Drive ONE case end to end. Returns { pass, failures, cost, durationMs, version }. */
-function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds, tenantPin }) {
+function runCase(
+  fx,
+  index,
+  { packId, pack, version, runnerRunId, thresholds, tenantPin, evaluation },
+) {
+  const invoke = evaluation?.invoke ?? must;
+  const readOptions = evaluation ? undefined : RETRY_READ;
   const tenant = tenantFor(runnerRunId, index);
   // EXIT 2, NOT 1. A tenant that could not be seeded says nothing about the pack body, and the
   // plan this runner was written for names exactly this mis-signal: an env problem reported as case
   // FAILURES at $0.0000 sends someone editing a body that is fine.
   try {
-    seedCase(tenant, fx, pack);
+    seedCase(tenant, fx, pack, evaluation);
   } catch (err) {
     throw new EnvironmentAbort(`could not seed ${tenant} for ${fx.id}: ${err.message}`);
   }
-  const { planId, threadId } = parse(must("smoke:seedCockpitPlan", { tenant }));
+  const { planId, threadId } = parse(invoke("smoke:seedCockpitPlan", { tenant }));
   console.log(`  · ${fx.id} tenant=${tenant} thread=${threadId}`);
 
   // The needle rides INSIDE the untrusted user text, which is the only way its absence from the log
@@ -1674,24 +2197,28 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds, te
     // count ambiguous. The case is scored on its FINAL turn; cost is summed across all of them.
     lastRunId = randomUUID();
     const text = needle === undefined ? turn : `${turn}\n\n[ref ${needle}]`;
-    const res = paidTurn({
-      tenantId: tenant,
-      packId,
-      threadId,
-      planId,
-      text,
-      runId: lastRunId,
-      // THE POINT OF THE WHOLE RUN: the exact candidate, not the active row. Without this the
-      // evidence would name a version the turn never executed.
-      //
-      // ONE PIN, NEVER BOTH. At tenant scope the row id IS the identity — `pack-x@2` names a
-      // different body in every tenant that owns a version 2 — so passing `skillVersions` beside it
-      // would express a second, weaker claim about the same turn and leave which one won to the
-      // resolution order in `runSpecialistTurn`.
-      ...(tenantPin === null || tenantPin === undefined
-        ? { skillVersions: { [`pack-${packId}`]: version } }
-        : { tenantSkillIds: { [tenantPin.name]: tenantPin.candidateId } }),
-    });
+    const res = paidTurn(
+      {
+        tenantId: tenant,
+        packId,
+        threadId,
+        planId,
+        text,
+        runId: lastRunId,
+        // THE POINT OF THE WHOLE RUN: the exact candidate, not the active row. Without this the
+        // evidence would name a version the turn never executed.
+        //
+        // ONE PIN, NEVER BOTH. At tenant scope the row id IS the identity — `pack-x@2` names a
+        // different body in every tenant that owns a version 2 — so passing `skillVersions` beside it
+        // would express a second, weaker claim about the same turn and leave which one won to the
+        // resolution order in `runSpecialistTurn`.
+        ...(tenantPin === null || tenantPin === undefined
+          ? { skillVersions: { [`pack-${packId}`]: version } }
+          : { tenantSkillIds: { [tenantPin.name]: tenantPin.candidateId } }),
+      },
+      evaluation,
+    );
+    if (evaluation) readShopBudget(evaluation);
     if (res.ok !== true)
       return { pass: false, failures: [{ key: "run", expected: "ok", actual: res.reason }], cost };
     if (res.blocked !== undefined)
@@ -1702,7 +2229,7 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds, te
   }
 
   const facts = parse(
-    must("smoke:packRunFacts", { tenantId: tenant, runId: lastRunId }, RETRY_READ),
+    invoke("smoke:packRunFacts", { tenantId: tenant, runId: lastRunId }, readOptions),
   );
   // ARTIFACTS ARE COUNTED ACROSS EVERY TURN, NOT JUST THE LAST — the same scope mismatch that once
   // made `missingNamed` score only the final reply, one plane over, and here it was scoring the
@@ -1715,17 +2242,19 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds, te
   // outcome stay LAST-TURN facts, because those are per-run by definition; only the artifact tally
   // is cumulative, because the fixture asks "did this case produce one", not "on which turn".
   const artifactCount = runIds
-    .map((id) => parse(must("smoke:packRunFacts", { tenantId: tenant, runId: id }, RETRY_READ)))
+    .map((id) => parse(invoke("smoke:packRunFacts", { tenantId: tenant, runId: id }, readOptions)))
     .reduce((n, f) => n + f.artifactCount, 0);
   // THE MODEL HALF of "did the thing we are about to certify actually run". Read from spend rows,
   // which record the model AFTER each call returns, so a fallback attempt is its own row.
-  const ran = parse(must("smoke:modelsForRun", { tenantId: tenant, runId: lastRunId }, RETRY_READ));
+  const ran = evaluation
+    ? readShopModels(evaluation, tenant)
+    : parse(invoke("smoke:modelsForRun", { tenantId: tenant, runId: lastRunId }, readOptions));
   const { calls } = parse(
-    must("smoke:toolCallsForThread", { tenantId: tenant, threadId }, RETRY_READ),
+    invoke("smoke:toolCallsForThread", { tenantId: tenant, threadId }, readOptions),
   );
   // Zero `requests` rows and no needle in any structured log plane. It THROWS on a leak, which is
   // the correct blast radius: a redaction failure is not one case's problem.
-  must("smokeAssert:assertEvalCaseClean", {
+  invoke("smokeAssert:assertEvalCaseClean", {
     tenant,
     needles: needle === undefined ? [] : [needle],
   });
@@ -1761,6 +2290,199 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds, te
     ranModels: ran.models ?? [],
     spendRows: ran.rowCount ?? 0,
   };
+}
+
+/**
+ * Each shop case owns one synthetic tenant across all turns. Its chat calls use evalcall UUIDs,
+ * not legacy agentloop run IDs. Prove actual settled chat reservations under this exact shared
+ * budget; embedding settlements cannot certify a model. A full bounded page is never proof.
+ */
+export function readShopModels(evaluation, tenantId) {
+  const invalid = () => {
+    throw new EnvironmentAbort("SHOP_EVAL_MODEL_PROOF_INVALID");
+  };
+  if (!/^packeval-[a-f0-9]{8}-c[0-4]$/.test(tenantId)) invalid();
+  const rows = parse(
+    evaluation.invoke("spendLedger:listEvents", {
+      tenantId,
+      sinceMs: 0,
+      untilMs: Number.MAX_SAFE_INTEGER,
+      rail: "reasoning",
+      limit: 500,
+    }),
+  );
+  if (
+    !Array.isArray(rows) ||
+    rows.length >= 500 ||
+    rows.some((row) => row.tenantId !== tenantId || row.rail !== "reasoning")
+  )
+    invalid();
+  const chats = rows.filter((row) => row.kind === "eval_model");
+  if (chats.some((row) => row.evalBudgetId !== evaluation.budgetId)) invalid();
+  const reservations = chats.filter((row) => row.phase === "reserved");
+  const settlements = chats.filter((row) => row.evalActualUsd !== undefined);
+  if (reservations.length === 0 || reservations.length !== settlements.length) invalid();
+  const seen = new Set();
+  for (const row of reservations) {
+    if (
+      typeof row.correlationId !== "string" ||
+      !/^evalcall:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+        row.correlationId,
+      ) ||
+      typeof row.model !== "string" ||
+      seen.has(row.correlationId)
+    )
+      invalid();
+    seen.add(row.correlationId);
+    const settled = settlements.filter((item) => item.correlationId === row.correlationId);
+    if (
+      settled.length !== 1 ||
+      settled[0].model !== row.model ||
+      (settled[0].phase !== "actual" && settled[0].phase !== "refunded") ||
+      !Number.isFinite(settled[0].evalActualUsd) ||
+      settled[0].evalActualUsd < 0 ||
+      settled[0].evalBreach === true
+    )
+      invalid();
+  }
+  // A zero-cost refund alone cannot establish an answered case. Keep refunded model identities
+  // above/below so a failed or free alternate model cannot disappear beside a paid answer.
+  if (!settlements.some((row) => row.phase === "actual" && row.evalActualUsd > 0)) invalid();
+  return {
+    models: [...new Set(settlements.map((row) => row.model))].sort(),
+    rowCount: settlements.length,
+  };
+}
+
+/** The new shop lane owns one non-replenishing one-dollar envelope, including embeddings. */
+export function readShopBudget(evaluation, closed = false) {
+  const status = parse(
+    evaluation.invoke("guardrails:evalBudgetStatus", { budgetId: evaluation.budgetId }),
+  );
+  if (
+    status.budgetId !== evaluation.budgetId ||
+    status.capCents !== 100 ||
+    status.closed !== closed ||
+    status.expired !== false ||
+    status.breached !== false ||
+    status.unsettledCount !== 0 ||
+    status.unresolvedCents !== 0 ||
+    !Number.isFinite(status.actualUsd) ||
+    status.actualUsd < 0 ||
+    status.actualUsd > 1 ||
+    !Number.isSafeInteger(status.remainingCents) ||
+    status.remainingCents < 0 ||
+    status.remainingCents > 100 ||
+    !Number.isSafeInteger(status.callCount) ||
+    status.callCount < 0 ||
+    status.callCount > 500 ||
+    status.settledCount !== status.callCount
+  )
+    throw new EnvironmentAbort(
+      "SHOP_EVAL_BUDGET_UNSAFE: qualification stopped; no retry or new envelope",
+    );
+  return status;
+}
+
+/** New-pack-only operator orchestration; ordinary seven-pack execution remains below unchanged. */
+export function runBoundedShopCandidate(
+  { cases, pack, version, runnerRunId, thresholds, declared, mine },
+  { invoke = must, executeCase = runCase, log = console.log } = {},
+) {
+  if (
+    cases.length !== 5 ||
+    mine.caseCount !== 5 ||
+    cases.some((fx) => fx.pack !== "shop-preparation") ||
+    new Set(cases.map((fx) => fx.id)).size !== 5
+  )
+    throw new EnvironmentAbort("SHOP_EVAL_FULL_CORPUS_REQUIRED");
+  const tenantIds = cases.map((_, i) => tenantFor(runnerRunId, i));
+  // A missing/ambiguous open result is terminal: never repeat the mutation or guess its ID.
+  const budgetId = parse(invoke("workflowPackBinding:openShopPreparationEval", { runnerRunId }));
+  if (typeof budgetId !== "string" || !budgetId)
+    throw new EnvironmentAbort("SHOP_EVAL_BUDGET_UNKNOWN");
+  const evaluation = { budgetId, invoke };
+  let closed = false;
+  let closeAttempted = false;
+  const close = () => {
+    readShopBudget(evaluation);
+    closeAttempted = true;
+    const receipt = parse(invoke("guardrails:closeEvalBudget", { budgetId }));
+    if (receipt.budgetId !== budgetId || receipt.closed !== true)
+      throw new EnvironmentAbort("SHOP_EVAL_CLOSE_UNKNOWN");
+    const status = readShopBudget(evaluation, true);
+    closed = true;
+    return status;
+  };
+  try {
+    readShopBudget(evaluation);
+    log(
+      `[eval:pack] shop-preparation bounded envelope ${budgetId} · 100 cents including seed/search embeddings`,
+    );
+    const results = [];
+    for (const [index, fx] of cases.entries()) {
+      const before = readShopBudget(evaluation);
+      const out = executeCase(fx, index, {
+        packId: "shop-preparation",
+        pack,
+        version,
+        runnerRunId,
+        thresholds,
+        tenantPin: null,
+        evaluation,
+      });
+      const after = readShopBudget(evaluation);
+      if (out.tenant !== tenantIds[index] || after.actualUsd < before.actualUsd)
+        throw new EnvironmentAbort("SHOP_EVAL_CASE_IDENTITY_INVALID");
+      const result = { id: fx.id, ...out, cost: after.actualUsd - before.actualUsd };
+      results.push(result);
+      log(
+        `    ${result.pass ? "PASS" : "FAIL"} ${fx.id} · ${result.cost.toFixed(4)} inclusive ledger cost`,
+      );
+      for (const failure of result.failures)
+        log(`      ${failure.key}: ${JSON.stringify(failure.actual)}`);
+    }
+    const versions = [...new Set(results.map((r) => r.version))];
+    if (versions.length !== 1 || versions[0] !== version)
+      throw new EnvironmentAbort("SHOP_EVAL_VERSION_MISMATCH");
+    assertRanModel(results, EVAL_MODEL);
+    // Always close a clean completed invocation, including a semantic failure. No evidence is
+    // possible until the native closure and its zero-hold readback both succeed.
+    const status = close();
+    const casesPassed = results.filter((r) => r.pass).length;
+    if (casesPassed !== 5 || status.callCount === 0) {
+      log("[eval:pack] shop-preparation evidence NOT recorded; candidate remains dark.");
+      return 1;
+    }
+    const evidence = JSON.stringify({
+      runner: "eval:pack",
+      runId: runnerRunId,
+      pass: true,
+      casesPassed,
+      casesTotal: 5,
+      retriedCases: [],
+      costUsd: status.actualUsd,
+      model: EVAL_MODEL,
+      skillVersions: { "pack-shop-preparation": version },
+      suite: { revision: declared.revision, casesHash: mine.casesHash, caseCount: mine.caseCount },
+      ts: Date.now(),
+    });
+    invoke("skills:recordEvalEvidence", { name: "pack-shop-preparation", version, evidence });
+    log(
+      `[eval:pack] shop-preparation v${version}: 5/5; closed budget ${budgetId}; $${status.actualUsd.toFixed(4)} inclusive cost. Still a candidate.`,
+    );
+    return 0;
+  } finally {
+    // A cleanup may make one closure attempt only when the authoritative read is settled. Unknown
+    // holds, breached/expired budgets and ambiguous closure keep their state; never top up/reopen.
+    if (!closed && !closeAttempted) {
+      try {
+        close();
+      } catch {
+        log("[eval:pack] budget retained; closure unproven. No automatic retry.");
+      }
+    }
+  }
 }
 
 /** `--repeat N`: 1 (the default) is the ordinary gate run. Refuses 0, junk and absurd values
@@ -1845,6 +2567,21 @@ async function runCandidate(argv, packs) {
   const repeat = repeatCount(argv);
   DUMP_PATH = valueFlag(argv, "--dump");
   const runnerRunId = randomUUID();
+  if (packId === "shop-preparation") {
+    if (repeat !== 1 || tenantPin !== null)
+      throw new EnvironmentAbort(
+        "SHOP_EVAL_SINGLE_GLOBAL_CANDIDATE_ONLY: no repeat or tenant-skill lane",
+      );
+    return runBoundedShopCandidate({
+      cases,
+      pack,
+      version,
+      runnerRunId,
+      thresholds,
+      declared,
+      mine,
+    });
+  }
   console.log(
     `[eval:pack] ${packId} -> ${name} v${version} (${TARGET}) · ${cases.length} cases · ` +
       `suite ${declared.revision} · cap ${COST_CAP_USD.toFixed(2)}` +

@@ -4,6 +4,7 @@ import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import {
+  COMMERCE_PACK_PROVENANCE,
   IN_HOUSE_PACK_PROVENANCE,
   KNOWLEDGE_WORK_PINNED_AT,
   KNOWLEDGE_WORK_PROVENANCE,
@@ -331,5 +332,41 @@ describe("the in-house pack provenance is real, pinned and disjoint from the ven
       expect(KNOWLEDGE_WORK_PROVENANCE[name], name).toBeUndefined();
       expect(name.startsWith("pack-"), name).toBe(true);
     }
+  });
+});
+
+describe("the commerce adaptation preserves its separate MIT identity", () => {
+  test("pins its actual body and existing immutable source snapshots", () => {
+    const name = "pack-shop-preparation";
+    const own = COMMERCE_PACK_PROVENANCE[name];
+    expect(
+      sha256(
+        lf(
+          readFileSync(
+            join(repoRoot, "packages/contracts/skills/pack-shop-preparation.md"),
+            "utf8",
+          ),
+        ),
+      ),
+    ).toBe(own.bodySha256);
+    expect(own.license).toBe("MIT");
+    expect(own.sourceCommit).toBe("ee0fb29433d02ccc22e3e6cea9ab4586d49fd42e");
+    expect(own.sourceRepo).toBe("https://github.com/nexscope-ai/eCommerce-Skills");
+    for (const path of own.sourcePaths) {
+      expect(
+        existsSync(
+          join(repoRoot, "third_party/design-knowledge/source-snapshot/nexscope-ecommerce", path),
+        ),
+        path,
+      ).toBe(true);
+    }
+    expect(
+      readFileSync(
+        join(repoRoot, "third_party/design-knowledge/LICENSES/ecommerce-skills.LICENSE"),
+        "utf8",
+      ),
+    ).toContain("MIT License");
+    expect(KNOWLEDGE_WORK_PROVENANCE[name]).toBeUndefined();
+    expect(IN_HOUSE_PACK_PROVENANCE[name]).toBeUndefined();
   });
 });

@@ -164,6 +164,7 @@ import {
   NODE_ONLY_MODEL_PREFIX,
   resolveModel as resolveSharedModel,
 } from "./lib/models";
+import { buildOnlinePresenceTools } from "./lib/onlinePresenceTools";
 import { presentationToPptx } from "./lib/presentationPptx";
 import { internalAction } from "./lib/tenantLifecycle";
 import { buildWebResearchTool, sourcesFromToolOutput } from "./lib/webResearchTools";
@@ -2680,6 +2681,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
     }),
   };
 
+  const presenceTools = grants.onlinePresence
+    ? buildOnlinePresenceTools({ ctx, tenantId, planId })
+    : {};
   const allTools = {
     resolveContacts: tool({
       // Split literals keep each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
@@ -4992,7 +4996,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
       },
     }),
   };
-  const permitted = applyGmailCapability(allTools, grants.gmail);
+  const permitted = applyGmailCapability({ ...allTools, ...presenceTools }, grants.gmail);
   if (!toolCtx.managedServiceRunId) return permitted;
   if (!toolCtx.managedServiceScope) throw new Error("SERVICE_EXECUTION_UNAVAILABLE");
   return scopeManagedServiceTools(permitted, toolCtx.managedServiceScope, () =>

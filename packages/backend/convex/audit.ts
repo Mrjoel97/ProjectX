@@ -85,7 +85,14 @@ export const log = internalMutation({
       args.tenantId === VERTICAL_EVAL_AUDIT_NAMESPACE ||
       args.eventType.startsWith(VERTICAL_EVAL_EVENT_PREFIX) ||
       args.tenantId === AUTHORING_PROBE_AUDIT_NAMESPACE ||
+      args.tenantId === "control:presence-comparison:v1" ||
+      args.eventType.startsWith("presence_comparison.") ||
+      args.correlationId.startsWith("presence-comparison:") ||
+      args.eventType.startsWith("presence_design.") ||
+      args.correlationId.startsWith("presence-design:") ||
       args.eventType.startsWith("authoring_probe.") ||
+      args.eventType.startsWith("online_presence.shop_setup_") ||
+      args.correlationId.startsWith("online-presence-shop:") ||
       args.correlationId.startsWith("authoring-probe:")
     )
       throw new Error("RESERVED_EVIDENCE_NAMESPACE");

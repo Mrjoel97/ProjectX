@@ -1,0 +1,138 @@
+{
+  "recordedAt": "2026-10-24T11:15:25.307Z",
+  "scope": "Dedicated online-presence staging native lifecycle checkpoint; partial and not qualified",
+  "deployment": "third-gecko-977",
+  "origin": "https://pikar-presence-stg.vercel.app",
+  "actualDriver": "CUA documented Playwright API",
+  "qualificationReference": "2026-10-24-native-recipe-qualification.json",
+  "nativeProgress": {
+    "legacyBusinessOnboarding": {
+      "preparedAt": "2026-10-24T10:49:29.321Z",
+      "firstResponseAt": "2026-10-24T10:50:04.961Z",
+      "reviewedAt": "2026-10-24T10:51:02.157Z",
+      "confirmedAt": "2026-10-24T10:51:10.240Z",
+      "nativeConfirmationAndDashboardObserved": true,
+      "interpretation": "Legacy business onboarding only; complete current Foundation authoring/publication acceptance is not established"
+    },
+    "ownedIllustrationVault": {
+      "uploadedAt": "2026-10-24T10:52:46.631Z",
+      "readyObservedAt": "2026-10-24T10:53:16.454Z",
+      "identityReviewedAt": "2026-10-24T10:53:52.215Z",
+      "nativeReadyStatus": true,
+      "imagePreviewRendered": true,
+      "illustrativeGeneratedDemoArtworkLabelSaved": true,
+      "interpretation": "Native upload/ready/preview and saved identity observations; no new web-asset preparation, immutable website media attachment or published image delivery acceptance",
+      "displayedExtractedTextSizeBytes": 405,
+      "sizeInterpretation": "405 B is the extracted-text size displayed by Vault, not the uploaded image file size. The original approximately 3 MB image rendered and was preserved in Vault."
+    }
+  },
+  "websiteAttempt": {
+    "requestedAt": "2026-10-24T10:54:40.369Z",
+    "nativeStatusObservedAt": "2026-10-24T10:56:20.050Z",
+    "readOnlyDiagnosisAt": "2026-10-24T11:07:25.837Z",
+    "requestedKind": "website",
+    "requestedPageCount": 4,
+    "humanRequestedInquiryFormAndExactConsent": true,
+    "storedBriefKind": "website",
+    "storedContactConsentPresent": true,
+    "storedCtaScheme": "mailto",
+    "storedCtaLabel": "Inquire Now",
+    "externalHttpsDestinationRequiredUnconditionally": false,
+    "actualRefusal": {
+      "field": "ctaHref",
+      "reason": "unsupported_sales_path",
+      "interpretation": "The model supplied an unsupported mailto target; a consent-only inquiry form is supported. The URL safety gate correctly refused that defined invalid destination."
+    },
+    "sessionStatus": "collecting",
+    "sessionRevision": 2,
+    "planStatus": "collecting",
+    "traceSteps": 8,
+    "saveBriefCalls": 4,
+    "readContextCalls": 3,
+    "buildProjectCalls": 0,
+    "allRecordedStepsDone": true,
+    "lastStepEndedAt": "2026-10-24T10:55:11.756Z",
+    "artifactCreated": false,
+    "projectReceiptPresent": false,
+    "qualification": "Failed/paused with no website artifact; no retry performed by this diagnosis",
+    "traceArguments": "agentSteps structurally stores refs/counts/status only. The latest saved brief is direct evidence; earlier raw tool arguments are not claimed."
+  },
+  "spendingAndClosure": {
+    "approvedAggregateMaximumUsd": 5,
+    "openedAt": "2026-10-24T10:48:51.947Z",
+    "closedAt": "2026-10-24T11:10:07.314Z",
+    "closureReason": "root-stop",
+    "closureFailure": null,
+    "restoreErrors": [],
+    "providerAccessConfirmedOff": true,
+    "killSwitchAfter": true,
+    "mediaKillSwitchAfter": true,
+    "cumulativeDedicatedStageLedgerUsdUpperBound": 0.04668851000000002,
+    "cumulativeScope": "Bounded dedicated-stage actual-charge ledger dated on or after 2026-10-23; not a provider account balance",
+    "wholeNativeWindowAdditionalUsdUpperBound": 0.01160077000000001,
+    "unknownHolds": 0,
+    "heldCents": 0,
+    "legacyRoundedRows": 0,
+    "breached": false,
+    "websiteOwnerTimeWindowSubset": {
+      "calls": 8,
+      "settledCalls": 8,
+      "actualUsd": 0.00465075,
+      "unmatchedHolds": 0,
+      "model": "or/openai/gpt-4o-mini",
+      "scope": "Owned tenant rows within the website-session time window; paid UUID correlations do not prove a stronger exact-thread attribution",
+      "notTheWholeNativeWindow": true
+    },
+    "noAutomaticRetryOrReplacement": true,
+    "evidenceWrittenByWindow": false
+  },
+  "sourceAndQualificationBoundary": {
+    "priorRecipeQualificationPreserved": true,
+    "priorRecipeVersions": 2,
+    "businessAndCampaignActiveAtCheckpoint": true,
+    "catalogueRemainsCandidate": true,
+    "pendingSourceRepair": true,
+    "sourceRefreshWillRetirePriorAdmission": true,
+    "interpretation": "Preserve the v2 native receipt as historical evidence. Planned CTA guidance/schema and layout changes require fresh source identities, reviewed deployment and current native qualification before another manually admitted website test."
+  },
+  "pending": [
+    "Fix the demonstrated unsupported-mailto tool choice while preserving HTTPS URL validation and the supported consent-only form",
+    "Complete source checks/review, deployment and fresh exact-source recipe/native qualification",
+    "Earn a real image-backed private website artifact, revision and exact human content review",
+    "Exercise explicit publication, inquiries, offline/unpublish, rollback and tenant isolation",
+    "Merchant checkout and live shop operations remain unavailable"
+  ],
+  "privateEvidence": [
+    {
+      "file": ".tmp/presence-native-window-20261024.private.receipt.json",
+      "sha256": "975f382c926c2aa478b504c189f20857c75ab9e0f64a8b30b2a4d1d3bcb765b9"
+    },
+    {
+      "file": ".tmp/presence-native-20261024/lifecycle-witness.private.json",
+      "sha256": "1f784d497816d2bc5171d9ee99356caf59ac08cc5beab3c9d8e7a2f29937e67f"
+    },
+    {
+      "file": ".tmp/presence-native-20261024/first-website-diagnosis.private.json",
+      "sha256": "81e3f485cfe0b51fef787c9e8839459b04a8ee6bd0cf1c94dcd89da1e2bd9d63"
+    },
+    {
+      "file": ".tmp/presence-native-20261024/vault-illustration.jpg",
+      "sha256": "1c0dc248457d9e684365fcaff6efa141b6e126dc1c0f89a3f7b64d2d7e1bd0e5"
+    }
+  ],
+  "limits": [
+    "No raw emails, native user IDs, thread/plan/document IDs, DOM snapshots, model document text or consent wording are included",
+    "No complete website lifecycle, publication, paid shop qualification or production release is established",
+    "The eight-call website subset is not equated with the whole native window; prior failed paid attempts and recipe receipt remain unchanged",
+    "This record performs no network request, provider call, retry, state mutation, activation or source repair"
+  ],
+  "sourceRepairCheckpoint": {
+    "status": "Source frozen; deployment and current native qualification pending",
+    "scope": "Sites navigation and supported inquiry-form/CTA guidance repair; HTTPS safety remains enforced",
+    "recipeImplementationHash": "020145277a86e1023eadb14b02d95f730a45bad959912e5547d8f087e38d69ff",
+    "goldenRevision": "2026-09-11.budgeted-evaluator.4bd4583fafc728a67599750d6faf22d77511d888070e9f952c9f056d8314c60f",
+    "verticalEvaluatorRevision": "ed197a084b072554deb8c0648df2d0445cf0f2d6b172fc335c5a815e3da072cb",
+    "priorV2QualificationIsHistoricalOnly": true,
+    "newModelWindowOpened": false
+  }
+}

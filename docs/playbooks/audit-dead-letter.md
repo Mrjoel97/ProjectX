@@ -26,6 +26,12 @@
 
 > Last verified: 2026-10-22 — Managed service configuration is tenant-owned export/erasure data. Its pause/stop mutation atomically appends a `managed_service.control_changed` event containing only the service reference, setup/control revisions and closed state. The viewer's closed projection omits objectives, credential/body fields and unexpected content. Configuration persistence does not grant execution authority; no live service or provider cancellation is claimed.
 
+> Last verified: 2026-10-24 — Merchant products, mappings, stock/order/payment/operation records and digital copies participate in tenant privacy/export/erasure. Buyer data and digital expiry use bounded fixed cleanup; capabilities exclude erased tenants. Audit stores refs/hashes/counts/closed states, not buyer addresses, credentials or proposal source text. Prepared buyer notices do not mean an external message was sent; physical success records actual merchant handoff, not carrier delivery.
+
+> Last verified: 2026-10-22 — Website image copies and immutable asset snapshots join the explicit tenant export/erasure storage map as webAssets.storageId. Preparation returns bounded refs/metadata, never raw bytes or generation prompts in logs/audit. Native erasure preserves the other tenant and removes owned copied bytes; deletion of a source alone does not rewrite reviewed website bytes.
+
+> Last verified: 2026-10-21 — Five Phase53 web/session tables join the tenant export/deletion registry. Web artifact storage IDs join the existing storage walker. Public forms persist bounded consented inquiry receipts with fixed hourly expired-row deletion. Site/session audit payloads are refs, counts and hashes, not business copy or messages. Existing audit retention and WORM policy remain unchanged.
+
 > Last verified: 2026-10-19 — Review-first voice transcription emits `intake.dictation_draft`; the audit viewer projects only its character count and existing correlation reference. Transcript text, filenames and nested PII counts remain outside the projection. A focused regression covers this boundary; no recording is sent as an agent turn until the user explicitly sends the written prompt.
 
 > Last verified: 2026-10-19 — Zernio connections export as credential summaries; the latest report exports as tenant-owned data. Both ride the existing erasure walk. Erasure reports local deletion with upstream revocation unsupported, requiring key revocation in Zernio; no provider grant is automatically deleted.

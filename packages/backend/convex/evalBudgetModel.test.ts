@@ -29,6 +29,73 @@ const context = (events: string[]) =>
   }) as unknown as GenericActionCtx<DataModel>;
 
 describe("low-level model budget middleware", () => {
+  test.each([
+    { pin: "or/moonshotai/kimi-k3.1-pro", comparison: true, effort: "low" },
+    { pin: "or/moonshotai/kimi-k3.1-pro", comparison: false, effort: undefined },
+    { pin: "or/openai/gpt-4o-mini", comparison: true, effort: undefined },
+  ])("comparison reasoning wire stays scoped: $pin / $comparison", async ({
+    pin,
+    comparison,
+    effort,
+  }) => {
+    const events: string[] = [];
+    const wire: Record<string, unknown>[] = [];
+    const provider = createOpenRouter({
+      apiKey: "offline-test-key",
+      fetch: async (_url, init) => {
+        events.push("provider");
+        wire.push(JSON.parse(String(init?.body)));
+        return Response.json({
+          id: "comparison-response",
+          model: pin.slice(3),
+          object: "chat.completion",
+          created: 1,
+          choices: [
+            {
+              index: 0,
+              finish_reason: "stop",
+              message: { role: "assistant", content: "<html>Proposal</html>" },
+            },
+          ],
+          usage: {
+            prompt_tokens: 2,
+            completion_tokens: 1,
+            total_tokens: 3,
+            cost: 0.000123,
+            is_byok: false,
+          },
+        });
+      },
+    });
+    const model = evalBudgetModel({
+      ctx: context(events),
+      tenantId,
+      budgetId,
+      modelId: pin,
+      model: provider.chat(pin.slice(3)),
+      mode: "golden",
+      onCost: () => {},
+      ...(comparison ? { websiteComparison: true as const } : {}),
+    });
+    await generateText({
+      model,
+      prompt: "Synthetic proposal",
+      maxOutputTokens: 8192,
+      maxRetries: 0,
+      ...(effort ? { providerOptions: { openrouter: { reasoning: { effort } } } } : {}),
+    });
+    expect(events).toEqual(["reserve", "provider", "settle"]);
+    expect(wire).toHaveLength(1);
+    expect(wire[0]?.reasoning).toEqual(effort ? { effort } : undefined);
+    expect(wire[0]).toMatchObject({
+      max_tokens: 8192,
+      provider: {
+        only: [pin.includes("moonshotai") ? "moonshotai" : "openai"],
+        allow_fallbacks: false,
+      },
+    });
+  });
+
   test("a committed breach stops the loop and preserves known cost", async () => {
     const events: string[] = [];
     const ctx = {

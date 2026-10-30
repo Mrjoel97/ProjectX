@@ -39,6 +39,7 @@ import {
   reconcileStandingServiceAccounting,
   standingServiceBinding,
 } from "./lib/managedServiceBudget";
+import { presenceModelOutputLimit } from "./lib/presenceModelLimits";
 import { internalMutation } from "./lib/tenantLifecycle";
 // The PLAIN-FUNCTION half of the ledger writer, not `ctx.runMutation`: the limiter movement and
 // its ledger row must commit or fail TOGETHER (FIN-01). A second transaction could leave the
@@ -358,12 +359,26 @@ export const openEvalBudget = internalMutation({
     tenantIds: v.array(v.string()),
     capCents: v.number(),
     family: v.optional(v.literal("golden")),
+    purpose: v.optional(v.literal("shop-preparation")),
     authoringProbe: v.optional(v.object({ threadId: v.string(), authorizationSha256: v.string() })),
   },
   handler: async (
     ctx,
-    { tenantIds, capCents, family, authoringProbe },
+    { tenantIds, capCents, family, authoringProbe, purpose },
   ): Promise<Id<"spendEvents">> => {
+    if (purpose === "shop-preparation") {
+      const prefix = /^packeval-([a-f0-9]{8})-c0$/.exec(tenantIds[0] ?? "");
+      if (
+        capCents !== 100 ||
+        family !== undefined ||
+        authoringProbe !== undefined ||
+        !prefix ||
+        JSON.stringify(tenantIds) !==
+          JSON.stringify(Array.from({ length: 5 }, (_, i) => `packeval-${prefix[1]}-c${i}`)) ||
+        process.env.GOLDEN_OPENROUTER_BILLING !== "standard"
+      )
+        throw new Error("SHOP_EVAL_ENVELOPE_INVALID");
+    }
     if (family === "golden") {
       try {
         if (process.env.GOLDEN_OPENROUTER_BILLING !== "standard") throw new Error();
@@ -440,6 +455,7 @@ export const openEvalBudget = internalMutation({
       evalEnvelope: {
         tenantIds,
         expiresAt: now + EVAL_BUDGET_LIFETIME_MS,
+        ...(purpose ? { purpose } : {}),
         // Only new isolated golden runs opt in. Existing envelopes, authoring probes and
         // pack/vertical budgets retain their original component accounting with no migration.
         ...(family === "golden" && !authoringProbe
@@ -489,6 +505,7 @@ export const reserveEvalCall = internalMutation({
     callId: v.string(),
     model: v.string(),
     outputTokens: v.number(),
+    websiteComparison: v.optional(v.literal(true)),
     providerCall: v.optional(
       v.union(
         v.object({ kind: v.literal("chat"), model: v.string(), maxOutputTokens: v.number() }),
@@ -508,7 +525,7 @@ export const reserveEvalCall = internalMutation({
   },
   handler: async (
     ctx,
-    { tenantId, budgetId, callId, model, outputTokens, providerCall },
+    { tenantId, budgetId, callId, model, outputTokens, providerCall, websiteComparison },
   ): Promise<Id<"spendEvents">> => {
     if (!/^[a-f0-9-]{36}$/.test(callId)) throw new Error("EVAL_CALL_ID_INVALID");
     const { envelope, config } = await evalEnvelopeFor(ctx, budgetId, tenantId);
@@ -529,7 +546,14 @@ export const reserveEvalCall = internalMutation({
     const amountCents = providerCall
       ? goldenProviderCeilingCents(providerCall)
       : evalCallCeilingCents(model, outputTokens);
-    const correlationId = `evalcall:${callId}`;
+    if (
+      websiteComparison &&
+      (!/^packeval-[a-f0-9]{8}-presence$/.test(tenantId) ||
+        !["or/openai/gpt-4o-mini", "or/moonshotai/kimi-k3.1-pro"].includes(model) ||
+        providerCall?.kind !== "chat")
+    )
+      throw Error("WEBSITE_COMPARISON_RESERVATION_INVALID");
+    const correlationId = `evalcall:${websiteComparison ? "presence-comparison:" : ""}${callId}`;
     // Re-entry can never authorize another provider execution with a consumed reservation.
     if (
       await ctx.db
@@ -538,6 +562,14 @@ export const reserveEvalCall = internalMutation({
         .first()
     )
       throw new Error("EVAL_CALL_ALREADY_RESERVED");
+    const alternateCorrelationId = `evalcall:${websiteComparison ? "" : "presence-comparison:"}${callId}`;
+    if (
+      await ctx.db
+        .query("spendEvents")
+        .withIndex("by_correlation", (q) => q.eq("correlationId", alternateCorrelationId))
+        .first()
+    )
+      throw Error("EVAL_CALL_ALREADY_RESERVED");
     const rows = await ctx.db
       .query("spendEvents")
       .withIndex("by_eval_budget", (q) => q.eq("evalBudgetId", budgetId))
@@ -545,6 +577,20 @@ export const reserveEvalCall = internalMutation({
     if (rows.some((row) => row.kind === "eval_budget_closed"))
       throw new Error("EVAL_BUDGET_CLOSED");
     if (rows.some((row) => row.evalBreach)) throw new Error("EVAL_BUDGET_BREACHED");
+    // Only the new operator shop lane refuses concurrent outstanding calls. A failed source may be
+    // rendered as no-match by the ordinary tool, but its unknown hold must stop the next provider
+    // before egress. Existing golden/vertical/authoring envelopes retain their concurrency.
+    if (
+      envelope.evalEnvelope?.purpose === "shop-preparation" ||
+      websiteComparison ||
+      rows.some((row) => row.correlationId.startsWith("evalcall:presence-comparison:"))
+    ) {
+      const settled = new Set(
+        rows.filter((row) => row.evalActualUsd !== undefined).map((row) => row.correlationId),
+      );
+      if (rows.some((row) => row.phase === "reserved" && !settled.has(row.correlationId)))
+        throw new Error("EVAL_BUDGET_UNRESOLVED");
+    }
     if (
       envelope.evalAuthoringProbe &&
       (await probeControl(ctx, budgetId)).some((row) => row.eventType === "authoring_probe.failed")
@@ -868,11 +914,19 @@ export const reservePaidCall = internalMutation({
     model: v.string(),
     ceilingCents: v.number(),
     rail: vRail,
+    websiteDesign: v.optional(
+      v.object({
+        planId: v.id("plans"),
+        revision: v.number(),
+        runRef: v.string(),
+        purpose: v.optional(v.literal("vision-review")),
+      }),
+    ),
     managedServiceRunId: v.optional(v.id("managedServiceRuns")),
   },
   handler: async (
     ctx,
-    { tenantId, callId, model, ceilingCents, rail, managedServiceRunId },
+    { tenantId, callId, model, ceilingCents, rail, websiteDesign, managedServiceRunId },
   ): Promise<Id<"spendEvents">> => {
     if (
       !/^[a-f0-9-]{36}$/.test(callId) ||
@@ -882,6 +936,88 @@ export const reservePaidCall = internalMutation({
     )
       throw new Error("PAID_ADMISSION_INVALID");
     if ((await getGuardrailConfig(ctx)).killSwitch) throw new Error("PAID_KILL_SWITCH");
+    const kimi = model === "or/moonshotai/kimi-k3.1-pro";
+    if ((websiteDesign && !kimi) || (websiteDesign && (rail === "ingest" || managedServiceRunId)))
+      throw new Error("PAID_WEBSITE_MODEL_SCOPE_INVALID");
+    if (websiteDesign) {
+      if (
+        !/^[a-f0-9]{16}$/.test(websiteDesign.runRef) ||
+        !Number.isSafeInteger(websiteDesign.revision) ||
+        websiteDesign.revision < 0 ||
+        ceilingCents !==
+          goldenProviderCeilingCents({
+            kind: "chat",
+            model,
+            maxOutputTokens: presenceModelOutputLimit(websiteDesign.purpose),
+          })
+      )
+        throw new Error("PAID_WEBSITE_ADMISSION_INVALID");
+      const plan = await ctx.db.get(websiteDesign.planId);
+      const session = await ctx.db
+        .query("onlinePresenceSessions")
+        .withIndex("by_tenant_plan", (q) =>
+          q.eq("tenantId", tenantId).eq("planId", websiteDesign.planId),
+        )
+        .unique();
+      if (
+        !plan ||
+        plan.tenantId !== tenantId ||
+        !session ||
+        session.threadId !== plan.threadId ||
+        session.revision !== websiteDesign.revision
+      )
+        throw new Error("PAID_WEBSITE_CONTEXT_CHANGED");
+      if (websiteDesign.purpose === "vision-review") {
+        const project = session.projectId ? await ctx.db.get(session.projectId) : null;
+        const version =
+          session.projectId && session.projectVersion !== undefined
+            ? await ctx.db
+                .query("webProjectVersions")
+                .withIndex("by_tenant_project_version", (q) =>
+                  q
+                    .eq("tenantId", tenantId)
+                    .eq("projectId", session.projectId!)
+                    .eq("version", session.projectVersion!),
+                )
+                .unique()
+            : null;
+        if (
+          !project ||
+          project.tenantId !== tenantId ||
+          project.draftVersion !== session.projectVersion ||
+          !version?.providerReceipt ||
+          version.contentHash !== session.projectContentHash ||
+          !version.browserReviewReportStorageId ||
+          version.browserReviewVisionStorageId ||
+          version.browserReviewJob?.state !== "captured" ||
+          version.browserReviewJob.runRef !== websiteDesign.runRef
+        )
+          throw new Error("PAID_WEBSITE_VISION_CONTEXT_INVALID");
+      }
+      // An uncertain response must not become a fresh model attempt under a new run identity.
+      const history = await ctx.db
+        .query("spendEvents")
+        .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", tenantId))
+        .take(5001);
+      if (history.length > 5000) throw new Error("PAID_WEBSITE_LEDGER_LIMIT");
+      const settled = new Set(
+        history
+          .filter(
+            (row) =>
+              row.phase === "actual" || (row.phase === "refunded" && row.evalActualUsd === 0),
+          )
+          .map((row) => row.correlationId),
+      );
+      if (
+        history.some(
+          (row) =>
+            row.model === model && row.phase === "reserved" && !settled.has(row.correlationId),
+        )
+      )
+        throw new Error("PAID_WEBSITE_PRIOR_HOLD");
+      if (history.some((row) => row.model === model && row.evalBreach))
+        throw new Error("PAID_WEBSITE_PRIOR_BREACH");
+    }
     let standing = false;
     if (managedServiceRunId) {
       if (rail) throw new Error("SERVICE_PAID_RAIL_UNSUPPORTED");

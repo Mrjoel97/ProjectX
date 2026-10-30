@@ -1,0 +1,200 @@
+{
+  "recordedAt": "2026-10-23T14:22:40.314Z",
+  "scope": "Dedicated online-presence staging only; application production and Phase48 staging are outside scope",
+  "source": "df0286d53a09c055572e14aa982a6d3361111b1f",
+  "release": {
+    "backendDeployment": "third-gecko-977",
+    "backendReference": "joel-feruzi:pikar-presence-stg:dev/presence",
+    "backendClientOrigin": "https://third-gecko-977.convex.cloud",
+    "backendHttpOrigin": "https://third-gecko-977.convex.site",
+    "backendApply": "Strict TypeScript and code generation completed; Convex functions ready",
+    "frontendProject": "pikar-presence-stg",
+    "frontendDeploymentId": "dpl_7EotyeRNHrgWUdoSV397z1ZKTnNY",
+    "frontendImmutableOrigin": "https://pikar-presence-mw3ajamk7-joelferuzi-gmailcoms-projects.vercel.app",
+    "stableOrigin": "https://pikar-presence-stg.vercel.app",
+    "frontendBuild": "Compiled and TypeScript completed; 40 static pages generated",
+    "promotion": "Dedicated staging project stable alias promotion succeeded",
+    "privateLogHashes": [
+      {
+        "name": "presence-reviewed-backend-deploy-20261023.log",
+        "sha256": "bcc173e5a3bfacb6346c76a6c29fdc3a69288746e2f21f640c062a30554850c5"
+      },
+      {
+        "name": "presence-reviewed-frontend-deploy-20261023.log",
+        "sha256": "02384615de9d6ab91def2ba72862ec6d7d6f8aea535798a4b0ae77aad11e1b16"
+      },
+      {
+        "name": "presence-reviewed-frontend-promote-20261023.log",
+        "sha256": "33f38a7b6d97a8f0f3883853070074b5f21f9370462641c370a0e9a65cf421ff"
+      }
+    ]
+  },
+  "publicHttp": {
+    "observedAt": "2026-10-23T14:21:20.214Z",
+    "scope": "Public unauthenticated HTTP only; dedicated online-presence staging",
+    "pass": true,
+    "http": [
+      {
+        "origin": "https://pikar-presence-stg.vercel.app",
+        "path": "/signin",
+        "method": "GET",
+        "status": 200,
+        "location": null,
+        "robots": "noindex, nofollow, noarchive",
+        "environment": "online-presence-staging",
+        "contentType": "text/html; charset=utf-8"
+      },
+      {
+        "origin": "https://pikar-presence-stg.vercel.app",
+        "path": "/signup",
+        "method": "GET",
+        "status": 200,
+        "location": null,
+        "robots": "noindex, nofollow, noarchive",
+        "environment": "online-presence-staging",
+        "contentType": "text/html; charset=utf-8"
+      },
+      {
+        "origin": "https://pikar-presence-stg.vercel.app",
+        "path": "/dashboard/sites",
+        "method": "GET",
+        "status": 307,
+        "location": "/signin",
+        "robots": "noindex, nofollow, noarchive",
+        "environment": "online-presence-staging",
+        "contentType": "text/plain"
+      },
+      {
+        "origin": "https://pikar-presence-stg.vercel.app",
+        "path": "/ops?view=web-recipes",
+        "method": "GET",
+        "status": 307,
+        "location": "/signin",
+        "robots": "noindex, nofollow, noarchive",
+        "environment": "online-presence-staging",
+        "contentType": "text/plain"
+      },
+      {
+        "origin": "https://pikar-presence-stg.vercel.app",
+        "path": "/ops/web-recipes",
+        "method": "GET",
+        "status": 307,
+        "location": "/signin",
+        "robots": "noindex, nofollow, noarchive",
+        "environment": "online-presence-staging",
+        "contentType": "text/plain"
+      },
+      {
+        "origin": "https://third-gecko-977.convex.site",
+        "path": "/p/unpublished/home",
+        "method": "GET",
+        "status": 404,
+        "location": null,
+        "robots": null,
+        "environment": null,
+        "contentType": "text/plain;charset=UTF-8"
+      },
+      {
+        "origin": "https://third-gecko-977.convex.site",
+        "path": "/p/unpublished/assets/missing/0000000000000000000000000000000000000000000000000000000000000000",
+        "method": "GET",
+        "status": 404,
+        "location": null,
+        "robots": null,
+        "environment": null,
+        "contentType": null
+      },
+      {
+        "origin": "https://third-gecko-977.convex.site",
+        "path": "/p/unpublished/home",
+        "method": "HEAD",
+        "status": 404,
+        "location": null,
+        "robots": null,
+        "environment": null,
+        "contentType": "text/plain;charset=UTF-8"
+      },
+      {
+        "origin": "https://third-gecko-977.convex.site",
+        "path": "/p/unpublished/assets/missing/0000000000000000000000000000000000000000000000000000000000000000",
+        "method": "HEAD",
+        "status": 404,
+        "location": null,
+        "robots": null,
+        "environment": null,
+        "contentType": null
+      }
+    ],
+    "limits": [
+      "No authenticated browser/owner protocol observation",
+      "No recipe activation or publication",
+      "No provider calls or production requests"
+    ]
+  },
+  "hostedDeterministicRecipes": {
+    "observedAt": "2026-10-23T14:12:23.156Z",
+    "recipes": [
+      {
+        "name": "web-recipe-business-site",
+        "version": 2,
+        "cases": 20,
+        "costUsd": 0
+      },
+      {
+        "name": "web-recipe-campaign-landing",
+        "version": 2,
+        "cases": 20,
+        "costUsd": 0
+      },
+      {
+        "name": "web-recipe-storefront-catalogue",
+        "version": 2,
+        "cases": 20,
+        "costUsd": 0
+      }
+    ],
+    "interpretation": "Exact hosted deterministic evaluation results only; not native browser or model acceptance"
+  },
+  "nativeAccountMetadata": {
+    "observedAt": "2026-10-23T13:22:58.071Z",
+    "verifiedAccountCount": 2,
+    "ownerCount": 1,
+    "otherAccountRemainsOrdinary": true,
+    "auditedGrantCount": 1,
+    "repeatedGrantChanged": false,
+    "interpretation": "Operator readback of native records and approved role grant; not a signed-in browser protocol witness"
+  },
+  "boundedShopModelAttempt": {
+    "startedAt": "2026-10-23T14:12:53.936Z",
+    "completedAt": "2026-10-23T14:18:45.483Z",
+    "runnerExit": 2,
+    "executionUncertain": false,
+    "budgetCount": 1,
+    "capCents": 100,
+    "observedActualUsd": 0.014748319999999997,
+    "providerCallCount": 43,
+    "settledCallCount": 43,
+    "closed": true,
+    "breached": false,
+    "unsettledCount": 0,
+    "unresolvedCents": 0,
+    "killSwitchAfter": true,
+    "mediaKillSwitchAfter": true,
+    "restoreError": null,
+    "qualification": "Not passing: runner exited 2; this receipt does not diagnose its stop or issue evaluation evidence"
+  },
+  "pending": [
+    "Current-source native authenticated owner recipe protocol at /ops?view=web-recipes in actual desktop and mobile widths",
+    "Independent exact frozen-transcript review and truthful browser evidence issuance",
+    "Recipe activation through existing evidence gates",
+    "Native customer Foundation/documents-to-image-backed private draft, revision and exact review acceptance",
+    "Explicit approved publication, inquiry, offline/rollback and tenant-isolation acceptance",
+    "Passing shop model evaluation and its separate native browser acceptance",
+    "Merchant checkout and live shop operations remain unavailable"
+  ],
+  "limits": [
+    "Anonymous HTTP requests are not native account, owner UI, model-quality or publication certification",
+    "No raw user identities, account IDs, invitations, budget IDs, credentials or model text are included",
+    "This receipt makes no production release, recipe activation, passing native protocol or working checkout claim"
+  ]
+}

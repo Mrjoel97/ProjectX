@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@pikar/contracts": "workspace:*",
     "ai": "7.0.20"
   },
   "devDependencies": {

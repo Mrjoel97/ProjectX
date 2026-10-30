@@ -507,6 +507,14 @@ const PACK_THRESHOLD_FIELD: Readonly<
     max: 20,
     integer: true,
   },
+  "shop-preparation": {
+    key: "listing_max_items",
+    kind: "threshold",
+    label: "Most listing drafts in one preparation document",
+    min: 1,
+    max: 25,
+    integer: true,
+  },
   "offer-and-lead-plan": {
     key: "plan_days",
     kind: "threshold",
