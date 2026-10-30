@@ -133,6 +133,7 @@ import type * as presenceComparisonRun from "../presenceComparisonRun.js";
 import type * as presenceDesignControl from "../presenceDesignControl.js";
 import type * as presenceDesignProbe from "../presenceDesignProbe.js";
 import type * as presenceRequiredRun from "../presenceRequiredRun.js";
+import type * as presenceVisualRevision from "../presenceVisualRevision.js";
 import type * as proactiveReview from "../proactiveReview.js";
 import type * as proposals from "../proposals.js";
 import type * as providerGates from "../providerGates.js";
@@ -344,6 +345,7 @@ declare const fullApi: ApiFromModules<{
   presenceDesignControl: typeof presenceDesignControl;
   presenceDesignProbe: typeof presenceDesignProbe;
   presenceRequiredRun: typeof presenceRequiredRun;
+  presenceVisualRevision: typeof presenceVisualRevision;
   proactiveReview: typeof proactiveReview;
   proposals: typeof proposals;
   providerGates: typeof providerGates;
