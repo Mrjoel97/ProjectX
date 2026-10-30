@@ -106,6 +106,14 @@ A single pre-provider retry now requires a failed incomplete job, exact owned ca
 
 Read-only admission against the actual staging limiter found only 424 cents remaining in its fixed window, below the 428-cent reservation. Both 440- and 450-cent nominal configurations still refuse it. The one-use live retry has NOT been consumed, no counters were reset, and no additional model call was made. The helper checks real capacity before opening its window or claiming the retry. Final v4 visual acceptance remains pending until capacity is legitimately available; cumulative model spending remains $0.49259531 of the original $5 allowance.
 
+### Final staging release checkpoint — 2026-10-30
+
+Runtime commit `1f6155f7` is deployed only to `third-gecko-977` and staging frontend `dpl_NEWRYkAQw6d2R6Ybo3hWq2Us3DTh`, promoted to `pikar-presence-stg.vercel.app`. Final source identity is `2864a055a3f96f4ca6227dfcb90c4405664a608fe9ab0eda5ff91724b93f6198`. Backend typecheck and final frontend build/typecheck passed; earlier unchanged contracts/core/web checks also passed.
+
+Thirty-six fresh actual-browser protocol observations were audited against this source, recomputing 24 original artifact/inert-frame pairs. Evidence was issued and read back for all three recipes. Business-site 7 and campaign-landing 7 are active; catalogue 3 remains a presentation-only candidate. This does not establish merchant checkout or autonomous fulfilment.
+
+The private refined project remains `vx7f8c4dbeg2aaxkzbe37hn7kx8h8nk4`, version 4, content `60551b51302dbf571637d549e7d526b4e3449147f7f52e0984ab1f6b95346a75`. All twelve hosted DOM captures passed, but its paid visual acceptance is still pending. The actual fixed-window reset is 2026-10-31 07:23:41.835 UTC (10:23:41.835 Tanzania). No retry was consumed and no automatic future run is scheduled. Original spending switches/200c/100c limits remain restored. The Fieldwork carousel/spacing preview is available separately; its success is not substituted for native project visual approval.
+
 ## Earlier validation milestone
 
 Renderer/recipe tests: 36 passed. Example UI tests: 4 passed. Historical publication tests: 7 passed. Deterministic quality tests: 6 passed. All four package typechecks passed. Additional provider/control/coordinator tests are recorded in the change report. Native gallery browser inspection loaded all four images, moved to the chosen slide, and measured no document overflow at 390px. The refined provider preview also loaded all four images without overflow at 390px. Browser captures are local review evidence, not issued qualification receipts. No paid provider call was made in this change.
