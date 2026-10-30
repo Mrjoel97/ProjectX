@@ -1,3 +1,5 @@
+import { sha256Bytes } from "@pikar/core/webRuntime";
+import type { Id } from "./_generated/dataModel";
 import { inspectWebAssetBytes } from "@pikar/core/webAssets";
 import type { WebBrowserPageReport } from "@pikar/core/webBrowserQuality";
 import { materializeWebRecipeWithProvenance } from "@pikar/core/webRecipes";
@@ -22,7 +24,7 @@ async function retryFixture() {
   const f = await fixture();
   const startedAt = Date.now() - 5000;
   const stored = await f.t.run(async ctx => {
-    const ids = [];
+    const ids: Id<"_storage">[] = [];
     for (let n = 0; n < 4; n++) {
       const storageId = await ctx.storage.store(new Blob(["offline capture"]));
       await ctx.db.insert("uploadReceipts", { tenantId: f.args.tenantId, ticketHash: `retry-${n}`, expiresAt: Date.now()+60000, state: "complete", storageId });
@@ -32,7 +34,7 @@ async function retryFixture() {
     await ctx.db.patch(f.args.versionId, {browserReviewJob: {runRef: "original", state: "failed", startedAt, reason: "browser_review_incomplete"}, browserReviewReportStorageId: ids[0]!, browserReviewScreenshots: screenshots});
     return {reportStorageId: ids[0]!, screenshots};
   });
-  const args = {tenantId: f.args.tenantId, versionId: f.args.versionId, runRef: "original-pre-provider-retry-1", contentHash: f.args.contentHash, providerReceiptHash: f.args.providerReceiptHash, retryEvidence: {reportStorageId: stored.reportStorageId, capture: {status: "captured", contentHash: f.args.contentHash, providerReceiptHash: f.args.providerReceiptHash, artifactHashes: f.args.artifactHashes, reports: reports(), screenshots: stored.screenshots}}};
+  const args = {tenantId: f.args.tenantId, versionId: f.args.versionId, runRef: sha256Bytes(new TextEncoder().encode(JSON.stringify({priorRunRef:"original",attempt:1}))).slice(0,16), contentHash: f.args.contentHash, providerReceiptHash: f.args.providerReceiptHash, retryEvidence: {reportStorageId: stored.reportStorageId, capture: {status: "captured", contentHash: f.args.contentHash, providerReceiptHash: f.args.providerReceiptHash, artifactHashes: f.args.artifactHashes, reports: reports(), screenshots: stored.screenshots}}};
   return {...f, retryArgs: args, startedAt, stored};
 }
 

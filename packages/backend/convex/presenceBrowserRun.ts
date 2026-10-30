@@ -75,7 +75,7 @@ export const run = internalAction({
       receipt: source.providerReceiptHash,
     }).slice(0, 16);
     const retrying = source.job?.state === "failed" && !source.job.preProviderRetry;
-    const runRef = retrying ? source.job!.runRef + "-pre-provider-retry-1" : baseRunRef;
+    const runRef = retrying ? digest({ priorRunRef: source.job!.runRef, attempt: 1 }).slice(0, 16) : baseRunRef;
     let retryEvidence;
     if (retrying) {
       // Read only the existing owned capture; claim atomically validates its identity,

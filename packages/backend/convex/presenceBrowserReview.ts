@@ -1,3 +1,4 @@
+import { sha256Bytes } from "@pikar/core/webRuntime";
 import { webAssetPath } from "@pikar/core/webAssets";
 import { assessWebBrowserQuality, type WebBrowserPageReport } from "@pikar/core/webBrowserQuality";
 import { v } from "convex/values";
@@ -98,7 +99,7 @@ export const claim = internalMutation({
         version.browserReview || version.browserReviewVisionStorageId || !version.artifacts ||
         !version.browserReviewReportStorageId || !args.retryEvidence ||
         args.retryEvidence.reportStorageId !== version.browserReviewReportStorageId ||
-        args.runRef !== prior.runRef + "-pre-provider-retry-1") return false;
+        args.runRef !== sha256Bytes(new TextEncoder().encode(JSON.stringify({ priorRunRef: prior.runRef, attempt: 1 }))).slice(0, 16)) return false;
       validateProviderReceipt(version.providerReceipt, version.artifacts);
       const hashes = artifactHashes(version.artifacts);
       const capture = args.retryEvidence.capture;
