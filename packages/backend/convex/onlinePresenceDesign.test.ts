@@ -118,8 +118,12 @@ beforeEach(() => {
       role: "user",
       content: [{ type: "text" }, { type: "file", mediaType: "image/png" }],
     });
-    const content = options.messages?.[0].content as Array<{ type: string; text?: string }>;
-    const input = JSON.parse(String(content[0].text));
+    const content = options.messages?.[0]?.content as
+      | Array<{ type: string; text?: string }>
+      | undefined;
+    const text = content?.[0]?.text;
+    if (typeof text !== "string") throw Error("Expected provider prompt text");
+    const input = JSON.parse(text);
     expect(input.layoutPlan.version).toBe(2);
     expect(input.untrustedStitchReference).toBeTruthy();
     if (input.untrustedStitchReference.startsWith("reference"))
