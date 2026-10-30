@@ -26,7 +26,7 @@ The real `buildOnlinePresenceProject` tool now calls `onlinePresenceDesign.build
 
 The customer finalizer now schedules a private exact-version browser job. The authenticated staging review endpoint verifies artifact and owned-image hashes before creating a nonpersistent, network-denied browser VM. It captures each page at 1440px, 390px and actual reduced-motion 390px. The server persists tenant-owned reports and screenshots, rechecks governing business sources, and uses exact Kimi image input for a separate fidelity and overlay-readability verdict. Unsupported, uncertain, stale, incomplete or mismatched results cannot approve publication.
 
-A supported layout repair creates a new private immutable version, preserves original source content and provider provenance, and schedules a fresh review. There is at most one automatic repair in a lineage; the repaired version cannot inherit approval or trigger an endless paid loop. Actual model identity and completed output are checked. Evidence hashing normalizes database field order.
+A supported layout repair creates a new private immutable version, preserves original source content and provider provenance, and schedules a fresh review. Model-proposed repair remains limited to one attempt and cannot follow a renderer repair. Deterministic renderer repairs are limited to the exact known migrations described below, including one explicit v13-to-v14 follow-up; none can inherit approval or trigger an endless paid loop. Actual model identity and completed output are checked. Evidence hashing normalizes database field order.
 
 The browser snapshot was prepared on the dedicated staging project with Playwright 1.61.1. Its real launch, DOM, screenshot and reduced-motion smoke checks passed. It has a finite 30-day lifetime and will require replacement before expiry. Staging worker credentials are server-only. No model spending switches were enabled by provisioning this browser infrastructure.
 
@@ -85,6 +85,12 @@ All 36 desktop/phone protocol observations were freshly audited for v12 and sour
 A new mandatory run completed Stitch and v2 Kimi automatically and produced private project `vx7f8c4dbeg2aaxkzbe37hn7kx8h8nk4` version 1. All twelve hard DOM captures passed, but real vision correctly rejected white split-hero text on pale paper, phantom grid whitespace, excessive footer scale and weak section spacing. No model repair plan was returned. Cumulative spending reached $0.42465531 and all original spending controls were restored.
 
 Renderer v13 corrects split-hero ink while preserving white image overlays, removes the `grid-row:1/20` implicit-row gap, scales the footer and structures service/contact spacing without inventing content. Tests using the exact saved document/profile measured visible dark headings, no horizontal overflow, and natural About-section height at both widths. A narrow, evidence-bound v12-to-v13 renderer repair is prepared to append a new immutable version and require fresh browser/vision review, reusing the existing provider design. This source change invalidates v12 qualification for new builds; no passing v13 design review is claimed at this checkpoint.
+
+### Final touch-target regression — renderer v14
+
+The v13 private repair version passed layout corrections but stopped before paid vision: its smaller footer wordmark had a measured 28.79px touch height. No additional model cost occurred. Renderer v14 preserves the font scale and gives that link a minimum 44px width/height. Full browser inspection now covers all four exact saved pages at desktop, mobile and reduced motion using verified owned image bytes: twelve reports with zero hard failures. Two browser regressions and 24 renderer tests passed.
+
+The only second renderer repair permitted is v13 version 2 with the existing attempt-1/v13 lineage, no model repair or vision record, and exact owned touch-target-only evidence. It creates immutable version 3 with attempt-2/v14/prior-version-2 lineage; further repeats are refused. The original v12 split correction can apply directly to v14 as a first repair. Seventeen repair/publication tests and backend typecheck passed. Final paid visual acceptance and current-source recipe qualification remain pending at this checkpoint.
 
 ## Earlier validation milestone
 

@@ -34,7 +34,7 @@ export type PresenceProviderReceipt = {
     priorVersion: number;
     browserEvidenceHash: string;
     rendererVersion: string;
-    attempt: 1;
+    attempt: 1 | 2;
   };
 };
 export const artifactHashes = (artifacts: readonly { pageSlug: string; html: string }[]) =>
@@ -69,7 +69,10 @@ export function validateProviderReceipt(
     (receipt.rendererRepair !== undefined &&
       (!Number.isSafeInteger(receipt.rendererRepair.priorVersion) ||
         receipt.rendererRepair.priorVersion < 1 ||
-        receipt.rendererRepair.attempt !== 1 ||
+        (receipt.rendererRepair.attempt !== 1 && receipt.rendererRepair.attempt !== 2) ||
+        (receipt.rendererRepair.attempt === 2 &&
+          (receipt.rendererRepair.rendererVersion !== "web-design-renderer-v14" ||
+            receipt.rendererRepair.priorVersion !== 2)) ||
         !hash.test(receipt.rendererRepair.browserEvidenceHash) ||
         !/^web-design-renderer-v[0-9]+$/.test(receipt.rendererRepair.rendererVersion))) ||
     (receipt.repair !== undefined && receipt.rendererRepair !== undefined) ||

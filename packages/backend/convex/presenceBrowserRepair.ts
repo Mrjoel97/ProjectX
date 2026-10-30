@@ -25,6 +25,20 @@ const digest = (value: unknown) => sha256Bytes(new TextEncoder().encode(JSON.str
 const scope = { tenantId: v.string(), projectId: v.id("webProjects"), version: v.number() };
 const inputsRef = makeFunctionReference<"query">("presenceBrowserRepair:inputs");
 const applyRef = makeFunctionReference<"mutation">("presenceBrowserRepair:apply");
+/** A single follow-up for the measured v13 footer hit-area regression; never a general retry. */
+function isFooterRendererUpgrade(version: any) {
+  const prior = version.providerReceipt?.rendererRepair;
+  return (
+    version.version === 2 &&
+    version.rendererVersion === "web-design-renderer-v13" &&
+    String(WEB_DESIGN_RENDERER_VERSION) === "web-design-renderer-v14" &&
+    !version.providerReceipt?.repair &&
+    prior?.attempt === 1 &&
+    prior.rendererVersion === "web-design-renderer-v13" &&
+    prior.priorVersion === 1 &&
+    !version.browserReviewVisionStorageId
+  );
+}
 export const inputs = internalQuery({
   args: scope,
   handler: async (ctx, args) => {
@@ -40,7 +54,7 @@ export const inputs = internalQuery({
     if (
       !version?.providerReceipt ||
       version.providerReceipt.repair ||
-      version.providerReceipt.rendererRepair ||
+      (version.providerReceipt.rendererRepair && !isFooterRendererUpgrade(version)) ||
       version.browserReview?.status !== "failed" ||
       version.browserReviewJob?.state !== "completed" ||
       !version.browserReviewReportStorageId
@@ -72,6 +86,7 @@ export function verifyRendererRepairEvidence(
   capture: any,
 ) {
   if (
+    (version.providerReceipt.rendererRepair && !isFooterRendererUpgrade(version)) ||
     version.rendererVersion === WEB_DESIGN_RENDERER_VERSION ||
     !/^web-design-renderer-v[0-9]+$/.test(version.rendererVersion) ||
     capture?.status !== "captured" ||
@@ -117,7 +132,9 @@ function isSplitRendererUpgrade(version: any) {
   const plan = version.recipeRef?.designProfile?.layoutPlan;
   return (
     version.rendererVersion === "web-design-renderer-v12" &&
-    WEB_DESIGN_RENDERER_VERSION === "web-design-renderer-v13" &&
+    ["web-design-renderer-v13", "web-design-renderer-v14"].includes(
+      String(WEB_DESIGN_RENDERER_VERSION),
+    ) &&
     validateWebLayoutPlan(plan) &&
     plan.version === 2 &&
     plan.hero === "split"
@@ -293,7 +310,7 @@ export const apply = internalMutation({
     if (
       !version?.providerReceipt ||
       version.providerReceipt.repair ||
-      version.providerReceipt.rendererRepair ||
+      (version.providerReceipt.rendererRepair && !isFooterRendererUpgrade(version)) ||
       !version.artifacts ||
       !version.recipeRef ||
       !session ||
@@ -382,7 +399,7 @@ export const apply = internalMutation({
               priorVersion: args.version,
               browserEvidenceHash: args.browserEvidenceHash!,
               rendererVersion: WEB_DESIGN_RENDERER_VERSION,
-              attempt: 1 as const,
+              attempt: isFooterRendererUpgrade(version) ? (2 as const) : (1 as const),
             },
           }
         : {

@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { renderDesignedWebDocument } from "@pikar/core/webDesignRenderer";
 import { materializeWebRecipeWithProvenance } from "@pikar/core/webRecipes";
 import { expect, test } from "@playwright/test";
+import { assessWebBrowserQuality, inspectRenderedPage, type WebBrowserPageReport } from "@pikar/core/webBrowserQuality";
 
 test("reduced-motion gallery arrows move instantly despite the global motion reset", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -27,28 +28,45 @@ test("reduced-motion gallery arrows move instantly despite the global motion res
 
 // Fictional business briefs for presentation checks, never customer facts or live qualification.
 test("split hero keeps dark text on light paper and editorial sections do not create phantom rows", async ({ page }) => {
+  test.setTimeout(60000);
+  const image = readFileSync(new URL("../public/presence-examples/studio.webp", import.meta.url));
+  const imageHash = createHash("sha256").update(image).digest("hex");
   const result = materializeWebRecipeWithProvenance("business-site", {
+    ...contact,
     brandName: "Studio fixture", headline: "Thoughtful identities for independent businesses",
     summary: "Brand and website design.", about: "A small independent design studio.",
     services: ["Brand identity", "Website design"], artDirection: "studio",
-    media: { hero: { storageRef: `webasset:fixture:${"a".repeat(64)}`, alt: "Studio material study" } },
+    media: { hero: { storageRef: `webasset:fixture:${imageHash}`, alt: "Studio material study" } },
   });
   const profile = { ...result.designProfile, layoutPlan: {
     version: 2, hero: "split", sectionLayout: "editorial-columns", services: "columns", gallery: "grid", spacing: "compact", headingScale: "balanced", motion: "subtle",
     designTokens: { colors: { paper: "#F6FBF5", card: "#F0F5F0", ink: "#181D1A", muted: "#414846", accent: "#32534A", rule: "#C1C8C4" }, typography: { heading: "editorial-serif", body: "humanist-sans" }, spacing: { contentWidth: 1280, copyMeasure: 62, heroMinHeight: 560, sectionGap: 64 }, footer: "light" },
   } as const };
-  for (const width of [1440, 390]) {
+  const reports: WebBrowserPageReport[] = [];
+  for (const { width, reduced } of [{ width: 1440, reduced: false }, { width: 390, reduced: false }, { width: 390, reduced: true }]) {
+   for (const saved of result.document.pages) {
     await page.setViewportSize({ width, height: 1000 });
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.setContent(renderDesignedWebDocument(result.document, profile));
+    await page.emulateMedia({ reducedMotion: reduced ? "reduce" : "no-preference" });
+    const html = renderDesignedWebDocument(result.document, profile, { slug: "design-fixture", page: saved.slug });
+    await page.unrouteAll();
+    await page.route("**/*", route => new URL(route.request().url()).pathname.endsWith(imageHash)
+      ? route.fulfill({ contentType: "image/webp", body: image })
+      : route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto(`https://presence-review.invalid/p/design-fixture/${saved.slug}`);
+    await page.waitForFunction(() => Array.from(document.images).every(image => image.complete));
+    await page.waitForTimeout(1300);
+    reports.push(await page.evaluate(inspectRenderedPage));
     expect(await page.locator("h1").evaluate(el => getComputedStyle(el).color)).toBe("rgb(24, 29, 26)");
     expect(await page.locator("body").evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgb(246, 251, 245)");
     expect(await page.locator(".hero-composition").evaluate(el => getComputedStyle(el).minHeight)).toBe("0px");
-    expect(await page.locator("#about").evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(280);
+    if (saved.slug === "home") expect(await page.locator("#about").evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(280);
     expect(await page.locator(".footer-brand").evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeLessThanOrEqual(36);
-    expect(await page.locator("#services>p").allTextContents()).toEqual(["Brand identity", "Website design"]);
+    if (saved.slug === "home" || saved.slug === "services") expect(await page.locator("#services>p").allTextContents()).toEqual(["Brand identity", "Website design"]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
+  }
+  expect(reports).toHaveLength(12);
+  expect(assessWebBrowserQuality({ pageSlugs: result.document.pages.map(page => page.slug), reports }).issues.filter(issue => issue.severity === "fail")).toEqual([]);
   await page.setContent(renderDesignedWebDocument(result.document, { ...profile, layoutPlan: { ...profile.layoutPlan, hero: "overlay-left" } }));
   expect(await page.locator("h1").evaluate(el => getComputedStyle(el).color)).toBe("rgb(255, 255, 255)");
 });

@@ -732,3 +732,87 @@ test("split upgrade rejects stale, unowned, current renderer and mismatched actu
     await f.t.action(makeFunctionReference<"action">("presenceBrowserRepair:run"), f.runArgs),
   ).toEqual({ status: "stopped" });
 });
+
+async function footerFollowupFixture() {
+  const f = await rendererRepairFixture(true);
+  const receipt = {
+    ...f.version.providerReceipt!,
+    rendererRepair: {
+      priorVersion: 1,
+      browserEvidenceHash: "d".repeat(64),
+      rendererVersion: "web-design-renderer-v13",
+      attempt: 1 as const,
+    },
+  };
+  const capture = { ...f.capture, providerReceiptHash: providerReceiptHash(receipt) };
+  const captureId = await f.t.run((ctx) => ctx.storage.store(new Blob([JSON.stringify(capture)])));
+  await f.t.mutation(internal.lib.tenantLifecycle.ownGeneratedStorage, {
+    tenantId: f.tenantId,
+    storageId: captureId,
+  });
+  await f.t.run(async (ctx) => {
+    await ctx.db.patch(f.version._id, {
+      version: 2,
+      rendererVersion: "web-design-renderer-v13",
+      providerReceipt: receipt,
+      browserReviewReportStorageId: captureId,
+      browserReview: {
+        ...f.version.browserReview!,
+        providerReceiptHash: providerReceiptHash(receipt),
+      },
+    });
+    await ctx.db.patch(f.version.projectId, { draftVersion: 2 });
+    const session = await ctx.db.query("onlinePresenceSessions").first();
+    await ctx.db.patch(session!._id, { projectVersion: 2 });
+  });
+  const version = await f.t.run((ctx) => ctx.db.get(f.version._id));
+  return { ...f, version: version!, capture, captureId, runArgs: { ...f.runArgs, version: 2 } };
+}
+test("one v13 footer follow-up appends v3 with attempt2 and leaves the previous draft immutable", async () => {
+  const f = await footerFollowupFixture();
+  const run = makeFunctionReference<"action">("presenceBrowserRepair:run");
+  expect(await f.t.action(run, f.runArgs)).toEqual({ status: "repaired", version: 3 });
+  const rows = await f.t.run((ctx) => ctx.db.query("webProjectVersions").collect());
+  const old = rows.find((v) => v.version === 2)!,
+    next = rows.find((v) => v.version === 3)!;
+  expect(old).toEqual(f.version);
+  expect(next.document).toEqual(old.document);
+  expect(next.recipeRef).toEqual(old.recipeRef);
+  expect(next.providerReceipt?.rendererRepair).toEqual({
+    priorVersion: 2,
+    browserEvidenceHash: old.browserReview!.reportHash,
+    rendererVersion: "web-design-renderer-v14",
+    attempt: 2,
+  });
+  expect(next.browserReview).toBeUndefined();
+  expect(presencePublicationReady(next)).toBe(false);
+  expect(await f.t.action(run, { ...f.runArgs, version: 3 })).toEqual({ status: "stopped" });
+});
+test("footer follow-up rejects other lineages, additional attempts and unrelated DOM failures", async () => {
+  const f = await footerFollowupFixture();
+  for (const prior of [
+    { ...f.version.providerReceipt!.rendererRepair!, attempt: 2 },
+    { ...f.version.providerReceipt!.rendererRepair!, rendererVersion: "web-design-renderer-v12" },
+    { ...f.version.providerReceipt!.rendererRepair!, priorVersion: 2 },
+  ]) {
+    const version = {
+      ...f.version,
+      providerReceipt: { ...f.version.providerReceipt!, rendererRepair: prior },
+    };
+    expect(() => verifyRendererRepairEvidence(version as never, f.capture)).toThrow();
+  }
+  expect(() =>
+    verifyRendererRepairEvidence(
+      {
+        ...f.version,
+        providerReceipt: f.version.providerReceipt!,
+        browserReview: f.version.browserReview!,
+      },
+      { ...f.capture, reports: f.capture.reports.map((r) => ({ ...r, documentWidth: 2000 })) },
+    ),
+  ).toThrow();
+  const run = makeFunctionReference<"action">("presenceBrowserRepair:run");
+  expect(await f.t.action(run, { ...f.runArgs, tenantId: "foreign" })).toEqual({
+    status: "stopped",
+  });
+});

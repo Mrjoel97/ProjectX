@@ -118,3 +118,42 @@ describe("exact version publication quality gate", () => {
     expect(presencePublicationReady({ ...reviewed, providerReceipt: repaired })).toBe(false);
   });
 });
+
+it("only exact v14 second renderer receipt is valid and hash-bound", () => {
+  const artifacts = [{ pageSlug: "home", html: "test" }];
+  const base: PresenceProviderReceipt = {
+    pipelineVersion: "stitch-kimi-required-v1",
+    runRef: "test-run-id",
+    stitchHash: "a".repeat(64),
+    kimiHash: "b".repeat(64),
+    sourceFingerprint: "c".repeat(64),
+    briefHash: "d".repeat(64),
+    layoutHash: "e".repeat(64),
+    artifactHashes: artifactHashes(artifacts),
+    pendingBrowser: true,
+    rendererRepair: {
+      priorVersion: 2,
+      browserEvidenceHash: "f".repeat(64),
+      rendererVersion: "web-design-renderer-v14",
+      attempt: 2,
+    },
+  };
+  expect(() => validateProviderReceipt(base, artifacts)).not.toThrow();
+  for (const patch of [
+    { attempt: 3 },
+    { priorVersion: 1 },
+    { rendererVersion: "web-design-renderer-v13" },
+  ])
+    expect(() =>
+      validateProviderReceipt(
+        {
+          ...base,
+          rendererRepair: { ...base.rendererRepair!, ...patch },
+        } as PresenceProviderReceipt,
+        artifacts,
+      ),
+    ).toThrow();
+  expect(providerReceiptHash(base)).not.toBe(
+    providerReceiptHash({ ...base, rendererRepair: { ...base.rendererRepair!, attempt: 1 } }),
+  );
+});

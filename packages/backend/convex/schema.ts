@@ -4551,7 +4551,7 @@ export default defineSchema({
             priorVersion: v.number(),
             browserEvidenceHash: v.string(),
             rendererVersion: v.string(),
-            attempt: v.literal(1),
+            attempt: v.union(v.literal(1), v.literal(2)),
           }),
         ),
       }),

@@ -22,7 +22,7 @@ import {
   sha256Bytes,
 } from "./webRuntime";
 
-export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v13" as const;
+export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v14" as const;
 const encoder = new TextEncoder();
 
 /** The renderer depends on the selected records, not merely the bundle's role labels. */
@@ -359,7 +359,7 @@ button,.cta{transition:transform var(--motion-feedback) var(--motion-ease)}
     ? `<nav aria-label="Footer"><ul>${navigationLinks}</ul></nav>`
     : "";
   const presentationCss = designTokens ? `body{font-family:${tokenFonts[designTokens.typography.body]}}body[data-layout-hero] .site-footer{background:${designTokens.footer === "light" ? colors.paper : colors.ink};color:${designTokens.footer === "light" ? colors.ink : colors.paper};border-color:${colors.rule}}body[data-layout-hero] .site-footer a,body[data-layout-hero] .site-footer p{color:inherit}body[data-layout-hero]:not([data-layout-hero=split]) .hero-composition.has-media{min-height:${designTokens.spacing.heroMinHeight}px}body[data-layout-hero] .hero h1{font-weight:${designTokens.typography.heading.endsWith("serif") ? 400 : 600}}@media(max-width:767px){body[data-layout-hero]:not([data-layout-hero=split]) .hero-composition.has-media{min-height:${Math.min(480, designTokens.spacing.heroMinHeight)}px}}body[data-layout-spacing] .content-block{padding-block:clamp(28px,6vw,${designTokens.spacing.sectionGap}px)}.content-flow p,.hero p:not(.eyebrow){max-width:${designTokens.spacing.copyMeasure}ch}body[data-layout-services=columns] #services>p{max-width:${designTokens.spacing.copyMeasure}ch}
-body[data-layout-hero] .footer-brand{font-size:clamp(1.5rem,2.4vw,2.25rem);line-height:1.2;letter-spacing:-.025em;font-weight:500}
+body[data-layout-hero] .footer-brand{display:inline-flex;align-items:center;min-height:44px;min-width:44px;font-size:clamp(1.5rem,2.4vw,2.25rem);line-height:1.2;letter-spacing:-.025em;font-weight:500}
 body[data-layout-sections] #about{padding:0;background:transparent}body[data-layout-sections] #about>p{font-size:clamp(1.05rem,1.5vw,1.25rem);line-height:1.65}
 body[data-layout-services=columns] #services{gap:28px 40px}body[data-layout-services=columns] #services>h2{margin-bottom:4px}body[data-layout-services=columns] #services>p{border-top:1px solid var(--rule);padding:20px 0 4px;font-size:clamp(1.1rem,1.8vw,1.4rem);font-weight:500;line-height:1.5}
 body[data-layout-hero] .hero-composition.has-rail:not(.has-media){align-items:start;gap:clamp(24px,5vw,64px);padding-block:40px}body[data-layout-hero] .has-rail:not(.has-media) .hero-rail{padding:0;background:transparent}
