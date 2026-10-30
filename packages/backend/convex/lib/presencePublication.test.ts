@@ -74,4 +74,47 @@ describe("exact version publication quality gate", () => {
     expect(providerReceiptHash(reordered)).toBe(providerReceiptHash(receipt));
     expect(presencePublicationReady({ ...reviewed, providerReceipt: reordered })).toBe(true);
   });
+  it("binds renderer repair evidence separately and refuses mixed or malformed lineages", () => {
+    const repaired: PresenceProviderReceipt = {
+      ...receipt,
+      rendererRepair: {
+        priorVersion: 1,
+        browserEvidenceHash: "c".repeat(64),
+        rendererVersion: "web-design-renderer-v10",
+        attempt: 1,
+      },
+    };
+    expect(() => validateProviderReceipt(repaired, artifacts)).not.toThrow();
+    expect(providerReceiptHash(repaired)).not.toBe(providerReceiptHash(receipt));
+    expect(
+      providerReceiptHash({
+        ...repaired,
+        rendererRepair: {
+          attempt: 1,
+          rendererVersion: "web-design-renderer-v10",
+          browserEvidenceHash: "c".repeat(64),
+          priorVersion: 1,
+        },
+      }),
+    ).toBe(providerReceiptHash(repaired));
+    expect(() =>
+      validateProviderReceipt(
+        {
+          ...repaired,
+          repair: { priorVersion: 1, visionEvidenceHash: "a".repeat(64), attempt: 1 },
+        },
+        artifacts,
+      ),
+    ).toThrow();
+    expect(() =>
+      validateProviderReceipt(
+        {
+          ...repaired,
+          rendererRepair: { ...repaired.rendererRepair!, browserEvidenceHash: "bad" },
+        },
+        artifacts,
+      ),
+    ).toThrow();
+    expect(presencePublicationReady({ ...reviewed, providerReceipt: repaired })).toBe(false);
+  });
 });

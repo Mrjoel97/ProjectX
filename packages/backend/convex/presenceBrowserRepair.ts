@@ -1,6 +1,9 @@
 import { validateDesignProfileRef } from "@pikar/core/designKnowledge";
 import { assessWebBrowserQuality } from "@pikar/core/webBrowserQuality";
-import { renderDesignedWebDocumentBytes } from "@pikar/core/webDesignRenderer";
+import {
+  renderDesignedWebDocumentBytes,
+  WEB_DESIGN_RENDERER_VERSION,
+} from "@pikar/core/webDesignRenderer";
 import { canonicalWebLayoutPlan, validateWebLayoutPlan } from "@pikar/core/webLayoutPlan";
 import { assessWebQuality } from "@pikar/core/webQuality";
 import { sha256Bytes, validateWebDocument } from "@pikar/core/webRuntime";
@@ -9,6 +12,7 @@ import { v } from "convex/values";
 import { internalQuery } from "./_generated/server";
 import {
   artifactHashes,
+  canonicalArtifactHashes,
   canonicalEvidenceHash,
   providerReceiptHash,
   validateProviderReceipt,
@@ -36,15 +40,15 @@ export const inputs = internalQuery({
     if (
       !version?.providerReceipt ||
       version.providerReceipt.repair ||
+      version.providerReceipt.rendererRepair ||
       version.browserReview?.status !== "failed" ||
       version.browserReviewJob?.state !== "completed" ||
-      !version.browserReviewVisionStorageId ||
       !version.browserReviewReportStorageId
     )
       return null;
     for (const storageId of [
-      version.browserReviewVisionStorageId,
       version.browserReviewReportStorageId,
+      ...(version.browserReviewVisionStorageId ? [version.browserReviewVisionStorageId] : []),
     ]) {
       const owned = await ctx.db
         .query("uploadReceipts")
@@ -55,6 +59,58 @@ export const inputs = internalQuery({
     return version;
   },
 });
+
+/** A renderer upgrade may repair only measured touch-target failures, never stand in for vision. */
+export function verifyRendererRepairEvidence(
+  version: {
+    contentHash: string;
+    rendererVersion: string;
+    providerReceipt: Parameters<typeof providerReceiptHash>[0];
+    browserReview: { reportHash: string };
+    browserReviewScreenshots?: { sha256: string }[];
+  },
+  capture: any,
+) {
+  if (
+    version.rendererVersion === WEB_DESIGN_RENDERER_VERSION ||
+    !/^web-design-renderer-v[0-9]+$/.test(version.rendererVersion) ||
+    capture?.status !== "captured" ||
+    capture.contentHash !== version.contentHash ||
+    capture.providerReceiptHash !== providerReceiptHash(version.providerReceipt) ||
+    !Array.isArray(capture.reports) ||
+    !Array.isArray(capture.artifactHashes) ||
+    canonicalArtifactHashes(capture.artifactHashes) !==
+      canonicalArtifactHashes(version.providerReceipt.artifactHashes) ||
+    !Array.isArray(capture.screenshots) ||
+    JSON.stringify(capture.screenshots.map((s: { sha256: string }) => s.sha256)) !==
+      JSON.stringify(version.browserReviewScreenshots?.map((s) => s.sha256))
+  )
+    throw Error("PRESENCE_RENDERER_REPAIR_EVIDENCE_INVALID");
+  const assessment = assessWebBrowserQuality({
+    pageSlugs: version.providerReceipt.artifactHashes.map((p) => p.pageSlug),
+    reports: capture.reports,
+  });
+  if (
+    assessment.status !== "fail" ||
+    !assessment.issues.some((issue) => issue.code === "small_touch_targets") ||
+    assessment.issues.some(
+      (issue) =>
+        issue.code !== "small_touch_targets" && issue.code !== "contrast_needs_visual_review",
+    )
+  )
+    throw Error("PRESENCE_RENDERER_REPAIR_EVIDENCE_INVALID");
+  const evidenceHash = digest(capture.reports);
+  if (
+    canonicalEvidenceHash({
+      reports: capture.reports,
+      fidelity: { matched: false, evidenceHash },
+      visualContrast: { passed: false, evidenceHash },
+      assessment,
+    }) !== version.browserReview.reportHash
+  )
+    throw Error("PRESENCE_RENDERER_REPAIR_EVIDENCE_INVALID");
+  return version.browserReview.reportHash;
+}
 
 /** Reconstruct the exact completed review before trusting a stored repair proposal. */
 export function verifyRepairEvidence(
@@ -107,15 +163,27 @@ export const run = internalAction({
     const ctx = { ...rawCtx, ...lifecycleActionContext(rawCtx, args.tenantId) };
     const version = await ctx.runQuery(inputsRef, args);
     if (!version) return { status: "stopped" };
-    const [visionBlob, captureBlob] = await Promise.all([
-      ctx.storage.get(version.browserReviewVisionStorageId),
-      ctx.storage.get(version.browserReviewReportStorageId),
-    ]);
-    if (!visionBlob || !captureBlob || visionBlob.size > 100000 || captureBlob.size > 3200000)
-      return { status: "stopped" };
+    const captureBlob = await ctx.storage.get(version.browserReviewReportStorageId);
+    if (!captureBlob || captureBlob.size > 3200000) return { status: "stopped" };
+    const capture = JSON.parse(await captureBlob.text());
+    if (!version.browserReviewVisionStorageId) {
+      if (!validateWebLayoutPlan(version.recipeRef?.designProfile.layoutPlan))
+        return { status: "stopped" };
+      const browserEvidenceHash = verifyRendererRepairEvidence(version, capture);
+      return ctx.runMutation(applyRef, {
+        ...args,
+        repairKind: "renderer",
+        layoutPlan: version.recipeRef.designProfile.layoutPlan,
+        browserEvidenceHash,
+        reportStorageId: version.browserReviewReportStorageId,
+        reportHash: version.browserReview.reportHash,
+      });
+    }
+    const visionBlob = await ctx.storage.get(version.browserReviewVisionStorageId);
+    if (!visionBlob || visionBlob.size > 100000) return { status: "stopped" };
     const vision = JSON.parse(await visionBlob.text());
     if (!vision?.repairPlan) return { status: "stopped" };
-    const evidence = verifyRepairEvidence(version, vision, JSON.parse(await captureBlob.text()));
+    const evidence = verifyRepairEvidence(version, vision, capture);
     return ctx.runMutation(applyRef, {
       ...args,
       ...evidence,
@@ -129,8 +197,11 @@ export const apply = internalMutation({
   args: {
     ...scope,
     layoutPlan: v.any(),
-    visionEvidenceHash: v.string(),
-    visionStorageId: v.id("_storage"),
+    repairKind: v.optional(v.literal("renderer")),
+    browserEvidenceHash: v.optional(v.string()),
+    reportStorageId: v.optional(v.id("_storage")),
+    visionEvidenceHash: v.optional(v.string()),
+    visionStorageId: v.optional(v.id("_storage")),
     reportHash: v.string(),
   },
   handler: async (ctx, args) => {
@@ -152,6 +223,7 @@ export const apply = internalMutation({
     if (
       !version?.providerReceipt ||
       version.providerReceipt.repair ||
+      version.providerReceipt.rendererRepair ||
       !version.artifacts ||
       !version.recipeRef ||
       !session ||
@@ -160,9 +232,22 @@ export const apply = internalMutation({
       version.browserReview?.status !== "failed" ||
       version.browserReviewJob?.state !== "completed" ||
       version.browserReview.reportHash !== args.reportHash ||
-      version.browserReviewVisionStorageId !== args.visionStorageId ||
       !validateWebLayoutPlan(args.layoutPlan) ||
-      !/^[a-f0-9]{64}$/.test(args.visionEvidenceHash)
+      (args.repairKind === "renderer"
+        ? version.browserReviewVisionStorageId !== undefined ||
+          args.visionStorageId !== undefined ||
+          args.visionEvidenceHash !== undefined ||
+          version.rendererVersion === WEB_DESIGN_RENDERER_VERSION ||
+          args.reportStorageId !== version.browserReviewReportStorageId ||
+          !args.reportStorageId ||
+          args.browserEvidenceHash !== args.reportHash ||
+          !/^[a-f0-9]{64}$/.test(args.browserEvidenceHash ?? "") ||
+          digest(canonicalWebLayoutPlan(args.layoutPlan)) !== version.providerReceipt.layoutHash
+        : version.browserReviewVisionStorageId !== args.visionStorageId ||
+          !args.visionStorageId ||
+          !/^[a-f0-9]{64}$/.test(args.visionEvidenceHash ?? "") ||
+          args.browserEvidenceHash !== undefined ||
+          args.reportStorageId !== undefined)
     )
       throw Error("PRESENCE_REPAIR_UNAVAILABLE");
     const snapshot = await prepareRequiredDesign(ctx, {
@@ -178,7 +263,8 @@ export const apply = internalMutation({
       throw Error("PRESENCE_REPAIR_SOURCES_CHANGED");
     validateProviderReceipt(version.providerReceipt, version.artifacts);
     const layoutPlan = canonicalWebLayoutPlan(args.layoutPlan);
-    if (digest(layoutPlan) === version.providerReceipt.layoutHash) return { status: "stopped" };
+    if (!args.repairKind && digest(layoutPlan) === version.providerReceipt.layoutHash)
+      return { status: "stopped" };
     const validated = validateWebDocument(version.document);
     if (!validated.ok) throw Error("PRESENCE_REPAIR_DOCUMENT_INVALID");
     const document = validated.value;
@@ -204,11 +290,22 @@ export const apply = internalMutation({
       ...version.providerReceipt,
       layoutHash: digest(layoutPlan),
       artifactHashes: artifactHashes(artifacts),
-      repair: {
-        priorVersion: args.version,
-        visionEvidenceHash: args.visionEvidenceHash,
-        attempt: 1 as const,
-      },
+      ...(args.repairKind === "renderer"
+        ? {
+            rendererRepair: {
+              priorVersion: args.version,
+              browserEvidenceHash: args.browserEvidenceHash!,
+              rendererVersion: WEB_DESIGN_RENDERER_VERSION,
+              attempt: 1 as const,
+            },
+          }
+        : {
+            repair: {
+              priorVersion: args.version,
+              visionEvidenceHash: args.visionEvidenceHash!,
+              attempt: 1 as const,
+            },
+          }),
     };
     const result = await reviseProjectWithVersion(
       Object.assign(ctx, { tenantId: args.tenantId, userId: args.tenantId }),

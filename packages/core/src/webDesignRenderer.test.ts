@@ -4,6 +4,7 @@ import {
   assertDesignProfileSources,
   designedWebDocumentHash,
   renderDesignedWebDocument,
+  WEB_DESIGN_RENDERER_VERSION,
   webColorContrast,
 } from "./webDesignRenderer";
 import { materializeWebRecipeWithProvenance } from "./webRecipes";
@@ -487,6 +488,35 @@ describe("closed recipe design renderer", () => {
       ".site-header nav a{display:inline-flex;align-items:center;min-height:44px",
     );
   });
+});
+
+test("short navigation labels retain 44px touch targets in both header and footer", () => {
+  const result = materializeWebRecipeWithProvenance("business-site", {
+    brandName: "Studio",
+    headline: "Thoughtful design",
+    summary: "A small design practice.",
+    services: ["Identity design"],
+    about: "A local studio.",
+    contactConsent: "I agree to hear from this studio.",
+    pageMode: "multi-page",
+    projectSlug: "studio",
+  });
+  for (const page of result.document.pages) {
+    const html = renderDesignedWebDocument(result.document, result.designProfile, {
+      slug: "studio",
+      page: page.slug,
+    });
+    expect(html).toContain(`content="${WEB_DESIGN_RENDERER_VERSION}"`);
+    for (const selector of [".site-header nav a", ".site-footer nav a"]) {
+      const declaration = html.slice(html.indexOf(`${selector}{`)).split("}")[0];
+      expect(declaration).toContain("display:inline-flex;");
+      expect(declaration).toContain("min-height:44px;");
+      expect(declaration).toContain("min-width:44px;");
+    }
+    for (const label of ["Home", "About"]) {
+      expect(html.split(`>${label}</a>`)).toHaveLength(3);
+    }
+  }
 });
 
 test("image composition respects owned crop and navigation retains exact per-page destinations", () => {

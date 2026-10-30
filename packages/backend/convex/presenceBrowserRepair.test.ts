@@ -7,8 +7,11 @@ import {
   WEB_RECIPE_UPSTREAM_PROVENANCE,
 } from "@pikar/contracts/webRecipeSkill";
 import { validateDesignProfileRef } from "@pikar/core/designKnowledge";
-import { assessWebBrowserQuality } from "@pikar/core/webBrowserQuality";
-import { renderDesignedWebDocument } from "@pikar/core/webDesignRenderer";
+import { assessWebBrowserQuality, type WebBrowserPageReport } from "@pikar/core/webBrowserQuality";
+import {
+  renderDesignedWebDocument,
+  WEB_DESIGN_RENDERER_VERSION,
+} from "@pikar/core/webDesignRenderer";
 import { canonicalWebLayoutPlan } from "@pikar/core/webLayoutPlan";
 import {
   canonicalWebRecipeDefinition,
@@ -30,7 +33,7 @@ import {
   presencePublicationReady,
   providerReceiptHash,
 } from "./lib/presencePublication";
-import { verifyRepairEvidence } from "./presenceBrowserRepair";
+import { verifyRepairEvidence, verifyRendererRepairEvidence } from "./presenceBrowserRepair";
 import schema from "./schema";
 import { evaluateWebRecipeCandidate } from "./webRecipeEvals";
 
@@ -432,4 +435,170 @@ test("action uses actual completed report and owned stored vision despite object
       version: 1,
     }),
   ).toEqual({ status: "repaired", version: 2 });
+});
+
+async function rendererRepairFixture() {
+  const f = await repairFixture();
+  const reports: WebBrowserPageReport[] = f.version.providerReceipt!.artifactHashes.flatMap(
+    ({ pageSlug }) =>
+      [
+        { width: 1440, reduced: false },
+        { width: 390, reduced: false },
+        { width: 390, reduced: true },
+      ].map((mode) => ({
+        version: "web-browser-quality-v1",
+        pageSlug,
+        pathname: `/p/fixture/${pageSlug}`,
+        viewportWidth: mode.width,
+        documentWidth: mode.width,
+        reducedMotion: mode.reduced,
+        complete: true,
+        readyState: "complete",
+        images: { total: 1, loaded: 1, missingAlt: 0 },
+        headings: { h1: 1, empty: 0, clipped: 0 },
+          links: { total: 1, brokenAnchors: [], hrefs: [`/p/fixture/${pageSlug}`] },
+        touchTargets: { total: 1, tooSmall: 1 },
+        textContrast: { checked: 2, failed: 0, unknown: 1, minimumRatio: 7 },
+        motion: { activeAnimations: 0, nontrivialDurations: 0, smoothScroll: false },
+      })),
+  );
+  const screenshotHashes = reports.map((_r, i) => digest(i));
+  const capture = {
+    status: "captured",
+    contentHash: f.version.contentHash,
+    providerReceiptHash: providerReceiptHash(f.version.providerReceipt!),
+    artifactHashes: f.version.providerReceipt!.artifactHashes,
+    reports,
+    screenshots: screenshotHashes.map((sha256) => ({ sha256 })),
+  };
+  const evidenceHash = digest(reports);
+  await f.t.mutation(makeFunctionReference<"mutation">("presenceBrowserReview:complete"), {
+    tenantId: f.tenantId,
+    versionId: f.version._id,
+    contentHash: f.version.contentHash,
+    providerReceiptHash: capture.providerReceiptHash,
+    artifactHashes: capture.artifactHashes,
+    reports,
+    fidelity: { matched: false, evidenceHash },
+    visualContrast: { passed: false, evidenceHash },
+  });
+  const captureId = await f.t.run((ctx) => ctx.storage.store(new Blob([JSON.stringify(capture)])));
+  await f.t.mutation(internal.lib.tenantLifecycle.ownGeneratedStorage, {
+    tenantId: f.tenantId,
+    storageId: captureId,
+  });
+  await f.t.run((ctx) =>
+    ctx.db.patch(f.version._id, {
+      rendererVersion: "web-design-renderer-v9",
+      browserReviewVisionStorageId: undefined,
+      browserReviewReportStorageId: captureId,
+      recipeRef: { ...f.version.recipeRef!, rendererVersion: "web-design-renderer-v9" },
+      browserReviewScreenshots: reports.map((r, i) => ({
+        storageId: captureId,
+        pageSlug: r.pageSlug!,
+        viewportWidth: r.viewportWidth,
+        reducedMotion: r.reducedMotion,
+        sha256: screenshotHashes[i]!,
+        mimeType: "image/jpeg",
+      })),
+    }),
+  );
+  const version = await f.t.run((ctx) => ctx.db.get(f.version._id));
+  return {
+    ...f,
+    version: version!,
+    capture,
+    captureId,
+    runArgs: { tenantId: f.tenantId, projectId: f.version.projectId, version: 1 },
+  };
+}
+
+test("owned target-only browser failure rerenders once without vision and requires a fresh review", async () => {
+  const f = await rendererRepairFixture();
+  const run = makeFunctionReference<"action">("presenceBrowserRepair:run");
+  expect(await f.t.action(run, f.runArgs)).toEqual({ status: "repaired", version: 2 });
+  const versions = await f.t.run((ctx) => ctx.db.query("webProjectVersions").collect());
+  const old = versions.find((v) => v.version === 1)!,
+    next = versions.find((v) => v.version === 2)!;
+  expect(old).toEqual(f.version);
+  expect(next.document).toEqual(old.document);
+  expect(next.recipeRef).toEqual(old.recipeRef);
+  expect(next.rendererVersion).toBe(WEB_DESIGN_RENDERER_VERSION);
+  expect(next.providerReceipt?.rendererRepair).toEqual({
+    priorVersion: 1,
+    browserEvidenceHash: old.browserReview!.reportHash,
+    rendererVersion: WEB_DESIGN_RENDERER_VERSION,
+    attempt: 1,
+  });
+  expect(next.providerReceipt?.repair).toBeUndefined();
+  expect(next.browserReview).toBeUndefined();
+  expect(presencePublicationReady(next)).toBe(false);
+  expect(await f.t.action(run, f.runArgs)).toEqual({ status: "stopped" });
+  expect(await f.t.action(run, { ...f.runArgs, version: 2 })).toEqual({ status: "stopped" });
+  expect(await f.t.run((ctx) => ctx.db.query("spendEvents").collect())).toEqual([]);
+});
+
+test("renderer repair refuses unrelated failures, changed evidence and current renderer", async () => {
+  const f = await rendererRepairFixture();
+  const bound = {
+    ...f.version,
+    providerReceipt: f.version.providerReceipt!,
+    browserReview: f.version.browserReview!,
+  };
+  expect(verifyRendererRepairEvidence(bound, f.capture)).toBe(f.version.browserReview!.reportHash);
+  for (const capture of [
+    { ...f.capture, contentHash: "changed" },
+    { ...f.capture, screenshots: [] },
+    {
+      ...f.capture,
+      reports: f.capture.reports.map((r) => ({ ...r, documentWidth: r.viewportWidth + 20 })),
+    },
+    {
+      ...f.capture,
+      reports: f.capture.reports.map((r) => ({ ...r, touchTargets: { total: 1, tooSmall: 0 } })),
+    },
+    { ...f.capture, artifactHashes: [] },
+  ])
+    expect(() => verifyRendererRepairEvidence(bound, capture)).toThrow(
+      "PRESENCE_RENDERER_REPAIR_EVIDENCE_INVALID",
+    );
+  expect(() =>
+    verifyRendererRepairEvidence(
+      { ...bound, rendererVersion: WEB_DESIGN_RENDERER_VERSION },
+      f.capture,
+    ),
+  ).toThrow();
+  expect(() =>
+    verifyRendererRepairEvidence(
+      { ...bound, browserReview: { reportHash: "a".repeat(64) } },
+      f.capture,
+    ),
+  ).toThrow();
+});
+
+test("renderer repair requires owned reports and unchanged authoritative sources", async () => {
+  const f = await rendererRepairFixture();
+  const run = makeFunctionReference<"action">("presenceBrowserRepair:run");
+  expect(await f.t.action(run, { ...f.runArgs, tenantId: "foreign" })).toEqual({
+    status: "stopped",
+  });
+  await f.t.run(async (ctx) => {
+    const owned = await ctx.db
+      .query("uploadReceipts")
+      .withIndex("by_storage", (q) => q.eq("storageId", f.captureId))
+      .unique();
+    await ctx.db.patch(owned!._id, { tenantId: "foreign" });
+  });
+  expect(await f.t.action(run, f.runArgs)).toEqual({ status: "stopped" });
+  await f.t.run(async (ctx) => {
+    const owned = await ctx.db
+      .query("uploadReceipts")
+      .withIndex("by_storage", (q) => q.eq("storageId", f.captureId))
+      .unique();
+    await ctx.db.patch(owned!._id, { tenantId: f.tenantId });
+    const session = await ctx.db.query("onlinePresenceSessions").first();
+    await ctx.db.patch(session!._id, { sourceSnapshots: [{ ref: "source", revision: "changed" }] });
+  });
+  await expect(f.t.action(run, f.runArgs)).rejects.toThrow("PRESENCE_REPAIR_SOURCES_CHANGED");
+  expect(await f.t.run((ctx) => ctx.db.query("webProjectVersions").collect())).toHaveLength(1);
 });

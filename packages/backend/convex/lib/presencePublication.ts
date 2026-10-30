@@ -30,6 +30,12 @@ export type PresenceProviderReceipt = {
   stitchHtmlStorageId?: Id<"_storage">;
   stitchImageStorageId?: Id<"_storage">;
   repair?: { priorVersion: number; visionEvidenceHash: string; attempt: 1 };
+  rendererRepair?: {
+    priorVersion: number;
+    browserEvidenceHash: string;
+    rendererVersion: string;
+    attempt: 1;
+  };
 };
 export const artifactHashes = (artifacts: readonly { pageSlug: string; html: string }[]) =>
   artifacts.map(({ pageSlug, html }) => ({
@@ -60,6 +66,13 @@ export function validateProviderReceipt(
         receipt.repair.priorVersion < 1 ||
         receipt.repair.attempt !== 1 ||
         !hash.test(receipt.repair.visionEvidenceHash))) ||
+    (receipt.rendererRepair !== undefined &&
+      (!Number.isSafeInteger(receipt.rendererRepair.priorVersion) ||
+        receipt.rendererRepair.priorVersion < 1 ||
+        receipt.rendererRepair.attempt !== 1 ||
+        !hash.test(receipt.rendererRepair.browserEvidenceHash) ||
+        !/^web-design-renderer-v[0-9]+$/.test(receipt.rendererRepair.rendererVersion))) ||
+    (receipt.repair !== undefined && receipt.rendererRepair !== undefined) ||
     canonicalArtifactHashes(receipt.artifactHashes) !==
       canonicalArtifactHashes(artifactHashes(artifacts))
   )
@@ -94,6 +107,14 @@ export const providerReceiptHash = (receipt: PresenceProviderReceipt) =>
               priorVersion: receipt.repair.priorVersion,
               visionEvidenceHash: receipt.repair.visionEvidenceHash,
               attempt: receipt.repair.attempt,
+            }
+          : undefined,
+        rendererRepair: receipt.rendererRepair
+          ? {
+              priorVersion: receipt.rendererRepair.priorVersion,
+              browserEvidenceHash: receipt.rendererRepair.browserEvidenceHash,
+              rendererVersion: receipt.rendererRepair.rendererVersion,
+              attempt: receipt.rendererRepair.attempt,
             }
           : undefined,
       }),
