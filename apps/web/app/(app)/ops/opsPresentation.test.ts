@@ -1,6 +1,6 @@
 // GOVN-01 presentation contract, rendered in the repository's DOM-free React test runner.
 //
-// This renders the REAL OpsPage component while replacing only Convex's hook transport. Recording
+// This renders the REAL OpsPage component while replacing Convex's hook transport and Next's route context. Recording
 // every hook reference lets the test prove the important mount property: an unconfirmed viewer
 // does not merely receive hidden optimizer markup; React never executes the owner-only panels, so
 // their queries and mutations never subscribe. This is component evidence, not a browser/DOM claim.
@@ -33,9 +33,13 @@ const hooks = vi.hoisted(() => {
 });
 
 vi.mock("convex/react", () => ({
+  useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
   useQuery: hooks.useQuery,
   useMutation: hooks.useMutation,
 }));
+
+// Supply the default route query without Next's absent server router suspending the tested page.
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams() }));
 
 const shellSource = readFileSync(fileURLToPath(new URL("../layout.tsx", import.meta.url)), "utf8");
 
@@ -109,6 +113,7 @@ function render(viewer: Viewer): { html: string; queries: string[]; mutations: s
   };
 
   const html = renderToStaticMarkup(createElement(OpsPage));
+  expect(html).not.toContain("Loading operations");
   return {
     html,
     queries: names(hooks.state.queryCalls),
