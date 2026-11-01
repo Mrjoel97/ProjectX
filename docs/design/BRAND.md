@@ -78,7 +78,7 @@ Tokens live in `globals.css` — use the CSS variables, never hardcode hex. Two 
 
 - **App shell:** a **dark teal (`--teal-900`) left nav rail** + a **light (`--canvas`) content area**.
   The rail has the brain-logo wordmark ("Pikar AI"), a vertical nav (Command Center, Approval and
-  Compliance, Finance, Content, Sales Pipeline, Marketing, My Workspace, Skills and Workflows, Live Voice, Reports,
+  Compliance, Finance, Content, Sales Pipeline, Marketing, My Workspace, Skills and Workflows, Sites, Live Voice, Reports,
   Knowledge Vault), and Settings / Collapse / Sign Out at the bottom. Settings contains the
   Business Profile, Connections and Settings tabs. The rail **collapses to an icon-only strip**.
 - **Cockpit (`/dashboard/workspace`):** a **two-pane** layout — a chat pane (left) and a live

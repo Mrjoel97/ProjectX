@@ -100,6 +100,30 @@ const DECK_SHAPE = [
  *    flattened to a total at the write site.
  */
 export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = {
+  // Tenant business references only; raw provider data and completion JSON stay private.
+  "tenant_merchant.payment_observed": ["paymentId", "orderId", "quoteHash", "status"],
+  "tenant_merchant.digital_granted": ["orderId", "operationId", "sourceHash", "expiresAt"],
+  "presence_design.claimed": [
+    "revision",
+    "policy",
+    "candidateOnly",
+    "workflow",
+    "sourceFingerprint",
+  ],
+  "presence_design.attempt": [
+    "phase",
+    "failureReason",
+    "provider",
+    "providerGeneration",
+    "operation",
+    "outcome",
+    "costStatus",
+    "stopped",
+    "revision",
+    "reconciliationRequired",
+    "recoveryClaimed",
+  ],
+  "presence_design.completion": ["revision"],
   // WHICH SKILL BODY A PINNED RUN ACTUALLY LOADED (2026-08-30). Written only when a caller pins a
   // version — in practice the eval runner — and it is the row `smokeAssert:observedSkillLoads`
   // reads back so `run-eval-golden.mjs` can refuse to certify a body no run exercised.

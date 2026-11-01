@@ -1,0 +1,171 @@
+{
+  "recordedAt": "2026-10-23T14:57:13.102Z",
+  "scope": "Dedicated online-presence staging only; no application production or Phase48 staging changes",
+  "release": {
+    "backendSource": "84d005d1dce664c3895d530aaf9a5455f600a359",
+    "backendDeployment": "third-gecko-977",
+    "backendReference": "joel-feruzi:pikar-presence-stg:dev/presence",
+    "backendApply": "Functions ready after 28.8 seconds; code generation enabled; full backend typecheck not repeated for this follow-up",
+    "typecheckBasis": "Prior strict df0286d53a09c055572e14aa982a6d3361111b1f deployment; follow-up production TypeScript changes were canonical body strings, provenance and identity constants",
+    "frontendSource": "df0286d53a09c055572e14aa982a6d3361111b1f",
+    "frontendDeploymentId": "dpl_7EotyeRNHrgWUdoSV397z1ZKTnNY",
+    "frontendOrigin": "https://pikar-presence-stg.vercel.app",
+    "frontendChangedInFollowup": false,
+    "priorReleaseReceipt": "2026-10-23-online-presence-staging.json",
+    "publicHttp": "Prior nine-check receipt retained; no new network smoke claimed for this follow-up"
+  },
+  "deployedSourceIdentities": {
+    "recipeImplementationHash": "9dcc29ebea307d30fd9f998d34fefa37a2136ab88c2931079c050fac608d3410",
+    "recipeIdentityChanged": false,
+    "goldenRevision": "2026-09-11.budgeted-evaluator.248d2235e0f29bb466e834ad4de5e98297be96858377758c7bcdf4f0491e62da",
+    "goldenCasesHash": "5dbe6fdbd447ab2a152ccf928d195ed404ca3bf431f5240397f6be3b627e55fd",
+    "goldenCases": 46,
+    "verticalRevision": "e7b070967def6f100b6c2943222026193ac031444f3810689515a1a5c723cb43",
+    "verticalCorpusHash": "dc21fea0660d041e0c3ee5ed9b2ea0448f53c4834f9566b6c0180a11578bcc69",
+    "verticalLanes": 6,
+    "verticalCases": 40,
+    "interpretation": "Changed body dependencies retired previous golden and vertical identities; identity refresh is not passing evaluation evidence"
+  },
+  "checksBeforeFollowupRelease": {
+    "nativeBudgetAndRunnerTestsPassed": 16,
+    "focusedBodyAndProvenanceTestsPassed": 73,
+    "workflowPackCount": 8,
+    "workflowFixtureCases": 40,
+    "scorerRejectionControlsPassed": 78,
+    "priorRejectionControlsRetained": 75,
+    "recipeSourceIdentitySources": 26,
+    "interpretation": "Offline deterministic and synthetic-provider checks; not native owner or model-quality acceptance"
+  },
+  "shopCandidateBeforeFinalAttempt": {
+    "observedAt": "2026-10-23T14:43:09.456Z",
+    "name": "pack-shop-preparation",
+    "version": 2,
+    "status": "candidate",
+    "bodyHash": "e028c25ffd4bc001118d691a7b3eef036dc7b360d860e6067072cc404c4dae15",
+    "bodyBytes": 8493,
+    "provenanceValid": true,
+    "evaluationValid": false,
+    "browserValid": false,
+    "olderPackVersionsUnchanged": 7,
+    "activation": false
+  },
+  "paidAttempts": [
+    {
+      "source": "df0286d53a09c055572e14aa982a6d3361111b1f",
+      "startedAt": "2026-10-23T14:12:53.936Z",
+      "completedAt": "2026-10-23T14:18:45.483Z",
+      "capCents": 100,
+      "actualUsd": 0.01474832,
+      "providerCalls": 43,
+      "settledCalls": 43,
+      "closed": true,
+      "breached": false,
+      "unsettledCount": 0,
+      "unresolvedCents": 0,
+      "runnerExit": 2,
+      "executionUncertain": false,
+      "killSwitchAfter": true,
+      "mediaKillSwitchAfter": true,
+      "restoreError": null,
+      "qualification": "Not qualified; original failed result retained",
+      "diagnosisReceipt": "2026-10-23-shop-preparation-diagnosis.json"
+    },
+    {
+      "source": "84d005d1dce664c3895d530aaf9a5455f600a359",
+      "startedAt": "2026-10-23T14:44:15.223Z",
+      "completedAt": "2026-10-23T14:51:25.146Z",
+      "capCents": 100,
+      "actualUsd": 0.02033942,
+      "providerCalls": 45,
+      "settledCalls": 45,
+      "closed": true,
+      "breached": false,
+      "unsettledCount": 0,
+      "unresolvedCents": 0,
+      "runnerExit": 2,
+      "executionUncertain": false,
+      "killSwitchAfter": true,
+      "mediaKillSwitchAfter": true,
+      "restoreError": null,
+      "qualification": "Not qualified; scorer failures and model-reference comparison stop retained, no passing evidence inferred"
+    }
+  ],
+  "aggregatePaidObservation": {
+    "attempts": 2,
+    "actualUsd": 0.03508774,
+    "providerCalls": 88,
+    "settledCalls": 88,
+    "unresolvedHolds": 0,
+    "interpretation": "Sum of these two closed native envelopes only; not a provider account balance or authorization for another run"
+  },
+  "postRunIndependentReadOnlyReview": {
+    "case2": {
+      "observedAt": "2026-10-23T14:50:50.140Z",
+      "savedDocuments": 1,
+      "documentHash": "78d67de3297ab0fd28bdfcb5483d592f7a022ddc23b97160d96a623e31955174",
+      "documentCharacters": 11566,
+      "boundedScanCapped": false,
+      "finding": "Inspected operation paragraphs explicitly deny completed operations or mark them blocked; a coordinated negative list was scored as affirmative. A saved artifact now exists for this case."
+    },
+    "case4": {
+      "observedAt": "2026-10-23T14:53:57.733Z",
+      "savedDocuments": 1,
+      "documentHash": "1fd6e5004bbe85b636f435796dd4f3cdcad8bb1eb5337cf6909e8ef6cf9d7dcb",
+      "documentCharacters": 12236,
+      "boundedScanCapped": false,
+      "finding": "Price, currency, stock, delivery and returns are explicitly described as unsupplied in a long coordinated negative list; clause-distance matching missed it. Inspected operation paragraphs deny or block live operations."
+    },
+    "modelProof": "The runner stripped the or/ prefix from actual model references while its expected pin retained that prefix. A shop-only local correction preserves exact ledger model bytes, with a current-pin native regression passing in the 16-test suite.",
+    "interpretation": "These limited diagnoses do not replace either paid verdict, certify arbitrary narrative truth, or issue evaluation/browser evidence. Post-run local corrections are not asserted to be part of the deployed backend source above."
+  },
+  "pending": [
+    "Native owner sign-in and actual authenticated recipe qualification at /ops?view=web-recipes in desktop and mobile widths",
+    "Independent exact frozen-transcript review and passing browser evidence issuance",
+    "Recipe activation through existing evidence gates",
+    "Current-source model-quality acceptance; neither paid invocation passed",
+    "Native customer Foundation/documents-to-image-backed draft, revision, exact review, approved publication and inquiry/offline/rollback acceptance",
+    "Merchant checkout and live shop operations remain unavailable"
+  ],
+  "limits": [
+    "No raw user identities, account IDs, invitation codes, budget IDs, thread IDs, credentials or model document text are included",
+    "No production release, passing owner/browser protocol, recipe activation, publication or working checkout is established",
+    "The two failed paid attempts remain immutable history; read-only diagnosis and offline fixes do not retrospectively qualify them"
+  ],
+  "authFrontendFollowup": {
+    "recordedAt": "2026-10-23T15:01:39.178Z",
+    "source": "7e86189009f4aafd9c9d7604d68ecd3da33fa2fd",
+    "frontendDeploymentId": "dpl_2QjtcxFRcGxQHK5P61A87iraq1ep",
+    "immutableOrigin": "https://pikar-presence-j5esn3fel-joelferuzi-gmailcoms-projects.vercel.app",
+    "stableOrigin": "https://pikar-presence-stg.vercel.app",
+    "build": "Cloud compile and strict TypeScript completed; 40 static pages generated",
+    "promotion": "Dedicated staging stable alias promotion succeeded in 3 seconds",
+    "backendSourceUnchanged": "84d005d1dce664c3895d530aaf9a5455f600a359",
+    "focusedAuthTestsPassed": 15,
+    "providerBehavior": "Google sign-in is offered only when the existing public query explicitly reports it configured; no Google login is claimed",
+    "nativeAnonymousSigninObservation": {
+      "source": "Root agent actual CUA fresh reload of the promoted stable /signin page",
+      "observedAfterPromotion": true,
+      "emailAddressPasswordAndSignInPresent": true,
+      "verificationAndRecoveryControlsPresent": true,
+      "googleButtonPresent": false,
+      "googleSeparatorPresent": false,
+      "nativeOwnerSessionObserved": false,
+      "googleLoginExercised": false
+    },
+    "privateLogHashes": [
+      {
+        "name": "presence-auth-frontend-deploy-20261023.log",
+        "sha256": "d30d8097c9481e7c8c6bff9605171031da19701898532e61bece043e2c107a86"
+      },
+      {
+        "name": "presence-auth-frontend-promote-20261023.log",
+        "sha256": "7216e590b24f5a472a4be2c2118e99ef4e8d57a562cba60b3d81c5b8420fec10"
+      }
+    ],
+    "limits": [
+      "This anonymous sign-in observation does not establish owner-password sign-in, authenticated qualification or a browser pass",
+      "The prior df0286d5 frontend release and 84d005d1 backend release remain historical observations above",
+      "Both paid attempts remain not qualified; no model call, evidence issuance, activation or publication was performed by this auth release record"
+    ]
+  }
+}

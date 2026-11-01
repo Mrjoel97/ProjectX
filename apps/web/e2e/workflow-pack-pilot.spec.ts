@@ -163,6 +163,7 @@ const TITLE_TO_PACK: Record<string, string> = {
   "Process / SOP": "process-sop",
   "Brand review": "brand-review",
   "Offer and lead plan": "offer-and-lead-plan",
+  "Prepare my online shop": "shop-preparation",
 };
 
 // FREE and offline: enumerate the actual intended per-pack obligations without a page,

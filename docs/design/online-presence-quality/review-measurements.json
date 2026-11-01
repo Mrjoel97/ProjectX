@@ -1,0 +1,969 @@
+{
+  "baseline": "bdfad213",
+  "scope": "fictional offline rendered examples; not live customer evidence",
+  "views": [
+    {
+      "fixture": "advisory",
+      "page": "home",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Clarity for your next move.",
+          "lines": 1
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 170,
+        "y": 345.515625,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/mtaa/home/cta/primary",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "advisory",
+      "page": "home",
+      "width": 768,
+      "scrollWidth": 768,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Clarity for your next move.",
+          "lines": 1
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 40,
+        "y": 295.59375,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/mtaa/home/cta/primary",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "advisory",
+      "page": "home",
+      "width": 390,
+      "scrollWidth": 390,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Clarity for your next move.",
+          "lines": 2
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 20,
+        "y": 342.59375,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/mtaa/home/cta/primary",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "advisory",
+      "page": "about",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "advisory",
+      "page": "about",
+      "width": 768,
+      "scrollWidth": 768,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "advisory",
+      "page": "about",
+      "width": 390,
+      "scrollWidth": 390,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "advisory",
+      "page": "services",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "advisory",
+      "page": "services",
+      "width": 768,
+      "scrollWidth": 768,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "advisory",
+      "page": "services",
+      "width": 390,
+      "scrollWidth": 390,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "advisory",
+      "page": "contact",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Contact",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 170,
+        "y": 338.625,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/mtaa/contact/cta/primary",
+          "method": "post"
+        },
+        {
+          "action": "/p/mtaa/contact/forms/contact",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "advisory",
+      "page": "contact",
+      "width": 768,
+      "scrollWidth": 768,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Contact",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 40,
+        "y": 209.9375,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/mtaa/contact/cta/primary",
+          "method": "post"
+        },
+        {
+          "action": "/p/mtaa/contact/forms/contact",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "advisory",
+      "page": "contact",
+      "width": 390,
+      "scrollWidth": 390,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Contact",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 20,
+        "y": 229.265625,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/mtaa/contact/cta/primary",
+          "method": "post"
+        },
+        {
+          "action": "/p/mtaa/contact/forms/contact",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "studio",
+      "page": "home",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Make the useful beautiful.",
+          "lines": 2
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 143,
+        "y": 435.375,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/fieldwork/home/cta/primary",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "studio",
+      "page": "home",
+      "width": 768,
+      "scrollWidth": 768,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Make the useful beautiful.",
+          "lines": 1
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 40,
+        "y": 295.59375,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/fieldwork/home/cta/primary",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "studio",
+      "page": "home",
+      "width": 390,
+      "scrollWidth": 390,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Make the useful beautiful.",
+          "lines": 2
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 20,
+        "y": 342.59375,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/fieldwork/home/cta/primary",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "studio",
+      "page": "about",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "studio",
+      "page": "about",
+      "width": 768,
+      "scrollWidth": 768,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "studio",
+      "page": "about",
+      "width": 390,
+      "scrollWidth": 390,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "studio",
+      "page": "services",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "studio",
+      "page": "services",
+      "width": 768,
+      "scrollWidth": 768,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "studio",
+      "page": "services",
+      "width": 390,
+      "scrollWidth": 390,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "studio",
+      "page": "contact",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Contact",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 143,
+        "y": 259.859375,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/fieldwork/contact/cta/primary",
+          "method": "post"
+        },
+        {
+          "action": "/p/fieldwork/contact/forms/contact",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "studio",
+      "page": "contact",
+      "width": 768,
+      "scrollWidth": 768,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Contact",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 40,
+        "y": 209.9375,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/fieldwork/contact/cta/primary",
+          "method": "post"
+        },
+        {
+          "action": "/p/fieldwork/contact/forms/contact",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "studio",
+      "page": "contact",
+      "width": 390,
+      "scrollWidth": 390,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Contact",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 20,
+        "y": 229.265625,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/fieldwork/contact/cta/primary",
+          "method": "post"
+        },
+        {
+          "action": "/p/fieldwork/contact/forms/contact",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "technical",
+      "page": "home",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Systems that work together.",
+          "lines": 2
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 197,
+        "y": 387.578125,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/relay/home/cta/primary",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "technical",
+      "page": "home",
+      "width": 768,
+      "scrollWidth": 768,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Systems that work together.",
+          "lines": 1
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 76,
+        "y": 277.765625,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/relay/home/cta/primary",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "technical",
+      "page": "home",
+      "width": 390,
+      "scrollWidth": 390,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Systems that work together.",
+          "lines": 2
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 42,
+        "y": 339.375,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/relay/home/cta/primary",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "technical",
+      "page": "about",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "technical",
+      "page": "about",
+      "width": 768,
+      "scrollWidth": 768,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "technical",
+      "page": "about",
+      "width": 390,
+      "scrollWidth": 390,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "About",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "technical",
+      "page": "services",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "technical",
+      "page": "services",
+      "width": 768,
+      "scrollWidth": 768,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "technical",
+      "page": "services",
+      "width": 390,
+      "scrollWidth": 390,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Services",
+          "lines": 1
+        },
+        {
+          "text": "Services",
+          "lines": 1
+        }
+      ],
+      "primaryAction": null,
+      "forms": []
+    },
+    {
+      "fixture": "technical",
+      "page": "contact",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Contact",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 197,
+        "y": 343.125,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/relay/contact/cta/primary",
+          "method": "post"
+        },
+        {
+          "action": "/p/relay/contact/forms/contact",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "technical",
+      "page": "contact",
+      "width": 768,
+      "scrollWidth": 768,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Contact",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 76,
+        "y": 221.9375,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/relay/contact/cta/primary",
+          "method": "post"
+        },
+        {
+          "action": "/p/relay/contact/forms/contact",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "technical",
+      "page": "contact",
+      "width": 390,
+      "scrollWidth": 390,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Contact",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 42,
+        "y": 231.65625,
+        "width": 184.515625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/relay/contact/cta/primary",
+          "method": "post"
+        },
+        {
+          "action": "/p/relay/contact/forms/contact",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "campaign",
+      "page": "campaign",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Plan your next quarter.",
+          "lines": 2
+        },
+        {
+          "text": "What we can support",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 170,
+        "y": 422.09375,
+        "width": 230.140625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/campaign/campaign/cta/primary",
+          "method": "post"
+        },
+        {
+          "action": "/p/campaign/campaign/forms/signup",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "campaign",
+      "page": "campaign",
+      "width": 768,
+      "scrollWidth": 768,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Plan your next quarter.",
+          "lines": 1
+        },
+        {
+          "text": "What we can support",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 40,
+        "y": 282.3125,
+        "width": 230.140625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/campaign/campaign/cta/primary",
+          "method": "post"
+        },
+        {
+          "action": "/p/campaign/campaign/forms/signup",
+          "method": "post"
+        }
+      ]
+    },
+    {
+      "fixture": "campaign",
+      "page": "campaign",
+      "width": 390,
+      "scrollWidth": 390,
+      "titleCount": 1,
+      "headingLines": [
+        {
+          "text": "Plan your next quarter.",
+          "lines": 2
+        },
+        {
+          "text": "What we can support",
+          "lines": 1
+        }
+      ],
+      "primaryAction": {
+        "x": 20,
+        "y": 310.984375,
+        "width": 230.140625,
+        "height": 48
+      },
+      "forms": [
+        {
+          "action": "/p/campaign/campaign/cta/primary",
+          "method": "post"
+        },
+        {
+          "action": "/p/campaign/campaign/forms/signup",
+          "method": "post"
+        }
+      ]
+    }
+  ]
+}

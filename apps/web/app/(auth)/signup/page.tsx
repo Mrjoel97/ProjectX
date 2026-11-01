@@ -288,9 +288,11 @@ function SignUp() {
             </button>
           </form>
 
-          <div className="auth-or">OR</div>
+          {(providers?.google === true || providers?.microsoft === true) && (
+            <div className="auth-or">OR</div>
+          )}
 
-          {providers?.google !== false && (
+          {providers?.google === true && (
             <button
               type="button"
               className="auth-google"

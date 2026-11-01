@@ -150,6 +150,37 @@ function SkillsAndWorkflowsLibrary() {
           Start a guided workflow or review your business skills.
         </p>
       </header>
+      <section
+        aria-labelledby="online-presence-workflow"
+        style={{
+          background: "var(--card)",
+          border: "1px solid var(--rule)",
+          borderRadius: 18,
+          padding: "1.25rem",
+        }}
+      >
+        <p className="caps-label">A complete business outcome</p>
+        <h2 id="online-presence-workflow">Establish your online presence</h2>
+        <p style={{ color: "var(--ink-soft)" }}>
+          Let Pikar use your business foundation to prepare a website or landing page. Continue in
+          one conversation, then review the finished pages before publishing.
+        </p>
+        <Link
+          href="/dashboard/sites"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            minHeight: 44,
+            padding: "0.7rem 1rem",
+            background: "var(--teal-600)",
+            color: "white",
+            borderRadius: 10,
+            fontWeight: 700,
+          }}
+        >
+          Build with Pikar
+        </Link>
+      </section>
       <div
         role="tablist"
         aria-label="Skills and workflows"

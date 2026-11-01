@@ -9,6 +9,8 @@ import type { GenericActionCtx } from "convex/server";
 import { internal } from "../_generated/api";
 import type { DataModel, Id } from "../_generated/dataModel";
 
+import { presenceModelOutputLimit } from "./presenceModelLimits";
+
 function refuseCacheWrites(value: unknown): void {
   if (!value || typeof value !== "object") return;
   for (const [key, child] of Object.entries(value)) {
@@ -30,11 +32,28 @@ export function paidBudgetModel(args: {
   /** Trusted service driver only; native admission rereads the run and exact setup. */
   managedServiceRunId?: Id<"managedServiceRuns">;
   onCost?: (usd: number) => void;
+  /** Server-selected native website design context; never supplied by model tool arguments. */
+  websiteDesign?: {
+    planId: Id<"plans">;
+    revision: number;
+    runRef: string;
+    purpose?: "vision-review";
+  };
+  beforeCall?: () => Promise<void>;
 }): ReturnType<typeof wrapLanguageModel> {
+  const kimi = args.modelId === "or/moonshotai/kimi-k3.1-pro";
+  if (
+    (args.websiteDesign && !kimi) ||
+    (args.websiteDesign && (args.rail || args.managedServiceRunId))
+  )
+    throw new Error("PAID_WEBSITE_MODEL_SCOPE_INVALID");
+  const outputLimit = args.websiteDesign
+    ? presenceModelOutputLimit(args.websiteDesign.purpose)
+    : EVAL_MAX_OUTPUT_TOKENS;
   const call = {
     kind: "chat",
     model: args.modelId,
-    maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS,
+    maxOutputTokens: outputLimit,
   } as const;
   const ceilingCents = goldenProviderCeilingCents(call);
   const options = goldenChatWireOptions(call);
@@ -53,20 +72,24 @@ export function paidBudgetModel(args: {
         }
         return {
           ...params,
-          maxOutputTokens: Math.min(
-            params.maxOutputTokens ?? EVAL_MAX_OUTPUT_TOKENS,
-            EVAL_MAX_OUTPUT_TOKENS,
-          ),
-          providerOptions: { openrouter: options },
+          maxOutputTokens: Math.min(params.maxOutputTokens ?? outputLimit, outputLimit),
+          providerOptions: {
+            openrouter: {
+              ...options,
+              ...(args.websiteDesign ? { reasoning: { effort: "low" as const } } : {}),
+            },
+          },
         };
       },
       wrapGenerate: async ({ doGenerate }) => {
+        await args.beforeCall?.();
         const reservationId = await args.ctx.runMutation(internal.guardrails.reservePaidCall, {
           tenantId: args.tenantId,
           callId: crypto.randomUUID(),
           model: args.modelId,
           ceilingCents,
           rail: args.rail,
+          ...(args.websiteDesign ? { websiteDesign: args.websiteDesign } : {}),
           ...(args.managedServiceRunId ? { managedServiceRunId: args.managedServiceRunId } : {}),
         });
         let result: Awaited<ReturnType<typeof doGenerate>>;

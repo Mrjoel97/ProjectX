@@ -1,6 +1,8 @@
 "use client";
 
 import { useAuthActions } from "@convex-dev/auth/react";
+import { api } from "@pikar/backend/api";
+import { useQuery } from "convex/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -10,6 +12,7 @@ import { PasswordChallenge } from "../PasswordChallenge";
 
 export default function SignIn() {
   const { signIn } = useAuthActions();
+  const providers = useQuery(api.invites.authProviders, {});
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,10 +24,9 @@ export default function SignIn() {
   /**
    * The OAuth buttons used to be `onClick={() => void signIn(…)}`. `void` discards the promise, so
    * a rejection went nowhere: no redirect, no message, no console entry — a button that did
-   * nothing, indistinguishable from a dead page. /signup avoids one shape of this by not rendering
-   * a provider button unless `authProviders` says the deployment holds its credentials, but that
-   * only covers a MISSING provider — every other start-time refusal still lands here, and this page
-   * has no such guard at all.
+   * nothing, indistinguishable from a dead page. Both auth pages show Google only after the
+   * deployment's `authProviders` query confirms its credentials. That avoids a missing-provider
+   * round trip; every other start-time refusal still lands here.
    *
    * SCOPE, HONESTLY: this catches failures raised while STARTING the flow. A failure inside
    * `/api/auth/callback/<provider>` is a server-side 500 with no redirect and no error parameter
@@ -143,16 +145,19 @@ export default function SignIn() {
         Forgot your password?
       </button>
 
-      <div className="auth-or">OR</div>
-
-      <button
-        type="button"
-        className="auth-google"
-        disabled={busy}
-        onClick={() => void onOAuth("google", "Google")}
-      >
-        <GoogleIcon /> {busy ? "Connecting…" : "Continue with Google"}
-      </button>
+      {providers?.google === true && (
+        <>
+          <div className="auth-or">OR</div>
+          <button
+            type="button"
+            className="auth-google"
+            disabled={busy}
+            onClick={() => void onOAuth("google", "Google")}
+          >
+            <GoogleIcon /> {busy ? "Connecting…" : "Continue with Google"}
+          </button>
+        </>
+      )}
 
       <p className="auth-switch">
         Don&rsquo;t have an account? <Link href="/signup">Create one</Link>

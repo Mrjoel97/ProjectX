@@ -1,0 +1,332 @@
+{
+  "observedAt": "2026-10-21T23:43:29.475Z",
+  "source": "3b189161ab2df466130d2b237ece2d7eec581f09",
+  "origin": "https://pikar-presence-stg.vercel.app",
+  "backend": "https://third-gecko-977.convex.cloud",
+  "evaluated": [
+    {
+      "cases": 20,
+      "costUsd": 0,
+      "name": "web-recipe-business-site",
+      "skillId": "ss7as0h8j9my59tay3br10mm4h8gp7dr",
+      "version": 1
+    },
+    {
+      "cases": 20,
+      "costUsd": 0,
+      "name": "web-recipe-campaign-landing",
+      "skillId": "ss78mssy3qd8w6ernz31z21jyh8gpqx9",
+      "version": 1
+    },
+    {
+      "cases": 20,
+      "costUsd": 0,
+      "name": "web-recipe-storefront-catalogue",
+      "skillId": "ss72yt52kbtfv7dcz8vmq4ftzx8gq2tq",
+      "version": 1
+    }
+  ],
+  "state": {
+    "killSwitch": true,
+    "mediaKillSwitch": true,
+    "projects": 0,
+    "recipes": [
+      {
+        "hasBrowserEvidence": false,
+        "hasDeterministicEvidence": true,
+        "name": "web-recipe-business-site",
+        "status": "candidate",
+        "version": 1
+      },
+      {
+        "hasBrowserEvidence": false,
+        "hasDeterministicEvidence": true,
+        "name": "web-recipe-campaign-landing",
+        "status": "candidate",
+        "version": 1
+      },
+      {
+        "hasBrowserEvidence": false,
+        "hasDeterministicEvidence": true,
+        "name": "web-recipe-storefront-catalogue",
+        "status": "candidate",
+        "version": 1
+      }
+    ],
+    "users": 0
+  },
+  "http": [
+    {
+      "path": "/signin",
+      "status": 200,
+      "location": null,
+      "robots": "noindex, nofollow, noarchive",
+      "environment": "online-presence-staging"
+    },
+    {
+      "path": "/signup",
+      "status": 200,
+      "location": null,
+      "robots": "noindex, nofollow, noarchive",
+      "environment": "online-presence-staging"
+    },
+    {
+      "path": "/dashboard/sites",
+      "status": 307,
+      "location": "/signin",
+      "robots": "noindex, nofollow, noarchive",
+      "environment": "online-presence-staging"
+    },
+    {
+      "backendPath": "/p/unpublished/home",
+      "status": 404
+    },
+    {
+      "backendPath": "/p/unpublished/assets/missing/0000000000000000000000000000000000000000000000000000000000000000",
+      "status": 404
+    }
+  ],
+  "jwksStatus": 200,
+  "anonymousBrowser": {
+    "observedAt": "2026-10-21T23:48:55.721Z",
+    "browserChannel": "msedge",
+    "browserVersion": "155.0.4283.62",
+    "headless": true,
+    "viewport": {
+      "width": 1280,
+      "height": 900
+    },
+    "signin": true,
+    "signup": true,
+    "runtimeErrors": []
+  },
+  "limits": [
+    "No native account/email verification",
+    "No model/media provider calls",
+    "No recipe browser qualification or activation",
+    "No publication or merchant checkout acceptance"
+  ],
+  "authorization": {
+    "instruction": "Create a separate staging environment",
+    "scope": "Dedicated online-presence staging; no production release or model budget"
+  },
+  "deployment": {
+    "vercelProjectId": "prj_O01HZIZVy4rg8u3W91W7bPjTSDQB",
+    "vercelTeamId": "team_A2KUgi8LeCYzoSNiQNKhy2CQ",
+    "vercelDeploymentId": "dpl_Amez1qATSWmp9J9pvsznu4WxiAAE",
+    "vercelUrl": "https://pikar-presence-8ufzbm9dv-joelferuzi-gmailcoms-projects.vercel.app",
+    "vercelTarget": "production target within dedicated staging project",
+    "readyAt": "2026-10-21T23:37:17Z",
+    "convexReference": "joel-feruzi:pikar-presence-stg:dev/presence",
+    "convexDeployment": "third-gecko-977",
+    "convexType": "cloud development",
+    "httpOrigin": "https://third-gecko-977.convex.site",
+    "backendApply": "strict TypeScript and codegen passed",
+    "frontendBuild": "TypeScript passed; 39 pages",
+    "generatedApiSha256": "7837313fdef001a01c3b456b5d4e382680343f2ebf1fb0a101b1321793f118b0",
+    "generatedApiNote": "Actual Convex codegen output in addition to application source commit",
+    "stagingHeadersConfig": "config/online-presence-staging.vercel.json",
+    "stagingHeadersConfigSha256": "62c852e79eb2221bfd0eb68c614ae430f38300d37e414cc7e65aae943246b618"
+  },
+  "notConfigured": [
+    "Staging email provider/sender",
+    "Model/media provider access",
+    "Google OAuth",
+    "Merchant providers"
+  ],
+  "deterministicEvidenceReadback": {
+    "observedAt": "2026-10-21T23:48:45.065Z",
+    "deployment": "third-gecko-977",
+    "recipes": [
+      {
+        "definition": {
+          "bundleHash": "d818e4d9ab6fcf85b3725d578edf2fbace642dc0472e1d94922c030f7df016a8",
+          "compilerId": "web-recipes-v4",
+          "schemaVersion": 1
+        },
+        "evidence": {
+          "bodyHash": "8f67dbbe93d6022eb4efd77fa3e31549936760172a1722f516b059ecf8ee5256",
+          "casesPassed": 20,
+          "casesTotal": 20,
+          "costUsd": 0,
+          "definitionHash": "sha256:61b01dcb15e3ad0dc1eda59f098b4324f9529280cfc9b191d634af639b4fb4ca",
+          "familyCoverage": [
+            "business-site"
+          ],
+          "filtered": false,
+          "model": "none",
+          "name": "web-recipe-business-site",
+          "outcomes": {
+            "attribution": 1,
+            "changed-body": 1,
+            "changed-bundle": 1,
+            "changed-version": 1,
+            "consent": 1,
+            "cross-family": 1,
+            "design-dial": 1,
+            "injection": 1,
+            "max": 1,
+            "no-commerce": 1,
+            "non-canonical": 1,
+            "one-over": 1,
+            "partial": 1,
+            "positive": 1,
+            "repeat": 1,
+            "required": 1,
+            "source-coverage": 1,
+            "source-influence": 1,
+            "source-removal": 1,
+            "unknown": 1
+          },
+          "pass": true,
+          "retriedCases": [],
+          "runId": "presence-stg-20261022-business-site",
+          "runner": "eval:web-recipe-deterministic",
+          "skillId": "ss7as0h8j9my59tay3br10mm4h8gp7dr",
+          "skillVersions": {
+            "web-recipe-business-site": 1
+          },
+          "skipped": 0,
+          "suite": {
+            "caseCount": 20,
+            "casesHash": "ce5d98b1c932b4f7f2cd9173eae3b1f07666f05e6d40870acad660754f73cd70",
+            "corpusCaseCount": 60,
+            "revision": "2026-10-22.online-presence-media.v5"
+          },
+          "ts": 1792626188639,
+          "version": 1
+        },
+        "hasBrowserEvidence": false,
+        "name": "web-recipe-business-site",
+        "status": "candidate",
+        "version": 1
+      },
+      {
+        "definition": {
+          "bundleHash": "d818e4d9ab6fcf85b3725d578edf2fbace642dc0472e1d94922c030f7df016a8",
+          "compilerId": "web-recipes-v4",
+          "schemaVersion": 1
+        },
+        "evidence": {
+          "bodyHash": "a9962c56540dbde4500be6ec77439b67e7ef8d82e51a97d50033f2ec55619de8",
+          "casesPassed": 20,
+          "casesTotal": 20,
+          "costUsd": 0,
+          "definitionHash": "sha256:80267b6e7642f3613739bf91baa1bc7a53b9e1128a95d28e9d660086daff46af",
+          "familyCoverage": [
+            "campaign-landing"
+          ],
+          "filtered": false,
+          "model": "none",
+          "name": "web-recipe-campaign-landing",
+          "outcomes": {
+            "attribution": 1,
+            "changed-body": 1,
+            "changed-bundle": 1,
+            "changed-version": 1,
+            "consent": 1,
+            "cross-family": 1,
+            "design-dial": 1,
+            "injection": 1,
+            "max": 1,
+            "no-commerce": 1,
+            "non-canonical": 1,
+            "one-over": 1,
+            "partial": 1,
+            "positive": 1,
+            "repeat": 1,
+            "required": 1,
+            "source-coverage": 1,
+            "source-influence": 1,
+            "source-removal": 1,
+            "unknown": 1
+          },
+          "pass": true,
+          "retriedCases": [],
+          "runId": "presence-stg-20261022-campaign-landing",
+          "runner": "eval:web-recipe-deterministic",
+          "skillId": "ss78mssy3qd8w6ernz31z21jyh8gpqx9",
+          "skillVersions": {
+            "web-recipe-campaign-landing": 1
+          },
+          "skipped": 0,
+          "suite": {
+            "caseCount": 20,
+            "casesHash": "ce5d98b1c932b4f7f2cd9173eae3b1f07666f05e6d40870acad660754f73cd70",
+            "corpusCaseCount": 60,
+            "revision": "2026-10-22.online-presence-media.v5"
+          },
+          "ts": 1792626190540,
+          "version": 1
+        },
+        "hasBrowserEvidence": false,
+        "name": "web-recipe-campaign-landing",
+        "status": "candidate",
+        "version": 1
+      },
+      {
+        "definition": {
+          "bundleHash": "d818e4d9ab6fcf85b3725d578edf2fbace642dc0472e1d94922c030f7df016a8",
+          "compilerId": "web-recipes-v4",
+          "schemaVersion": 1
+        },
+        "evidence": {
+          "bodyHash": "88e3a54469bac2221b2806cdbd0ae5b961960cc36c0ea9b374e695553eae0a8c",
+          "casesPassed": 20,
+          "casesTotal": 20,
+          "costUsd": 0,
+          "definitionHash": "sha256:7f0eea397a9dee099c09dcec52271e0537066a294b7f16eee9338289ac7b7edb",
+          "familyCoverage": [
+            "storefront-catalogue"
+          ],
+          "filtered": false,
+          "model": "none",
+          "name": "web-recipe-storefront-catalogue",
+          "outcomes": {
+            "attribution": 1,
+            "changed-body": 1,
+            "changed-bundle": 1,
+            "changed-version": 1,
+            "consent": 1,
+            "cross-family": 1,
+            "design-dial": 1,
+            "injection": 1,
+            "max": 1,
+            "no-commerce": 1,
+            "non-canonical": 1,
+            "one-over": 1,
+            "partial": 1,
+            "positive": 1,
+            "repeat": 1,
+            "required": 1,
+            "source-coverage": 1,
+            "source-influence": 1,
+            "source-removal": 1,
+            "unknown": 1
+          },
+          "pass": true,
+          "retriedCases": [],
+          "runId": "presence-stg-20261022-storefront-catalogue",
+          "runner": "eval:web-recipe-deterministic",
+          "skillId": "ss72yt52kbtfv7dcz8vmq4ftzx8gq2tq",
+          "skillVersions": {
+            "web-recipe-storefront-catalogue": 1
+          },
+          "skipped": 0,
+          "suite": {
+            "caseCount": 20,
+            "casesHash": "ce5d98b1c932b4f7f2cd9173eae3b1f07666f05e6d40870acad660754f73cd70",
+            "corpusCaseCount": 60,
+            "revision": "2026-10-22.online-presence-media.v5"
+          },
+          "ts": 1792626192307,
+          "version": 1
+        },
+        "hasBrowserEvidence": false,
+        "name": "web-recipe-storefront-catalogue",
+        "status": "candidate",
+        "version": 1
+      }
+    ]
+  }
+}

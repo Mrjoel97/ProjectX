@@ -1716,7 +1716,7 @@ test("only media.ts and mediaComplete.ts write a TERMINAL mediaJobs status, and 
   expect([...succeeders]).toEqual(["mediaComplete.ts"]);
 });
 
-test("storage.getUrl stays in authenticated queries or exact reviewed funnel/social/product-reference capability seams", () => {
+test("storage.getUrl stays in authenticated queries or exact approved capability seams", () => {
   // A storage URL is a BEARER CAPABILITY. Reached from anything but a tenant-guarded read it is one
   // step from a log line or an unguarded return.
   // Instagram requires image_url rather than uploaded bytes. Its one reviewed handoff is
@@ -1745,6 +1745,8 @@ test("storage.getUrl stays in authenticated queries or exact reviewed funnel/soc
     ["resolveAndIncrement", "internalMutation"],
   ]);
   const seenFunnelExceptions: string[] = [];
+  let seenPresenceWorkerSeam = 0;
+  let seenPresencePilotArtifact = 0;
   const seenSocialExceptions: string[] = [];
   const seenProductReferenceExceptions: string[] = [];
   let sites = 0;
@@ -1757,6 +1759,34 @@ test("storage.getUrl stays in authenticated queries or exact reviewed funnel/soc
       if (rel === "funnels.ts" && name && funnelExceptions.has(name)) {
         expect(kind).toBe(funnelExceptions.get(name));
         seenFunnelExceptions.push(name);
+        continue;
+      }
+      // The worker is internal-only, source-version pinned and resolves owned image bytes.
+      // Its URLs go only to the authenticated first-party browser runner, never the model.
+      if (rel === "presenceBrowserReview.ts" && name === "runtimeInputs") {
+        expect(kind).toBe("internalQuery");
+        const prefix = code.slice(enclosing!.index, call.index);
+        expect(prefix).toMatch(/project\.tenantId\s*!==\s*args\.tenantId/);
+        expect(prefix).toMatch(/project\.draftVersion\s*!==\s*args\.version/);
+        expect(prefix).toMatch(
+          /resolveDocumentAssets\(ctx,\s*args\.tenantId,\s*version\.document\)/,
+        );
+        expect(prefix).toMatch(/row\.tenantId\s*!==\s*args\.tenantId/);
+        seenPresenceWorkerSeam++;
+        continue;
+      }
+      // Synthetic, internal staging pilot: the URL identifies only the blob just created in
+      // this helper, never an arbitrary storage id supplied by a customer or provider.
+      if (rel === "presenceComparisonRun.ts" && kind === undefined) {
+        const helper = code.slice(code.indexOf("async function artifact("), call.index);
+        expect(helper).toMatch(
+          /const storageId\s*=\s*await ctx\.storage\.store\(new Blob\(\[bytes\]/,
+        );
+        expect(code.slice(call.index)).toMatch(/^storage\.getUrl\(storageId\)/);
+        expect(code).toMatch(/export const run\s*=\s*internalAction\(/);
+        expect(code).toMatch(/assertPresenceDesignStage\(\)/);
+        expect(code).toMatch(/const tenantId\s*=\s*`packeval-/);
+        seenPresencePilotArtifact++;
         continue;
       }
       if (rel === "socialContentActions.ts" && name === "publishPost") {
@@ -1777,6 +1807,8 @@ test("storage.getUrl stays in authenticated queries or exact reviewed funnel/soc
   }
   expect(sites, "no storage.getUrl call sites found - the scan is vacuous").toBeGreaterThan(0);
   expect(seenFunnelExceptions.sort()).toEqual(["create", "resolveAndIncrement"]);
+  expect(seenPresenceWorkerSeam).toBe(1);
+  expect(seenPresencePilotArtifact).toBe(1);
   expect(seenSocialExceptions).toEqual(["publishPost"]);
   expect(seenProductReferenceExceptions).toEqual(["productReferencesForSubmit"]);
 });
@@ -1909,6 +1941,9 @@ test("the social URL handoff's claim is tenant, human approval and live qualific
 const webRoot = join(convexDir, "../../../apps/web");
 const renderRoute = join(webRoot, "app/api/media/render/route.ts");
 const bakeScript = join(webRoot, "scripts/bake-sandbox-snapshot.mjs");
+const presenceReviewRoute = join(webRoot, "app/api/presence/review/route.ts");
+const presenceReviewRunner = join(webRoot, "app/api/presence/review/runner.ts");
+const presenceBrowserBake = join(webRoot, "scripts/bake-presence-browser-snapshot.mjs");
 const coreRender = join(convexDir, "../../core/src/render.ts");
 const readAt = (path: string): string => readFileSync(path, "utf8");
 
@@ -1958,6 +1993,9 @@ test("NO VERCEL ACCESS TOKEN EXISTS ANYWHERE — D11's headline property, assert
     ...allConvexSources(),
     ["apps/web/.../route.ts", readAt(renderRoute)],
     ["apps/web/scripts/bake-sandbox-snapshot.mjs", readAt(bakeScript)],
+    ["apps/web/app/api/presence/review/route.ts", readAt(presenceReviewRoute)],
+    ["apps/web/app/api/presence/review/runner.ts", readAt(presenceReviewRunner)],
+    ["apps/web/scripts/bake-presence-browser-snapshot.mjs", readAt(presenceBrowserBake)],
     ["packages/core/src/render.ts", readAt(coreRender)],
   ];
   let scanned = 0;
@@ -1974,16 +2012,23 @@ test("NO VERCEL ACCESS TOKEN EXISTS ANYWHERE — D11's headline property, assert
   expect(readAt(bakeScript)).toMatch(/snapshot/);
 });
 
-test("Sandbox.create appears TWICE and the render one is never an inline literal", () => {
-  // Two, not one: the render route, and the OWNER-RUN bake script (egress open, zero tenant
-  // bytes, run by hand). Any third occurrence is a new VM nobody reviewed.
+test("Sandbox.create has exactly four reviewed callsites and customer runners use shared isolated options", () => {
+  // Media and presence each have one deny-all customer runner and one tenant-free owner bake.
+  // New browser support does not grant a generic sandbox or team-scoped credential capability.
   const all = [
     ...allConvexSources().map(([rel, code]) => [rel, code] as const),
     ["route.ts", stripCode(readAt(renderRoute))] as const,
     ["bake-sandbox-snapshot.mjs", stripCode(readAt(bakeScript))] as const,
+    ["presence-review-route.ts", stripCode(readAt(presenceReviewRoute))] as const,
+    ["bake-presence-browser-snapshot.mjs", stripCode(readAt(presenceBrowserBake))] as const,
   ];
   const sites = all.filter(([, code]) => /Sandbox\.create/.test(code)).map(([rel]) => rel);
-  expect(sites.sort()).toEqual(["bake-sandbox-snapshot.mjs", "route.ts"]);
+  expect(sites.sort()).toEqual([
+    "bake-presence-browser-snapshot.mjs",
+    "bake-sandbox-snapshot.mjs",
+    "presence-review-route.ts",
+    "route.ts",
+  ]);
 
   // THE ONE THAT MATTERS: the render route's argument is `buildSandboxOptions(...)`, never an
   // object literal. That is precisely what makes `persistent: false` and `networkPolicy:
@@ -1994,6 +2039,13 @@ test("Sandbox.create appears TWICE and the render one is never an inline literal
     stripCode(readAt(renderRoute)),
     "the route builds its own sandbox options inline",
   ).not.toMatch(/Sandbox\.create\(\s*\{/);
+  expect(stripCode(readAt(presenceReviewRoute))).toMatch(/Sandbox\.create\(options\)/);
+  expect(stripCode(readAt(presenceReviewRoute))).not.toMatch(/Sandbox\.create\(\s*\{/);
+  expect(stripCode(readAt(presenceReviewRunner))).toMatch(/buildSandboxOptions\(/);
+  expect(stripCode(readAt(presenceBrowserBake))).toMatch(/persistent:\s*false/);
+  expect(stripCode(readAt(presenceBrowserBake))).toMatch(
+    /snapshotExpiration:\s*BROWSER_SNAPSHOT_TTL_MS/,
+  );
 });
 
 test("no `name:` and no `persistent: true` anywhere in the render diff", () => {
@@ -2004,6 +2056,9 @@ test("no `name:` and no `persistent: true` anywhere in the render diff", () => {
     ["core/render.ts", coreRender],
     ["route.ts", renderRoute],
     ["bake-sandbox-snapshot.mjs", bakeScript],
+    ["presence-review-route.ts", presenceReviewRoute],
+    ["presence-review-runner.ts", presenceReviewRunner],
+    ["bake-presence-browser-snapshot.mjs", presenceBrowserBake],
   ] as const) {
     const code = stripCode(readAt(path));
     expect(code, `${rel} sets persistent: true`).not.toMatch(/persistent:\s*true/);

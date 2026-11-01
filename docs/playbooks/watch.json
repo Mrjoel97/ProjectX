@@ -47,6 +47,7 @@
     "packages/backend/convex/foglamp.test.ts"
   ],
   "ci-gate.md": [
+    "config/online-presence-staging.vercel.json",
     ".github/scripts/phase48-staging-parity",
     ".github/workflows/phase48-staging-parity.yml",
     ".github/scripts/phase48-staging-release",
@@ -225,7 +226,9 @@
     "apps/web/app/layout.tsx",
     "apps/web/app/fonts.css",
     "apps/web/app/fonts.test.ts",
-    "apps/web/public/fonts/"
+    "apps/web/public/fonts/",
+    "apps/web/app/(app)/layout.test.tsx",
+    "apps/web/app/(app)/dashboard/sites/"
   ],
   "cockpit.md": [
     "apps/web/lib/workspaceArtifactFixtures.test.ts",
@@ -455,7 +458,8 @@
     "packages/core/src/mediaFinishing",
     "packages/core/src/orbitRing",
     "packages/backend/scripts/prepare-director-comparison.mjs",
-    "packages/backend/scripts/evaluate-director-comparison"
+    "packages/backend/scripts/evaluate-director-comparison",
+    "packages/core/src/stockSelection.ts"
   ],
   "contacts-crm.md": [
     "packages/core/src/marketingLead",
@@ -483,7 +487,9 @@
     "packages/core/src/fallback.test.ts",
     "packages/backend/convex/scaleConstants.test.ts",
     "packages/backend/convex/mediaCampaign",
-    "packages/core/src/mediaCampaign"
+    "packages/core/src/mediaCampaign",
+    "packages/backend/convex/presenceComparison",
+    "packages/core/src/presenceComparison"
   ],
   "proposals.md": [
     "packages/core/src/proposal.ts",
@@ -509,7 +515,8 @@
     "packages/backend/convex/workflowPack",
     "packages/backend/scripts/run-workflow-pack-evals.mjs",
     "packages/backend/scripts/workflow-pack-fixtures/",
-    "apps/web/app/(app)/dashboard/workflows/"
+    "apps/web/app/(app)/dashboard/workflows/",
+    "packages/backend/convex/workflowPackEvalBudget.test.ts"
   ],
   "revenue-connectors.md": [
     "apps/web/app/connectors",
@@ -603,7 +610,8 @@
     "packages/backend/convex/verticalEngineering.test.ts",
     "packages/backend/convex/verticalProductDesign.test.ts",
     "apps/web/app/(app)/dashboard/profile/VerticalPackRecommendations.tsx",
-    "apps/web/app/(app)/dashboard/profile/verticalPackRecommendations"
+    "apps/web/app/(app)/dashboard/profile/verticalPackRecommendations",
+    "packages/backend/scripts/smokeRun.mjs"
   ],
   "revenue-crm.md": ["packages/revenue/src/crm", "packages/backend/convex/revenueCrm"],
   "revenue-finance.md": [
@@ -619,5 +627,78 @@
     "packages/backend/convex/youtubeMetadata.test.ts",
     "packages/backend/convex/socialDisconnect.test.ts",
     "apps/web/app/social/youtube/callback/"
+  ],
+  "online-presence.md": [
+    "packages/backend/convex/presenceComparison",
+    "packages/core/src/presenceComparison",
+    "packages/contracts/skills/website-design-proposal.md",
+    "packages/contracts/src/skills/websiteDesignProposal.ts",
+    "packages/backend/convex/lib/stitchDesignClient",
+    "packages/backend/convex/presenceDesignProbe",
+    "packages/backend/convex/webProjectLegacyRendering",
+    "apps/web/app/(app)/ops/web-recipes/",
+    "packages/backend/convex/webRecipeQualification.test.ts",
+    "packages/core/src/onlinePresence",
+    "packages/core/src/webRuntime",
+    "packages/core/src/webForms",
+    "packages/core/src/webRecipes",
+    "packages/core/src/webRecipeFixtures",
+    "packages/core/src/webDesignRenderer",
+    "packages/core/src/designKnowledge",
+    "packages/contracts/src/webRuntime",
+    "packages/contracts/src/webPublication",
+    "packages/contracts/src/webRecipeSkill",
+    "packages/backend/convex/onlinePresence",
+    "packages/backend/convex/webProjects",
+    "packages/backend/convex/webRuntime",
+    "packages/backend/convex/webForms",
+    "packages/backend/convex/webHttp",
+    "packages/backend/convex/webRecipes",
+    "packages/backend/convex/webRecipeEvals",
+    "packages/backend/convex/webProjectLifecycle",
+    "packages/backend/convex/lib/onlinePresenceTools",
+    "apps/web/app/(app)/dashboard/sites/",
+    "apps/web/app/(app)/dashboard/workspace/OnlinePresenceCard",
+    "scripts/compile-design-knowledge.mjs",
+    "scripts/verify-design-knowledge-provenance.mjs",
+    "third_party/design-knowledge/",
+    "packages/core/package.json",
+    "packages/core/src/index.ts",
+    "packages/backend/convex/isolation.test.ts",
+    "packages/backend/convex/webRecipeRegistry",
+    "packages/backend/convex/webTenantLifecycle",
+    "apps/web/playwright.design.config.ts",
+    "apps/web/e2e/online-presence-design.spec.ts",
+    "packages/backend/convex/webProjectLegacyRendering.test.ts",
+    "packages/backend/scripts/webRecipeEvaluatorIdentity.mjs",
+    "packages/core/src/webAssets",
+    "packages/backend/convex/webAssets",
+    "apps/web/e2e/fixtures/online-presence/",
+    "packages/contracts/src/tenantCommerce",
+    "packages/core/src/tenantCommerce",
+    "packages/core/src/tenantInventory",
+    "packages/core/src/tenantOrder",
+    "apps/web/app/(app)/layout.test.tsx",
+    "apps/web/public/presence-examples/"
+  ],
+  "merchant-commerce.md": [
+    "packages/contracts/src/tenantCommerce",
+    "packages/core/src/tenantCommerce",
+    "packages/core/src/tenantInventory",
+    "packages/core/src/tenantOrder",
+    "packages/core/src/tenantMerchant",
+    "packages/core/src/merchantBuyer",
+    "packages/core/src/merchantSetup",
+    "packages/core/src/tenantData.ts",
+    "packages/backend/convex/merchant",
+    "packages/backend/convex/lib/merchantProviderClient",
+    "packages/backend/convex/tenantCatalogue",
+    "packages/backend/convex/tenantOrders",
+    "packages/backend/convex/onlinePresenceShop",
+    "apps/web/app/(app)/dashboard/sites/MerchantWorkspace",
+    "apps/web/app/(app)/dashboard/sites/merchantWorkspace",
+    "apps/web/app/(app)/dashboard/sites/ShopSetupReview",
+    "apps/web/app/(app)/dashboard/sites/merchantPresentation",
+    "apps/web/app/(app)/dashboard/sites/merchant.module.css"
   ]
 }

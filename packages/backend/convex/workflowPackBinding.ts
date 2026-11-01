@@ -1,4 +1,5 @@
 "use node";
+
 // ^ REQUIRED. This module imports `runSpecialistTurn` from `llm.ts` and `traced` from
 // `lib/foglamp.ts`, and foglamp reaches `node:async_hooks`. A default-runtime module importing
 // either fails to BUNDLE — a deploy error, not a caught exception (see lib/foglamp.ts). It also
@@ -26,6 +27,7 @@
 // `spendEvents.correlationId` and as the `agentSteps.turnId` for the whole run.
 // `workflowPackOutcomes.ts` joins on exactly that. See `PACK_DERIVED_METRIC_SOURCES` in @pikar/core.
 
+import { COMMERCE_PACK_PROVENANCE } from "@pikar/contracts/skills/knowledgeWorkProvenance";
 import {
   customizationRunBlock,
   customizationSchemaFor,
@@ -40,6 +42,7 @@ import {
   toolsForWorkflowPack,
   type WorkflowPackId,
 } from "@pikar/core";
+import { EVAL_BUDGET_LIFETIME_MS } from "@pikar/cost/evalBudget";
 import { scanText } from "@pikar/pii";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
@@ -201,6 +204,7 @@ async function runPackTurn(
   ctx: GenericActionCtx<DataModel>,
   args: PackTurnArgs,
   mockScript?: { primary: unknown[]; fallback?: unknown[] },
+  evaluationBudgetId?: Id<"spendEvents">,
 ): Promise<PackRunResult> {
   const resolved = resolveWorkflowPack(args.packId);
   // Refused BEFORE anything is recorded, and NOTHING is recorded for it: `workflowPackEvents.packId`
@@ -395,6 +399,7 @@ async function runPackTurn(
           threadId,
           ...(args.skillVersions === undefined ? {} : { skillVersions: args.skillVersions }),
           ...(args.tenantSkillIds === undefined ? {} : { tenantSkillIds: args.tenantSkillIds }),
+          ...(evaluationBudgetId === undefined ? {} : { evalBudgetId: evaluationBudgetId }),
           ...(mockScript === undefined ? {} : { mockScript }),
         }),
     );
@@ -495,6 +500,127 @@ async function runPackTurn(
 export const runWorkflowPack = internalAction({
   args: packArgs,
   handler: async (ctx, args): Promise<PackRunResult> => runPackTurn(ctx, args),
+});
+
+/** Operator-only qualification of the one new private pack. Ordinary product args stay closed. */
+export const openShopPreparationEval = internalAction({
+  args: { runnerRunId: v.string() },
+  handler: async (ctx, { runnerRunId }): Promise<Id<"spendEvents">> => {
+    if (process.env.GOLDEN_OPENROUTER_BILLING !== "standard")
+      throw new Error("SHOP_EVAL_STANDARD_BILLING_REQUIRED");
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(runnerRunId))
+      throw new Error("SHOP_EVAL_CONTEXT_INVALID");
+    return await ctx.runMutation(internal.guardrails.openEvalBudget, {
+      tenantIds: Array.from({ length: 5 }, (_, i) => `packeval-${runnerRunId.slice(0, 8)}-c${i}`),
+      capCents: 100,
+      purpose: "shop-preparation",
+    });
+  },
+});
+
+export const runShopPreparationEval = internalAction({
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    planId: v.id("plans"),
+    text: v.string(),
+    runId: v.string(),
+    version: v.number(),
+    budgetId: v.id("spendEvents"),
+  },
+  handler: async (ctx, args): Promise<PackRunResult> => {
+    if (process.env.GOLDEN_OPENROUTER_BILLING !== "standard")
+      throw new Error("SHOP_EVAL_STANDARD_BILLING_REQUIRED");
+    const tenant = /^packeval-([a-f0-9]{8})-c[0-4]$/.exec(args.tenantId);
+    if (
+      !tenant ||
+      !Number.isSafeInteger(args.version) ||
+      args.version < 1 ||
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(args.runId)
+    )
+      throw new Error("SHOP_EVAL_CONTEXT_INVALID");
+    const tenantIds = Array.from({ length: 5 }, (_, i) => `packeval-${tenant[1]}-c${i}`);
+    const now = Date.now();
+    // Reuse the bounded refs-only ledger reader to inspect the actual immutable envelope. A Node
+    // module cannot declare a query; no new general budget or tenant authority is introduced.
+    const rows = await ctx.runQuery(internal.spendLedger.listEvents, {
+      tenantId: tenantIds[0] as string,
+      sinceMs: now - EVAL_BUDGET_LIFETIME_MS,
+      untilMs: now + 1,
+      rail: "reasoning",
+      limit: 200,
+    });
+    const envelope = rows.find((row) => row._id === args.budgetId);
+    const configuration = envelope?.evalEnvelope;
+    if (
+      !envelope ||
+      !configuration ||
+      envelope.kind !== "eval_envelope" ||
+      envelope.phase !== "estimated" ||
+      envelope.amountCents !== 100 ||
+      envelope.evalAuthoringProbe !== undefined ||
+      configuration.purpose !== "shop-preparation" ||
+      configuration.accountingMode !== undefined ||
+      configuration.expiresAt !== envelope.createdAt + EVAL_BUDGET_LIFETIME_MS ||
+      configuration.expiresAt <= now ||
+      JSON.stringify(configuration.tenantIds) !== JSON.stringify(tenantIds)
+    )
+      throw new Error("SHOP_EVAL_ENVELOPE_INVALID");
+    const assertActive = async () => {
+      const status = await ctx.runQuery(internal.guardrails.evalBudgetStatus, {
+        budgetId: args.budgetId,
+      });
+      if (
+        status.capCents !== 100 ||
+        status.closed ||
+        status.expired ||
+        status.breached ||
+        status.unsettledCount !== 0 ||
+        status.unresolvedCents !== 0 ||
+        status.actualUsd < 0 ||
+        status.actualUsd > 1
+      )
+        throw new Error("SHOP_EVAL_BUDGET_UNSAFE");
+    };
+    await assertActive();
+    const plan = await ctx.runQuery(internal.plans.getById, { planId: args.planId });
+    if (
+      !plan ||
+      plan.tenantId !== args.tenantId ||
+      plan.threadId !== args.threadId ||
+      plan.status !== "collecting" ||
+      plan.kind !== undefined
+    )
+      throw new Error("SHOP_EVAL_PLAN_INVALID");
+    const candidates = await ctx.runQuery(internal.skills.inspectPackCandidates, {});
+    const candidate = candidates.find((row) => row.name === "pack-shop-preparation");
+    if (
+      !candidate?.present ||
+      candidate.status !== "candidate" ||
+      candidate.version !== args.version ||
+      !candidate.provenanceValid ||
+      candidate.bodyHash !== COMMERCE_PACK_PROVENANCE["pack-shop-preparation"].bodySha256
+    )
+      throw new Error("SHOP_EVAL_CANDIDATE_INVALID");
+    const result = await runPackTurn(
+      ctx,
+      {
+        tenantId: args.tenantId,
+        threadId: args.threadId,
+        planId: args.planId,
+        text: args.text,
+        runId: args.runId,
+        packId: "shop-preparation",
+        skillVersions: { "pack-shop-preparation": args.version },
+      },
+      undefined,
+      args.budgetId,
+    );
+    // searchVault deliberately degrades read failures to no-match. Its uncertain embedding hold
+    // must still stop qualification even if the model subsequently returns useful prose.
+    await assertActive();
+    return result;
+  },
 });
 
 /**

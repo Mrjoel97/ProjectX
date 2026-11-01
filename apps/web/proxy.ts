@@ -18,6 +18,8 @@ const isPublic = createRouteMatcher([
   "/signin",
   "/signup",
   "/api/media/render",
+  // Server-to-server review uses its own required bearer credential before any VM starts.
+  "/api/presence/review",
   // OAuth nonce/receipt validation owns this one server relay; no session cookie is forwarded.
   "/social/youtube/callback",
 ]);

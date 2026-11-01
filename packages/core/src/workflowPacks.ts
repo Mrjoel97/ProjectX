@@ -1,3 +1,5 @@
+import { COMMERCE_PACK_PROVENANCE } from "@pikar/contracts/skills/knowledgeWorkProvenance";
+
 // The curated knowledge-work pack registry (Phase 27, PACK-02/PACK-03). Pure TS, Convex-free
 // (CLAUDE.md §1) — `convex/llm.ts` is the thin adapter that consumes the grant, and 27-07 binds it.
 //
@@ -36,6 +38,7 @@ export const WORKFLOW_PACK_IDS = [
   "brand-review",
   // 35-02 (G23 half B): the idea-stage artifact. The ONE original (non-vendor) pack body.
   "offer-and-lead-plan",
+  "shop-preparation",
 ] as const satisfies readonly string[];
 export type WorkflowPackId = (typeof WORKFLOW_PACK_IDS)[number];
 
@@ -607,6 +610,30 @@ export const WORKFLOW_PACKS: Readonly<Record<WorkflowPackId, WorkflowPackSpec>> 
       ...LEAF_FORBIDDEN_OPERATIONS,
     ],
   },
+  "shop-preparation": {
+    skillName: "pack-shop-preparation",
+    title: "Prepare my online shop",
+    opener:
+      "Prepare my online shop from my business documents and product information. Save the supported listing drafts and launch checklist privately; tell me what still needs to be decided or connected.",
+    blurb:
+      "Source-backed listing drafts and a launch checklist, saved privately. Checkout and store operations remain unavailable.",
+    output: "document",
+    operations: [
+      groundInVault,
+      saveDocument(
+        "save-shop-preparation",
+        "Save the completed private listing and shop-preparation package.",
+      ),
+      missing(
+        "read-live-commerce",
+        "connector-financials",
+        "Read live catalogue, stock, order, payment and refund facts.",
+      ),
+      missing("read-buyers", "crm-facts", "Read buyer history and contact consent."),
+      missing("read-support-history", "support-desk", "Read prior customer support cases."),
+      ...LEAF_FORBIDDEN_OPERATIONS,
+    ],
+  },
 };
 
 export type ResolvedWorkflowPack =
@@ -796,7 +823,7 @@ export type PackBrowserEvidence = {
  * of this repository instead of the vendor's.
  */
 export const PACK_PROVENANCE_LICENSES = ["Apache-2.0", "Pikar-original"] as const;
-export type PackProvenanceLicense = (typeof PACK_PROVENANCE_LICENSES)[number];
+export type PackProvenanceLicense = (typeof PACK_PROVENANCE_LICENSES)[number] | "MIT";
 
 /**
  * Immutable upstream provenance for an adapted pack body (27-01/27-08). `bodySha256` pins the
@@ -898,7 +925,16 @@ export function hasValidPackProvenance(
   try {
     const p = JSON.parse(provenance) as Partial<PackProvenance>;
     return (
-      (PACK_PROVENANCE_LICENSES as readonly unknown[]).includes(p.license) &&
+      (name === "pack-shop-preparation"
+        ? p.license === "MIT" &&
+          p.sourceRepo === COMMERCE_PACK_PROVENANCE[name]?.sourceRepo &&
+          p.sourceCommit === COMMERCE_PACK_PROVENANCE[name]?.sourceCommit &&
+          JSON.stringify(p.sourcePaths) ===
+            JSON.stringify(COMMERCE_PACK_PROVENANCE[name]?.sourcePaths) &&
+          p.bodySha256 === COMMERCE_PACK_PROVENANCE[name]?.bodySha256 &&
+          p.modificationNotice === COMMERCE_PACK_PROVENANCE[name]?.modificationNotice &&
+          p.ts === COMMERCE_PACK_PROVENANCE[name]?.pinnedAt
+        : (PACK_PROVENANCE_LICENSES as readonly unknown[]).includes(p.license)) &&
       typeof p.sourceRepo === "string" &&
       p.sourceRepo.length > 0 &&
       typeof p.sourceCommit === "string" &&

@@ -28,6 +28,27 @@ export type TenantTableCategory =
 export const TENANT_TABLE_CLASSIFICATION = {
   authRevocations: "global", // Opaque security metadata: durable erasure fence, expiring reset-session fence; never business content.
   users: "tenant_owned",
+  onlinePresenceSessions: "tenant_owned",
+  webSubmissions: "tenant_owned",
+  webMetrics: "tenant_owned",
+  webProjectVersions: "tenant_owned",
+  webProjects: "tenant_owned",
+  webAssets: "tenant_owned",
+  tenantProducts: "tenant_owned",
+  tenantMerchantAccounts: "tenant_owned",
+  tenantMerchantPayments: "tenant_owned",
+  tenantMerchantEvents: "tenant_owned",
+  tenantMerchantOperations: "tenant_owned",
+  tenantMerchantAutomation: "tenant_owned",
+
+  tenantStock: "tenant_owned",
+  tenantReservations: "tenant_owned",
+  tenantCommercePolicies: "tenant_owned",
+  tenantCommerceMappings: "tenant_owned",
+  tenantCarts: "tenant_owned",
+  tenantOrders: "tenant_owned",
+  tenantOrderAttempts: "tenant_owned",
+
   uploadReceipts: "tenant_owned",
   audit: "audit_immutable",
   // The DLQ shares the refs-only compliance plane and is never user-content export/deletion data.
@@ -337,6 +358,16 @@ export const STORAGE_ID_FIELDS = {
   attachments: ["storageId"],
   intakeArtifacts: ["storageId"],
   vaultDocuments: ["storageId", "transcriptionStorageId"],
+  webProjectVersions: [
+    "artifactStorageId",
+    "browserReviewReportStorageId",
+    "browserReviewVisionStorageId",
+    "browserReviewScreenshots[].storageId",
+    "providerReceipt.stitchHtmlStorageId",
+    "providerReceipt.stitchImageStorageId",
+  ],
+  webAssets: ["storageId"],
+  tenantMerchantOperations: ["storageId"],
   funnels: ["storageId"], // Fixed artifact bytes can outlive a changed/deleted Vault reference.
   mediaJobs: ["assetStorageId"],
 } as const satisfies Record<string, readonly string[]>;
@@ -362,7 +393,14 @@ export function storageIdsIn(table: string, row: Record<string, unknown>): strin
   for (const path of paths) {
     const split = path.indexOf("[].");
     if (split === -1) {
-      push(row[path]);
+      let value: unknown = row;
+      for (const part of path.split(".")) {
+        value =
+          value !== null && typeof value === "object"
+            ? (value as Record<string, unknown>)[part]
+            : undefined;
+      }
+      push(value);
       continue;
     }
     // `indexOf`/`slice` rather than destructuring `split("[].")`: under

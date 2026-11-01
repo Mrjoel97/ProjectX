@@ -1791,3 +1791,18 @@ The same continuation adds a field-level Business Ledger and shared standing con
 ### 2026-10-24 integrated social-service and conversation continuation
 
 ADR067 admits the named opt-in recurring social release candidate, with whole-run provider accounting, durable scheduled dispatch and pause/recovery fences. Draft editing/rejection/known-failure replacement and authoritative provider-permalink reporting links are implemented locally. The owner-approved ADR068 extension adds contextual business questions, exact reviewed Foundation statement confirmation and continuation through the same service executor. See [current execution and hosted acceptance](phases/50-recurring-read-and-prepare-services/50-EXECUTION-2026-10-24.md) and [the Phase51/52 conversation amendment](design/conversational-business-operations.md). Prior inert/absent-mapping descriptions refer to earlier source. These source changes do not complete current-source CI, actual hosted/provider cycles or phase requirements, and production remains unchanged.
+
+### Phase 53: Agentic online presence — isolated selective recovery
+
+Owner authorized after the October21 deep discovery. Preserve the distinct historical PR36 website/recipe/merchant phase directories and current managed-service phases48–52.
+
+- 53-01: selective website/runtime recovery, agent-prepared brief/private pages and exact-version review; local implementation/validation.
+- 53-02: partial — new dedicated staging frontend/backend deployed; anonymous browser/boundary checks and hosted deterministic recipes pass. Native authentication, model workflow, recipe browser qualification and release admission remain open; see53-02-SUMMARY.md.
+- 53-03: partial — pure goods quote/inventory/order foundations recovered; merchant-direct Stripe plus PayPal, persistent adapters and fulfillment remain open.
+- 53-04: complete locally — Taste/UI UX Pro Max quality, business-directed rendering and offline browser checks; see53-04-SUMMARY.md.
+- 53-05: complete locally — owned logo/hero/gallery assets, agent preparation, protected review and exact published image delivery; see53-05-SUMMARY.md.
+- 53-06: in progress — visual refinements, reviewed eCommerce skill adoption, private shop-preparation candidate and hosted owner qualification interface.
+
+Requirements: OPRES-01..04. See `.planning/phases/53-agentic-online-presence/53-VALIDATION.md`.
+
+| 53. Agentic online presence | 3/6 | Partial — website/design/imagery verified locally and dedicated staging deployed; hosted qualification and complete commerce open | - |

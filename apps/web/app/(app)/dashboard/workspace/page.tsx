@@ -555,6 +555,9 @@ function WorkspacePageContent({ storageKey }: { storageKey: string }) {
                       >
                         Skills and Workflows
                       </Link>
+                      <Link role="menuitem" className="head-menu-item" href="/dashboard/sites">
+                        Sites
+                      </Link>
                       <button
                         type="button"
                         role="menuitem"

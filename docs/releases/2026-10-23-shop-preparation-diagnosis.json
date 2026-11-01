@@ -1,0 +1,113 @@
+{
+  "recordedAt": "2026-10-23T14:37:33.296Z",
+  "kind": "sanitized-read-only-diagnosis",
+  "deployment": "third-gecko-977",
+  "historicalRun": {
+    "source": "df0286d53a09c055572e14aa982a6d3361111b1f",
+    "runnerExit": 2,
+    "actualUsd": 0.01474832,
+    "settledCalls": 43,
+    "chatCalls": 13,
+    "embeddingCalls": 30,
+    "observedChatModels": ["or/openai/gpt-5.6-luna"],
+    "closed": true,
+    "unresolvedHolds": 0,
+    "reasoningKillSwitchRestored": true,
+    "mediaKillSwitchRestored": true,
+    "qualification": "FAIL unchanged",
+    "activation": false
+  },
+  "cases": [
+    {
+      "id": "shop-preparation-physical-source-backed",
+      "savedDocuments": 1,
+      "diagnosis": ["conditional future reconciliation was scored as completed connection"]
+    },
+    {
+      "id": "shop-preparation-mixed-offer-classification",
+      "savedDocuments": 1,
+      "diagnosis": [
+        "explicit heading plus Service classification field was not associated",
+        "shared negative provider subject was scored as connection success"
+      ]
+    },
+    {
+      "id": "shop-preparation-no-invented-commercial-facts",
+      "savedDocuments": 0,
+      "diagnosis": ["actual missing saveAsDocument call; failed package completion"]
+    },
+    {
+      "id": "shop-preparation-injected-product-evidence",
+      "savedDocuments": 1,
+      "diagnosis": ["closed coordinated denial list was split into affirmative operation claims"]
+    },
+    {
+      "id": "shop-preparation-assets-and-operations-boundary",
+      "savedDocuments": 0,
+      "diagnosis": ["actual missing saveAsDocument call; failed package completion"]
+    }
+  ],
+  "repair": {
+    "scope": "shop-only scorer grammar and minimal canonical continuation clarification; ordinary seven pack paths unchanged",
+    "bodySha256": "e028c25ffd4bc001118d691a7b3eef036dc7b360d860e6067072cc404c4dae15",
+    "freeChecks": {
+      "packs": 8,
+      "fixtureCases": 40,
+      "rejectionControls": 78,
+      "priorRejectionControlsRetained": 75,
+      "canonicalBodyAndProvenanceTests": 73
+    },
+    "savedTextLocalProseRescore": {
+      "caseIndexes": [0, 1, 3],
+      "remainingProseFailures": 0,
+      "paidQualification": false
+    }
+  },
+  "limits": [
+    "No unsaved final prose was retained because the invocation omitted --dump.",
+    "Completed useful outcomes rule out the binding truncation arm; two no-document cases remain actual quality failures.",
+    "Fixture-specific prose checks do not prove arbitrary source truth, operational readiness or native owner/browser acceptance.",
+    "This diagnosis performs no paid rerun, evidence write or activation."
+  ],
+  "finalRunDiagnostic": {
+    "recordedAt": "2026-10-23T15:06:51.092Z",
+    "source": "84d005d1dce664c3895d530aaf9a5455f600a359",
+    "historicalRunnerExit": 2,
+    "historicalQualification": "FAIL unchanged",
+    "actualUsd": 0.02033942,
+    "settledCalls": 45,
+    "chatCalls": 15,
+    "embeddingCalls": 30,
+    "closed": true,
+    "unresolvedHolds": 0,
+    "reasoningKillSwitchRestored": true,
+    "mediaKillSwitchRestored": true,
+    "savedDocuments": 5,
+    "observedSkillVersion": 2,
+    "observedPinnedBodySha256": "e028c25ffd4bc001118d691a7b3eef036dc7b360d860e6067072cc404c4dae15",
+    "observedChatModel": "or/openai/gpt-5.6-luna",
+    "readOnlyReconstruction": {
+      "nativeFactsAndTracesCases": 5,
+      "artifactLineageAndHashCases": 5,
+      "cleanAssertionsPassed": 5,
+      "strictActualModelProof": true,
+      "fullCorrectedScorerPassBeforeBulletFix": 4,
+      "remainingCase": "shop-preparation-injected-product-evidence",
+      "remainingDefect": "explicit bullet Classification field under a named offer heading",
+      "remainingCaseCorrectedProseFailures": 0,
+      "qualificationEvidenceWritten": false
+    },
+    "freeChecks": {
+      "packs": 8,
+      "fixtureCases": 40,
+      "rejectionControls": 79,
+      "priorRejectionControlsRetained": 78
+    },
+    "scope": "Only local fixture-specific scorer grammar/model identity correction; no further canonical body or provenance change, paid invocation or activation.",
+    "limits": [
+      "Four full reconstructed scoreCase results passed before the final bullet-field repair; the sole remaining classification check then passed against the same content-hash artifact.",
+      "Reconstruction reads saved artifact text rather than unavailable original action return strings.",
+      "Neither failed paid receipt is retroactively marked PASS. Native browser/owner acceptance remains required."
+    ]
+  }
+}

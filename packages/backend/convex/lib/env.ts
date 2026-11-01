@@ -35,6 +35,64 @@ export type EnvSpec = {
 
 export const ENV_MANIFEST: readonly EnvSpec[] = [
   {
+    name: "MERCHANT_PAYPAL_PARTNER_ATTRIBUTION_ID",
+    tier: "feature",
+    whatBreaks: "PayPal partner attribution is unavailable for merchant sandbox onboarding.",
+  },
+  {
+    name: "MERCHANT_PAYPAL_PARTNER_MERCHANT_ID",
+    tier: "feature",
+    whatBreaks: "PayPal sandbox merchant onboarding cannot identify the configured partner.",
+  },
+  {
+    name: "MERCHANT_PAYPAL_SANDBOX_CLIENT_ID",
+    tier: "feature",
+    whatBreaks: "PayPal merchant sandbox checkout and onboarding remain unavailable.",
+  },
+  {
+    name: "MERCHANT_PAYPAL_SANDBOX_CLIENT_SECRET",
+    tier: "feature",
+    whatBreaks: "PayPal merchant sandbox API requests cannot authenticate.",
+  },
+  {
+    name: "MERCHANT_PAYPAL_SANDBOX_WEBHOOK_ID",
+    tier: "feature",
+    whatBreaks: "PayPal sandbox payment events cannot be verified or reconciled.",
+  },
+  {
+    name: "MERCHANT_STRIPE_TEST_SECRET_KEY",
+    tier: "feature",
+    whatBreaks: "Stripe merchant test checkout and account verification remain unavailable.",
+  },
+  {
+    name: "MERCHANT_STRIPE_TEST_WEBHOOK_SECRET",
+    tier: "feature",
+    whatBreaks: "Stripe merchant test payment events cannot be verified or reconciled.",
+  },
+  {
+    name: "PRESENCE_BROWSER_REVIEW_SECRET",
+    tier: "feature",
+    whatBreaks: "Private website browser reviews cannot authenticate to the review worker.",
+  },
+  {
+    name: "PRESENCE_BROWSER_REVIEW_URL",
+    tier: "feature",
+    whatBreaks:
+      "Website desktop and mobile review cannot run; new website publication remains gated.",
+  },
+  {
+    name: "PRESENCE_STITCH_BILLING",
+    tier: "feature",
+    whatBreaks:
+      "Required Stitch design generation stays disabled without its supported billing attestation.",
+  },
+  {
+    name: "STITCH_API_KEY",
+    tier: "feature",
+    whatBreaks:
+      "Required Stitch website design generation cannot authenticate; other application features remain available.",
+  },
+  {
     name: "NATIVE_ONBOARDING_PILOT",
     tier: "feature",
     whatBreaks:

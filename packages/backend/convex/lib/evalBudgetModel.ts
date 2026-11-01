@@ -47,6 +47,8 @@ export function evalBudgetModel(args: {
   beforeCall?: () => void;
   /** General golden suite uses real local tools/RAG; native vertical grants stay closed. */
   mode?: "golden";
+  /** Internal operator-only proposal comparison. Never derived from a model/tool argument. */
+  websiteComparison?: true;
 }): ReturnType<typeof wrapLanguageModel> {
   const goldenCall = {
     kind: "chat",
@@ -92,22 +94,28 @@ export function evalBudgetModel(args: {
           ...params,
           maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS,
           providerOptions: {
-            openrouter: goldenOptions ?? {
-              max_tokens: EVAL_MAX_OUTPUT_TOKENS,
-              n: 1,
-              plugins: [],
-              transforms: [],
-              provider: {
-                only: ["openai"],
-                allow_fallbacks: false,
-                require_parameters: true,
-                max_price: {
-                  prompt: bound?.promptPerMillion ?? 0,
-                  completion: bound?.completionPerMillion ?? 0,
-                  request: 0,
-                  image: 0,
+            openrouter: {
+              ...(goldenOptions ?? {
+                max_tokens: EVAL_MAX_OUTPUT_TOKENS,
+                n: 1,
+                plugins: [],
+                transforms: [],
+                provider: {
+                  only: ["openai"],
+                  allow_fallbacks: false,
+                  require_parameters: true,
+                  max_price: {
+                    prompt: bound?.promptPerMillion ?? 0,
+                    completion: bound?.completionPerMillion ?? 0,
+                    request: 0,
+                    image: 0,
+                  },
                 },
-              },
+              }),
+              // Operator comparison only; ordinary/golden model reasoning stays unchanged.
+              ...(args.websiteComparison && args.modelId === "or/moonshotai/kimi-k3.1-pro"
+                ? { reasoning: { effort: "low" as const } }
+                : {}),
             },
           },
         };
@@ -120,6 +128,7 @@ export function evalBudgetModel(args: {
           callId: crypto.randomUUID(),
           model: args.modelId,
           outputTokens: EVAL_MAX_OUTPUT_TOKENS,
+          ...(args.websiteComparison ? { websiteComparison: true as const } : {}),
           ...(goldenOptions ? { providerCall: goldenCall } : {}),
         });
         let result: Awaited<ReturnType<typeof doGenerate>>;

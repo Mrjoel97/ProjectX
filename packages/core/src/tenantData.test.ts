@@ -54,8 +54,9 @@ describe("tenant table classification registry", () => {
     // + three foundation tables and expiring auth revocations = 67 with owned upload receipts.
     // + Buffer connections, transient OAuth, campaign posts and reports = 71.
     // + Zernio connection credentials and cached reports = 73.
-    // Combined schema inventory includes media, native social and managed services.
-    expect(schemaTables).toHaveLength(85);
+    // Combined presence/commerce, media, native social and managed-service schema inventory.
+    expect(schemaTables).toHaveLength(104);
+
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -231,6 +232,33 @@ describe("tenant table classification registry", () => {
 // behaviour test cannot see: a row whose attachments array is missing looks identical to one whose
 // attachments carried no bytes.
 describe("storageIdsIn — every byte reachable from one row", () => {
+  test("site versions include owned Stitch artifacts nested in provider receipts without following shared image snapshots", () => {
+    expect(
+      storageIdsIn("webProjectVersions", {
+        artifactStorageId: "kg_native_artifact",
+        providerReceipt: {
+          stitchHtmlStorageId: "kg_stitch_html",
+          stitchImageStorageId: "kg_stitch_image",
+          stitchHash: "not_storage",
+        },
+        assetSnapshots: [{ storageId: "kg_shared_web_asset" }],
+      }),
+    ).toEqual(["kg_native_artifact", "kg_stitch_html", "kg_stitch_image"]);
+    for (const providerReceipt of [
+      undefined,
+      null,
+      "not_an_object",
+      {},
+      { stitchHtmlStorageId: 7, stitchImageStorageId: "" },
+    ]) {
+      expect(
+        storageIdsIn("webProjectVersions", {
+          artifactStorageId: "kg_native_artifact",
+          providerReceipt,
+        }),
+      ).toEqual(["kg_native_artifact"]);
+    }
+  });
   test("explicit product references remain reachable for export and tenant erasure", () => {
     expect(
       storageIdsIn("plans", {
@@ -308,10 +336,11 @@ describe("STORAGE_ID_FIELDS covers every _storage field in schema.ts", () => {
     for (const line of schemaSource.split("\n")) {
       const opened = /^ {2}([A-Za-z][A-Za-z0-9]*): defineTable\(/.exec(line);
       if (opened?.[1] !== undefined) table = opened[1];
-      const field = /([A-Za-z][A-Za-z0-9]*):\s*v\.(?:optional\(\s*)?v?\.?id\("_storage"\)/.exec(
-        line,
+      const fields = line.matchAll(
+        /([A-Za-z][A-Za-z0-9]*):\s*v\.(?:optional\(\s*)?v?\.?id\("_storage"\)/g,
       );
-      if (field?.[1] !== undefined && table !== null) out.push({ table, field: field[1] });
+      for (const field of fields)
+        if (field[1] !== undefined && table !== null) out.push({ table, field: field[1] });
     }
     return out;
   };
@@ -330,7 +359,7 @@ describe("STORAGE_ID_FIELDS covers every _storage field in schema.ts", () => {
     // to be covered, because that is what the extractor actually reads.
     const declaredLeaves = new Set(
       Object.entries(STORAGE_ID_FIELDS).flatMap(([table, paths]) =>
-        paths.map((p) => `${table}.${p.includes("[].") ? p.slice(p.indexOf("[].") + 3) : p}`),
+        paths.map((p) => `${table}.${p.split(".").at(-1)}`),
       ),
     );
     const undeclared = [
@@ -353,7 +382,7 @@ describe("STORAGE_ID_FIELDS covers every _storage field in schema.ts", () => {
     const missing: string[] = [];
     for (const [table, paths] of Object.entries(STORAGE_ID_FIELDS)) {
       for (const path of paths) {
-        const leaf = path.includes("[].") ? path.slice(path.indexOf("[].") + 3) : path;
+        const leaf = path.split(".").at(-1);
         if (!sites.some((x) => x.table === table && x.field === leaf))
           missing.push(`${table}.${path}`);
       }
@@ -367,13 +396,22 @@ describe("STORAGE_ID_FIELDS covers every _storage field in schema.ts", () => {
     for (const [table, paths] of Object.entries(STORAGE_ID_FIELDS)) {
       for (const path of paths) {
         const marker = `kg_${table}_${path}`;
+        const nested: Record<string, unknown> = {};
+        const parts = path.split(".");
+        let cursor = nested;
+        for (const part of parts.slice(0, -1)) {
+          const child: Record<string, unknown> = {};
+          cursor[part] = child;
+          cursor = child;
+        }
+        cursor[parts.at(-1)!] = marker;
         const row: Record<string, unknown> = path.includes("[].")
           ? {
               [path.slice(0, path.indexOf("[]."))]: [
                 { [path.slice(path.indexOf("[].") + 3)]: marker },
               ],
             }
-          : { [path]: marker };
+          : nested;
         expect(storageIdsIn(table, row), `${table}.${path} is declared but unreachable`).toContain(
           marker,
         );

@@ -219,6 +219,22 @@ export async function ensureThreadAndPlan(
   return { threadId: tid, planId: plan._id };
 }
 
+/** Start a dedicated attended website workflow using the existing conversation driver. */
+export const startOnlinePresence = tenantAction({
+  args: { text: v.string() },
+  handler: async (ctx, { text }): Promise<{ threadId: string }> => {
+    if (!text.trim() || text.length > 8000) throw new Error("INVALID_PRESENCE_REQUEST");
+    const { threadId, planId } = await ensureThreadAndPlan(ctx, undefined, text);
+    await ctx.runMutation(internal.onlinePresence.ensureSession, {
+      tenantId: ctx.tenantId,
+      threadId,
+      planId,
+      text,
+    });
+    return ctx.runAction(api.cockpit.sendCockpitMessage, { threadId, text });
+  },
+});
+
 /** Create only the tenant-owned conversation and plan for a first file/voice submission.
  * No greeting, model call, user message, approval or external work is created here. */
 export const prepareIntakeThread = tenantAction({
@@ -467,13 +483,27 @@ export const sendCockpitMessage = tenantAction({
     // that cleanup and no model or provider egress has occurred.
     const { threadId: tid, planId } = await ensureThreadAndPlan(ctx, threadId, text);
 
+    const presence = await ctx.runQuery(internal.onlinePresence.lookupSession, {
+      tenantId: ctx.tenantId,
+      planId,
+    });
+    // The service has ordinary spend accounting; authoring probes require their own envelope.
+    // Refuse that alternate entry before a message, trace, claim or model call.
+    if (presence)
+      await ctx.runQuery(internal.authoringProbe.assertUnregisteredThread, {
+        tenantId: ctx.tenantId,
+        threadId: tid,
+      });
+
     // 2. Fetch the prior turns BEFORE saving the current one (UAT-E) — otherwise the current turn
     //    appears twice (as the last history row AND as "The user says:"). A fresh thread yields [].
-    const probeBudgetId = await ctx.runMutation(internal.authoringProbe.claimTurn, {
-      tenantId: ctx.tenantId,
-      threadId: tid,
-      turnId,
-    });
+    const probeBudgetId = presence
+      ? null
+      : await ctx.runMutation(internal.authoringProbe.claimTurn, {
+          tenantId: ctx.tenantId,
+          threadId: tid,
+          turnId,
+        });
     const history = await fetchRecentHistory(ctx, tid);
 
     //    Persist the user's turn (the agent thread is a message store — DECISION #2 retired; the
@@ -501,19 +531,37 @@ export const sendCockpitMessage = tenantAction({
     let reply: string;
     let probeFailed = true;
     try {
-      const res = await ctx.runAction(internal.llm.runCockpitAgent, {
-        tenantId: ctx.tenantId,
-        threadId: tid,
-        planId,
-        text,
-        clientContext,
-        turnId,
-        history, // UAT-E: the model sees the conversation so far, not just this turn
-        ...(probeBudgetId ? { evalBudgetId: probeBudgetId } : {}),
-        ...(researchControlId ? { researchControlId, researchRequestId: turnId } : {}),
-      });
-      reply = res.reply;
-      probeFailed = !!res.blocked;
+      if (presence) {
+        await ctx.runMutation(internal.onlinePresence.ensureSession, {
+          tenantId: ctx.tenantId,
+          threadId: tid,
+          planId,
+          text,
+        });
+        const result = await ctx.runAction(internal.onlinePresenceRun.run, {
+          tenantId: ctx.tenantId,
+          threadId: tid,
+          planId,
+          text,
+          runId: turnId,
+        });
+        reply = result.reply;
+        probeFailed = !result.ok;
+      } else {
+        const res = await ctx.runAction(internal.llm.runCockpitAgent, {
+          tenantId: ctx.tenantId,
+          threadId: tid,
+          planId,
+          text,
+          clientContext,
+          turnId,
+          history, // UAT-E: the model sees the conversation so far, not just this turn
+          ...(probeBudgetId ? { evalBudgetId: probeBudgetId } : {}),
+          ...(researchControlId ? { researchControlId, researchRequestId: turnId } : {}),
+        });
+        reply = res.reply;
+        probeFailed = !!res.blocked;
+      }
     } catch (e) {
       reply = "Something went wrong on my side — nothing was sent. Please try that again.";
       // AGNT-04: an EXHAUSTED model timeout (primary + CHEAP_MODEL fallback both timed out) escalates

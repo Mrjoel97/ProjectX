@@ -1,3 +1,4 @@
+import { commerceExportView, isCommerceTable } from "@pikar/core/tenantCommercePrivacy";
 import {
   AUDIT_ARCHIVE_STATEMENT,
   type DeletableTenantTable,
@@ -179,7 +180,10 @@ export const exportTenantData = tenantQuery({
                 }
               : summarizeTenantCredential(row),
           )
-        : rows;
+        : isCommerceTable(table)
+          ? rows.map((row) => commerceExportView(table, row))
+          : rows;
+
     const totalRows = rowsExported + shapedRows.length;
     const tableRowsAfter = tableRows + shapedRows.length;
     // Only a table with rows STILL UNREAD is truncated. One that ends exactly on its budget is

@@ -781,6 +781,7 @@ describe("pack customization schemas are derived from the Phase 27 manifest", ()
     "process-sop": ["vault", "drive"],
     "brand-review": ["vault"],
     "offer-and-lead-plan": ["vault", "web"],
+    "shop-preparation": ["vault"],
   };
 
   test("every pack's readable sources are exactly its manifest's existing reads", () => {
@@ -806,9 +807,13 @@ describe("pack customization schemas are derived from the Phase 27 manifest", ()
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.value.fields.some((f) => f.kind === "source_preference")).toBe(false);
-    // …and the other five DO have one, so this is a real branch and not a schema that never
+    const shop = customizationSchemaFor("shop-preparation", 1);
+    expect(shop.ok && shop.value.fields.some((f) => f.kind === "source_preference")).toBe(false);
+    // The packs with multiple readable sources DO have one, so this is a real branch and not a schema that never
     // offers preferences at all.
-    for (const id of WORKFLOW_PACK_IDS.filter((p) => p !== "brand-review")) {
+    for (const id of WORKFLOW_PACK_IDS.filter(
+      (p) => p !== "brand-review" && p !== "shop-preparation",
+    )) {
       const other = customizationSchemaFor(id, 1);
       expect(other.ok).toBe(true);
       if (!other.ok) return;
@@ -870,6 +875,7 @@ describe("a pack customization field can never carry authority", () => {
       "business_terms",
       "campaign_weeks",
       "extra_guidance",
+      "listing_max_items",
       "plan_days",
       "preferred_sources",
       "priority_count",

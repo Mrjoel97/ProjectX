@@ -155,6 +155,8 @@ test.each([
   { tenantId: "control:foundation-retention:v1" },
   { eventType: "foundation_retention.purged" },
   { correlationId: "foundation-retention:opaque" },
+  { eventType: "online_presence.shop_setup_approved" },
+  { correlationId: "online-presence-shop:opaque" },
 ])("generic writer refuses retention receipt forgery %j", async (reserved) => {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
