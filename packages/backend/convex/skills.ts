@@ -1,3 +1,4 @@
+import { presenceDesignPolicySkillBody } from "@pikar/contracts/skills/presenceDesignPolicy";
 // Versioned skill/prompt registry adapter (SkillOpt readiness).
 //
 // Thin adapter over the `skills` table: pure contract lives in @pikar/contracts.
@@ -750,6 +751,7 @@ export const getSkillVersion = internalQuery({
  */
 const SEEDS = [
   { name: "online-presence-specialist", body: onlinePresenceSpecialistSkillBody },
+  { name: "presence-design-policy", body: presenceDesignPolicySkillBody },
   { name: EXECUTIVE_ROUTER_SKILL, body: executiveRouterSkillBody },
   { name: EMAIL_DRAFTER_SKILL, body: emailDrafterSkillBody },
   { name: COCKPIT_AGENT_SKILL, body: cockpitAgentSkillBody },

@@ -983,9 +983,9 @@ describe("nothing imports the recurrence spike", () => {
 
   const metadataArrays: Record<string, RegExp> = {
     "packages/backend/scripts/goldenEvaluatorIdentity.mjs":
-      /^export const EVALUATOR_FILES = \[\n(?: {2}"[A-Za-z0-9_./-]+",\n)+\]\.sort\(\);$/m,
+      /^export const EVALUATOR_FILES = \[\n(?: {2}"[A-Za-z0-9_./()-]+",\n| {2}\/\/[^\n]*\n)+\]\.sort\(\);$/m,
     "packages/backend/scripts/vertical-eval-corpus.mjs":
-      /^export const EVALUATOR_FILES = \[\n(?: {2}"[A-Za-z0-9_./-]+",\n)+\]\.sort\(\);$/m,
+      /^export const EVALUATOR_FILES = \[\n(?: {2}"[A-Za-z0-9_./()-]+",\n| {2}\/\/[^\n]*\n)+\]\.sort\(\);$/m,
     "packages/backend/scripts/goldenEvaluatorIdentity.test.mjs":
       /^ {2}const dependencies = \[\n(?: {4}"[A-Za-z0-9_./-]+",\n)+ {2}\];$/m,
   };
@@ -997,7 +997,7 @@ describe("nothing imports the recurrence spike", () => {
   const usesSpike = (file: string, text: string) => {
     const metadata = metadataArrays[relative(file)];
     const normalized = text.replace(/\r\n/g, "\n");
-    // Remove ONE exact path entry only from these named, entirely literal identity arrays.
+    // Remove ONE exact path entry only from these named, entirely literal identity arrays (allowing comments and route-group path parentheses).
     // Imports, expressions, duplicate entries and every other module remain in the scan.
     const executable = metadata
       ? normalized.replace(metadata, (array) =>

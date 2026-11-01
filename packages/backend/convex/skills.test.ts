@@ -39,6 +39,7 @@ import {
   KNOWLEDGE_WORK_PROVENANCE,
 } from "@pikar/contracts/skills/knowledgeWorkProvenance";
 import { packBusinessPulseSkillBody } from "@pikar/contracts/skills/packBusinessPulse";
+import { presenceDesignPolicySkillBody } from "@pikar/contracts/skills/presenceDesignPolicy";
 import { presentationDrafterSkillBody } from "@pikar/contracts/skills/presentationDrafter";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { revenueSkillBodies } from "@pikar/contracts/skills/revenueBodies";
@@ -1134,6 +1135,7 @@ describe("the knowledge bodies stay ungated only while the runner cannot certify
 describe("no hardcoded agent prompts in convex/", () => {
   test.each([
     ["executive-agent.classifier.md", executiveAgentClassifierSkillBody],
+    ["presence-design-policy.md", presenceDesignPolicySkillBody],
     ["executive-router.md", executiveRouterSkillBody],
     ["email-drafter.md", emailDrafterSkillBody],
     ["cockpit-agent.md", cockpitAgentSkillBody],

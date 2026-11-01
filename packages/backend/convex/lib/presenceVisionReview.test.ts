@@ -1,4 +1,5 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { presenceDesignPolicySkillBody } from "@pikar/contracts/skills/presenceDesignPolicy";
 import { sha256Bytes } from "@pikar/core/webRuntime";
 import { beforeEach, expect, test, vi } from "vitest";
 import { resolveModel } from "./models";
@@ -69,7 +70,14 @@ function input() {
     a.reservationId ? { breached: false } : "reservation",
   );
   return {
-    ctx: { runMutation } as never,
+    ctx: {
+      runMutation,
+      runQuery: vi.fn(async () => ({
+        body: presenceDesignPolicySkillBody,
+        version: 1,
+        skillId: "policy",
+      })),
+    } as never,
     tenantId: "ordinary-tenant",
     planId: "plan" as never,
     revision: 3,
@@ -274,4 +282,37 @@ test("repair is a recommendation only and cannot approve the existing artifact",
   const result = await reviewPresenceVision(input());
   expect(result.passed).toBe(false);
   expect(result.fidelityMatched).toBe(false);
+});
+
+test("missing registry policy refuses before paid admission or provider generation", async () => {
+  const args = input();
+  const ctx = args.ctx as unknown as {
+    runQuery: ReturnType<typeof vi.fn>;
+    runMutation: ReturnType<typeof vi.fn>;
+  };
+  ctx.runQuery.mockRejectedValueOnce(new Error("NO_ACTIVE_SKILL: presence-design-policy"));
+  await expect(reviewPresenceVision(args)).rejects.toThrow("NO_ACTIVE_SKILL");
+  expect(ctx.runQuery).toHaveBeenCalledOnce();
+  expect(args.beforeCall).not.toHaveBeenCalled();
+  expect(ctx.runMutation).not.toHaveBeenCalled();
+  expect(wire).toHaveLength(0);
+});
+
+test.each([
+  "not-json",
+  "null",
+  "[]",
+  JSON.stringify({ vision: "incomplete" }),
+  JSON.stringify({ ...JSON.parse(presenceDesignPolicySkillBody), vision: " " }),
+])("invalid registry policy refuses before paid generation: %s", async (body) => {
+  const args = input();
+  const ctx = args.ctx as unknown as {
+    runQuery: ReturnType<typeof vi.fn>;
+    runMutation: ReturnType<typeof vi.fn>;
+  };
+  ctx.runQuery.mockResolvedValueOnce({ body, version: 2, skillId: "policy" });
+  await expect(reviewPresenceVision(args)).rejects.toThrow("PRESENCE_POLICY_INVALID");
+  expect(args.beforeCall).not.toHaveBeenCalled();
+  expect(ctx.runMutation).not.toHaveBeenCalled();
+  expect(wire).toHaveLength(0);
 });

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { presenceDesignPolicySkillBody } from "@pikar/contracts/skills/presenceDesignPolicy";
 
 import { selectDesignProfile } from "@pikar/core/designKnowledge";
 import { sha256Bytes } from "@pikar/core/webRuntime";
@@ -155,6 +156,15 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 async function setup() {
   const t = convexTest(schema, modules);
+  await t.run((ctx) =>
+    ctx.db.insert("skills", {
+      name: "presence-design-policy",
+      version: 1,
+      body: presenceDesignPolicySkillBody,
+      status: "active",
+      createdAt: Date.now(),
+    }),
+  );
   t.registerComponent("auditCounts", aggregateSchema, aggregates);
   t.registerComponent("rateLimiter", limiterSchema, limiters);
   const tenantId = await t.run((ctx) => ctx.db.insert("users", {}));

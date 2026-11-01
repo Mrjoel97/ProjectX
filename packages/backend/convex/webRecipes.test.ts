@@ -161,7 +161,7 @@ describe("Phase 49 recipe project boundary", () => {
           args: unknown,
         ) => Promise<{ ok: boolean; code: string }>
       )(publication.unpublish, { projectId: result.projectId, expectedRevision: result.revision }),
-    ).resolves.toMatchObject({ ok: false, code: "COMMERCE_UNAVAILABLE" });
+    ).resolves.toMatchObject({ ok: true, revision: result.revision + 1 });
     await expect(
       t.query(internal.webRuntime.resolvePage, {
         host: "pikar-platform",
@@ -413,13 +413,16 @@ describe("Phase 49 recipe project boundary", () => {
     expect(manual).not.toContain("recipeRef");
   });
 
-  test("storefront has a private owner seam but no readiness toggle or public resolver", () => {
+  test("storefront recipe remains private and public resolvers enforce merchant readiness", () => {
     expect(SOURCE).toContain("export const commerceContractReady = (): false => false");
     expect(SOURCE).toContain("export const qualifyStorefront = ownerMutation");
     expect(SOURCE).toContain("export const getStorefrontQualification = ownerQuery");
     expect(PROJECTS).toContain('project.kind === "storefront"');
     expect(PROJECTS).toContain("COMMERCE_UNAVAILABLE");
-    expect(RUNTIME).toContain('resolved.project.kind === "storefront"');
+    expect(RUNTIME).toContain("internal.webProjects.resolvePublished");
+    const resolver = PROJECTS.slice(PROJECTS.indexOf("export const resolvePublished"));
+    expect(resolver).toContain("merchantReadiness(ctx, project.tenantId, project._id)");
+    expect(resolver).toContain("publicCheckoutReady");
     expect(HTTP).toContain('resolved.project.kind === "storefront"');
   });
 

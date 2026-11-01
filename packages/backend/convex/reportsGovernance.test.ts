@@ -11,7 +11,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AUDIT_VIEWER_EVENTS } from "@pikar/contracts/auditProjection";
+import { AUDIT_VIEWER_EVENTS, projectAuditRow } from "@pikar/contracts/auditProjection";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -368,7 +368,17 @@ describe("the allowlist against the write sites it claims to cover", () => {
 
   // Production retention accounting lives in the reserved control namespace, never a tenant view.
   // foundation.test verifies the actual writer namespace and audit.test refuses forged receipts.
-  const CONTROL_ACCOUNTING_EVENTS = new Set(["foundation_retention.purged"]);
+  const CONTROL_ACCOUNTING_EVENTS = new Set([
+    "foundation_retention.purged",
+    "presence_comparison.claimed",
+  ]);
+  test("comparison claim remains internal operator accounting", () => {
+    const source = readFileSync(join(convexDir, "presenceComparisonControl.ts"), "utf8");
+    expect(source).toContain("tenantId: COMPARISON_NAMESPACE");
+    expect(source).toContain("export const claim = internalMutation");
+    expect(source).toContain('eventType: "presence_comparison.claimed"');
+    expect(AUDIT_VIEWER_EVENTS).not.toHaveProperty("presence_comparison.claimed");
+  });
 
   test("excluded authoring control events remain reserved operator probe receipts", () => {
     const probe = readFileSync(join(convexDir, "authoringProbe.ts"), "utf8");
@@ -424,4 +434,29 @@ describe("the allowlist against the write sites it claims to cover", () => {
     const invented = Object.keys(AUDIT_VIEWER_EVENTS).filter((e) => !literals.has(e));
     expect(invented, "these events appear nowhere in convex/ source").toEqual([]);
   });
+});
+
+test("presence completion and commerce projection never disclose provider bodies", () => {
+  const project = (eventType: string, payload: unknown) =>
+    projectAuditRow({ ts: 1, eventType, actor: "agent", correlationId: "safe-ref", payload });
+  expect(
+    project("presence_design.completion", { revision: 2, completionJson: '{"secret":"private"}' })
+      .refs,
+  ).toEqual({ revision: 2 });
+  expect(
+    project("tenant_merchant.payment_observed", {
+      paymentId: "payment-1",
+      orderId: "order-1",
+      status: "succeeded",
+      eventRef: "provider-secret",
+      rawBody: "private",
+    }).refs,
+  ).toEqual({ paymentId: "payment-1", orderId: "order-1", status: "succeeded" });
+  expect(
+    project("presence_design.attempt", {
+      phase: "claimed",
+      projectRef: "private-project",
+      prompt: "private",
+    }).refs,
+  ).toEqual({ phase: "claimed" });
 });

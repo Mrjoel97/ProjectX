@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { presenceDesignPolicySkillBody } from "@pikar/contracts/skills/presenceDesignPolicy";
 import { generateText } from "ai";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
@@ -11,7 +12,10 @@ import type { ActionCtx } from "./_generated/server";
 import { generateStitchDesignEvidence } from "./lib/stitchDesignClient";
 import schema from "./schema";
 
-vi.mock("ai", () => ({ generateText: vi.fn() }));
+vi.mock("ai", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("ai")>()),
+  generateText: vi.fn(),
+}));
 vi.mock("./lib/models", () => ({ resolveModel: (modelId: string) => ({ modelId }) }));
 vi.mock("./lib/evalBudgetModel", () => ({ evalBudgetModel: (args: unknown) => args }));
 vi.mock("./lib/stitchDesignClient", () => ({ generateStitchDesignEvidence: vi.fn() }));
@@ -33,6 +37,15 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 async function setup() {
   const t = convexTest(schema, modules);
+  await t.run((ctx) =>
+    ctx.db.insert("skills", {
+      name: "presence-design-policy",
+      version: 1,
+      body: presenceDesignPolicySkillBody,
+      status: "active",
+      createdAt: Date.now(),
+    }),
+  );
   t.registerComponent("auditCounts", aggregateSchema, aggregates);
   t.registerComponent("rateLimiter", limiterSchema, limiters);
   const tenantId = "packeval-abc12345-presence";

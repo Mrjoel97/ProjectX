@@ -55,7 +55,16 @@ export function merchantProductConfigRef(
   >,
   presentationItemId: string,
 ) {
-  return `${presentationItemId}:${product._id}#${sha256Bytes(new TextEncoder().encode(JSON.stringify([product.currency, product.goodsKind ?? null, product.priceMinor, product.status, product.digitalDeliveryDocumentId ?? null, product.digitalDeliverySourceHash ?? null])))}`;
+  const config = [
+    product.currency,
+    product.goodsKind ?? null,
+    product.priceMinor,
+    product.status,
+    product.digitalDeliveryDocumentId ?? null,
+    product.digitalDeliverySourceHash ?? null,
+  ];
+  const digest = sha256Bytes(new TextEncoder().encode(JSON.stringify(config)));
+  return `${presentationItemId}:${product._id}#${digest}`;
 }
 export async function merchantReadiness(
   ctx: Db,

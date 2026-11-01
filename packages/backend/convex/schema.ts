@@ -38,7 +38,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 const webRecipeName = literals(WEB_RECIPE_SKILL_NAMES);
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 92 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 104 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │

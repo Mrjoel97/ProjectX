@@ -72,7 +72,7 @@ export const run = internalAction({
         : outcome === "awaiting_review" && after.artifact
           ? after.artifact.publishedVersion === after.artifact.version
             ? `Website version ${after.artifact.version} is published. [Review this version](${after.artifact.projectUrl}&version=${after.artifact.version}).`
-            : `Website version ${after.artifact.version} is ready for your review. [Open the exact version](${after.artifact.projectUrl}&version=${after.artifact.version}). Check its pages and source disclosures before approving publication.`
+            : `Review website v${after.artifact.version}: [open](${after.artifact.projectUrl}&version=${after.artifact.version}). Check pages and source disclosures before approving publication.`
           : result.reply;
     return { ok: true, reply, costUsd: result.costUsd, outcome };
   },

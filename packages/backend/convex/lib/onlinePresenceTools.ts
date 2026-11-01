@@ -169,7 +169,7 @@ export function buildOnlinePresenceTools(context: {
               shopSetup: {
                 type: "object",
                 description:
-                  "Private proposed shop operating package from actual source facts. Omit unknown fields; missing facts are returned for one grouped follow-up. Native exact-package review, not this proposal, activates products and operating choices.",
+                  "Propose shop setup from source facts; omit unknowns for grouped follow-up. Only native exact-package review can activate products and operations.",
                 properties: {
                   version: { type: "integer", const: 1 },
                   sellerCountry: { type: "string", pattern: "^[A-Z]{2}$" },
@@ -337,7 +337,7 @@ export function buildOnlinePresenceTools(context: {
     }),
     buildOnlinePresenceProject: tool({
       description:
-        "Build or revise the saved private website with required Stitch design and Kimi implementation. Rechecks owned sources, budget and revision. Returns an exact private version pending visual review; never substitutes an older recipe when providers fail, publishes, or enables checkout.",
+        "Build a private version with required Stitch and Kimi. Rechecks sources, budget and revision; requires visual review. No provider fallback, publication or checkout activation.",
       inputSchema: jsonSchema<{ expectedRevision: number }>({
         type: "object",
         properties: { expectedRevision: { type: "integer", minimum: 0 } },

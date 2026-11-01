@@ -35,6 +35,8 @@ export const WEB_RECIPE_EVALUATOR_FILES = [
   "packages/backend/convex/presenceVisualRevision.ts",
   "packages/backend/convex/lib/presenceVisionReview.ts",
   "packages/backend/convex/lib/presenceModelLimits.ts",
+  "packages/backend/convex/lib/presencePolicy.ts",
+  "packages/contracts/src/skills/presenceDesignPolicy.ts",
   "apps/web/proxy.ts",
   "apps/web/app/api/presence/review/route.ts",
   "apps/web/app/api/presence/review/runner.ts",

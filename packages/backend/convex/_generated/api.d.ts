@@ -93,6 +93,7 @@ import type * as lib_onlinePresenceTools from "../lib/onlinePresenceTools.js";
 import type * as lib_paidBudgetModel from "../lib/paidBudgetModel.js";
 import type * as lib_planRow from "../lib/planRow.js";
 import type * as lib_presenceModelLimits from "../lib/presenceModelLimits.js";
+import type * as lib_presencePolicy from "../lib/presencePolicy.js";
 import type * as lib_presencePublication from "../lib/presencePublication.js";
 import type * as lib_presenceRequiredPipeline from "../lib/presenceRequiredPipeline.js";
 import type * as lib_presenceVisionReview from "../lib/presenceVisionReview.js";
@@ -328,6 +329,7 @@ declare const fullApi: ApiFromModules<{
   "lib/paidBudgetModel": typeof lib_paidBudgetModel;
   "lib/planRow": typeof lib_planRow;
   "lib/presenceModelLimits": typeof lib_presenceModelLimits;
+  "lib/presencePolicy": typeof lib_presencePolicy;
   "lib/presencePublication": typeof lib_presencePublication;
   "lib/presenceRequiredPipeline": typeof lib_presenceRequiredPipeline;
   "lib/presenceVisionReview": typeof lib_presenceVisionReview;

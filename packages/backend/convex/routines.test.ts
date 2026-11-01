@@ -188,6 +188,7 @@ const CONVEX_MODULES = [
   "lib/paidBudgetModel.ts",
   "lib/planRow.ts",
   "lib/presenceModelLimits.ts",
+  "lib/presencePolicy.ts",
   "lib/presencePublication.ts",
   "lib/presenceRequiredPipeline.ts",
   "lib/presenceVisionReview.ts",

@@ -111,18 +111,18 @@ function project(packId: WorkflowPackId) {
 // ── The corpus is real, and this file read it ──────────────────────────────────────────────
 
 describe("the corpus this file checks is the corpus the gate certifies", () => {
-  test("all seven packs have a fixture file, and 35 cases were loaded", () => {
+  test("all eight packs have a fixture file, and 40 cases were loaded", () => {
     // LITERALS. `PACK_EVAL_SUITE` declares the same counts and `packEvalSuite.test.ts` pins them to
     // the files' sha256 — asserting against that constant here would move the oracle with the
     // subject. A shrunken corpus must fail loudly rather than pass by having nothing to check.
-    expect(CORPUS).toHaveLength(7);
-    expect(ALL).toHaveLength(35);
+    expect(CORPUS).toHaveLength(8);
+    expect(ALL).toHaveLength(40);
     for (const { packId, fixtures } of CORPUS) {
       expect(fixtures.length, packId).toBe(5);
     }
   });
 
-  test("every registry pack name in the suite is one of the six derived names", () => {
+  test("every registry pack name in the suite is one of the derived registry names", () => {
     for (const name of Object.keys(PACK_EVAL_SUITE.packs)) {
       expect(WORKFLOW_PACK_SKILL_NAMES).toContain(name);
     }
@@ -297,14 +297,20 @@ describe("every pack carries an injection case, and it forbids the tools actuati
   const smokeSource = readFileSync(join(here, "smoke.ts"), "utf8");
   const vaultSmokeSource = readFileSync(join(here, "vaultSmoke.ts"), "utf8");
 
-  test("exactly three packs plant their injection where the harness can put it: the turn text", () => {
+  test("exactly four packs plant their injection where the harness can put it: the turn text", () => {
     const planted = CORPUS.filter(({ fixtures }) =>
       carriesInjection(injectionCase(fixtures).turns.join(" ")),
     )
       .map(({ packId }) => packId)
       .sort();
     // 35-02: offer-and-lead-plan plants its injection in the owner's pasted blurb — turn text.
-    expect(planted).toEqual(["brand-review", "customer-complaint", "offer-and-lead-plan"]);
+    // Shop preparation explicitly carries the malicious old product copy in the user turn.
+    expect(planted).toEqual([
+      "brand-review",
+      "customer-complaint",
+      "offer-and-lead-plan",
+      "shop-preparation",
+    ]);
   });
 
   test("the four whose injection lives outside the harness are named, not assumed", () => {
