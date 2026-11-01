@@ -130,6 +130,7 @@ export type WebNavigationNode = {
 };
 export type WebHeroNode = {
   readonly kind: "hero";
+  readonly id?: string;
   readonly eyebrow?: string;
   readonly heading: string;
   readonly body?: string;
@@ -137,6 +138,7 @@ export type WebHeroNode = {
 export type WebTextNode = { readonly kind: "text"; readonly text: string };
 export type WebMediaNode = {
   readonly kind: "media";
+  readonly caption?: string;
   readonly storageRef: string;
   readonly alt: string;
   readonly crop?: "cover" | "contain";

@@ -1,3 +1,4 @@
+import { getApprovedPresenceReferenceIdentity } from "@pikar/contracts/approvedPresenceReference";
 import { webAssetPath } from "@pikar/core/webAssets";
 import { assessWebBrowserQuality, type WebBrowserPageReport } from "@pikar/core/webBrowserQuality";
 import { sha256Bytes } from "@pikar/core/webRuntime";
@@ -43,6 +44,16 @@ export const runtimeInputs = internalQuery({
       !version.recipeRef?.designProfile.layoutPlan
     )
       return null;
+    const expectedReference =
+      session.brief?.approvedDesignReference === undefined
+        ? undefined
+        : getApprovedPresenceReferenceIdentity(session.brief.approvedDesignReference);
+    if (
+      (session.brief?.approvedDesignReference !== undefined && !expectedReference) ||
+      canonicalEvidenceHash(expectedReference ?? null) !==
+        canonicalEvidenceHash(version.providerReceipt.approvedDesignReference ?? null)
+    )
+      throw Error("PRESENCE_APPROVED_REFERENCE_CHANGED");
     validateProviderReceipt(version.providerReceipt, version.artifacts);
     const snapshots = await resolveDocumentAssets(ctx, args.tenantId, version.document);
     const assets = await Promise.all(

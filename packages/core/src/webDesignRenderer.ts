@@ -13,7 +13,11 @@ import {
 } from "./designKnowledge";
 import { webAssetPath } from "./webAssets";
 import { WEB_CAROUSEL_TAG } from "./webCarouselRuntime";
-import { canonicalWebLayoutPlan, type WebLayoutPlan } from "./webLayoutPlan";
+import {
+  canonicalWebLayoutPlan,
+  validateWebLayoutPlanForDocument,
+  type WebLayoutPlan,
+} from "./webLayoutPlan";
 import {
   canonicalWebDocument,
   escapeWebText,
@@ -22,7 +26,7 @@ import {
   sha256Bytes,
 } from "./webRuntime";
 
-export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v16" as const;
+export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v17" as const;
 const encoder = new TextEncoder();
 
 /** The renderer depends on the selected records, not merely the bundle's role labels. */
@@ -113,7 +117,10 @@ function designedGallery(
   route: WebRouteContext,
   plan?: WebLayoutPlan,
 ): string | undefined {
-  if (node.id !== "gallery" || !node.children.every((child) => child.kind === "media"))
+  if (
+    (node.id !== "gallery" && plan?.version !== 3) ||
+    !node.children.every((child) => child.kind === "media")
+  )
     return undefined;
   const images = node.children.filter((child) => child.kind === "media");
   const carousel = images.length >= 3 && images.length <= 6 && plan?.gallery !== "grid";
@@ -121,7 +128,7 @@ function designedGallery(
   const slides = images
     .map(
       (image, index) =>
-        `<li id="gallery-image-${index + 1}" class="gallery-slide" aria-label="Image ${index + 1} of ${images.length}">${renderWebMedia(image, route)}<p class="gallery-caption">${escapeWebText(image.alt)}</p></li>`,
+        `<li id="gallery-image-${index + 1}" class="gallery-slide" aria-label="Image ${index + 1} of ${images.length}">${renderWebMedia(image, route)}<p class="gallery-caption">${escapeWebText(image.caption ?? image.alt)}</p></li>`,
     )
     .join("");
   const controls = carousel
@@ -142,7 +149,48 @@ export function renderDesignedWebDocument(
   const direction = profile.artDirection ?? "editorial";
   const surfaceStyle = profile.surfaceStyle ?? "minimal";
   const layoutPlan = profile.layoutPlan;
-  const designTokens = layoutPlan?.version === 2 ? layoutPlan.designTokens : undefined;
+  if (layoutPlan?.version === 3 && !validateWebLayoutPlanForDocument(document, layoutPlan))
+    throw Error("WEB_LAYOUT_DOCUMENT_MISMATCH");
+  const designTokens = layoutPlan && layoutPlan.version !== 1 ? layoutPlan.designTokens : undefined;
+  const annotations =
+    layoutPlan?.version === 3
+      ? layoutPlan.sections.filter((section) => section.pageSlug === parts.page.slug)
+      : [];
+  const annotationFor = (node: { kind: string; id?: string }) =>
+    annotations.find((section) => section.nodeId === node.id);
+  const pagePresentation =
+    layoutPlan?.version === 3
+      ? layoutPlan.pagePresentation?.find((p) => p.pageSlug === parts.page.slug)
+      : undefined;
+  const treatedHeading = (nodeId: string | undefined, value: string): string => {
+    const treatment =
+      layoutPlan?.version === 3
+        ? layoutPlan.headingTreatments?.find(
+            (t) => t.pageSlug === parts.page.slug && t.nodeId === nodeId,
+          )
+        : undefined;
+    if (!treatment) return escapeWebText(value);
+    const cuts = [
+      ...new Set([
+        0,
+        value.length,
+        ...treatment.breakAfter,
+        ...treatment.emphasisRanges.flatMap((r) => [r.start, r.end]),
+      ]),
+    ].sort((a, b) => a - b);
+    return cuts
+      .slice(0, -1)
+      .map((start, i) => {
+        const end = cuts[i + 1] ?? value.length;
+        const range = treatment.emphasisRanges.find((r) => start >= r.start && end <= r.end);
+        const copy = escapeWebText(value.slice(start, end));
+        return (
+          (treatment.breakAfter.includes(start) ? "<br>" : "") +
+          (range ? `<em class="heading-tone-${range.tone}">${copy}</em>` : copy)
+        );
+      })
+      .join("");
+  };
   const innerPage = !!designTokens && parts.page.slug !== parts.document.pages[0]?.slug;
   const baseColors = designTokens
     ? { ...designTokens.colors, hero: designTokens.colors.paper, heroInk: designTokens.colors.ink }
@@ -194,7 +242,7 @@ export function renderDesignedWebDocument(
     page.nodes.some((node) => node.kind === "form"),
   );
   const catalogue = parts.nodes.find((entry) => entry.node.kind === "catalogue");
-  const entryHtml = (entry: (typeof parts.nodes)[number]) =>
+  const defaultEntryHtml = (entry: (typeof parts.nodes)[number]) =>
     entry.node.kind === "catalogue"
       ? designedCatalogue(entry.node, parts.route)
       : entry.node.kind === "form"
@@ -208,6 +256,135 @@ export function renderDesignedWebDocument(
               ? entry.html.replace(`<h2>${escapeWebText(entry.node.heading)}</h2>`, "")
               : entry.html))
           : entry.html;
+  const entryHtml = (entry: (typeof parts.nodes)[number]) => {
+    const annotation = annotationFor(entry.node);
+    if (!annotation) return defaultEntryHtml(entry);
+    if (entry.node.kind === "form")
+      return (
+        '<section class="planned-section planned-contact" data-composition="contact-panel"><div class="planned-contact-body">' +
+        designedInquiry(entry.node, parts.route) +
+        "</div></section>"
+      );
+    if (entry.node.kind !== "section") return defaultEntryHtml(entry);
+    const node = entry.node;
+    if (annotation.composition === "image-caption" && layoutPlan?.gallery === "carousel") {
+      const first = node.children.findIndex((c) => c.kind === "media"),
+        last = node.children.reduce(
+          (last, child, index) => (child.kind === "media" ? index : last),
+          -1,
+        );
+      const contiguous =
+        first >= 0 && node.children.slice(first, last + 1).every((c) => c.kind === "media");
+      const gallery = contiguous
+        ? designedGallery(
+            { ...node, children: node.children.slice(first, last + 1) },
+            parts.route,
+            layoutPlan,
+          )
+        : undefined;
+      if (gallery) {
+        const sourceCopy = (children: typeof node.children) =>
+          children
+            .map((c) =>
+              c.kind === "text"
+                ? `<p class="gallery-source-copy">${escapeWebText(c.text)}</p>`
+                : "",
+            )
+            .join("");
+        let result = gallery
+          .replace('id="gallery"', `id="${escapeWebText(node.id)}"`)
+          .replace(
+            'class="designed-gallery',
+            'data-composition="image-caption" class="designed-gallery',
+          );
+        if (node.heading)
+          result = result.replace(
+            `<h2 id="gallery-heading">${escapeWebText(node.heading)}</h2>`,
+            `<h2 id="gallery-heading">${treatedHeading(node.id, node.heading)}</h2>`,
+          );
+        result = result.replace(
+          '<div class="gallery-viewport"',
+          sourceCopy(node.children.slice(0, first)) + '<div class="gallery-viewport"',
+        );
+        return result.replace(
+          /<\/section>$/,
+          sourceCopy(node.children.slice(last + 1)) + "</section>",
+        );
+      }
+    }
+    const heading = node.heading
+      ? `<h2 class="planned-heading">${treatedHeading(node.id, node.heading)}</h2>`
+      : "";
+    const text = (value: string) => `<p>${escapeWebText(value)}</p>`;
+    const unsupported = (): never => {
+      throw new Error("WEB_LAYOUT_DOCUMENT_MISMATCH");
+    };
+    const supported = (child: WebSectionNode["children"][number]): string =>
+      child.kind === "text"
+        ? text(child.text)
+        : child.kind === "media"
+          ? renderWebMedia(child, parts.route)
+          : child.kind === "cta"
+            ? child.analytics
+              ? `<form method="post" action="/p/${parts.route.slug}/${parts.route.page}/cta/${escapeWebText(child.id)}"><button type="submit" data-target="${escapeWebText(child.target.kind === "local" ? child.target.path : child.target.url)}">${escapeWebText(child.label)}</button></form>`
+              : `<a class="cta" href="${escapeWebText(child.target.kind === "local" ? child.target.path : child.target.url)}">${escapeWebText(child.label)}</a>`
+            : child.kind === "section"
+              ? `<article id="${escapeWebText(child.id)}">` +
+                (child.heading ? `<h3>${escapeWebText(child.heading)}</h3>` : "") +
+                child.children.map(supported).join("") +
+                "</article>"
+              : unsupported();
+    const service =
+      annotation.composition === "service-panels" ||
+      annotation.composition === "numbered-services" ||
+      annotation.composition === "principles-grid";
+    const children = service
+      ? node.children
+          .map(
+            (child) =>
+              '<article class="planned-service' +
+              (child.kind === "text" || (child.kind === "section" && child.children.length === 0)
+                ? " is-compact"
+                : "") +
+              '"' +
+              (child.kind === "section" ? ` id="${escapeWebText(child.id)}"` : "") +
+              ">" +
+              (child.kind === "section"
+                ? (child.heading ? `<h3>${escapeWebText(child.heading)}</h3>` : "") +
+                  child.children.map(supported).join("")
+                : child.kind === "text"
+                  ? `<h3>${escapeWebText(child.text)}</h3>`
+                  : supported(child)) +
+              "</article>",
+          )
+          .join("")
+      : annotation.composition === "image-caption"
+        ? node.children
+            .map((child) =>
+              child.kind === "media"
+                ? '<div class="planned-image">' +
+                  renderWebMedia(child, parts.route) +
+                  '<p class="planned-caption">' +
+                  escapeWebText(child.caption ?? child.alt) +
+                  "</p></div>"
+                : supported(child),
+            )
+            .join("")
+        : node.children.map(supported).join("");
+    return (
+      '<section id="' +
+      escapeWebText(node.id) +
+      '" class="planned-section planned-' +
+      annotation.composition +
+      '" data-composition="' +
+      annotation.composition +
+      '">' +
+      heading +
+      '<div class="planned-body">' +
+      children +
+      "</div></section>"
+    );
+  };
   const heroIndex = hero ? parts.nodes.indexOf(hero) : -1;
   const cta = hero
     ? parts.nodes.slice(heroIndex + 1).find((entry) => entry.node.kind === "cta")
@@ -217,11 +394,11 @@ export function renderDesignedWebDocument(
         (entry) =>
           entry.node.kind === "media" && entry.node.placement === "hero" && entry.html.length > 0,
       ) ??
-      parts.nodes.find((entry) => entry.node.kind === "form") ??
-      (!innerPage && direction === "studio"
+      parts.nodes.find((entry) => entry.node.kind === "form" && !annotationFor(entry.node)) ??
+      (!innerPage && layoutPlan?.version !== 3 && direction === "studio"
         ? parts.nodes.find((entry) => entry.node.kind === "section" && entry.node.id === "services")
         : undefined) ??
-      (!innerPage && direction === "technical"
+      (!innerPage && layoutPlan?.version !== 3 && direction === "technical"
         ? parts.nodes.find((entry) => entry.node.kind === "section" && entry.node.id === "proof")
         : undefined))
     : undefined;
@@ -231,12 +408,12 @@ export function renderDesignedWebDocument(
     .filter((entry) => entry !== hero && entry !== cta && entry !== rail)
     .map(
       (entry) =>
-        `<div class="content-block node-${entry.node.kind}"${entry === catalogue ? ' id="pikar-collection"' : ""}>${entryHtml(entry)}</div>`,
+        `<div class="${annotationFor(entry.node) ? "planned-content" : "content-block"} node-${entry.node.kind}"${entry === catalogue ? ' id="pikar-collection"' : ""}>${entryHtml(entry)}</div>`,
     )
     .join("");
   // Reuse only an already-authorized brand image; never invent assets for sparse inner pages.
   const supportingMedia =
-    innerPage && rail?.node.kind !== "media"
+    innerPage && layoutPlan?.version !== 3 && rail?.node.kind !== "media"
       ? parts.document.pages[0]?.nodes.find(
           (node) => node.kind === "media" && node.placement === "hero",
         )
@@ -250,7 +427,7 @@ export function renderDesignedWebDocument(
         "</p></div>"
       : "";
   const heroHtml = hero
-    ? `<div class="hero-composition${rail ? " has-rail" : ""}${rail?.node.kind === "media" ? " has-media" : ""}"><div class="hero-copy">${hero.html}${cta ? `<div class="hero-action">${cta.html}</div>` : inquiry?.node.kind === "form" && rail !== inquiry ? `<div class="hero-action"><a class="cta" href="#inquiry-${escapeWebText(inquiry.node.id)}">Get in touch</a></div>` : !inquiry && contactPage && contactPage.slug !== parts.page.slug ? `<div class="hero-action"><a class="cta" href="/p/${parts.route.slug}/${contactPage.slug}">Get in touch</a></div>` : catalogue ? '<div class="hero-action"><a class="cta" href="#pikar-collection">Explore the collection</a></div>' : ""}${supportingVisual}</div>${rail ? `<div class="hero-rail${rail.node.kind === "media" ? " hero-visual" : ""}">${entryHtml(rail)}</div>` : ""}</div>`
+    ? `<div class="hero-composition${rail ? " has-rail" : ""}${rail?.node.kind === "media" ? " has-media" : ""}"><div class="hero-copy">${hero.node.kind === "hero" ? hero.html.replace(`<h1>${escapeWebText(hero.node.heading)}</h1>`, `<h1>${treatedHeading(hero.node.id, hero.node.heading)}</h1>`) : hero.html}${cta ? `<div class="hero-action">${cta.html}</div>` : inquiry?.node.kind === "form" && rail !== inquiry ? `<div class="hero-action"><a class="cta" href="#inquiry-${escapeWebText(inquiry.node.id)}">Get in touch</a></div>` : !inquiry && contactPage && contactPage.slug !== parts.page.slug ? `<div class="hero-action"><a class="cta" href="/p/${parts.route.slug}/${contactPage.slug}">Get in touch</a></div>` : catalogue ? '<div class="hero-action"><a class="cta" href="#pikar-collection">Explore the collection</a></div>' : ""}${supportingVisual}</div>${rail ? `<div class="hero-rail${rail.node.kind === "media" ? " hero-visual" : ""}">${entryHtml(rail)}</div>` : ""}</div>`
     : "";
   const home = `/p/${parts.route.slug}/${parts.document.pages[0]?.slug ?? parts.route.page}`;
   const brand = escapeWebText(parts.document.brand.name);
@@ -366,7 +543,7 @@ body[data-layout-services=columns] #services{display:grid;grid-template-columns:
 `
     : "";
   const layoutAttributes = layoutPlan
-    ? ` data-layout-hero="${layoutPlan.hero}" data-layout-spacing="${layoutPlan.spacing}" data-layout-heading="${layoutPlan.headingScale}" data-layout-sections="${layoutPlan.sectionLayout}" data-layout-services="${layoutPlan.services}"`
+    ? ` data-layout-version="${layoutPlan.version}" data-layout-hero="${layoutPlan.hero}" data-layout-spacing="${layoutPlan.spacing}" data-layout-heading="${layoutPlan.headingScale}" data-layout-sections="${layoutPlan.sectionLayout}" data-layout-services="${layoutPlan.services}"`
     : "";
   const motionCss =
     motion === 0
@@ -448,7 +625,30 @@ body[data-inner-page=inquiry] .hero-composition.has-rail{grid-template-columns:m
 @media(max-width:767px){body[data-inner-page] main{padding-top:28px;padding-bottom:40px}body[data-inner-page]:not([data-inner-page=inquiry]) main,body[data-inner-page=inquiry] .hero-composition.has-rail{grid-template-columns:minmax(0,1fr);gap:32px}.inner-brand-visual{margin-top:28px}.inner-brand-visual .web-media{max-height:220px}body[data-inner-page=editorial][data-layout-spacing] .content-block.node-text{padding:28px 0}body[data-inner-page=services][data-layout-services] #services>p{padding:24px;min-height:150px}body[data-inner-page=inquiry] .has-rail:not(.has-media) .hero-rail{padding:24px}}
 `
     : "";
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${galleryCss}${layoutCss}${presentationCss}${innerPageCss}${editorialFinishCss}${innerEditorialCss}${motionCss}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"${layoutAttributes}${innerComposition ? ` data-inner-page="${innerComposition}"` : ""}><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer>${content.includes('class="designed-gallery gallery-carousel"') ? WEB_CAROUSEL_TAG : ""}</body></html>`;
+  const sectionCompositionCss =
+    layoutPlan?.version === 3
+      ? `
+body[data-layout-version="3"] #services[data-composition],body[data-layout-version="3"] #about[data-composition],body[data-layout-version="3"] #proof[data-composition]{display:block;padding-block:clamp(64px,7vw,104px)}body[data-layout-version="3"] #services[data-composition="service-panels"],body[data-layout-version="3"] #services[data-composition="numbered-services"]{background:var(--ink);color:var(--paper)}.planned-content{min-width:0}.planned-section{padding-block:clamp(64px,7vw,104px)}body[data-layout-version="3"] :is(#about,#services,#proof,.planned-section) .planned-heading{font-family:var(--heading);font-size:clamp(2.3rem,4.2vw,4rem);font-weight:400;line-height:1.12;letter-spacing:-.025em;text-wrap:balance;max-width:26ch;margin:0 0 36px}.planned-section .planned-body{min-width:0}.planned-editorial-lead .planned-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:32px 48px;max-width:1000px}.planned-editorial-lead .planned-body>p{margin:0;max-width:48ch}.planned-editorial-lead .planned-body>p:first-child{font-family:var(--heading);font-size:clamp(1.3rem,2vw,1.75rem);line-height:1.4}.planned-editorial-lead .planned-body>article{padding-top:24px}.planned-editorial-lead h3{font-size:1.4rem;font-weight:400}
+.planned-service-panels,.planned-numbered-services{background:var(--ink);color:var(--paper);width:100vw;margin-inline:calc(50% - 50vw);padding-inline:max(24px,calc((100vw - var(--measure))/2 + 32px))}.planned-service-panels .planned-body,.planned-numbered-services .planned-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:48px 64px;counter-reset:planned-service}.planned-section .planned-service{min-width:0;border-top:1px solid currentColor;padding-top:32px;counter-increment:planned-service}.planned-section .planned-service h3{font-family:var(--heading);font-size:clamp(1.8rem,2.8vw,2.6rem);font-weight:400;line-height:1.15;letter-spacing:-.02em;max-width:22ch;margin:0}.planned-section .planned-service p{color:inherit;font-size:1.05rem;line-height:1.7;max-width:46ch;margin:20px 0 0}.planned-section .planned-service.is-compact{padding-block:24px}.planned-numbered-services .planned-service:before{content:counter(planned-service,decimal-leading-zero);display:block;font-family:var(--heading);font-size:1.2rem;margin-bottom:20px}
+.planned-image-caption .planned-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:32px}.planned-image .web-media{aspect-ratio:4/3!important;max-height:340px}.planned-caption{font-size:.9rem;line-height:1.5;margin:16px 0 0}.planned-contact{background:var(--card);width:100vw;margin-inline:calc(50% - 50vw);padding-inline:24px}.planned-contact-body{max-width:720px;margin-inline:auto}.planned-contact legend{font-family:var(--heading);font-size:clamp(2.3rem,4.2vw,4rem);font-weight:400;line-height:1.12;letter-spacing:-.025em;margin-bottom:32px}.planned-contact form{max-width:none}.planned-contact label{margin-block:24px}.planned-contact button{margin-top:16px}
+.planned-content:has(+.planned-content .planned-principles-grid) .planned-editorial-lead{padding-bottom:32px}.planned-principles-grid{padding-top:0}.designed-gallery[data-composition="image-caption"]{padding-block:64px}.designed-gallery[data-composition="image-caption"] .gallery-heading{display:block;margin-bottom:32px}.designed-gallery[data-composition="image-caption"] .gallery-heading h2{font-family:var(--heading);font-size:clamp(2.3rem,4.2vw,4rem);font-weight:400;line-height:1.12;max-width:16ch;margin:0 0 24px}.planned-principles-grid .planned-body{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border:1px solid var(--rule);counter-reset:planned-service}.planned-principles-grid .planned-service{border:0;padding:32px;counter-increment:planned-service}.planned-principles-grid .planned-service+.planned-service{border-left:1px solid var(--rule)}.planned-principles-grid .planned-service:before{content:counter(planned-service,decimal-leading-zero);display:block;font-size:.8rem;font-style:italic;color:var(--muted);margin-bottom:32px}.planned-principles-grid .planned-service h3{font-family:var(--body);font-size:.9rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}.planned-principles-grid .planned-service p{font-size:.95rem;line-height:1.6;margin-top:16px}.planned-contact-copy{text-align:center;background:var(--card);padding-inline:24px}.planned-contact-copy .planned-heading{margin-inline:auto}.planned-contact-copy .planned-body{max-width:60ch;margin-inline:auto}.planned-contact-copy p{margin:24px 0;line-height:1.7}
+@media(max-width:767px){.planned-principles-grid .planned-body{grid-template-columns:1fr}.planned-principles-grid .planned-service+.planned-service{border-left:0;border-top:1px solid var(--rule)}.planned-editorial-lead .planned-body,.planned-service-panels .planned-body,.planned-numbered-services .planned-body,.planned-image-caption .planned-body{grid-template-columns:minmax(0,1fr);gap:32px}.planned-section{padding-block:64px}.planned-section .planned-heading{font-size:clamp(2rem,8vw,3rem)}.planned-service-panels,.planned-numbered-services{padding-inline:20px}.planned-image .web-media{max-height:260px}}
+`
+      : "";
+  const headingTreatmentCss =
+    layoutPlan?.version === 3 && layoutPlan.headingTreatments?.length
+      ? ".heading-tone-accent{color:var(--accent);font-weight:inherit}.heading-tone-muted{color:var(--muted);font-weight:inherit}"
+      : "";
+  const pagePresentationCss = pagePresentation
+    ? `
+body[data-page-chrome=editorial-compact] .designed-gallery[data-composition="image-caption"]{max-width:1000px}body[data-page-chrome=editorial-compact] .designed-gallery[data-composition="image-caption"] .gallery-slide .web-media img{animation:none}body[data-page-chrome=editorial-compact] .gallery-controls{justify-content:flex-end}body[data-page-chrome=editorial-compact] .gallery-controls button{width:48px;height:48px;padding:0;border-radius:50%;background:transparent;font-size:24px}body[data-page-chrome=editorial-compact] .gallery-source-copy{max-width:48ch;font-size:1rem;line-height:1.6;margin:18px 0 28px}body[data-page-chrome=editorial-compact] main{max-width:none;padding-inline:5vw}body[data-page-chrome=editorial-compact] .planned-service-panels,body[data-page-chrome=editorial-compact] .planned-numbered-services{padding-inline:5vw}body[data-page-chrome=editorial-compact] .planned-content:has(+.planned-content .planned-principles-grid) #about{padding-bottom:0}body[data-page-chrome=editorial-compact] .planned-principles-grid{padding-top:40px}body[data-page-chrome=editorial-compact]{font-family:"Helvetica Neue",Arial,sans-serif}body[data-page-chrome=editorial-compact] .site-header{max-width:none;padding:18px 5vw;border-bottom:1px solid var(--rule)}body[data-page-chrome=editorial-compact] .brand{font-family:var(--heading);font-size:1.15rem;font-weight:400;line-height:1.05;letter-spacing:0;max-width:12rem}body[data-page-chrome=editorial-compact] .site-header nav a{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase}body[data-page-chrome=editorial-compact] .site-footer{max-width:none;padding:32px 5vw;margin-top:0;border-top:1px solid var(--rule);grid-template-columns:1fr auto;align-items:center}body[data-page-chrome=editorial-compact] .footer-brand,body[data-page-chrome=editorial-compact] .site-footer nav a{font-family:inherit;font-size:.65rem;font-weight:500;letter-spacing:.12em;text-transform:uppercase;line-height:1.6}body[data-layout-hero][data-hero-frame=wide-inset] .hero-composition.has-media{width:calc(100vw - 40px);margin-inline:calc(50% - 50vw + 20px);padding:clamp(2rem,6vw,5.5rem);min-height:min(790px,88vh)}body[data-layout-hero][data-hero-frame=wide-inset] .hero-composition.has-media:before{background:linear-gradient(90deg,rgba(20,25,20,.83) 0%,rgba(20,25,20,.5) 48%,rgba(20,25,20,.16) 100%),linear-gradient(0deg,rgba(20,25,20,.58),transparent 55%)}body[data-layout-hero][data-hero-frame=wide-inset] .hero-composition.has-media .hero-copy{max-width:none;width:100%}body[data-layout-hero][data-hero-frame=wide-inset] .hero-composition.has-media .hero h1{font-weight:400;font-size:clamp(2.8rem,6.2vw,6.3rem);max-width:16ch;line-height:1.02;letter-spacing:-.045em}body[data-layout-hero][data-hero-frame=wide-inset] .hero-composition.has-media .hero p:not(.eyebrow){max-width:40ch}body[data-layout-hero][data-hero-frame=wide-inset] .hero-action .cta{background:transparent;color:inherit;border:1px solid currentColor;font-size:.7rem;letter-spacing:.12em;text-transform:uppercase}body[data-contact-surface=paper-deep] .planned-contact-copy{width:100vw;margin-inline:calc(50% - 50vw);background:var(--card);padding-block:104px}body[data-layout-version="3"][data-contact-surface=paper-deep] :is(#contact,.planned-contact-copy) .planned-heading{margin-inline:auto;max-width:12ch;font-size:clamp(3rem,7vw,7rem);line-height:1.05}body[data-contact-surface=paper-deep] .planned-contact-copy .planned-body{max-width:60ch}body[data-contact-surface=paper-deep] .planned-contact-copy .cta{background:var(--ink);color:var(--paper);font-size:.7rem;letter-spacing:.12em;text-transform:uppercase}
+@media(max-width:767px){body[data-page-chrome=editorial-compact] .site-header{padding:20px;gap:16px}body[data-page-chrome=editorial-compact] .site-footer{grid-template-columns:1fr;padding:32px 20px}body[data-layout-hero][data-hero-frame=wide-inset] .hero-composition.has-media{min-height:640px;padding:28px 24px}body[data-layout-hero][data-hero-frame=wide-inset] .hero-composition.has-media .hero h1{font-size:clamp(2.6rem,10.8vw,4rem);max-width:16ch}body[data-contact-surface=paper-deep] .planned-contact-copy{padding:72px 24px}}
+`
+    : "";
+  const pagePresentationAttributes = pagePresentation
+    ? ` data-page-chrome="${pagePresentation.chrome}" data-hero-frame="${pagePresentation.heroFrame}" data-contact-surface="${pagePresentation.contactSurface}"`
+    : "";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${galleryCss}${layoutCss}${presentationCss}${innerPageCss}${editorialFinishCss}${innerEditorialCss}${motionCss}${sectionCompositionCss}${headingTreatmentCss}${pagePresentationCss}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"${layoutAttributes}${pagePresentationAttributes}${innerComposition ? ` data-inner-page="${innerComposition}"` : ""}><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer>${content.includes('class="designed-gallery gallery-carousel"') ? WEB_CAROUSEL_TAG : ""}</body></html>`;
 }
 
 export function renderDesignedWebDocumentBytes(

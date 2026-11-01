@@ -75,6 +75,7 @@ import type * as knowledgeSearch from "../knowledgeSearch.js";
 import type * as knowledgeVaultDrive from "../knowledgeVaultDrive.js";
 import type * as lib_agenda from "../lib/agenda.js";
 import type * as lib_allowlist from "../lib/allowlist.js";
+import type * as lib_approvedPresenceReference from "../lib/approvedPresenceReference.js";
 import type * as lib_authEmail from "../lib/authEmail.js";
 import type * as lib_bufferMcp from "../lib/bufferMcp.js";
 import type * as lib_dispatchShared from "../lib/dispatchShared.js";
@@ -311,6 +312,7 @@ declare const fullApi: ApiFromModules<{
   knowledgeVaultDrive: typeof knowledgeVaultDrive;
   "lib/agenda": typeof lib_agenda;
   "lib/allowlist": typeof lib_allowlist;
+  "lib/approvedPresenceReference": typeof lib_approvedPresenceReference;
   "lib/authEmail": typeof lib_authEmail;
   "lib/bufferMcp": typeof lib_bufferMcp;
   "lib/dispatchShared": typeof lib_dispatchShared;

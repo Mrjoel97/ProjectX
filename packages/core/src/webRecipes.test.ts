@@ -13,6 +13,82 @@ import {
 import { canonicalWebDocument, renderWebDocument } from "./webRuntime";
 
 describe("canonical web recipes", () => {
+  it("gives each materialized page hero a stable reference for source-bound typography", () => {
+    const document = materializeWebRecipe("business-site", {
+      brandName: "Studio",
+      headline: "Our work",
+      pageMode: "multi-page",
+      projectSlug: "studio",
+      about: "Independent design.",
+      services: ["Brand identity"],
+      contactConsent: "Contact me about my enquiry.",
+    });
+    expect(document.pages).toHaveLength(4);
+    for (const page of document.pages) {
+      expect(page.nodes.find((node) => node.kind === "hero")).toMatchObject({ id: "page-hero" });
+      expect(page.nodes.filter((node) => "id" in node && node.id === "page-hero")).toHaveLength(1);
+    }
+  });
+  it("preserves sourced service titles, descriptions and details as distinct nodes", () => {
+    const document = materializeWebRecipe("business-site", {
+      brandName: "Studio",
+      headline: "Our work",
+      pageMode: "multi-page",
+      projectSlug: "studio",
+      services: [
+        {
+          title: "Brand identity",
+          description: "Identity for independent businesses.",
+          details: ["Visual direction", "Identity systems"],
+        },
+        "Website design",
+      ],
+    });
+    for (const page of document.pages.filter(
+      (page) => page.slug === "home" || page.slug === "services",
+    )) {
+      const section = page.nodes.find((node) => node.kind === "section" && node.id === "services");
+      expect(section).toMatchObject({
+        children: [
+          {
+            kind: "section",
+            id: "service-1",
+            heading: "Brand identity",
+            children: [
+              { kind: "text", text: "Identity for independent businesses." },
+              { kind: "text", text: "Visual direction" },
+              { kind: "text", text: "Identity systems" },
+            ],
+          },
+          { kind: "text", text: "Website design" },
+        ],
+      });
+    }
+  });
+  it("rejects invented structured-service fields and unbounded detail lists", () => {
+    for (const service of [
+      { title: "Brand", html: "unsafe" },
+      { title: "Brand", details: ["a", "b", "c", "d"] },
+      { title: "Brand", description: "<script>alert(1)</script>" },
+    ])
+      expect(
+        validateWebRecipeInput("business-site", {
+          brandName: "Studio",
+          headline: "Our work",
+          services: [service],
+        }).ok,
+      ).toBe(false);
+  });
+  it("keeps a title-only sourced service compact without inventing a description", () => {
+    const document = materializeWebRecipe("business-site", {
+      brandName: "Studio",
+      headline: "Our work",
+      services: [{ title: "Brand identity" }],
+    });
+    expect(
+      document.pages[0]?.nodes.find((node) => node.kind === "section" && node.id === "services"),
+    ).toMatchObject({ children: [{ kind: "text", text: "Brand identity" }] });
+  });
   it("exposes exactly the three closed recipe families", () => {
     expect(
       WEB_RECIPE_DEFINITIONS.map((recipe) => [recipe.id, recipe.registryName, recipe.outputKind]),
@@ -187,7 +263,7 @@ describe("canonical web recipes", () => {
       expect(html).toContain(
         "https://appointments.example/consultation?service=design&amp;locale=en",
       );
-      expect(result.recipe.compilerId).toBe("web-recipes-v8");
+      expect(result.recipe.compilerId).toBe("web-recipes-v9");
       expect(
         materializeWebRecipeWithProvenance(family, {
           ...input,

@@ -1,6 +1,12 @@
 import type { WebDocument, WebNode } from "@pikar/contracts/webRuntime";
 import { hasUnsafeWebMarkup } from "./webCarouselRuntime";
-import { escapeWebText, sha256Bytes, validateWebDocument } from "./webRuntime";
+import {
+  escapeWebText,
+  isWebAnchorPath,
+  sha256Bytes,
+  validateWebDocument,
+  webPageAnchorTargetCount,
+} from "./webRuntime";
 
 export const WEB_QUALITY_POLICY_VERSION = "web-quality-v1" as const;
 export type WebQualityIssue = {
@@ -28,6 +34,23 @@ export function assessWebQuality(input: {
   const document = validation.value;
   const paths = new Set(document.pages.map((page) => `/p/${input.routeSlug}/${page.slug}`));
   const localTarget = (path: string, pageSlug?: string) => {
+    if (isWebAnchorPath(path)) {
+      const pages = document.pages.filter(
+        (page) => pageSlug === undefined || page.slug === pageSlug,
+      );
+      for (const page of pages) {
+        const html =
+          input.artifacts.find((artifact) => artifact.pageSlug === page.slug)?.html ?? "";
+        const count = (html.match(new RegExp(`\\sid=["']${path.slice(1)}["']`, "g")) ?? []).length;
+        if (webPageAnchorTargetCount(page, path) !== 1 || count !== 1)
+          add(
+            "unresolved_local_target",
+            "Render exactly one source-owned anchor target on this page.",
+            page.slug,
+          );
+      }
+      return;
+    }
     if (!paths.has(path))
       add(
         "unresolved_local_target",

@@ -1,3 +1,4 @@
+import { getApprovedPresenceReferenceIdentity } from "@pikar/contracts/approvedPresenceReference";
 import { describe, expect, it } from "vitest";
 import {
   artifactHashes,
@@ -156,4 +157,18 @@ it("only exact v14 second renderer receipt is valid and hash-bound", () => {
   expect(providerReceiptHash(base)).not.toBe(
     providerReceiptHash({ ...base, rendererRepair: { ...base.rendererRepair!, attempt: 1 } }),
   );
+});
+
+it("selected approved reference is hash-bound and cannot reuse no-reference review or forged identity", () => {
+  const identity = getApprovedPresenceReferenceIdentity("fieldwork-v1")!;
+  const selected = { ...receipt, approvedDesignReference: identity };
+  expect(() => validateProviderReceipt(selected, artifacts)).not.toThrow();
+  expect(providerReceiptHash(selected)).not.toBe(providerReceiptHash(receipt));
+  expect(presencePublicationReady({ ...reviewed, providerReceipt: selected })).toBe(false);
+  expect(() =>
+    validateProviderReceipt(
+      { ...selected, approvedDesignReference: { ...identity, manifestHash: "0".repeat(64) } },
+      artifacts,
+    ),
+  ).toThrow();
 });

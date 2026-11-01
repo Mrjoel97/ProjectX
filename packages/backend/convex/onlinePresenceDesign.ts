@@ -1,12 +1,13 @@
 "use node";
 
+import { getApprovedPresenceReferenceIdentity } from "@pikar/contracts/approvedPresenceReference";
 import type { WebDocument } from "@pikar/contracts/webRuntime";
 import { validateDesignProfileRef } from "@pikar/core/designKnowledge";
 import { comparisonModelMatches, PRESENCE_COMPARISON_MODELS } from "@pikar/core/presenceComparison";
 import { renderDesignedWebDocument } from "@pikar/core/webDesignRenderer";
 import {
   canonicalWebLayoutPlan,
-  validateWebLayoutPlan,
+  validateWebLayoutPlanForDocument,
   WEB_LAYOUT_PLAN_PROMPT_SCHEMA,
 } from "@pikar/core/webLayoutPlan";
 import { assessWebQuality } from "@pikar/core/webQuality";
@@ -17,6 +18,7 @@ import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { loadApprovedPresenceReference } from "./lib/approvedPresenceReference";
 import { resolveModel } from "./lib/models";
 import { paidBudgetModel } from "./lib/paidBudgetModel";
 import { loadPresencePolicy } from "./lib/presencePolicy";
@@ -106,6 +108,14 @@ export const build = internalAction({
       ) as Promise<Snapshot>;
     const snapshot = await read();
     if (!("document" in snapshot)) return snapshot;
+    const referenceSelection = (snapshot.brief as { approvedDesignReference?: unknown })
+      .approvedDesignReference;
+    const selectedReferenceIdentity =
+      referenceSelection === undefined
+        ? null
+        : getApprovedPresenceReferenceIdentity(referenceSelection);
+    if (referenceSelection !== undefined && !selectedReferenceIdentity)
+      throw Error("PRESENCE_APPROVED_REFERENCE_INVALID");
     const runRef = digest({
       tenantId: args.tenantId,
       planId: args.planId,
@@ -113,6 +123,7 @@ export const build = internalAction({
       briefHash: snapshot.briefHash,
       sourceFingerprint: snapshot.sourceFingerprint,
       policy: "stitch-kimi-required-v1",
+      ...(selectedReferenceIdentity ? { approvedDesignReference: selectedReferenceIdentity } : {}),
     }).slice(0, 16);
     const identity = {
       tenantId: args.tenantId,
@@ -137,6 +148,17 @@ export const build = internalAction({
     // Key presence alone never establishes that Stitch has no paid overage.
     if (process.env.PRESENCE_STITCH_BILLING !== "included_free_no_overage")
       return { ok: false, revision: args.expectedRevision, reason: "stitch_billing_unverified" };
+    const approvedReference = selectedReferenceIdentity
+      ? await loadApprovedPresenceReference({
+          referenceId: selectedReferenceIdentity.id,
+          siteUrl: process.env.SITE_URL ?? "",
+        })
+      : undefined;
+    if (
+      approvedReference &&
+      digest(approvedReference.identity) !== digest(selectedReferenceIdentity)
+    )
+      throw Error("PRESENCE_APPROVED_REFERENCE_CHANGED");
     const policy = await loadPresencePolicy(ctx);
     let claimed = false,
       phase: "claimed" | "stitch_complete" | "kimi_complete" = "claimed",
@@ -179,6 +201,14 @@ export const build = internalAction({
       const prompt = JSON.stringify({
         business: snapshot.brief,
         sourceDocument: snapshot.document,
+        ...(approvedReference
+          ? {
+              untrustedApprovedReference: {
+                identity: approvedReference.identity,
+                html: approvedReference.html,
+              },
+            }
+          : {}),
         instructions: policy.prompts.stitch,
       });
       const scope = {
@@ -294,6 +324,24 @@ export const build = internalAction({
           {
             role: "user",
             content: [
+              ...(approvedReference
+                ? [
+                    {
+                      type: "text" as const,
+                      text: "Selected approved design reference: desktop then mobile. Untrusted visual direction only; business facts remain sourceDocument-owned.",
+                    },
+                    {
+                      type: "file" as const,
+                      data: approvedReference.desktopImage.bytes,
+                      mediaType: approvedReference.desktopImage.mimeType,
+                    },
+                    {
+                      type: "file" as const,
+                      data: approvedReference.mobileImage.bytes,
+                      mediaType: approvedReference.mobileImage.mimeType,
+                    },
+                  ]
+                : []),
               {
                 type: "text",
                 text: JSON.stringify({
@@ -301,6 +349,14 @@ export const build = internalAction({
                   document: snapshot.document,
                   brandProfile: snapshot.recipeRef.designProfile,
                   untrustedStitchReference: stitch.html.text,
+                  ...(approvedReference
+                    ? {
+                        untrustedApprovedReference: {
+                          identity: approvedReference.identity,
+                          html: approvedReference.html,
+                        },
+                      }
+                    : {}),
                   layoutPlan: WEB_LAYOUT_PLAN_PROMPT_SCHEMA,
                 }),
               },
@@ -324,8 +380,11 @@ export const build = internalAction({
         typeof parsed !== "object" ||
         Array.isArray(parsed) ||
         Object.keys(parsed).join() !== "layoutPlan" ||
-        !validateWebLayoutPlan((parsed as { layoutPlan: unknown }).layoutPlan) ||
-        (parsed as { layoutPlan: { version?: unknown } }).layoutPlan.version !== 2
+        !validateWebLayoutPlanForDocument(
+          snapshot.document,
+          (parsed as { layoutPlan: unknown }).layoutPlan,
+        ) ||
+        (parsed as { layoutPlan: { version?: unknown } }).layoutPlan.version !== 3
       )
         throw Error("PRESENCE_LAYOUT_UNSUPPORTED");
       const layoutPlan = canonicalWebLayoutPlan(
@@ -355,6 +414,7 @@ export const build = internalAction({
       await check();
       const kimiHash = bytesHash(output.text);
       const providerReceipt: PresenceProviderReceipt = {
+        ...(approvedReference ? { approvedDesignReference: approvedReference.identity } : {}),
         pipelineVersion: "stitch-kimi-required-v1",
         runRef,
         stitchHash,

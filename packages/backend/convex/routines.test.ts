@@ -189,6 +189,7 @@ const CONVEX_MODULES = [
   "lib/planRow.ts",
   "lib/presenceModelLimits.ts",
   "lib/presencePolicy.ts",
+  "lib/approvedPresenceReference.ts",
   "lib/presencePublication.ts",
   "lib/presenceRequiredPipeline.ts",
   "lib/presenceVisionReview.ts",

@@ -3,7 +3,10 @@ import {
   renderDesignedWebDocumentBytes,
   WEB_DESIGN_RENDERER_VERSION,
 } from "@pikar/core/webDesignRenderer";
-import { canonicalWebLayoutPlan, validateWebLayoutPlan } from "@pikar/core/webLayoutPlan";
+import {
+  canonicalWebLayoutPlan,
+  validateWebLayoutPlanForDocument,
+} from "@pikar/core/webLayoutPlan";
 import { assessWebQuality } from "@pikar/core/webQuality";
 import { sha256Bytes, validateWebDocument } from "@pikar/core/webRuntime";
 import { makeFunctionReference } from "convex/server";
@@ -86,7 +89,7 @@ export const request = tenantMutation({
     const profile = version.recipeRef.designProfile;
     if (
       !validateDesignProfileRef(profile) ||
-      !validateWebLayoutPlan(profile.layoutPlan) ||
+      !validateWebLayoutPlanForDocument(version.document, profile.layoutPlan) ||
       sha256Bytes(
         new TextEncoder().encode(JSON.stringify(canonicalWebLayoutPlan(profile.layoutPlan))),
       ) !== version.providerReceipt.layoutHash

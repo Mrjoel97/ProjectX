@@ -1,3 +1,7 @@
+import {
+  type ApprovedPresenceReferenceIdentity,
+  validateApprovedPresenceReferenceIdentity,
+} from "@pikar/contracts/approvedPresenceReference";
 import { sha256Bytes } from "@pikar/core/webRuntime";
 import type { Id } from "../_generated/dataModel";
 
@@ -18,6 +22,7 @@ export function canonicalEvidenceHash(value: unknown): string {
 }
 
 export type PresenceProviderReceipt = {
+  approvedDesignReference?: ApprovedPresenceReferenceIdentity;
   pipelineVersion: "stitch-kimi-required-v1";
   runRef: string;
   stitchHash: string;
@@ -68,6 +73,8 @@ export function validateProviderReceipt(
       receipt.layoutHash,
     ].every((value) => hash.test(value)) ||
     receipt.pendingBrowser !== true ||
+    (receipt.approvedDesignReference !== undefined &&
+      !validateApprovedPresenceReferenceIdentity(receipt.approvedDesignReference)) ||
     (receipt.repair !== undefined &&
       (!Number.isSafeInteger(receipt.repair.priorVersion) ||
         receipt.repair.priorVersion < 1 ||
@@ -108,6 +115,15 @@ export const providerReceiptHash = (receipt: PresenceProviderReceipt) =>
   sha256Bytes(
     new TextEncoder().encode(
       JSON.stringify({
+        ...(receipt.approvedDesignReference
+          ? {
+              approvedDesignReference: {
+                id: receipt.approvedDesignReference.id,
+                revision: receipt.approvedDesignReference.revision,
+                manifestHash: receipt.approvedDesignReference.manifestHash,
+              },
+            }
+          : {}),
         pipelineVersion: receipt.pipelineVersion,
         runRef: receipt.runRef,
         stitchHash: receipt.stitchHash,

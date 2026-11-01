@@ -5065,6 +5065,13 @@ export default defineSchema({
     requiresProviderReview: v.optional(v.boolean()),
     providerReceipt: v.optional(
       v.object({
+        approvedDesignReference: v.optional(
+          v.object({
+            id: v.literal("fieldwork-v1"),
+            revision: v.literal("1"),
+            manifestHash: v.string(),
+          }),
+        ),
         pipelineVersion: v.literal("stitch-kimi-required-v1"),
         runRef: v.string(),
         stitchHash: v.string(),
@@ -5188,6 +5195,87 @@ export default defineSchema({
               }),
               v.object({
                 version: v.literal(2),
+                designTokens: v.object({
+                  colors: v.object({
+                    paper: v.string(),
+                    card: v.string(),
+                    ink: v.string(),
+                    muted: v.string(),
+                    accent: v.string(),
+                    rule: v.string(),
+                  }),
+                  typography: v.object({
+                    heading: v.union(
+                      v.literal("editorial-serif"),
+                      v.literal("modern-serif"),
+                      v.literal("humanist-sans"),
+                      v.literal("geometric-sans"),
+                    ),
+                    body: v.union(v.literal("humanist-sans"), v.literal("geometric-sans")),
+                  }),
+                  spacing: v.object({
+                    contentWidth: v.number(),
+                    sectionGap: v.number(),
+                    copyMeasure: v.number(),
+                    heroMinHeight: v.number(),
+                  }),
+                  footer: v.union(v.literal("light"), v.literal("dark")),
+                }),
+                hero: v.union(
+                  v.literal("overlay-left"),
+                  v.literal("overlay-centered"),
+                  v.literal("split"),
+                ),
+                sectionLayout: v.union(v.literal("editorial-columns"), v.literal("stacked")),
+                services: v.union(v.literal("rows"), v.literal("columns")),
+                gallery: v.union(v.literal("grid"), v.literal("carousel")),
+                spacing: v.union(v.literal("relaxed"), v.literal("compact")),
+                headingScale: v.union(v.literal("balanced"), v.literal("display")),
+                motion: v.union(v.literal("none"), v.literal("subtle")),
+              }),
+              v.object({
+                version: v.literal(3),
+                pagePresentation: v.optional(
+                  v.array(
+                    v.object({
+                      pageSlug: v.string(),
+                      heroFrame: v.union(v.literal("content"), v.literal("wide-inset")),
+                      chrome: v.union(v.literal("default"), v.literal("editorial-compact")),
+                      contactSurface: v.union(v.literal("default"), v.literal("paper-deep")),
+                    }),
+                  ),
+                ),
+                headingTreatments: v.optional(
+                  v.array(
+                    v.object({
+                      pageSlug: v.string(),
+                      nodeId: v.string(),
+                      breakAfter: v.array(v.number()),
+                      emphasisRanges: v.array(
+                        v.object({
+                          start: v.number(),
+                          end: v.number(),
+                          tone: v.union(v.literal("accent"), v.literal("muted")),
+                        }),
+                      ),
+                    }),
+                  ),
+                ),
+                sections: v.array(
+                  v.object({
+                    pageSlug: v.string(),
+                    nodeId: v.string(),
+                    composition: v.union(
+                      v.literal("editorial-lead"),
+                      v.literal("numbered-services"),
+                      v.literal("service-panels"),
+                      v.literal("principles-grid"),
+                      v.literal("contact-copy"),
+                      v.literal("image-caption"),
+                      v.literal("contact-panel"),
+                    ),
+                  }),
+                ),
                 designTokens: v.object({
                   colors: v.object({
                     paper: v.string(),

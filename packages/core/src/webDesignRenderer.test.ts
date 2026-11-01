@@ -8,6 +8,7 @@ import {
   WEB_DESIGN_RENDERER_VERSION,
   webColorContrast,
 } from "./webDesignRenderer";
+import type { WebSectionPresentation } from "./webLayoutPlan";
 import { materializeWebRecipeWithProvenance } from "./webRecipes";
 import { canonicalWebDocument, renderWebDocument } from "./webRuntime";
 
@@ -807,4 +808,196 @@ test("inner v2 pages reuse only an existing owned brand image and preserve the s
     page: document.pages[1]?.slug ?? "about",
   });
   expect(empty).not.toContain('class="inner-brand-visual"');
+});
+
+test("v3 source annotations preserve structured services and reject missing coverage", () => {
+  const { document, designProfile } = materializeWebRecipeWithProvenance("business-site", {
+    brandName: "Source studio",
+    headline: "Source heading",
+    about: "Source introduction",
+    services: [
+      {
+        title: "Brand & identity",
+        description: "Exact source description.",
+        details: ["Exact source detail."],
+      },
+      { title: "Web design" },
+    ],
+    contactConsent: "Contact me about this inquiry.",
+    pageMode: "multi-page",
+    projectSlug: "studio",
+  });
+  const layoutPlan = {
+    version: 3 as const,
+    hero: "overlay-left" as const,
+    sectionLayout: "editorial-columns" as const,
+    services: "columns" as const,
+    gallery: "grid" as const,
+    spacing: "relaxed" as const,
+    headingScale: "display" as const,
+    motion: "subtle" as const,
+    designTokens: {
+      colors: {
+        paper: "#f5f2ec",
+        card: "#ffffff",
+        ink: "#292c28",
+        muted: "#555555",
+        accent: "#344538",
+        rule: "#cccccc",
+      },
+      typography: { heading: "editorial-serif" as const, body: "humanist-sans" as const },
+      spacing: { contentWidth: 1200, sectionGap: 96, copyMeasure: 48, heroMinHeight: 600 },
+      footer: "light" as const,
+    },
+    sections: document.pages.flatMap((page) =>
+      page.nodes.flatMap<WebSectionPresentation>((node) =>
+        node.kind === "form"
+          ? [{ pageSlug: page.slug, nodeId: node.id, composition: "contact-panel" as const }]
+          : node.kind === "section"
+            ? [
+                {
+                  pageSlug: page.slug,
+                  nodeId: node.id,
+                  composition:
+                    node.id === "services"
+                      ? ("service-panels" as const)
+                      : ("editorial-lead" as const),
+                },
+              ]
+            : [],
+      ),
+    ),
+  };
+  const before = canonicalWebDocument(document);
+  const html = renderDesignedWebDocument(
+    document,
+    { ...designProfile, layoutPlan },
+    { slug: "studio", page: "services" },
+  );
+  expect(html).toContain('data-composition="service-panels"');
+  expect(html).toContain(
+    "<h3>Brand &amp; identity</h3><p>Exact source description.</p><p>Exact source detail.</p>",
+  );
+  expect(html).toContain('class="planned-service is-compact"><h3>Web design</h3></article>');
+  expect(html).not.toContain('class="service-card"');
+  expect(html).toContain('id="service-1"');
+  expect(canonicalWebDocument(document)).toBe(before);
+  const withGallery = structuredClone(document);
+  const firstPage = withGallery.pages[0];
+  if (!firstPage) throw new Error("Missing fixture page");
+  const images = ["a", "b", "c"].map((letter) => ({
+    kind: "media" as const,
+    storageRef: `webasset:brand_image:${letter.repeat(64)}`,
+    alt: `Source caption ${letter}`,
+  }));
+  const galleryDocument = {
+    ...withGallery,
+    pages: withGallery.pages.map((page, index) =>
+      index === 0
+        ? {
+            ...page,
+            nodes: [
+              ...page.nodes,
+              {
+                kind: "section" as const,
+                id: "source-materials",
+                heading: "Source materials",
+                children: [
+                  { kind: "text" as const, text: "Approved introduction." },
+                  ...images,
+                  { kind: "text" as const, text: "Approved image disclosure." },
+                ],
+              },
+            ],
+          }
+        : page,
+    ),
+  };
+  const galleryHtml = renderDesignedWebDocument(
+    galleryDocument,
+    {
+      ...designProfile,
+      layoutPlan: {
+        ...layoutPlan,
+        gallery: "carousel",
+        sections: [
+          ...layoutPlan.sections,
+          { pageSlug: firstPage.slug, nodeId: "source-materials", composition: "image-caption" },
+        ],
+      },
+    },
+    { slug: "studio", page: firstPage.slug },
+  );
+  expect(galleryHtml).toContain(
+    'id="source-materials" data-composition="image-caption" class="designed-gallery gallery-carousel"',
+  );
+  expect(galleryHtml).toContain(WEB_CAROUSEL_TAG);
+  expect(galleryHtml).toContain("Source caption a");
+  expect(galleryHtml).toContain("Approved introduction.");
+  expect(galleryHtml).toContain("Approved image disclosure.");
+  expect(galleryHtml.indexOf("Approved introduction.")).toBeLessThan(
+    galleryHtml.indexOf('<div class="gallery-viewport"'),
+  );
+  expect(galleryHtml.indexOf("Approved image disclosure.")).toBeGreaterThan(
+    galleryHtml.indexOf('<div class="gallery-controls"'),
+  );
+  expect(galleryHtml.replace(WEB_CAROUSEL_TAG, "").match(/data-gallery-next/g)).toHaveLength(1);
+  const panels = [
+    {
+      kind: "section" as const,
+      id: "source-principles",
+      children: [1, 2, 3].map((index) => ({
+        kind: "section" as const,
+        id: `principle-${index}`,
+        heading: `Principle ${index}`,
+        children: [{ kind: "text" as const, text: `Source proof ${index}` }],
+      })),
+    },
+    {
+      kind: "section" as const,
+      id: "source-contact",
+      heading: "Source contact",
+      children: [
+        { kind: "text" as const, text: "Exact contact source." },
+        {
+          kind: "cta" as const,
+          id: "source-action",
+          label: "Explore details",
+          target: { kind: "local" as const, path: "/details" },
+        },
+      ],
+    },
+  ];
+  const panelDocument = {
+    ...document,
+    pages: document.pages.map((page, index) =>
+      index === 0 ? { ...page, nodes: [...page.nodes, ...panels] } : page,
+    ),
+  };
+  const panelHtml = renderDesignedWebDocument(
+    panelDocument,
+    {
+      ...designProfile,
+      layoutPlan: {
+        ...layoutPlan,
+        sections: [
+          ...layoutPlan.sections,
+          { pageSlug: firstPage.slug, nodeId: "source-principles", composition: "principles-grid" },
+          { pageSlug: firstPage.slug, nodeId: "source-contact", composition: "contact-copy" },
+        ],
+      },
+    },
+    { slug: "studio", page: firstPage.slug },
+  );
+  expect(panelHtml).toContain('data-composition="principles-grid"');
+  expect(panelHtml).toContain('id="principle-3"><h3>Principle 3</h3><p>Source proof 3</p>');
+  expect(panelHtml).toContain('data-composition="contact-copy"');
+  expect(panelHtml).toContain('<a class="cta" href="/details">Explore details</a>');
+
+  expect(() =>
+    renderDesignedWebDocument(document, {
+      ...designProfile,
+      layoutPlan: { ...layoutPlan, sections: [] },
+    }),
+  ).toThrow("WEB_LAYOUT_DOCUMENT_MISMATCH");
 });

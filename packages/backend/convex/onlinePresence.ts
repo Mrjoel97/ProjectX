@@ -1,3 +1,4 @@
+import { getApprovedPresenceReferenceIdentity } from "@pikar/contracts/approvedPresenceReference";
 import { validateDesignProfileRef } from "@pikar/core/designKnowledge";
 import { merchantSetupSourceRefs } from "@pikar/core/merchantSetup";
 import {
@@ -9,7 +10,10 @@ import {
   type OnlinePresenceWarning,
 } from "@pikar/core/onlinePresence";
 import { parseWebAssetRef } from "@pikar/core/webAssets";
-import { canonicalWebLayoutPlan, validateWebLayoutPlan } from "@pikar/core/webLayoutPlan";
+import {
+  canonicalWebLayoutPlan,
+  validateWebLayoutPlanForDocument,
+} from "@pikar/core/webLayoutPlan";
 import { materializeWebRecipe, validateWebRecipeMedia } from "@pikar/core/webRecipes";
 import { sha256Bytes } from "@pikar/core/webRuntime";
 import { makeFunctionReference } from "convex/server";
@@ -461,6 +465,7 @@ export const saveBrief = internalMutation({
     clearFields: v.optional(
       v.array(
         v.union(
+          v.literal("approvedDesignReference"),
           v.literal("offer"),
           v.literal("services"),
           v.literal("about"),
@@ -828,10 +833,20 @@ export const buildProject = internalMutation({
     const completion = args.designCompletion;
     if (
       !validateDesignProfileRef(completion.profile) ||
-      !validateWebLayoutPlan(completion.profile.layoutPlan)
+      !validateWebLayoutPlanForDocument(prepared.document, completion.profile.layoutPlan)
     )
       throw Error("PRESENCE_DESIGN_PROFILE_INVALID");
     const providerReceipt = completion.providerReceipt as WebProviderReceipt;
+    const selectedReference = session.brief?.approvedDesignReference;
+    const expectedReference =
+      selectedReference === undefined
+        ? undefined
+        : getApprovedPresenceReferenceIdentity(selectedReference);
+    if (
+      (selectedReference !== undefined && !expectedReference) ||
+      hash(providerReceipt.approvedDesignReference ?? null) !== hash(expectedReference ?? null)
+    )
+      throw Error("PRESENCE_APPROVED_REFERENCE_CHANGED");
     if (
       providerReceipt.briefHash !== briefHash ||
       providerReceipt.sourceFingerprint !== sourceFingerprint ||

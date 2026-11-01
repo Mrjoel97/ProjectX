@@ -5,6 +5,7 @@ import {
 } from "@pikar/contracts/webRuntime";
 import { describe, expect, it } from "vitest";
 import {
+  canonicalWebDocument,
   hashWebDocument,
   renderWebDocument,
   renderWebDocumentBytes,
@@ -299,4 +300,160 @@ describe("web runtime contract and renderer", () => {
       }).ok,
     ).toBe(false);
   });
+});
+
+const anchoredFixture = (): WebDocument => ({
+  kind: "site",
+  title: "Anchors",
+  brand: { name: "Anchors" },
+  navigation: [
+    { label: "Home", path: "#home" },
+    { label: "Contact", path: "#contact" },
+  ],
+  pages: [
+    {
+      slug: "home",
+      title: "Home",
+      nodes: [
+        { kind: "hero", id: "home", heading: "Welcome" },
+        {
+          kind: "section",
+          id: "outer",
+          children: [
+            {
+              kind: "section",
+              id: "contact",
+              heading: "Contact",
+              children: [{ kind: "text", text: "Source contact copy" }],
+            },
+          ],
+        },
+        { kind: "cta", id: "visit", label: "Contact", target: { kind: "local", path: "#contact" } },
+      ],
+    },
+  ],
+});
+it("preserves exact source fragment navigation and untracked CTA to unique hero or nested section IDs", () => {
+  const document = anchoredFixture();
+  expect(validateWebDocument(document).ok).toBe(true);
+  const html = renderWebDocument(document, { slug: "anchors", page: "home" });
+  expect(html).toContain('<section class="hero" id="home">');
+  expect(html).toContain('<section id="contact">');
+  expect(html).toContain('href="#contact"');
+  expect(canonicalWebDocument(document)).toContain('"kind":"hero","id":"home"');
+});
+it("rejects unresolved, ambiguous, tracked and malformed fragment targets", () => {
+  for (const path of [
+    "#missing",
+    "#",
+    "#contact%20",
+    "/home#contact",
+    "#contact?x=1",
+    "#contact\\bad",
+    "javascript:bad",
+    "//evil/#contact",
+  ]) {
+    const document = anchoredFixture();
+    expect(
+      validateWebDocument({ ...document, navigation: [{ label: "Bad", path }] }).ok,
+      path,
+    ).toBe(false);
+  }
+  const document = anchoredFixture(),
+    home = document.pages[0]!;
+  const collision = {
+    ...document,
+    pages: [
+      {
+        ...home,
+        nodes: [
+          ...home.nodes,
+          { kind: "section", id: "contact", children: [{ kind: "text", text: "Duplicate" }] },
+        ],
+      },
+    ],
+  };
+  expect(validateWebDocument(collision).ok).toBe(false);
+  expect(
+    validateWebDocument({
+      ...document,
+      pages: [
+        {
+          ...home,
+          nodes: home.nodes.map((node) =>
+            node.kind === "cta" ? { ...node, analytics: true } : node,
+          ),
+        },
+      ],
+    }).ok,
+  ).toBe(false);
+  expect(
+    validateWebDocument({
+      ...document,
+      pages: [
+        ...document.pages,
+        { slug: "other", title: "Other", nodes: [{ kind: "hero", heading: "No targets" }] },
+      ],
+    }).ok,
+  ).toBe(false);
+  expect(
+    validateWebDocument({ ...document, navigation: [{ label: "Visit", path: "#visit" }] }).ok,
+  ).toBe(false);
+});
+it("keeps canonical legacy hero bytes and its rendered HTML unchanged when id is omitted", () => {
+  const document: WebDocument = {
+    kind: "site",
+    title: "Legacy",
+    brand: { name: "Legacy" },
+    navigation: [],
+    pages: [{ slug: "home", title: "Home", nodes: [{ kind: "hero", heading: "Welcome" }] }],
+  };
+  expect(canonicalWebDocument(document)).toBe(JSON.stringify(document));
+  expect(renderWebPageParts(document, { slug: "legacy", page: "home" }).nodes[0]?.html).toBe(
+    '<section class="hero"><h1>Welcome</h1></section>',
+  );
+});
+
+it("keeps supplied captions separate from alt text and leaves no-caption canonical bytes unchanged", () => {
+  const base: WebDocument = {
+    kind: "site",
+    title: "Image",
+    brand: { name: "Image" },
+    navigation: [],
+    pages: [
+      {
+        slug: "home",
+        title: "Home",
+        nodes: [
+          {
+            kind: "media",
+            storageRef:
+              "webasset:photo:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            alt: "Accessible description",
+          },
+        ],
+      },
+    ],
+  };
+  const media = base.pages[0]!.nodes[0]!;
+  expect(canonicalWebDocument(base)).toBe(JSON.stringify(base));
+  const captioned = {
+    ...base,
+    pages: [{ ...base.pages[0]!, nodes: [{ ...media, caption: "Source image caption" }] }],
+  };
+  const canonical = JSON.parse(canonicalWebDocument(captioned));
+  expect(canonical.pages[0].nodes[0]).toMatchObject({
+    alt: "Accessible description",
+    caption: "Source image caption",
+  });
+  expect(renderWebDocument(captioned, { slug: "image", page: "home" })).not.toContain(
+    "<figcaption",
+  );
+  for (const caption of ["", "x".repeat(513), "bad\ncaption", 7])
+    expect(
+      validateWebDocument({
+        ...base,
+        pages: [{ ...base.pages[0]!, nodes: [{ ...media, caption }] }],
+      }).ok,
+    ).toBe(false);
 });

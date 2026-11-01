@@ -33,7 +33,7 @@ export function PresenceExampleViewer({ exampleId }: { exampleId: PresenceExampl
     setNotice(null);
     try {
       const result = await start({
-        text: `Create ${example.kind === "Website" ? "a business website" : example.kind === "Landing page" ? "a landing page" : "an online shop"} for my business using a ${compiled.designProfile.surfaceStyle} visual style. I like the ${example.title} example's composition. Use my actual approved business information and owned imagery, not its fictional content, products or prices. Ask only for missing information.`,
+        text: `Create ${example.kind === "Website" ? "a business website" : example.kind === "Landing page" ? "a landing page" : "an online shop"} for my business using a ${compiled.designProfile.surfaceStyle} visual style. The ${example.title} technical sample is a reference for page types only; it is not the approved design. Use my actual approved business information and owned imagery, not its fictional content, products or prices. Ask only for missing information.`,
       });
       router.push(
         `/dashboard/workspace?thread=${encodeURIComponent(result.threadId)}&label=Your%20${example.kind === "Shop" ? "shop" : "website"}`,
@@ -52,7 +52,7 @@ export function PresenceExampleViewer({ exampleId }: { exampleId: PresenceExampl
       <header className={styles.viewerHeader}>
         <div>
           <p className={styles.type}>
-            {example.kind} example · {example.style}
+            Technical sample · {example.kind} · {example.style}
           </p>
           <h1>{example.title}</h1>
           <p>{example.description}</p>
@@ -63,14 +63,14 @@ export function PresenceExampleViewer({ exampleId }: { exampleId: PresenceExampl
           disabled={busy}
           onClick={() => void begin()}
         >
-          {busy ? "Opening your workflow…" : "Use this direction"}
+          {busy ? "Opening your workflow…" : "Start my own brief"}
         </button>
       </header>
       {notice && <p role="status">{notice}</p>}
       <p className={styles.notice}>
-        Read-only example with fictional content and generated illustrations. It creates no booking,
-        inquiry or purchase. Your own version uses your business information and is reviewed before
-        publication.
+        Simplified renderer sample, not a Kimi + Stitch output or the approved design. Read-only
+        fictional content and generated illustrations. It creates no booking, inquiry or purchase.
+        Your own version uses your business information and is reviewed before publication.
       </p>
       <div className={styles.toolbar}>
         <label>

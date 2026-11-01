@@ -104,3 +104,27 @@ describe("native website deterministic quality gate", () => {
     expect(assessWebQuality(value).ok).toBe(false);
   });
 });
+
+test("source fragment quality requires the matching DOM target exactly once", () => {
+  const doc: WebDocument = {
+    kind: "site",
+    title: "Anchor",
+    brand: { name: "Anchor" },
+    navigation: [{ label: "Home", path: "#home" }],
+    pages: [
+      { slug: "home", title: "Home", nodes: [{ kind: "hero", id: "home", heading: "Home" }] },
+    ],
+  };
+  const html = renderWebDocument(doc, { slug: "anchor", page: "home" });
+  const value = { document: doc, routeSlug: "anchor", artifacts: [{ pageSlug: "home", html }] };
+  expect(assessWebQuality(value).ok).toBe(true);
+  for (const bad of [
+    html.replace(' id="home"', ""),
+    html.replace("</main>", '<div id="home"></div></main>'),
+  ])
+    expect(
+      assessWebQuality({ ...value, artifacts: [{ pageSlug: "home", html: bad }] }).issues,
+    ).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "unresolved_local_target" })]),
+    );
+});

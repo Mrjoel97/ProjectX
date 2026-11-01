@@ -11,11 +11,15 @@ import {
   PRESENCE_EXAMPLES,
 } from "./examples";
 import { PresenceExampleViewer } from "./PresenceExampleViewer";
+import SitesPage from "./page";
 
 const mocks = vi.hoisted(() => ({ start: vi.fn(), push: vi.fn() }));
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
-vi.mock("convex/react", () => ({ useAction: () => mocks.start }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
+vi.mock("convex/react", () => ({ useAction: () => mocks.start, useQuery: () => [] }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mocks.push }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock("next/link", () => ({
   default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a>,
 }));
@@ -40,6 +44,44 @@ async function mount(id: "studio" | "retreat" | "homeware") {
 }
 
 describe("real renderer examples", () => {
+  it("starts with the approved direction only when explicitly selected", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    mounted.push({ root, host });
+    await act(async () => root.render(<SitesPage />));
+    const checkbox = host.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    expect(checkbox.checked).toBe(false);
+    await act(async () => checkbox.click());
+    const build = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Build with Pikar",
+    )!;
+    await act(async () => build.click());
+    expect(mocks.start).toHaveBeenCalledWith({
+      text: expect.stringContaining("approved Fieldwork design reference (fieldwork-v1)"),
+    });
+    expect(mocks.start.mock.calls[0]![0].text).toContain("Preserve my own business facts");
+  });
+  it("leads with the approved reference and labels renderer fixtures as technical samples", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    mounted.push({ root, host });
+    await act(async () => root.render(<SitesPage />));
+    const headings = [...host.querySelectorAll("h2")].map((node) => node.textContent);
+    expect(headings.slice(0, 2)).toEqual([
+      "Approved design preview · Fieldwork",
+      "Technical samples",
+    ]);
+    const reference = host.querySelector('a[href="/presence-examples/fieldwork.html"]');
+    expect(reference?.textContent).toContain("Open approved design preview");
+    expect(host.textContent).toContain("not Kimi + Stitch outputs or the approved design");
+    expect(host.textContent).toContain(
+      "does not demonstrate that generated sites preserve this design yet",
+    );
+    expect(host.querySelectorAll('a[href^="/dashboard/sites/examples/"]')).toHaveLength(3);
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
   it("compiles distinct website, landing and shop examples with actual owned fixture media rather than mock HTML", () => {
     const examples = PRESENCE_EXAMPLES.map(({ id }) => buildPresenceExample(id));
     expect(examples.map(({ document }) => document.kind)).toEqual([
@@ -113,6 +155,9 @@ describe("real renderer examples", () => {
 
   it("lets the reader inspect all website pages and phone width inside a restricted sandbox", async () => {
     const host = await mount("studio");
+    expect(host.textContent).toContain(
+      "Simplified renderer sample, not a Kimi + Stitch output or the approved design",
+    );
     const page = host.querySelector('select[aria-label="Example page"]') as HTMLSelectElement;
     expect(page.options).toHaveLength(4);
     await act(async () => {

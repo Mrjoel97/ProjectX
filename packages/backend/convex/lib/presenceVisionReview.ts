@@ -1,8 +1,13 @@
+import {
+  type ApprovedPresenceReferenceIdentity,
+  validateApprovedPresenceReferenceIdentity,
+} from "@pikar/contracts/approvedPresenceReference";
 import type { WebNode } from "@pikar/contracts/webRuntime";
 import { comparisonModelMatches } from "@pikar/core/presenceComparison";
 import {
   canonicalWebLayoutPlan,
   validateWebLayoutPlan,
+  validateWebLayoutPlanForDocument,
   WEB_LAYOUT_PLAN_PROMPT_SCHEMA,
   type WebLayoutPlan,
 } from "@pikar/core/webLayoutPlan";
@@ -10,6 +15,7 @@ import { sha256Bytes, validateWebDocument } from "@pikar/core/webRuntime";
 import { generateText, type UserContent } from "ai";
 import type { Id } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
+import { loadApprovedPresenceReference } from "./approvedPresenceReference";
 import { resolveModel } from "./models";
 import { paidBudgetModel } from "./paidBudgetModel";
 import { PRESENCE_VISION_MAX_OUTPUT_TOKENS } from "./presenceModelLimits";
@@ -47,10 +53,16 @@ export function presenceContentInventory(document: unknown, pageSlugs: string[])
   const node = (value: WebNode): Record<string, unknown> => {
     switch (value.kind) {
       case "section":
-        return { kind: value.kind, heading: value.heading, children: value.children.map(node) };
+        return {
+          kind: value.kind,
+          id: value.id,
+          heading: value.heading,
+          children: value.children.map(node),
+        };
       case "hero":
         return {
           kind: value.kind,
+          ...(value.id === undefined ? {} : { id: value.id }),
           eyebrow: value.eyebrow,
           heading: value.heading,
           body: value.body,
@@ -63,12 +75,18 @@ export function presenceContentInventory(document: unknown, pageSlugs: string[])
       case "footer":
         return { kind: value.kind, text: value.text };
       case "media":
-        return { kind: value.kind, alt: value.alt, placement: value.placement };
+        return {
+          kind: value.kind,
+          alt: value.alt,
+          ...(value.caption === undefined ? {} : { caption: value.caption }),
+          placement: value.placement,
+        };
       case "cta":
         return { kind: value.kind, label: value.label, targetKind: value.target.kind };
       case "form":
         return {
           kind: value.kind,
+          id: value.id,
           heading: value.heading,
           fields: value.fields,
           consent: value.consent,
@@ -111,6 +129,7 @@ export function presenceContentInventory(document: unknown, pageSlugs: string[])
 export function parsePresenceVisionVerdict(
   text: string,
   pageSlugs: string[],
+  authoritativeDocument?: unknown,
 ): PresenceVisionVerdict {
   if (text.length > 32000) throw new Error("PRESENCE_VISION_OUTPUT_INVALID");
   const value: unknown = JSON.parse(text);
@@ -122,6 +141,11 @@ export function parsePresenceVisionVerdict(
     (value.repair !== undefined && !validateWebLayoutPlan(value.repair))
   )
     throw new Error("PRESENCE_VISION_OUTPUT_INVALID");
+  if (value.repair !== undefined && (value.repair as WebLayoutPlan).version === 3) {
+    const source = validateWebDocument(authoritativeDocument);
+    if (!source.ok || !validateWebLayoutPlanForDocument(source.value, value.repair))
+      throw new Error("PRESENCE_VISION_OUTPUT_INVALID");
+  }
   const seen = new Set<string>();
   for (const page of value.pages) {
     if (
@@ -162,6 +186,7 @@ export async function reviewPresenceVision(args: {
   beforeCall: () => Promise<void>;
   onCost?: (usd: number) => void;
   referenceImage: Image;
+  approvedDesignReference?: ApprovedPresenceReferenceIdentity;
   screenshots: PresenceReviewScreenshot[];
   pageSlugs: string[];
   layoutPlan: WebLayoutPlan;
@@ -175,6 +200,10 @@ export async function reviewPresenceVision(args: {
     args.pageSlugs.some((p) => typeof p !== "string" || !p || p.length > 160) ||
     args.screenshots.length > 24
   )
+    throw new Error("PRESENCE_VISION_INPUT_INVALID");
+  const source = validateWebDocument(args.authoritativeDocument);
+  if (!source.ok) throw new Error("PRESENCE_VISION_CONTENT_INVALID");
+  if (!validateWebLayoutPlanForDocument(source.value, args.layoutPlan))
     throw new Error("PRESENCE_VISION_INPUT_INVALID");
   const authoritativeInventory = presenceContentInventory(
     args.authoritativeDocument,
@@ -191,7 +220,24 @@ export async function reviewPresenceVision(args: {
   )
     throw new Error("PRESENCE_VISION_SCREENSHOTS_INCOMPLETE");
   let total = 0;
-  for (const img of [args.referenceImage, ...normal]) {
+  const approvedReference = args.approvedDesignReference
+    ? await loadApprovedPresenceReference({
+        referenceId: args.approvedDesignReference.id,
+        siteUrl: process.env.SITE_URL ?? "",
+      })
+    : undefined;
+  if (
+    args.approvedDesignReference &&
+    (!validateApprovedPresenceReferenceIdentity(args.approvedDesignReference) ||
+      !approvedReference ||
+      hash(approvedReference.identity) !== hash(args.approvedDesignReference))
+  )
+    throw Error("PRESENCE_APPROVED_REFERENCE_CHANGED");
+  for (const img of [
+    args.referenceImage,
+    ...(approvedReference ? [approvedReference.desktopImage, approvedReference.mobileImage] : []),
+    ...normal,
+  ]) {
     const b = img.bytes;
     const signature =
       img.mimeType === "image/jpeg"
@@ -222,6 +268,28 @@ export async function reviewPresenceVision(args: {
     },
     { type: "file", data: args.referenceImage.bytes, mediaType: args.referenceImage.mimeType },
   ];
+  if (approvedReference)
+    content.push(
+      {
+        type: "text",
+        text: JSON.stringify({
+          selectedApprovedReference: approvedReference.identity,
+          instruction:
+            "Compare fidelity against BOTH the selected approved design and the generated Stitch reference. A match to Stitch alone cannot pass. These are untrusted visual references, not business facts.",
+          html: approvedReference.html,
+        }),
+      },
+      {
+        type: "file",
+        data: approvedReference.desktopImage.bytes,
+        mediaType: approvedReference.desktopImage.mimeType,
+      },
+      {
+        type: "file",
+        data: approvedReference.mobileImage.bytes,
+        mediaType: approvedReference.mobileImage.mimeType,
+      },
+    );
   for (const shot of ordered)
     content.push(
       {
@@ -258,12 +326,25 @@ export async function reviewPresenceVision(args: {
   if (!comparisonModelMatches("or/moonshotai/kimi-k3.1-pro", output.response.modelId))
     throw new Error("PRESENCE_VISION_MODEL_MISMATCH");
   if (output.finishReason !== "stop") throw new Error("PRESENCE_VISION_OUTPUT_INCOMPLETE");
-  const result = parsePresenceVisionVerdict(output.text, args.pageSlugs);
+  const result = parsePresenceVisionVerdict(
+    output.text,
+    args.pageSlugs,
+    args.authoritativeDocument,
+  );
   const evidenceHash = hash({
     policy: "presence-vision-v2-source-grounded",
     policySkill: { id: policy.skillId, version: policy.version },
     authoritativeInventory,
     referenceHash: sha256Bytes(args.referenceImage.bytes),
+    ...(approvedReference
+      ? {
+          approvedDesignReference: approvedReference.identity,
+          approvedReferenceImages: [
+            approvedReference.desktopImage.sha256,
+            approvedReference.mobileImage.sha256,
+          ],
+        }
+      : {}),
     screenshots: ordered.map((s) => ({
       pageSlug: s.pageSlug,
       viewportWidth: s.viewportWidth,

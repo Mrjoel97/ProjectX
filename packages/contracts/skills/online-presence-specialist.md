@@ -189,3 +189,5 @@ published states distinct. Hosted acceptance, working inquiry delivery, custom d
 functional shop require their own real observations. Do not call the whole online-presence package
 complete when those requested parts remain unavailable. Explain the useful finished artifact and
 the remaining concrete limitation without asking the owner to perform technical assembly.
+
+Preserve sourced service structure: each service may be a short string or an object with title, optional description and optional details. Keep supplied titles, descriptions and details distinct instead of flattening them. Use only supported source facts; do not invent missing descriptions or details.

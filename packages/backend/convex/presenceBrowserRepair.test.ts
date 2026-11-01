@@ -364,7 +364,7 @@ test("foreign tenant, stale evidence and changed authoritative sources cannot ap
   expect(await t.run((ctx) => ctx.db.query("webProjectVersions").collect())).toHaveLength(1);
 });
 test("repair evidence must match exact persisted report, screenshots and closed proposal", async () => {
-  const { version, args } = await repairFixture();
+  const { t, version, args } = await repairFixture();
   const reports: never[] = [];
   const fidelity = { matched: false, evidenceHash: "a".repeat(64) },
     visualContrast = { passed: false, evidenceHash: "a".repeat(64) };
@@ -393,6 +393,30 @@ test("repair evidence must match exact persisted report, screenshots and closed 
     screenshotHashes: ["c".repeat(64)],
   };
   expect(verifyRepairEvidence(bound, vision, { reports }).layoutPlan).toEqual(args.layoutPlan);
+  const foreignSectionPlan = {
+    ...args.layoutPlan,
+    version: 3,
+    designTokens: {
+      colors: {
+        paper: "#ffffff",
+        card: "#ffffff",
+        ink: "#111111",
+        muted: "#555555",
+        accent: "#222222",
+        rule: "#dddddd",
+      },
+      typography: { heading: "humanist-sans", body: "humanist-sans" },
+      spacing: { contentWidth: 1200, sectionGap: 64, copyMeasure: 60, heroMinHeight: 480 },
+      footer: "light",
+    },
+    sections: [{ pageSlug: "foreign", nodeId: "services", composition: "service-panels" }],
+  };
+  expect(() =>
+    verifyRepairEvidence(bound, { ...vision, repairPlan: foreignSectionPlan }, { reports }),
+  ).toThrow("PRESENCE_REPAIR_EVIDENCE_INVALID");
+  await expect(
+    t.mutation(repairApply, { ...args, layoutPlan: foreignSectionPlan }),
+  ).rejects.toThrow("PRESENCE_REPAIR_UNAVAILABLE");
   for (const altered of [
     { ...vision, contentHash: "bad" },
     { ...vision, screenshotHashes: [] },

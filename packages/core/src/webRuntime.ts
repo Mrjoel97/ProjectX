@@ -49,14 +49,17 @@ const slug = (value: unknown): value is string =>
   typeof value === "string" &&
   /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value) &&
   value.length <= WEB_RUNTIME_LIMITS.maxSlugLength;
+export const isWebAnchorPath = (value: unknown): boolean =>
+  typeof value === "string" && /^#[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(value);
 const safeLocalPath = (value: unknown): value is string =>
   typeof value === "string" &&
   value.length <= 512 &&
-  value.startsWith("/") &&
-  !value.startsWith("//") &&
-  !hasWhitespaceOrControl(value) &&
-  !/[\\]/.test(value) &&
-  !/[#]/.test(value);
+  (isWebAnchorPath(value) ||
+    (value.startsWith("/") &&
+      !value.startsWith("//") &&
+      !hasWhitespaceOrControl(value) &&
+      !/[\\]/.test(value) &&
+      !/[#]/.test(value)));
 const safeHttps = (value: unknown): value is string => {
   if (typeof value !== "string" || value.length > 2048 || hasWhitespaceOrControl(value))
     return false;
@@ -75,9 +78,18 @@ const safeStorageRef = (value: unknown): value is string =>
 
 export function validateWebMediaInput(value: unknown): boolean {
   if (
-    !validObject(value, ["storageRef", "alt", "crop", "placement", "aspect", "focalPoint"]) ||
+    !validObject(value, [
+      "storageRef",
+      "alt",
+      "caption",
+      "crop",
+      "placement",
+      "aspect",
+      "focalPoint",
+    ]) ||
     !parseWebAssetRef(value.storageRef) ||
-    !text(value.alt, 256)
+    !text(value.alt, 256) ||
+    !optionalText(value.caption, 512)
   )
     return false;
   if (value.crop !== undefined && value.crop !== "cover" && value.crop !== "contain") return false;
@@ -211,7 +223,8 @@ function validateNode(
   }
   if (kind === "hero") {
     const valid =
-      validObject(value, ["kind", "eyebrow", "heading", "body"]) &&
+      validObject(value, ["kind", "id", "eyebrow", "heading", "body"]) &&
+      (value.id === undefined || id(value.id)) &&
       text(value.heading) &&
       optionalText(value.eyebrow, WEB_RUNTIME_LIMITS.maxShortTextLength) &&
       optionalText(value.body);
@@ -229,6 +242,7 @@ function validateNode(
         "kind",
         "storageRef",
         "alt",
+        "caption",
         "crop",
         "placement",
         "aspect",
@@ -236,6 +250,7 @@ function validateNode(
       ]) ||
       !safeStorageRef(value.storageRef) ||
       !text(value.alt, WEB_RUNTIME_LIMITS.maxShortTextLength) ||
+      !optionalText(value.caption, 512) ||
       (parseWebAssetRef(value.storageRef) !== null &&
         !validateWebMediaInput(
           Object.fromEntries(Object.entries(value).filter(([key]) => key !== "kind")),
@@ -286,6 +301,13 @@ function validateNode(
       validateTarget(value.target, `${path}.target`, errors) &&
       (value.analytics === undefined || typeof value.analytics === "boolean");
     if (!valid) issue(errors, path, "invalid_cta");
+    if (
+      value.analytics === true &&
+      isRecord(value.target) &&
+      value.target.kind === "local" &&
+      isWebAnchorPath(value.target.path)
+    )
+      issue(errors, path, "tracked_fragment_refused");
     counter.urls += 1;
     return true;
   }
@@ -367,6 +389,18 @@ function validatePage(
   return true;
 }
 
+/** Fragment targets are only nodes with actual code-owned DOM IDs, not route/form identifiers. */
+export function webPageAnchorTargetCount(page: WebPage, fragment: string): number {
+  if (!isWebAnchorPath(fragment)) return 0;
+  let count = 0;
+  const walk = (node: WebNode): void => {
+    if ((node.kind === "hero" || node.kind === "section") && node.id === fragment.slice(1)) count++;
+    if (node.kind === "section") node.children.forEach(walk);
+  };
+  page.nodes.forEach(walk);
+  return count;
+}
+
 export function validateWebDocument(input: unknown): WebValidationResult<WebDocument> {
   const errors: WebValidationIssue[] = [];
   const counter = { count: 0, urls: 0 };
@@ -402,6 +436,33 @@ export function validateWebDocument(input: unknown): WebValidationResult<WebDocu
       if (isRecord(page) && typeof page.slug === "string" && pageSlugs.has(page.slug))
         issue(errors, `pages[${index}].slug`, "duplicate_page");
       if (isRecord(page) && typeof page.slug === "string") pageSlugs.add(page.slug);
+    });
+  }
+  if (errors.length === 0) {
+    const document = input as unknown as WebDocument;
+    document.pages.forEach((page, pageIndex) => {
+      const check = (target: string, path: string) => {
+        if (isWebAnchorPath(target) && webPageAnchorTargetCount(page, target) !== 1)
+          issue(errors, path, "unresolved_fragment_target");
+      };
+      document.navigation.forEach((item, i) => {
+        check(item.path, `pages[${pageIndex}].navigation[${i}]`);
+      });
+      const walk = (node: WebNode, path: string): void => {
+        if (node.kind === "navigation")
+          node.items.forEach((item, i) => {
+            check(item.path, `${path}.items[${i}]`);
+          });
+        if (node.kind === "cta" && node.target.kind === "local")
+          check(node.target.path, `${path}.target.path`);
+        if (node.kind === "section")
+          node.children.forEach((child, i) => {
+            walk(child, `${path}.children[${i}]`);
+          });
+      };
+      page.nodes.forEach((node, i) => {
+        walk(node, `pages[${pageIndex}].nodes[${i}]`);
+      });
     });
   }
   if (input.kind === "storefront" && Array.isArray(input.pages)) {
@@ -494,7 +555,7 @@ function renderNode(node: WebNode, route: WebRouteContext, depth = 0): string {
     case "navigation":
       return `<nav aria-label="Primary"><ul>${node.items.map((item) => `<li><a${attribute("href", item.path)}>${escapeHtml(item.label)}</a></li>`).join("")}</ul></nav>`;
     case "hero":
-      return `<section class="hero">${node.eyebrow ? `<p class="eyebrow">${escapeHtml(node.eyebrow)}</p>` : ""}<h1>${escapeHtml(node.heading)}</h1>${node.body ? `<p>${escapeHtml(node.body)}</p>` : ""}</section>`;
+      return `<section class="hero"${node.id === undefined ? "" : attribute("id", node.id)}>${node.eyebrow ? `<p class="eyebrow">${escapeHtml(node.eyebrow)}</p>` : ""}<h1>${escapeHtml(node.heading)}</h1>${node.body ? `<p>${escapeHtml(node.body)}</p>` : ""}</section>`;
     case "text":
       return `<p>${escapeHtml(node.text)}</p>`;
     case "media":
@@ -575,6 +636,7 @@ function canonicalNode(node: WebNode): unknown {
     case "hero":
       return {
         kind: node.kind,
+        ...(node.id === undefined ? {} : { id: node.id }),
         ...(node.eyebrow === undefined ? {} : { eyebrow: node.eyebrow }),
         heading: node.heading,
         ...(node.body === undefined ? {} : { body: node.body }),
@@ -586,6 +648,7 @@ function canonicalNode(node: WebNode): unknown {
         kind: node.kind,
         storageRef: node.storageRef,
         alt: node.alt,
+        ...(node.caption === undefined ? {} : { caption: node.caption }),
         ...(node.crop === undefined ? {} : { crop: node.crop }),
         ...(node.placement === undefined ? {} : { placement: node.placement }),
         ...(node.aspect === undefined ? {} : { aspect: node.aspect }),

@@ -1,7 +1,12 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import {
+  APPROVED_FIELDWORK_REFERENCE,
+  getApprovedPresenceReferenceIdentity,
+} from "@pikar/contracts/approvedPresenceReference";
 import { presenceDesignPolicySkillBody } from "@pikar/contracts/skills/presenceDesignPolicy";
 import { sha256Bytes } from "@pikar/core/webRuntime";
 import { beforeEach, expect, test, vi } from "vitest";
+import { loadApprovedPresenceReference } from "./approvedPresenceReference";
 import { resolveModel } from "./models";
 import {
   parsePresenceVisionVerdict,
@@ -9,6 +14,7 @@ import {
   reviewPresenceVision,
 } from "./presenceVisionReview";
 
+vi.mock("./approvedPresenceReference", () => ({ loadApprovedPresenceReference: vi.fn() }));
 vi.mock("./models", () => ({ resolveModel: vi.fn() }));
 const plan = {
   version: 1,
@@ -29,6 +35,7 @@ let responseModel: string;
 let finishReason: string;
 beforeEach(() => {
   wire = [];
+  vi.mocked(loadApprovedPresenceReference).mockReset();
   reply = { pages: [page] };
   cost = 0.02;
   responseModel = "moonshotai/kimi-k3.1-pro";
@@ -171,7 +178,7 @@ test("actual SDK prompt grounds fidelity in canonical content and separates cont
   const args = input();
   const first = await reviewPresenceVision(args);
   const prompt = JSON.parse(wire[0]!.messages[1].content[0].text);
-  expect(prompt.supportedLayoutPlan.version).toBe(2);
+  expect(prompt.supportedLayoutPlan.version).toBe(3);
   expect(prompt.supportedLayoutPlan.designTokens.footer).toEqual(["light", "dark"]);
   expect(prompt.authoritativeInventory.pages[0].nodes[0].heading).toBe("Customer-owned heading");
   expect(prompt.authoritativeInventory.navigationLabels).toEqual(["Home"]);
@@ -315,4 +322,104 @@ test.each([
   expect(args.beforeCall).not.toHaveBeenCalled();
   expect(ctx.runMutation).not.toHaveBeenCalled();
   expect(wire).toHaveLength(0);
+});
+
+test("v3 review and repair refuse foreign document references without silently dropping them", async () => {
+  const args = input();
+  const designTokens = {
+    colors: {
+      paper: "#ffffff",
+      card: "#ffffff",
+      ink: "#111111",
+      muted: "#555555",
+      accent: "#222222",
+      rule: "#dddddd",
+    },
+    typography: { heading: "humanist-sans", body: "humanist-sans" },
+    spacing: { contentWidth: 1200, sectionGap: 64, copyMeasure: 60, heroMinHeight: 480 },
+    footer: "light",
+  } as const;
+  const valid = { ...plan, version: 3, designTokens, sections: [] } as const;
+  const foreign = {
+    ...valid,
+    sections: [{ pageSlug: "foreign", nodeId: "about", composition: "editorial-lead" }],
+  } as const;
+  await expect(
+    reviewPresenceVision({ ...args, layoutPlan: { ...foreign, sections: [...foreign.sections] } }),
+  ).rejects.toThrow("PRESENCE_VISION_INPUT_INVALID");
+  expect(wire).toHaveLength(0);
+  expect(() =>
+    parsePresenceVisionVerdict(
+      JSON.stringify({ pages: [page], repair: valid }),
+      ["home"],
+      args.authoritativeDocument,
+    ),
+  ).not.toThrow();
+  expect(() =>
+    parsePresenceVisionVerdict(
+      JSON.stringify({ pages: [page], repair: foreign }),
+      ["home"],
+      args.authoritativeDocument,
+    ),
+  ).toThrow("PRESENCE_VISION_OUTPUT_INVALID");
+  expect(() =>
+    parsePresenceVisionVerdict(JSON.stringify({ pages: [page], repair: valid }), ["home"]),
+  ).toThrow("PRESENCE_VISION_OUTPUT_INVALID");
+});
+
+test("selected reference is independently supplied alongside Stitch and bound into vision evidence", async () => {
+  const args = input(),
+    identity = getApprovedPresenceReferenceIdentity("fieldwork-v1")!;
+  const image = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
+  vi.mocked(loadApprovedPresenceReference).mockResolvedValue({
+    identity,
+    html: "PINNED_APPROVED_REFERENCE",
+    desktopImage: {
+      bytes: image,
+      mimeType: "image/png",
+      sha256: APPROVED_FIELDWORK_REFERENCE.desktop.sha256,
+    },
+    mobileImage: {
+      bytes: image,
+      mimeType: "image/png",
+      sha256: APPROVED_FIELDWORK_REFERENCE.mobile.sha256,
+    },
+  });
+  const ordinary = await reviewPresenceVision(args);
+  expect(loadApprovedPresenceReference).not.toHaveBeenCalled();
+  const selected = await reviewPresenceVision({ ...input(), approvedDesignReference: identity });
+  expect(selected.evidenceHash).not.toBe(ordinary.evidenceHash);
+  const content = (wire[1]!.messages as any[]).flatMap((message) =>
+    Array.isArray(message.content) ? message.content : [],
+  );
+  expect(JSON.stringify(content)).toContain("PINNED_APPROVED_REFERENCE");
+  expect(JSON.stringify(content)).toContain("BOTH");
+  expect(content.filter((item: any) => item.type === "image_url")).toHaveLength(5);
+});
+test("unavailable selected reference blocks visual review before any paid admission", async () => {
+  const args = input();
+  vi.mocked(loadApprovedPresenceReference).mockRejectedValue(Error("REFERENCE_HASH_MISMATCH"));
+  await expect(
+    reviewPresenceVision({
+      ...args,
+      approvedDesignReference: getApprovedPresenceReferenceIdentity("fieldwork-v1")!,
+    }),
+  ).rejects.toThrow("REFERENCE_HASH_MISMATCH");
+  expect(wire).toHaveLength(0);
+  expect((args.ctx as any).runMutation).not.toHaveBeenCalled();
+});
+
+test("inventory preserves explicit hero heading identities without adding IDs to legacy heroes", () => {
+  const document = input().authoritativeDocument;
+  const ordinary = presenceContentInventory(document, ["home"]);
+  expect(JSON.stringify(ordinary)).not.toContain('"id":"page-hero"');
+  const withHeroId = {
+    ...document,
+    pages: document.pages.map((page) => ({
+      ...page,
+      nodes: page.nodes.map((node) => ({ ...node, id: "page-hero" })),
+    })),
+  };
+  const inventory = presenceContentInventory(withHeroId, ["home"]);
+  expect(JSON.stringify(inventory)).toContain('"id":"page-hero"');
 });

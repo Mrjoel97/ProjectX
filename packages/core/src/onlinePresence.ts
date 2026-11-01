@@ -6,6 +6,7 @@ import {
   type StorefrontCatalogueInput,
   validateWebRecipeInput,
   validateWebRecipeMedia,
+  validateWebServices,
   type WebRecipeMedia,
 } from "./webRecipes";
 
@@ -20,6 +21,7 @@ export const ONLINE_PRESENCE_TOOLS = Object.freeze([
 
 export type OnlinePresenceKind = "landing" | "website" | "shop";
 export const ONLINE_PRESENCE_OPTIONAL_FIELDS = [
+  "approvedDesignReference",
   "offer",
   "services",
   "about",
@@ -34,13 +36,15 @@ export const ONLINE_PRESENCE_OPTIONAL_FIELDS = [
 ] as const;
 export type OnlinePresenceClearField = (typeof ONLINE_PRESENCE_OPTIONAL_FIELDS)[number];
 export type OnlinePresenceBrief = {
+  /** Explicit style reference selection, never a source of business claims. */
+  approvedDesignReference?: "fieldwork-v1";
   kind: OnlinePresenceKind;
   businessName: string;
   headline: string;
   summary: string;
   audience: string;
   offer?: string;
-  services?: readonly string[];
+  services?: BusinessSiteInput["services"];
   about?: string;
   ctaLabel?: string;
   ctaHref?: string;
@@ -184,6 +188,7 @@ const text = (value: unknown, max: number): value is string =>
 const list = (value: unknown, max: number, length: number): value is readonly string[] =>
   Array.isArray(value) && value.length <= length && value.every((entry) => text(entry, max));
 const KEYS = [
+  "approvedDesignReference",
   "kind",
   "businessName",
   "headline",
@@ -283,12 +288,17 @@ export function assessOnlinePresenceBrief(
   }))
     if (raw[field] !== undefined && !text(raw[field], max))
       add(field, "invalid", `Provide valid ${field} text or leave it out.`);
-  for (const [field, limit] of [
-    ["services", 8],
-    ["proof", 6],
-  ] as const)
+  for (const [field, limit] of [["proof", 6]] as const)
     if (raw[field] !== undefined && !list(raw[field], 512, limit))
       add(field, "invalid", `Provide at most ${limit} short ${field} entries.`);
+  if (raw.approvedDesignReference !== undefined && raw.approvedDesignReference !== "fieldwork-v1")
+    add("approvedDesignReference", "invalid", "Select an available approved design reference.");
+  if (raw.services !== undefined && !validateWebServices(raw.services))
+    add(
+      "services",
+      "invalid",
+      "Provide at most eight sourced services with titles and optional descriptions/details.",
+    );
   if (raw.media !== undefined && !validateWebRecipeMedia(raw.media))
     add("media", "invalid", "Select prepared business images with descriptive alternative text.");
   if (raw.design !== undefined) {

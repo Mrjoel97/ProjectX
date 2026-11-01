@@ -4,7 +4,11 @@ import {
   renderDesignedWebDocumentBytes,
   WEB_DESIGN_RENDERER_VERSION,
 } from "@pikar/core/webDesignRenderer";
-import { canonicalWebLayoutPlan, validateWebLayoutPlan } from "@pikar/core/webLayoutPlan";
+import {
+  canonicalWebLayoutPlan,
+  validateWebLayoutPlan,
+  validateWebLayoutPlanForDocument,
+} from "@pikar/core/webLayoutPlan";
 import { assessWebQuality } from "@pikar/core/webQuality";
 import { sha256Bytes, validateWebDocument } from "@pikar/core/webRuntime";
 import { makeFunctionReference } from "convex/server";
@@ -190,6 +194,7 @@ export function verifySplitRendererRepairEvidence(version: any, vision: any, cap
 /** Reconstruct the exact completed review before trusting a stored repair proposal. */
 export function verifyRepairEvidence(
   version: {
+    document?: Parameters<typeof validateWebLayoutPlanForDocument>[0];
     contentHash: string;
     providerReceipt: Parameters<typeof providerReceiptHash>[0];
     browserReview: { reportHash: string };
@@ -201,6 +206,9 @@ export function verifyRepairEvidence(
   if (
     !vision ||
     !validateWebLayoutPlan(vision.repairPlan) ||
+    (vision.repairPlan.version === 3 &&
+      (!version.document ||
+        !validateWebLayoutPlanForDocument(version.document, vision.repairPlan))) ||
     !vision.fidelity ||
     !vision.visualContrast ||
     !/^[a-f0-9]{64}$/.test(vision.fidelity.evidenceHash) ||
@@ -242,7 +250,12 @@ export const run = internalAction({
     if (!captureBlob || captureBlob.size > 3200000) return { status: "stopped" };
     const capture = JSON.parse(await captureBlob.text());
     if (!version.browserReviewVisionStorageId) {
-      if (!validateWebLayoutPlan(version.recipeRef?.designProfile.layoutPlan))
+      if (
+        !validateWebLayoutPlanForDocument(
+          version.document,
+          version.recipeRef?.designProfile.layoutPlan,
+        )
+      )
         return { status: "stopped" };
       const browserEvidenceHash = verifyRendererRepairEvidence(version, capture);
       return ctx.runMutation(applyRef, {
@@ -319,7 +332,7 @@ export const apply = internalMutation({
       version.browserReview?.status !== "failed" ||
       version.browserReviewJob?.state !== "completed" ||
       version.browserReview.reportHash !== args.reportHash ||
-      !validateWebLayoutPlan(args.layoutPlan) ||
+      !validateWebLayoutPlanForDocument(version.document, args.layoutPlan) ||
       (args.repairKind === "renderer"
         ? (version.browserReviewVisionStorageId !== undefined
             ? !isSplitRendererUpgrade(version) ||
