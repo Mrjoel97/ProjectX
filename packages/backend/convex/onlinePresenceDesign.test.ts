@@ -44,7 +44,10 @@ vi.mock("./onlinePresence", async () => {
     }),
   };
 });
-vi.mock("ai", () => ({ generateText: vi.fn() }));
+vi.mock("ai", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("ai")>()),
+  generateText: vi.fn(),
+}));
 vi.mock("./lib/models", () => ({ resolveModel: (modelId: string) => ({ modelId }) }));
 vi.mock("./lib/paidBudgetModel", () => ({ paidBudgetModel: (args: unknown) => args }));
 vi.mock("./lib/stitchDesignClient", () => ({

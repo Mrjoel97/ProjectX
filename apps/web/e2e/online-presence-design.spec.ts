@@ -364,7 +364,15 @@ for (const direction of ["editorial", "studio", "technical"] as const) {
         expect(box!.width).toBeGreaterThan(100);
         expect(box!.height).toBeGreaterThan(100);
         const figure = await image.locator("..").boundingBox();
-        expect(figure!.width / figure!.height).toBeCloseTo(1.6, 1);
+        if (await image.evaluate((element) => Boolean(element.closest("#gallery")))) {
+          // Two-image galleries retain a consistent grid crop; carousel sizing is checked
+          // separately. Hero media now fills the approved image-overlay composition.
+          expect(figure!.width / figure!.height).toBeCloseTo(4 / 3, 1);
+        } else {
+          const hero = await page.locator(".hero-composition").boundingBox();
+          expect(figure!.width).toBeCloseTo(hero!.width, 0);
+          expect(figure!.height).toBeCloseTo(hero!.height, 0);
+        }
         expect(box!.x).toBeGreaterThanOrEqual(0);
         expect(box!.x + box!.width).toBeLessThanOrEqual(width);
       }

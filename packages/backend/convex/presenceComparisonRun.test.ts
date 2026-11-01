@@ -24,7 +24,10 @@ import { STITCH_MCP_ENDPOINT } from "./lib/stitchDesignClient";
 import { STITCH_INCLUDED_CREDITS_DECLARATION } from "./presenceDesignProbe";
 import schema from "./schema";
 
-vi.mock("ai", () => ({ generateText: vi.fn() }));
+vi.mock("ai", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("ai")>()),
+  generateText: vi.fn(),
+}));
 vi.mock("./lib/models", () => ({ resolveModel: (modelId: string) => ({ modelId }) }));
 // Native coordinator/protocol tests exercise real reserve/settle mutations; the SDK/provider is synthetic.
 vi.mock("./lib/evalBudgetModel", () => ({ evalBudgetModel: (args: unknown) => args }));
