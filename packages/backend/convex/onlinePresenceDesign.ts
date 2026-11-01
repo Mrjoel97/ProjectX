@@ -22,7 +22,7 @@ import { loadApprovedPresenceReference } from "./lib/approvedPresenceReference";
 import { resolveModel } from "./lib/models";
 import { paidBudgetModel } from "./lib/paidBudgetModel";
 import { loadPresencePolicy } from "./lib/presencePolicy";
-import type { PresenceProviderReceipt } from "./lib/presencePublication";
+import { canonicalEvidenceHash, type PresenceProviderReceipt } from "./lib/presencePublication";
 import {
   generateStitchDesignEvidence,
   recoverStitchDesignEvidence,
@@ -156,7 +156,8 @@ export const build = internalAction({
       : undefined;
     if (
       approvedReference &&
-      digest(approvedReference.identity) !== digest(selectedReferenceIdentity)
+      canonicalEvidenceHash(approvedReference.identity) !==
+        canonicalEvidenceHash(selectedReferenceIdentity)
     )
       throw Error("PRESENCE_APPROVED_REFERENCE_CHANGED");
     const policy = await loadPresencePolicy(ctx);
@@ -444,11 +445,22 @@ export const build = internalAction({
         ...args,
         designCompletion: { profile, providerReceipt },
       });
-    } catch {
+    } catch (error) {
+      const internalFailureCode = [
+        "PRESENCE_APPROVED_REFERENCE_CHANGED",
+        "PRESENCE_DESIGN_CONTEXT_CHANGED",
+        "PRESENCE_DESIGN_PROFILE_INVALID",
+        "PRESENCE_DESIGN_EVIDENCE_REQUIRED",
+        "PRESENCE_LAYOUT_INVALID",
+        "PRESENCE_QUALITY_FAILED",
+      ].find(
+        (code) => error instanceof Error && new RegExp("\\b" + code + "\\b").test(error.message),
+      );
       uncertain ||= modelAttempted && !modelSettled;
       if (claimed) {
         await journal({
           stopped: true,
+          ...(internalFailureCode ? { internalFailureCode } : {}),
           reconciliationRequired: uncertain,
           phase,
           ...stitchFailure,

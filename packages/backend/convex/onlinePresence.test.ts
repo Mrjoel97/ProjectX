@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { getApprovedPresenceReferenceIdentity } from "@pikar/contracts/approvedPresenceReference";
+import { convexToJson, jsonToConvex } from "convex/values";
 import { readFileSync } from "node:fs";
 import { onlinePresenceSpecialistSkillBody } from "@pikar/contracts/skills/onlinePresenceSpecialist";
 import {
@@ -130,6 +132,15 @@ async function offlineProviderBuild(
     designCompletion: {
       profile,
       providerReceipt: {
+        ...(snapshot.brief.approvedDesignReference
+          ? {
+              approvedDesignReference: jsonToConvex(
+                convexToJson(
+                  getApprovedPresenceReferenceIdentity(snapshot.brief.approvedDesignReference)!,
+                ),
+              ),
+            }
+          : {}),
         pipelineVersion: "stitch-kimi-required-v1",
         runRef,
         stitchHash,
@@ -1057,4 +1068,23 @@ test("the real specialist loop prepares owned imagery, saves a brief, and builds
   });
   expect(refusedBuild.ok).toBe(false);
   expect(await t.run((ctx) => ctx.db.query("webProjectVersions").collect())).toHaveLength(3);
+});
+
+test("approved reference completion survives real Convex object transport ordering", async () => {
+  const { t, tenantId, planId, session, brief } = await setup();
+  await activeRecipe(t);
+  const saved = await t.mutation(internal.onlinePresence.saveBrief, {
+    tenantId,
+    planId,
+    expectedRevision: session.revision,
+    brief: { ...brief, approvedDesignReference: "fieldwork-v1" },
+  });
+  expect(saved.ok).toBe(true);
+  const result = await offlineProviderBuild(t, {
+    tenantId,
+    planId,
+    expectedRevision: saved.revision,
+  });
+  expect(result.ok).toBe(true);
+  expect(result.artifact).toBeDefined();
 });

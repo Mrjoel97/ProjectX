@@ -27,6 +27,7 @@ import schema from "./schema";
 const state = vi.hoisted(() => ({
   snapshot: {} as Record<string, unknown>,
   finalizeFails: false,
+  finalizationError: "synthetic transient finalization failure",
   finalizations: 0,
 }));
 vi.mock("./onlinePresence", async () => {
@@ -39,7 +40,7 @@ vi.mock("./onlinePresence", async () => {
       args: { ...args, designCompletion: v.any() },
       handler: async (_ctx, args) => {
         state.finalizations++;
-        if (state.finalizeFails) throw Error("synthetic transient finalization failure");
+        if (state.finalizeFails) throw Error(state.finalizationError);
         return {
           ok: true,
           revision: args.expectedRevision + 1,
@@ -98,6 +99,7 @@ beforeEach(() => {
   calls = [];
   vi.mocked(loadApprovedPresenceReference).mockReset();
   state.finalizeFails = false;
+  state.finalizationError = "synthetic transient finalization failure";
   state.finalizations = 0;
   vi.stubEnv("STITCH_API_KEY", "synthetic");
   vi.stubEnv("OPENROUTER_API_KEY", "synthetic");
@@ -458,4 +460,20 @@ test("selected approved reference cannot silently disappear before provider gene
   await expect(t.action(run, args)).rejects.toThrow("APPROVED_REFERENCE_UNAVAILABLE");
   expect(generateStitchDesignEvidence).not.toHaveBeenCalled();
   expect(generateText).not.toHaveBeenCalled();
+});
+
+test.each([
+  "PRESENCE_APPROVED_REFERENCE_CHANGED",
+  "private-provider-url?key=secret",
+])("finalization diagnostics disclose only static internal codes: %s", async (message) => {
+  const { t, args } = await setup();
+  state.finalizeFails = true;
+  state.finalizationError = message;
+  expect((await t.action(run, args)).ok).toBe(false);
+  const audits = await t.run((ctx) => ctx.db.query("audit").collect());
+  const stopped = audits.find((row) => row.payload.stopped === true);
+  expect(stopped?.payload.internalFailureCode).toBe(
+    message.startsWith("PRESENCE_") ? message : undefined,
+  );
+  expect(JSON.stringify(audits)).not.toContain("secret");
 });

@@ -15,6 +15,7 @@ import { sha256Bytes, validateWebDocument } from "@pikar/core/webRuntime";
 import { generateText, type UserContent } from "ai";
 import type { Id } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
+import { canonicalEvidenceHash } from "./presencePublication";
 import { loadApprovedPresenceReference } from "./approvedPresenceReference";
 import { resolveModel } from "./models";
 import { paidBudgetModel } from "./paidBudgetModel";
@@ -230,7 +231,8 @@ export async function reviewPresenceVision(args: {
     args.approvedDesignReference &&
     (!validateApprovedPresenceReferenceIdentity(args.approvedDesignReference) ||
       !approvedReference ||
-      hash(approvedReference.identity) !== hash(args.approvedDesignReference))
+      canonicalEvidenceHash(approvedReference.identity) !==
+        canonicalEvidenceHash(args.approvedDesignReference))
   )
     throw Error("PRESENCE_APPROVED_REFERENCE_CHANGED");
   for (const img of [

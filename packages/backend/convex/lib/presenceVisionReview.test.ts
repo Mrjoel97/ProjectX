@@ -387,7 +387,14 @@ test("selected reference is independently supplied alongside Stitch and bound in
   });
   const ordinary = await reviewPresenceVision(args);
   expect(loadApprovedPresenceReference).not.toHaveBeenCalled();
-  const selected = await reviewPresenceVision({ ...input(), approvedDesignReference: identity });
+  const selected = await reviewPresenceVision({
+    ...input(),
+    approvedDesignReference: {
+      manifestHash: identity.manifestHash,
+      id: identity.id,
+      revision: identity.revision,
+    },
+  });
   expect(selected.evidenceHash).not.toBe(ordinary.evidenceHash);
   const content = (wire[1]!.messages as any[]).flatMap((message) =>
     Array.isArray(message.content) ? message.content : [],

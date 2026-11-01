@@ -21,6 +21,7 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
+import { canonicalEvidenceHash } from "./lib/presencePublication";
 import { assertTenantWritable, internalMutation } from "./lib/tenantLifecycle";
 import { type ShopSetupReview, shopSetupReviewForTenant } from "./onlinePresenceShop";
 import { imageSource, listImageCandidates, resolveDocumentAssets } from "./webAssets";
@@ -844,7 +845,8 @@ export const buildProject = internalMutation({
         : getApprovedPresenceReferenceIdentity(selectedReference);
     if (
       (selectedReference !== undefined && !expectedReference) ||
-      hash(providerReceipt.approvedDesignReference ?? null) !== hash(expectedReference ?? null)
+      canonicalEvidenceHash(providerReceipt.approvedDesignReference ?? null) !==
+        canonicalEvidenceHash(expectedReference ?? null)
     )
       throw Error("PRESENCE_APPROVED_REFERENCE_CHANGED");
     if (
