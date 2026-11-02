@@ -58,6 +58,7 @@ describe("real renderer examples", () => {
     )!;
     await act(async () => build.click());
     expect(mocks.start).toHaveBeenCalledWith({
+      approvedDesignReference: "fieldwork-v1",
       text: expect.stringContaining("approved Fieldwork design reference (fieldwork-v1)"),
     });
     expect(mocks.start.mock.calls[0]![0].text).toContain("Preserve my own business facts");

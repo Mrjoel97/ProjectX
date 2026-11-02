@@ -11,6 +11,7 @@ import {
   validateDesignProfileRef,
   verifiedDesignKnowledgeBundle,
 } from "./designKnowledge";
+import { renderFieldworkReferenceDocument } from "./fieldworkReferenceRenderer";
 import { webAssetPath } from "./webAssets";
 import { WEB_CAROUSEL_TAG } from "./webCarouselRuntime";
 import {
@@ -26,7 +27,7 @@ import {
   sha256Bytes,
 } from "./webRuntime";
 
-export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v17" as const;
+export const WEB_DESIGN_RENDERER_VERSION = "web-design-renderer-v18" as const;
 const encoder = new TextEncoder();
 
 /** The renderer depends on the selected records, not merely the bundle's role labels. */
@@ -86,6 +87,18 @@ const PALETTES = {
   },
 } as const;
 
+/** Resolve the paper-deep surface to an opaque color that the contrast checker can measure. */
+function deepPaper(paper: string, card: string, ink: string): string {
+  if (paper.toLowerCase() !== card.toLowerCase()) return card;
+  const channels = [1, 3, 5].map((offset) => {
+    const base = Number.parseInt(paper.slice(offset, offset + 2), 16);
+    const shade = Number.parseInt(ink.slice(offset, offset + 2), 16);
+    return Math.round(base * 0.94 + shade * 0.06)
+      .toString(16)
+      .padStart(2, "0");
+  });
+  return `#${channels.join("")}`;
+}
 function luminance(color: string): number {
   const channels = [1, 3, 5]
     .map((start) => Number.parseInt(color.slice(start, start + 2), 16) / 255)
@@ -106,9 +119,13 @@ function designedCatalogue(node: WebCatalogueNode, route: WebRouteContext): stri
   return `<section class="catalogue" aria-label="Catalogue presentation">${node.heading ? `<h2>${escapeWebText(node.heading)}</h2>` : ""}<div class="catalogue-items">${node.items.map((item) => `<article data-catalogue-id="${escapeWebText(item.id)}">${item.imageStorageRef ? renderWebMedia({ kind: "media", storageRef: item.imageStorageRef, alt: item.name, aspect: "square", crop: "contain" }, route) : ""}<div class="product-copy"><h3>${escapeWebText(item.name)}</h3>${item.displayPriceText ? `<p class="display-price">${escapeWebText(item.displayPriceText)}</p>` : ""}${item.availabilityLabel ? `<p class="availability">${escapeWebText(item.availabilityLabel)}</p>` : ""}<details><summary>View details</summary><p>${escapeWebText(item.description)}</p></details></div></article>`).join("")}</div><p class="commerce-unavailable">Ordering is unavailable in this presentation-only catalogue.</p></section>`;
 }
 
-function designedInquiry(node: WebFormNode, route: WebRouteContext): string {
+function designedInquiry(
+  node: WebFormNode,
+  route: WebRouteContext,
+  duplicateHeading = false,
+): string {
   const labels = { email: "Email address", name: "Your name", company: "Business name" };
-  return `<form id="inquiry-${escapeWebText(node.id)}" method="post" action="/p/${route.slug}/${route.page}/forms/${node.id}"><fieldset><legend>${escapeWebText(node.heading ?? "Start a conversation")}</legend>${node.fields.map((field) => `<label>${labels[field]}<input name="${field}" type="${field === "email" ? "email" : "text"}" autocomplete="${field === "company" ? "organization" : field}"${field === "email" ? " required" : ""}></label>`).join("")}<label><input name="consent" type="checkbox" required> ${escapeWebText(node.consent)}</label><button type="submit">Send inquiry</button></fieldset></form>`;
+  return `<form id="inquiry-${escapeWebText(node.id)}" method="post" action="/p/${route.slug}/${route.page}/forms/${node.id}"><fieldset><legend${duplicateHeading ? ' class="source-duplicate-heading"' : ""}>${escapeWebText(node.heading ?? "Start a conversation")}</legend>${node.fields.map((field) => `<label>${labels[field]}<input name="${field}" type="${field === "email" ? "email" : "text"}" autocomplete="${field === "company" ? "organization" : field}"${field === "email" ? " required" : ""}></label>`).join("")}<label><input name="consent" type="checkbox" required> ${escapeWebText(node.consent)}</label><button type="submit">Send inquiry</button></fieldset></form>`;
 }
 
 /** Approved media with a single immutable first-party carousel runtime. */
@@ -145,6 +162,8 @@ export function renderDesignedWebDocument(
   route?: WebRouteContext,
 ): string {
   assertDesignProfileSources(profile);
+  if (profile.approvedTemplate === "fieldwork-v1")
+    return renderFieldworkReferenceDocument(document, profile, route, WEB_DESIGN_RENDERER_VERSION);
   const parts = renderWebPageParts(document, route);
   const direction = profile.artDirection ?? "editorial";
   const surfaceStyle = profile.surfaceStyle ?? "minimal";
@@ -262,7 +281,11 @@ export function renderDesignedWebDocument(
     if (entry.node.kind === "form")
       return (
         '<section class="planned-section planned-contact" data-composition="contact-panel"><div class="planned-contact-body">' +
-        designedInquiry(entry.node, parts.route) +
+        designedInquiry(
+          entry.node,
+          parts.route,
+          hero?.node.kind === "hero" && entry.node.heading === hero.node.heading,
+        ) +
         "</div></section>"
       );
     if (entry.node.kind !== "section") return defaultEntryHtml(entry);
@@ -312,9 +335,14 @@ export function renderDesignedWebDocument(
         );
       }
     }
-    const heading = node.heading
-      ? `<h2 class="planned-heading">${treatedHeading(node.id, node.heading)}</h2>`
-      : "";
+    const duplicateTitle =
+      innerPage && hero?.node.kind === "hero" && node.heading === hero.node.heading;
+    const heading =
+      node.heading && !duplicateTitle
+        ? `<h2 class="planned-heading">${treatedHeading(node.id, node.heading)}</h2>`
+        : "";
+    const childHeading = (value: string) =>
+      duplicateTitle ? `<h2>${escapeWebText(value)}</h2>` : `<h3>${escapeWebText(value)}</h3>`;
     const text = (value: string) => `<p>${escapeWebText(value)}</p>`;
     const unsupported = (): never => {
       throw new Error("WEB_LAYOUT_DOCUMENT_MISMATCH");
@@ -330,7 +358,7 @@ export function renderDesignedWebDocument(
               : `<a class="cta" href="${escapeWebText(child.target.kind === "local" ? child.target.path : child.target.url)}">${escapeWebText(child.label)}</a>`
             : child.kind === "section"
               ? `<article id="${escapeWebText(child.id)}">` +
-                (child.heading ? `<h3>${escapeWebText(child.heading)}</h3>` : "") +
+                (child.heading ? childHeading(child.heading) : "") +
                 child.children.map(supported).join("") +
                 "</article>"
               : unsupported();
@@ -350,10 +378,10 @@ export function renderDesignedWebDocument(
               (child.kind === "section" ? ` id="${escapeWebText(child.id)}"` : "") +
               ">" +
               (child.kind === "section"
-                ? (child.heading ? `<h3>${escapeWebText(child.heading)}</h3>` : "") +
+                ? (child.heading ? childHeading(child.heading) : "") +
                   child.children.map(supported).join("")
                 : child.kind === "text"
-                  ? `<h3>${escapeWebText(child.text)}</h3>`
+                  ? childHeading(child.text)
                   : supported(child)) +
               "</article>",
           )
@@ -378,7 +406,9 @@ export function renderDesignedWebDocument(
       annotation.composition +
       '" data-composition="' +
       annotation.composition +
-      '">' +
+      '"' +
+      (duplicateTitle && node.heading ? ` aria-label="${escapeWebText(node.heading)}"` : "") +
+      ">" +
       heading +
       '<div class="planned-body">' +
       children +
@@ -629,9 +659,9 @@ body[data-inner-page=inquiry] .hero-composition.has-rail{grid-template-columns:m
     layoutPlan?.version === 3
       ? `
 body[data-layout-version="3"] #services[data-composition],body[data-layout-version="3"] #about[data-composition],body[data-layout-version="3"] #proof[data-composition]{display:block;padding-block:clamp(64px,7vw,104px)}body[data-layout-version="3"] #services[data-composition="service-panels"],body[data-layout-version="3"] #services[data-composition="numbered-services"]{background:var(--ink);color:var(--paper)}.planned-content{min-width:0}.planned-section{padding-block:clamp(64px,7vw,104px)}body[data-layout-version="3"] :is(#about,#services,#proof,.planned-section) .planned-heading{font-family:var(--heading);font-size:clamp(2.3rem,4.2vw,4rem);font-weight:400;line-height:1.12;letter-spacing:-.025em;text-wrap:balance;max-width:26ch;margin:0 0 36px}.planned-section .planned-body{min-width:0}.planned-editorial-lead .planned-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:32px 48px;max-width:1000px}.planned-editorial-lead .planned-body>p{margin:0;max-width:48ch}.planned-editorial-lead .planned-body>p:first-child{font-family:var(--heading);font-size:clamp(1.3rem,2vw,1.75rem);line-height:1.4}.planned-editorial-lead .planned-body>article{padding-top:24px}.planned-editorial-lead h3{font-size:1.4rem;font-weight:400}
-.planned-service-panels,.planned-numbered-services{background:var(--ink);color:var(--paper);width:100vw;margin-inline:calc(50% - 50vw);padding-inline:max(24px,calc((100vw - var(--measure))/2 + 32px))}.planned-service-panels .planned-body,.planned-numbered-services .planned-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:48px 64px;counter-reset:planned-service}.planned-section .planned-service{min-width:0;border-top:1px solid currentColor;padding-top:32px;counter-increment:planned-service}.planned-section .planned-service h3{font-family:var(--heading);font-size:clamp(1.8rem,2.8vw,2.6rem);font-weight:400;line-height:1.15;letter-spacing:-.02em;max-width:22ch;margin:0}.planned-section .planned-service p{color:inherit;font-size:1.05rem;line-height:1.7;max-width:46ch;margin:20px 0 0}.planned-section .planned-service.is-compact{padding-block:24px}.planned-numbered-services .planned-service:before{content:counter(planned-service,decimal-leading-zero);display:block;font-family:var(--heading);font-size:1.2rem;margin-bottom:20px}
+.planned-service-panels,.planned-numbered-services{background:var(--ink);color:var(--paper);width:100vw;margin-inline:calc(50% - 50vw);padding-inline:max(24px,calc((100vw - var(--measure))/2 + 32px))}.planned-service-panels .planned-body,.planned-numbered-services .planned-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:48px 64px;counter-reset:planned-service}.planned-section .planned-service{min-width:0;border-top:1px solid currentColor;padding-top:32px;counter-increment:planned-service}.planned-section .planned-service :is(h2,h3){font-family:var(--heading);font-size:clamp(1.8rem,2.8vw,2.6rem);font-weight:400;line-height:1.15;letter-spacing:-.02em;max-width:22ch;margin:0}.planned-section .planned-service p{color:inherit;font-size:1.05rem;line-height:1.7;max-width:46ch;margin:20px 0 0}.planned-section .planned-service.is-compact{padding-block:24px}.planned-numbered-services .planned-service:before{content:counter(planned-service,decimal-leading-zero);display:block;font-family:var(--heading);font-size:1.2rem;margin-bottom:20px}
 .planned-image-caption .planned-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:32px}.planned-image .web-media{aspect-ratio:4/3!important;max-height:340px}.planned-caption{font-size:.9rem;line-height:1.5;margin:16px 0 0}.planned-contact{background:var(--card);width:100vw;margin-inline:calc(50% - 50vw);padding-inline:24px}.planned-contact-body{max-width:720px;margin-inline:auto}.planned-contact legend{font-family:var(--heading);font-size:clamp(2.3rem,4.2vw,4rem);font-weight:400;line-height:1.12;letter-spacing:-.025em;margin-bottom:32px}.planned-contact form{max-width:none}.planned-contact label{margin-block:24px}.planned-contact button{margin-top:16px}
-.planned-content:has(+.planned-content .planned-principles-grid) .planned-editorial-lead{padding-bottom:32px}.planned-principles-grid{padding-top:0}.designed-gallery[data-composition="image-caption"]{padding-block:64px}.designed-gallery[data-composition="image-caption"] .gallery-heading{display:block;margin-bottom:32px}.designed-gallery[data-composition="image-caption"] .gallery-heading h2{font-family:var(--heading);font-size:clamp(2.3rem,4.2vw,4rem);font-weight:400;line-height:1.12;max-width:16ch;margin:0 0 24px}.planned-principles-grid .planned-body{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border:1px solid var(--rule);counter-reset:planned-service}.planned-principles-grid .planned-service{border:0;padding:32px;counter-increment:planned-service}.planned-principles-grid .planned-service+.planned-service{border-left:1px solid var(--rule)}.planned-principles-grid .planned-service:before{content:counter(planned-service,decimal-leading-zero);display:block;font-size:.8rem;font-style:italic;color:var(--muted);margin-bottom:32px}.planned-principles-grid .planned-service h3{font-family:var(--body);font-size:.9rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}.planned-principles-grid .planned-service p{font-size:.95rem;line-height:1.6;margin-top:16px}.planned-contact-copy{text-align:center;background:var(--card);padding-inline:24px}.planned-contact-copy .planned-heading{margin-inline:auto}.planned-contact-copy .planned-body{max-width:60ch;margin-inline:auto}.planned-contact-copy p{margin:24px 0;line-height:1.7}
+.planned-content:has(+.planned-content .planned-principles-grid) .planned-editorial-lead{padding-bottom:32px}.planned-principles-grid{padding-top:0}.designed-gallery[data-composition="image-caption"]{padding-block:64px}.designed-gallery[data-composition="image-caption"] .gallery-heading{display:block;margin-bottom:32px}.designed-gallery[data-composition="image-caption"] .gallery-heading h2{font-family:var(--heading);font-size:clamp(2.3rem,4.2vw,4rem);font-weight:400;line-height:1.12;max-width:16ch;margin:0 0 24px}.planned-principles-grid .planned-body{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border:1px solid var(--rule);counter-reset:planned-service}.planned-principles-grid .planned-service{border:0;padding:32px;counter-increment:planned-service}.planned-principles-grid .planned-service+.planned-service{border-left:1px solid var(--rule)}.planned-principles-grid .planned-service:before{content:counter(planned-service,decimal-leading-zero);display:block;font-size:.8rem;font-style:italic;color:var(--muted);margin-bottom:32px}.planned-principles-grid .planned-service :is(h2,h3){font-family:var(--body);font-size:.9rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}.planned-principles-grid .planned-service p{font-size:.95rem;line-height:1.6;margin-top:16px}.planned-contact-copy{text-align:center;background:var(--card);padding-inline:24px}.planned-contact-copy .planned-heading{margin-inline:auto}.planned-contact-copy .planned-body{max-width:60ch;margin-inline:auto}.planned-contact-copy p{margin:24px 0;line-height:1.7}
 @media(max-width:767px){.planned-principles-grid .planned-body{grid-template-columns:1fr}.planned-principles-grid .planned-service+.planned-service{border-left:0;border-top:1px solid var(--rule)}.planned-editorial-lead .planned-body,.planned-service-panels .planned-body,.planned-numbered-services .planned-body,.planned-image-caption .planned-body{grid-template-columns:minmax(0,1fr);gap:32px}.planned-section{padding-block:64px}.planned-section .planned-heading{font-size:clamp(2rem,8vw,3rem)}.planned-service-panels,.planned-numbered-services{padding-inline:20px}.planned-image .web-media{max-height:260px}}
 `
       : "";
@@ -648,7 +678,19 @@ body[data-page-chrome=editorial-compact] .designed-gallery[data-composition="ima
   const pagePresentationAttributes = pagePresentation
     ? ` data-page-chrome="${pagePresentation.chrome}" data-hero-frame="${pagePresentation.heroFrame}" data-contact-surface="${pagePresentation.contactSurface}"`
     : "";
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${galleryCss}${layoutCss}${presentationCss}${innerPageCss}${editorialFinishCss}${innerEditorialCss}${motionCss}${sectionCompositionCss}${headingTreatmentCss}${pagePresentationCss}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"${layoutAttributes}${pagePresentationAttributes}${innerComposition ? ` data-inner-page="${innerComposition}"` : ""}><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer>${content.includes('class="designed-gallery gallery-carousel"') ? WEB_CAROUSEL_TAG : ""}</body></html>`;
+  const innerV3Css =
+    layoutPlan?.version === 3
+      ? `
+.source-duplicate-heading{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip-path:inset(50%)!important;white-space:nowrap!important;border:0!important}
+body[data-layout-version="3"][data-inner-page]:not([data-inner-page=inquiry]) main,body[data-layout-version="3"][data-inner-page=inquiry] main{display:block;min-width:0}
+body[data-layout-version="3"][data-inner-page] .hero-composition{margin-bottom:48px}body[data-layout-version="3"][data-inner-page] .content-flow{width:100%;min-width:0}body[data-layout-version="3"][data-inner-page] .site-footer{margin-top:auto}
+body[data-layout-version="3"][data-inner-page=editorial][data-layout-spacing] .content-block.node-text{padding:0 0 40px;border:0;background:transparent}body[data-layout-version="3"][data-inner-page=editorial] .node-text>p{font-size:clamp(1.25rem,2vw,1.75rem);line-height:1.6;max-width:54ch;margin:0}
+body[data-layout-version="3"][data-inner-page] .planned-service-panels,body[data-layout-version="3"][data-inner-page] .planned-numbered-services{margin-inline:calc(50% - 50vw);width:100vw}
+body[data-layout-version="3"] .planned-content.node-form{width:100%;max-width:none;padding:0;margin:0}body[data-layout-version="3"][data-inner-page=inquiry][data-contact-surface=paper-deep] main{background:${deepPaper(colors.paper, colors.card, colors.ink)}}body[data-layout-version="3"][data-inner-page=inquiry][data-contact-surface=paper-deep] .hero-copy{text-align:center}body[data-layout-version="3"][data-inner-page=inquiry][data-contact-surface=paper-deep] .hero h1{margin-inline:auto}body[data-layout-version="3"][data-contact-surface=paper-deep] .planned-contact{background:${deepPaper(colors.paper, colors.card, colors.ink)};padding-block:clamp(48px,6vw,88px)}body[data-layout-version="3"][data-contact-surface=paper-deep] .planned-contact-body{width:min(100%,720px);max-width:720px;margin-inline:auto}body[data-layout-version="3"][data-contact-surface=paper-deep] .planned-contact fieldset{margin:0;padding:0;border:0}body[data-layout-version="3"][data-contact-surface=paper-deep] .planned-contact form{width:100%;max-width:none}body[data-layout-version="3"][data-contact-surface=paper-deep] .planned-contact label{max-width:none}body[data-layout-version="3"][data-contact-surface=paper-deep] .planned-contact button{background:var(--ink);color:var(--paper)}
+@media(max-width:767px){body[data-layout-version="3"][data-inner-page] .hero-composition{margin-bottom:32px}body[data-layout-version="3"][data-contact-surface=paper-deep] .planned-contact{padding-inline:24px}}
+`
+      : "";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="generator" content="${WEB_DESIGN_RENDERER_VERSION}"><title>${escapeWebText(parts.page.title)} · ${escapeWebText(parts.document.brand.name)}</title><meta name="description" content="${escapeWebText(description)}"><style>${css}${surfaceCss}${galleryCss}${layoutCss}${presentationCss}${innerPageCss}${editorialFinishCss}${innerEditorialCss}${motionCss}${sectionCompositionCss}${headingTreatmentCss}${pagePresentationCss}${innerV3Css}</style></head><body data-art-direction="${direction}" data-surface-style="${surfaceStyle}" data-pattern="${profile.patternId}"${layoutAttributes}${pagePresentationAttributes}${innerComposition ? ` data-inner-page="${innerComposition}"` : ""}><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><a class="brand" href="${escapeWebText(home)}">${logoHtml}<span>${brand}</span></a>${primaryNavigation}</header><main id="main-content" data-page="${escapeWebText(parts.page.slug)}">${heroHtml}<div class="content-flow">${content}</div></main><footer class="site-footer"><a class="footer-brand" href="${escapeWebText(home)}">${brand}</a>${footerNavigation}${footnote}</footer>${content.includes('class="designed-gallery gallery-carousel"') ? WEB_CAROUSEL_TAG : ""}</body></html>`;
 }
 
 export function renderDesignedWebDocumentBytes(
@@ -683,6 +725,9 @@ export function designedWebDocumentHashMaterial(
       density: profile.dials.density,
     },
     ...(profile.pageOverride === undefined ? {} : { pageOverride: profile.pageOverride }),
+    ...(profile.approvedTemplate === undefined
+      ? {}
+      : { approvedTemplate: profile.approvedTemplate }),
     ...(profile.artDirection === undefined ? {} : { artDirection: profile.artDirection }),
     ...(profile.surfaceStyle === undefined ? {} : { surfaceStyle: profile.surfaceStyle }),
     ...(profile.layoutPlan === undefined

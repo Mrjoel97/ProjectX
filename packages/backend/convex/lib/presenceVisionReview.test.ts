@@ -5,6 +5,7 @@ import {
 } from "@pikar/contracts/approvedPresenceReference";
 import { presenceDesignPolicySkillBody } from "@pikar/contracts/skills/presenceDesignPolicy";
 import { sha256Bytes } from "@pikar/core/webRuntime";
+import { PNG } from "pngjs";
 import { beforeEach, expect, test, vi } from "vitest";
 import { loadApprovedPresenceReference } from "./approvedPresenceReference";
 import { resolveModel } from "./models";
@@ -429,4 +430,37 @@ test("inventory preserves explicit hero heading identities without adding IDs to
   };
   const inventory = presenceContentInventory(withHeroId, ["home"]);
   expect(JSON.stringify(inventory)).toContain('"id":"page-hero"');
+});
+
+test("oversized owned PNG is converted before admission and exact model bytes are bound", async () => {
+  const fixture = new PNG({ width: 1200, height: 1000 });
+  fixture.data.fill(255);
+  const original = PNG.sync.write(fixture, { deflateLevel: 0, deflateStrategy: 0 });
+  expect(original.length).toBeGreaterThan(4 * 1024 * 1024);
+  const args = input();
+  args.referenceImage = { bytes: new Uint8Array(original), mimeType: "image/png" };
+  const result = await reviewPresenceVision(args);
+  expect(wire).toHaveLength(1);
+  const encoded = wire[0]!.messages[1].content[1].image_url.url;
+  expect(encoded.startsWith("data:image/jpeg;base64,")).toBe(true);
+  const reviewed = Buffer.from(encoded.split(",")[1], "base64");
+  expect(reviewed.length).toBeLessThan(4 * 1024 * 1024);
+  expect(result.referenceDerivation).toMatchObject({
+    originalHash: sha256Bytes(original),
+    imageHash: sha256Bytes(reviewed),
+    width: 1200,
+    height: 1000,
+  });
+});
+
+test("refuses a PNG dimension bomb before decoding or paid admission", async () => {
+  const bytes = Buffer.alloc(4 * 1024 * 1024 + 1);
+  bytes.set([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]);
+  bytes.writeUInt32BE(65535, 16);
+  bytes.writeUInt32BE(65535, 20);
+  const args = input();
+  args.referenceImage = { bytes: new Uint8Array(bytes), mimeType: "image/png" };
+  await expect(reviewPresenceVision(args)).rejects.toThrow("PRESENCE_REFERENCE_DIMENSIONS_INVALID");
+  expect(args.beforeCall).not.toHaveBeenCalled();
+  expect(wire).toHaveLength(0);
 });

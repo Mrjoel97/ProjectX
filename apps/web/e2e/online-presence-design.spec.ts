@@ -575,3 +575,86 @@ test("long multilingual business copy reflows without hiding content or horizont
     true,
   );
 });
+
+test("v3 inner service panels fit the viewport and the contact form is centered", async ({
+  page,
+}) => {
+  const { document, designProfile } = materializeWebRecipeWithProvenance("business-site", {
+    brandName: "Local print studio",
+    headline: "Your identity in print",
+    services: ["Visual identity", "Print layouts"],
+    contactConsent: "Contact me about this inquiry.",
+    pageMode: "multi-page",
+    projectSlug: "print",
+  });
+  const profile = {
+    ...designProfile,
+    layoutPlan: {
+      version: 3 as const,
+      hero: "overlay-left" as const,
+      sectionLayout: "editorial-columns" as const,
+      services: "columns" as const,
+      gallery: "grid" as const,
+      spacing: "compact" as const,
+      headingScale: "display" as const,
+      motion: "subtle" as const,
+      designTokens: {
+        colors: {
+          paper: "#f3f0e8",
+          card: "#f3f0e8",
+          ink: "#20241f",
+          muted: "#62665d",
+          accent: "#bd7250",
+          rule: "#c8c4b9",
+        },
+        typography: { heading: "editorial-serif" as const, body: "humanist-sans" as const },
+        spacing: { contentWidth: 1240, sectionGap: 80, copyMeasure: 58, heroMinHeight: 640 },
+        footer: "light" as const,
+      },
+      sections: [
+        { pageSlug: "home", nodeId: "services", composition: "numbered-services" as const },
+        { pageSlug: "services", nodeId: "services", composition: "numbered-services" as const },
+        { pageSlug: "contact", nodeId: "contact", composition: "contact-panel" as const },
+      ],
+      pagePresentation: [
+        {
+          pageSlug: "services",
+          heroFrame: "content" as const,
+          chrome: "editorial-compact" as const,
+          contactSurface: "default" as const,
+        },
+        {
+          pageSlug: "contact",
+          heroFrame: "content" as const,
+          chrome: "editorial-compact" as const,
+          contactSurface: "paper-deep" as const,
+        },
+      ],
+    },
+  };
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const slug of ["services", "contact"]) {
+      await page.setContent(
+        renderDesignedWebDocument(document, profile, { slug: "print", page: slug }),
+      );
+      const panel = page.locator("[data-composition]");
+      const bounds = await panel.boundingBox();
+      expect(bounds).toBeTruthy();
+      expect(Math.abs(bounds?.x ?? -100)).toBeLessThan(1);
+      expect(Math.abs((bounds?.width ?? 0) - width)).toBeLessThan(1);
+      expect(await page.evaluate(() => window.document.documentElement.scrollWidth)).toBe(width);
+      if (slug === "services") {
+        await expect(page.getByRole("region", { name: "Services" })).toBeVisible();
+        await expect(
+          page.getByRole("heading", { name: "Visual identity", level: 2 }),
+        ).toBeVisible();
+      } else {
+        const box = await page.locator("form").boundingBox();
+        expect(Math.abs((box?.x ?? 0) + (box?.width ?? 0) / 2 - width / 2)).toBeLessThan(1);
+        await expect(page.getByRole("group", { name: "Contact" })).toBeVisible();
+        await expect(page.getByLabel("Email address")).toBeVisible();
+      }
+    }
+  }
+});

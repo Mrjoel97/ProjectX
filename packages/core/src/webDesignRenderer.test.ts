@@ -8,7 +8,7 @@ import {
   WEB_DESIGN_RENDERER_VERSION,
   webColorContrast,
 } from "./webDesignRenderer";
-import type { WebSectionPresentation } from "./webLayoutPlan";
+import type { WebLayoutPlan, WebSectionPresentation } from "./webLayoutPlan";
 import { materializeWebRecipeWithProvenance } from "./webRecipes";
 import { canonicalWebDocument, renderWebDocument } from "./webRuntime";
 
@@ -876,9 +876,9 @@ test("v3 source annotations preserve structured services and reject missing cove
   );
   expect(html).toContain('data-composition="service-panels"');
   expect(html).toContain(
-    "<h3>Brand &amp; identity</h3><p>Exact source description.</p><p>Exact source detail.</p>",
+    "<h2>Brand &amp; identity</h2><p>Exact source description.</p><p>Exact source detail.</p>",
   );
-  expect(html).toContain('class="planned-service is-compact"><h3>Web design</h3></article>');
+  expect(html).toContain('class="planned-service is-compact"><h2>Web design</h2></article>');
   expect(html).not.toContain('class="service-card"');
   expect(html).toContain('id="service-1"');
   expect(canonicalWebDocument(document)).toBe(before);
@@ -1000,4 +1000,118 @@ test("v3 source annotations preserve structured services and reject missing cove
       layoutPlan: { ...layoutPlan, sections: [] },
     }),
   ).toThrow("WEB_LAYOUT_DOCUMENT_MISMATCH");
+});
+
+test("v18 preserves source and form semantics while visually deduplicating exact inner headings", () => {
+  const source = materializeWebRecipeWithProvenance("business-site", {
+    brandName: "Source studio",
+    headline: "Source headline",
+    about: "A short source biography.",
+    services: ["Identity", "Print"],
+    contactConsent: "Contact me about this inquiry.",
+    pageMode: "multi-page",
+    projectSlug: "source-studio",
+  });
+  const layoutPlan: WebLayoutPlan = {
+    version: 3,
+    hero: "overlay-left",
+    sectionLayout: "editorial-columns",
+    services: "columns",
+    gallery: "grid",
+    spacing: "compact",
+    headingScale: "display",
+    motion: "subtle",
+    designTokens: {
+      colors: {
+        paper: "#f3f0e8",
+        card: "#f3f0e8",
+        ink: "#20241f",
+        muted: "#62665d",
+        accent: "#bd7250",
+        rule: "#c8c4b9",
+      },
+      typography: {
+        heading: "editorial-serif",
+        body: "humanist-sans",
+      },
+      spacing: {
+        contentWidth: 1240,
+        sectionGap: 80,
+        copyMeasure: 58,
+        heroMinHeight: 640,
+      },
+      footer: "light",
+    },
+    pagePresentation: [
+      {
+        pageSlug: "about",
+        heroFrame: "content",
+        chrome: "editorial-compact",
+        contactSurface: "default",
+      },
+      {
+        pageSlug: "contact",
+        heroFrame: "content",
+        chrome: "editorial-compact",
+        contactSurface: "paper-deep",
+      },
+      {
+        pageSlug: "home",
+        heroFrame: "wide-inset",
+        chrome: "editorial-compact",
+        contactSurface: "default",
+      },
+      {
+        pageSlug: "services",
+        heroFrame: "content",
+        chrome: "editorial-compact",
+        contactSurface: "default",
+      },
+    ],
+    sections: [
+      {
+        pageSlug: "contact",
+        nodeId: "contact",
+        composition: "contact-panel",
+      },
+      {
+        pageSlug: "home",
+        nodeId: "about",
+        composition: "editorial-lead",
+      },
+      {
+        pageSlug: "home",
+        nodeId: "services",
+        composition: "numbered-services",
+      },
+      {
+        pageSlug: "services",
+        nodeId: "services",
+        composition: "numbered-services",
+      },
+    ],
+  };
+  const profile = { ...source.designProfile, layoutPlan };
+  const before = canonicalWebDocument(source.document);
+  const services = renderDesignedWebDocument(source.document, profile, {
+    slug: "source-studio",
+    page: "services",
+  });
+  expect(services).toContain("<h1>Services</h1>");
+  expect(services).toContain('data-composition="numbered-services" aria-label="Services"');
+  expect(services).toContain("Identity");
+  expect(services).toContain("Print");
+  const home = renderDesignedWebDocument(source.document, profile, {
+    slug: "source-studio",
+    page: "home",
+  });
+  expect(home).toContain('<h2 class="planned-heading">Services</h2>');
+  const contact = renderDesignedWebDocument(source.document, profile, {
+    slug: "source-studio",
+    page: "contact",
+  });
+  expect(contact).toContain('<legend class="source-duplicate-heading">Contact</legend>');
+  expect(contact).toContain('action="/p/source-studio/contact/forms/contact"');
+  expect(contact).toContain('name="consent" type="checkbox" required');
+  expect(canonicalWebDocument(source.document)).toBe(before);
 });

@@ -1,3 +1,4 @@
+import { approvedWebsiteTemplate } from "@pikar/contracts/approvedPresenceReference";
 import { validateDesignProfileRef } from "@pikar/core/designKnowledge";
 import { assessWebBrowserQuality } from "@pikar/core/webBrowserQuality";
 import {
@@ -384,9 +385,17 @@ export const apply = internalMutation({
     const validated = validateWebDocument(version.document);
     if (!validated.ok) throw Error("PRESENCE_REPAIR_DOCUMENT_INVALID");
     const document = validated.value;
+    const template = approvedWebsiteTemplate(
+      document.kind,
+      version.providerReceipt.approvedDesignReference,
+    );
     const recipeRef = {
       ...version.recipeRef,
-      designProfile: { ...version.recipeRef.designProfile, layoutPlan },
+      designProfile: {
+        ...version.recipeRef.designProfile,
+        layoutPlan,
+        ...(template ? { approvedTemplate: template } : {}),
+      },
     };
     if (!validateDesignProfileRef(recipeRef.designProfile))
       throw Error("PRESENCE_REPAIR_PROFILE_INVALID");

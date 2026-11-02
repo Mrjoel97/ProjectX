@@ -1,6 +1,9 @@
 "use node";
 
-import { getApprovedPresenceReferenceIdentity } from "@pikar/contracts/approvedPresenceReference";
+import {
+  approvedWebsiteTemplate,
+  getApprovedPresenceReferenceIdentity,
+} from "@pikar/contracts/approvedPresenceReference";
 import type { WebDocument } from "@pikar/contracts/webRuntime";
 import { validateDesignProfileRef } from "@pikar/core/designKnowledge";
 import { comparisonModelMatches, PRESENCE_COMPARISON_MODELS } from "@pikar/core/presenceComparison";
@@ -391,7 +394,12 @@ export const build = internalAction({
       const layoutPlan = canonicalWebLayoutPlan(
         (parsed as { layoutPlan: Parameters<typeof canonicalWebLayoutPlan>[0] }).layoutPlan,
       );
-      const profile = { ...snapshot.recipeRef.designProfile, layoutPlan };
+      const template = approvedWebsiteTemplate(snapshot.document.kind, approvedReference?.identity);
+      const profile = {
+        ...snapshot.recipeRef.designProfile,
+        layoutPlan,
+        ...(template ? { approvedTemplate: template } : {}),
+      };
       if (!validateDesignProfileRef(profile)) throw Error("PRESENCE_PROFILE_INVALID");
       const artifacts = snapshot.document.pages.map((page) => ({
         pageSlug: page.slug,

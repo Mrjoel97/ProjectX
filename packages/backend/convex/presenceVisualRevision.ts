@@ -1,3 +1,4 @@
+import { approvedWebsiteTemplate } from "@pikar/contracts/approvedPresenceReference";
 import { validateDesignProfileRef } from "@pikar/core/designKnowledge";
 import {
   renderDesignedWebDocumentBytes,
@@ -86,7 +87,14 @@ export const request = tenantMutation({
       .order("desc")
       .first();
     if (latest?._id !== version._id) throw Error("PRESENCE_REVISION_STALE");
-    const profile = version.recipeRef.designProfile;
+    const template = approvedWebsiteTemplate(
+      project.kind,
+      version.providerReceipt.approvedDesignReference,
+    );
+    const profile = {
+      ...version.recipeRef.designProfile,
+      ...(template ? { approvedTemplate: template } : {}),
+    };
     if (
       !validateDesignProfileRef(profile) ||
       !validateWebLayoutPlanForDocument(version.document, profile.layoutPlan) ||
@@ -139,7 +147,7 @@ export const request = tenantMutation({
       expectedRevision: project.revision,
       document,
       createdBy: ctx.userId,
-      recipeRef: version.recipeRef,
+      recipeRef: { ...version.recipeRef, designProfile: profile },
       sourceRefs: version.sourceRefs,
       sourceWarnings: version.sourceWarnings,
       providerReceipt: receipt,

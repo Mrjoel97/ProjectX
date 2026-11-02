@@ -5177,6 +5177,7 @@ export default defineSchema({
         inputHash: v.string(),
         rendererVersion: v.optional(v.string()),
         designProfile: v.object({
+          approvedTemplate: v.optional(v.literal("fieldwork-v1")),
           layoutPlan: v.optional(
             v.union(
               v.object({

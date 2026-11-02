@@ -75,3 +75,14 @@ export function validateApprovedPresenceReferenceIdentity(
     v.manifestHash === APPROVED_FIELDWORK_MANIFEST_HASH
   );
 }
+
+/** Only an explicitly selected, intact website reference can select a native component template. */
+export function approvedWebsiteTemplate(
+  kind: string,
+  reference: unknown,
+): "fieldwork-v1" | undefined {
+  if (reference === undefined || reference === null) return undefined;
+  if (!validateApprovedPresenceReferenceIdentity(reference))
+    throw Error("PRESENCE_APPROVED_REFERENCE_CHANGED");
+  return kind === "site" ? reference.id : undefined;
+}

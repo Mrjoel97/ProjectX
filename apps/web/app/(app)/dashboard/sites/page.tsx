@@ -33,6 +33,7 @@ export default function SitesPage() {
     setNotice(null);
     try {
       const result = await start({
+        ...(useApprovedReference ? { approvedDesignReference: "fieldwork-v1" as const } : {}),
         text:
           (request.trim() ||
             "Create a business website using my approved business foundation and documents. Ask only for information you still need.") +

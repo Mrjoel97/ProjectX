@@ -1,4 +1,7 @@
-import { getApprovedPresenceReferenceIdentity } from "@pikar/contracts/approvedPresenceReference";
+import {
+  approvedWebsiteTemplate,
+  getApprovedPresenceReferenceIdentity,
+} from "@pikar/contracts/approvedPresenceReference";
 import { validateDesignProfileRef } from "@pikar/core/designKnowledge";
 import { merchantSetupSourceRefs } from "@pikar/core/merchantSetup";
 import {
@@ -58,7 +61,13 @@ async function ownedSession(
 /** Only the authenticated cockpit calls this with an actual human message. It is deliberately
  * absent from ONLINE_PRESENCE_TOOLS: generated prose cannot become a user statement. */
 export const ensureSession = internalMutation({
-  args: { tenantId: v.string(), threadId: v.string(), planId: v.id("plans"), text: v.string() },
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    planId: v.id("plans"),
+    text: v.string(),
+    approvedDesignReference: v.optional(v.literal("fieldwork-v1")),
+  },
   handler: async (ctx, args): Promise<{ revision: number; sourceRef: string }> => {
     await assertTenantWritable(ctx, args.tenantId);
     const plan = await ownedPlan(ctx, args.tenantId, args.planId);
@@ -98,6 +107,9 @@ export const ensureSession = internalMutation({
     else
       await ctx.db.insert("onlinePresenceSessions", {
         tenantId: args.tenantId,
+        ...(args.approvedDesignReference
+          ? { brief: { approvedDesignReference: args.approvedDesignReference } }
+          : {}),
         threadId: args.threadId,
         planId: args.planId,
         humanMessages,
@@ -845,6 +857,8 @@ export const buildProject = internalMutation({
         : getApprovedPresenceReferenceIdentity(selectedReference);
     if (
       (selectedReference !== undefined && !expectedReference) ||
+      completion.profile.approvedTemplate !==
+        approvedWebsiteTemplate(prepared.document.kind, expectedReference) ||
       canonicalEvidenceHash(providerReceipt.approvedDesignReference ?? null) !==
         canonicalEvidenceHash(expectedReference ?? null)
     )

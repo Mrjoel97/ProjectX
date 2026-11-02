@@ -71,6 +71,7 @@ export type RecipeRef = {
   inputHash: string;
   rendererVersion?: string;
   designProfile: {
+    approvedTemplate?: "fieldwork-v1";
     layoutPlan?: WebLayoutPlan;
     artDirection?: "editorial" | "studio" | "technical";
     surfaceStyle?: "minimal" | "glass" | "clay";
@@ -212,6 +213,7 @@ async function appendVersion(
       "web-design-renderer-v14",
       "web-design-renderer-v15",
       "web-design-renderer-v16",
+      "web-design-renderer-v17",
       WEB_DESIGN_RENDERER_VERSION,
     ].includes(recipeRef.rendererVersion);
   if (recipeRef?.rendererVersion !== undefined && !designed)

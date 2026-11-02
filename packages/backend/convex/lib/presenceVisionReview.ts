@@ -1,3 +1,5 @@
+"use node";
+
 import {
   type ApprovedPresenceReferenceIdentity,
   validateApprovedPresenceReferenceIdentity,
@@ -15,12 +17,13 @@ import { sha256Bytes, validateWebDocument } from "@pikar/core/webRuntime";
 import { generateText, type UserContent } from "ai";
 import type { Id } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
-import { canonicalEvidenceHash } from "./presencePublication";
 import { loadApprovedPresenceReference } from "./approvedPresenceReference";
 import { resolveModel } from "./models";
 import { paidBudgetModel } from "./paidBudgetModel";
 import { PRESENCE_VISION_MAX_OUTPUT_TOKENS } from "./presenceModelLimits";
 import { loadPresencePolicy } from "./presencePolicy";
+import { canonicalEvidenceHash } from "./presencePublication";
+import { prepareStitchVisionImage, VISION_IMAGE_BYTE_LIMIT } from "./stitchVisionImage";
 
 type Verdict = "pass" | "fail" | "uncertain";
 type Image = { bytes: Uint8Array; mimeType: string };
@@ -235,8 +238,9 @@ export async function reviewPresenceVision(args: {
         canonicalEvidenceHash(args.approvedDesignReference))
   )
     throw Error("PRESENCE_APPROVED_REFERENCE_CHANGED");
+  const reference = prepareStitchVisionImage(args.referenceImage);
   for (const img of [
-    args.referenceImage,
+    reference.image,
     ...(approvedReference ? [approvedReference.desktopImage, approvedReference.mobileImage] : []),
     ...normal,
   ]) {
@@ -246,7 +250,7 @@ export async function reviewPresenceVision(args: {
         ? b[0] === 255 && b[1] === 216 && b[2] === 255
         : img.mimeType === "image/png" &&
           [137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => b[i] === v);
-    if (!signature || b.length < 12 || b.length > 4 * 1024 * 1024)
+    if (!signature || b.length < 12 || b.length > VISION_IMAGE_BYTE_LIMIT)
       throw new Error("PRESENCE_VISION_IMAGE_INVALID");
     total += b.length;
   }
@@ -268,7 +272,7 @@ export async function reviewPresenceVision(args: {
         authoritativeInventory,
       }),
     },
-    { type: "file", data: args.referenceImage.bytes, mediaType: args.referenceImage.mimeType },
+    { type: "file", data: reference.image.bytes, mediaType: reference.image.mimeType },
   ];
   if (approvedReference)
     content.push(
@@ -337,7 +341,8 @@ export async function reviewPresenceVision(args: {
     policy: "presence-vision-v2-source-grounded",
     policySkill: { id: policy.skillId, version: policy.version },
     authoritativeInventory,
-    referenceHash: sha256Bytes(args.referenceImage.bytes),
+    referenceHash: reference.derivation?.originalHash ?? sha256Bytes(args.referenceImage.bytes),
+    ...(reference.derivation ? { referenceDerivation: reference.derivation } : {}),
     ...(approvedReference
       ? {
           approvedDesignReference: approvedReference.identity,
@@ -357,6 +362,7 @@ export async function reviewPresenceVision(args: {
   });
   return {
     ...result,
+    ...(reference.derivation ? { referenceDerivation: reference.derivation } : {}),
     passed:
       result.pages.every((p) => p.fidelity === "pass" && p.contrast === "pass") && !result.repair,
     fidelityMatched: result.pages.every((p) => p.fidelity === "pass") && !result.repair,
@@ -376,6 +382,7 @@ export async function reviewPresenceScreenshots(args: Parameters<typeof reviewPr
       page.issues.map((issue) => `${page.pageSlug}: ${issue}`),
     ),
     ...(result.repair ? { repairPlan: result.repair } : {}),
+    ...(result.referenceDerivation ? { referenceDerivation: result.referenceDerivation } : {}),
     costUsd: result.costUsd,
   };
 }

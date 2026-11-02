@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { getApprovedPresenceReferenceIdentity } from "@pikar/contracts/approvedPresenceReference";
-import { convexToJson, jsonToConvex } from "convex/values";
+
 import { readFileSync } from "node:fs";
+import { getApprovedPresenceReferenceIdentity } from "@pikar/contracts/approvedPresenceReference";
 import { onlinePresenceSpecialistSkillBody } from "@pikar/contracts/skills/onlinePresenceSpecialist";
 import {
   WEB_RECIPE_BROWSER_EVIDENCE_OUTCOME_REFS,
@@ -24,6 +24,7 @@ import {
 } from "@pikar/core/webRecipes";
 import { canonicalWebDocument, sha256Bytes } from "@pikar/core/webRuntime";
 import { type FunctionReference, getFunctionName, makeFunctionReference } from "convex/server";
+import { convexToJson, jsonToConvex } from "convex/values";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -42,7 +43,10 @@ const aggregateModules = import.meta.glob(
 const rateLimiterModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
 );
-async function setup(text = "Acme designs gardens for homeowners.") {
+async function setup(
+  text = "Acme designs gardens for homeowners.",
+  approvedDesignReference?: "fieldwork-v1",
+) {
   const t = convexTest(schema, modules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
@@ -54,6 +58,7 @@ async function setup(text = "Acme designs gardens for homeowners.") {
     threadId,
     planId,
     text,
+    ...(approvedDesignReference ? { approvedDesignReference } : {}),
   });
   const brief = {
     kind: "website",
@@ -79,8 +84,27 @@ async function offlineProviderBuild(
   const snapshot = await t.mutation(internal.onlinePresence.designSnapshot, args);
   if (!("document" in snapshot)) return t.mutation(internal.onlinePresence.buildProject, args);
   const digest = (value: unknown) => sha256Bytes(new TextEncoder().encode(JSON.stringify(value)));
+  const useReference = snapshot.brief.approvedDesignReference === "fieldwork-v1";
   const layoutPlan = canonicalWebLayoutPlan({
-    version: 1,
+    ...(useReference
+      ? {
+          version: 3 as const,
+          sections: [],
+          designTokens: {
+            colors: {
+              paper: "#fffaf0",
+              card: "#ffffff",
+              ink: "#211e19",
+              muted: "#665e50",
+              accent: "#712b30",
+              rule: "#ded6c9",
+            },
+            typography: { heading: "editorial-serif" as const, body: "humanist-sans" as const },
+            spacing: { contentWidth: 1200, sectionGap: 64, copyMeasure: 62, heroMinHeight: 480 },
+            footer: "light" as const,
+          },
+        }
+      : { version: 1 as const }),
     hero: "overlay-left",
     sectionLayout: "editorial-columns",
     services: "rows",
@@ -89,7 +113,11 @@ async function offlineProviderBuild(
     headingScale: "balanced",
     motion: "subtle",
   });
-  const profile = { ...snapshot.recipeRef.designProfile, layoutPlan };
+  const profile = {
+    ...snapshot.recipeRef.designProfile,
+    layoutPlan,
+    ...(useReference ? { approvedTemplate: "fieldwork-v1" as const } : {}),
+  };
   if (!validateDesignProfileRef(profile)) throw Error("Invalid offline profile fixture");
   const runRef = crypto.randomUUID().replaceAll("-", "").slice(0, 16);
   const identity = {
@@ -1071,13 +1099,13 @@ test("the real specialist loop prepares owned imagery, saves a brief, and builds
 });
 
 test("approved reference completion survives real Convex object transport ordering", async () => {
-  const { t, tenantId, planId, session, brief } = await setup();
+  const { t, tenantId, planId, session, brief } = await setup(undefined, "fieldwork-v1");
   await activeRecipe(t);
   const saved = await t.mutation(internal.onlinePresence.saveBrief, {
     tenantId,
     planId,
     expectedRevision: session.revision,
-    brief: { ...brief, approvedDesignReference: "fieldwork-v1" },
+    brief,
   });
   expect(saved.ok).toBe(true);
   const result = await offlineProviderBuild(t, {
@@ -1087,4 +1115,7 @@ test("approved reference completion survives real Convex object transport orderi
   });
   expect(result.ok).toBe(true);
   expect(result.artifact).toBeDefined();
+  const stored = await t.run((ctx) => ctx.db.query("webProjectVersions").unique());
+  expect(stored?.recipeRef?.designProfile.approvedTemplate).toBe("fieldwork-v1");
+  expect(stored?.artifacts?.[0]?.html).toContain('class="wordmark"');
 });
