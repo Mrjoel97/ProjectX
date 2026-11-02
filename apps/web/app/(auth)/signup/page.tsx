@@ -452,7 +452,12 @@ function Waitlist({ onHasCode }: { onHasCode: (code: string) => void }) {
           placeholder="Optional"
           autoComplete="off"
         />
-        <button type="submit" className="auth-submit" disabled={busy}>
+        <button
+          type="submit"
+          className="auth-submit"
+          style={{ marginBlockStart: "0.75rem" }}
+          disabled={busy}
+        >
           {busy ? "Sending…" : "Request access"}
           {!busy && <ArrowIcon />}
         </button>
