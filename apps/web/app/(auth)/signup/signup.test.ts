@@ -3,12 +3,15 @@ import { getFunctionName } from "convex/server";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, test, vi } from "vitest";
+import GoogleReturnPage from "../signin/google/page";
 import SignInRoute from "../signin/page";
 import SignUpRoute from "./page";
 
 const mocks = vi.hoisted(() => ({
   signIn: vi.fn(),
   push: vi.fn(),
+  actualEmail: "parent@gmail.com",
+  checkEmail: false,
   replace: vi.fn(),
   returned: false,
   belongsToSession: false,
@@ -19,22 +22,31 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@convex-dev/auth/react", () => ({ useAuthActions: () => ({ signIn: mocks.signIn }) }));
 vi.mock("convex/react", () => ({
+  useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
   useMutation: () => vi.fn(),
   useQuery: (ref: Parameters<typeof getFunctionName>[0]) =>
-    getFunctionName(ref) === "invites:authProviders"
-      ? mocks.providersLoading
-        ? undefined
-        : { google: mocks.google, microsoft: mocks.microsoft, password: true }
-      : {
-          valid: mocks.valid,
-          belongsToSession: mocks.belongsToSession,
-          invitedEmailMasked: "t***@example.test",
-        },
+    getFunctionName(ref) === "invites:signedInEmail"
+      ? mocks.actualEmail
+      : getFunctionName(ref) === "invites:authProviders"
+        ? mocks.providersLoading
+          ? undefined
+          : { google: mocks.google, microsoft: mocks.microsoft, password: true }
+        : {
+            valid: mocks.valid,
+            belongsToSession: mocks.belongsToSession,
+            invitedEmailMasked: "t***@example.test",
+          },
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
   useSearchParams: () =>
-    new URLSearchParams(mocks.returned ? "invite=fixture-code&r=1" : "invite=fixture-code"),
+    new URLSearchParams(
+      mocks.checkEmail
+        ? "match=1"
+        : mocks.returned
+          ? "invite=fixture-code&r=1"
+          : "invite=fixture-code",
+    ),
 }));
 // Keep this test focused on page submission/state; reusable field styling is independent.
 vi.mock("../fields", () => {
@@ -187,7 +199,7 @@ test.each([
     mocks.signIn.mockResolvedValueOnce({ signingIn: false });
     await act(async () => google?.click());
     expect(mocks.signIn).toHaveBeenCalledExactlyOnceWith("google", {
-      redirectTo: _route === "signin" ? "/dashboard" : "/signup?invite=fixture-code&r=1",
+      redirectTo: _route === "signin" ? "/signin/google" : "/signup?invite=fixture-code&r=1",
     });
   } finally {
     await act(async () => root.unmount());
@@ -296,5 +308,28 @@ test("OAuth return opens only the workspace that redeemed the invitation", async
     expect(mocks.replace).toHaveBeenCalledWith("/dashboard");
   } finally {
     await act(async () => root.unmount());
+  }
+});
+
+test("the Google return blocks the parent workspace when a different Gmail was requested", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  mocks.checkEmail = true;
+  sessionStorage.setItem("pikar.google.expectedEmail", "target@gmail.com");
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(createElement(GoogleReturnPage)));
+    expect(container.textContent).toContain("Choose that Google account");
+    expect(container.textContent).toContain("parent@gmail.com");
+    expect(container.textContent).not.toContain("Open workspace for");
+    expect(mocks.replace).not.toHaveBeenCalled();
+    mocks.actualEmail = "target@gmail.com";
+    await act(async () => root.render(createElement(GoogleReturnPage)));
+    expect(mocks.replace).toHaveBeenCalledWith("/dashboard");
+  } finally {
+    await act(async () => root.unmount());
+    sessionStorage.clear();
+    mocks.checkEmail = false;
+    mocks.actualEmail = "parent@gmail.com";
   }
 });

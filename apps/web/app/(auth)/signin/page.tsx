@@ -37,7 +37,12 @@ export default function SignIn() {
     setError(null);
     setBusy(true);
     try {
-      await signIn(provider, { redirectTo: "/dashboard" });
+      const expected = email.trim().toLowerCase();
+      if (expected) sessionStorage.setItem("pikar.google.expectedEmail", expected);
+      else sessionStorage.removeItem("pikar.google.expectedEmail");
+      await signIn(provider, {
+        redirectTo: expected ? "/signin/google?match=1" : "/signin/google",
+      });
       // Deliberately NOT clearing `busy` on success: the browser is leaving for the provider, and
       // re-enabling the button would flash it live again mid-navigation.
     } catch {
@@ -157,8 +162,8 @@ export default function SignIn() {
             <GoogleIcon /> {busy ? "Connecting…" : "Continue with Google"}
           </button>
           <p className="auth-switch">
-            Choose the Google account you registered with. If you registered with an email and
-            password, use those above.
+            Choose the Google account for your workspace. Enter its email above to check the match
+            before opening it.
           </p>
         </>
       )}

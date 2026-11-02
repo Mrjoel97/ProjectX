@@ -1,5 +1,7 @@
 # Playbook: Beta Admission (BETA-01)
 
+> Last verified: 2026-11-02 — The authenticated Google return screen checks the current user against the address entered on sign-in, or shows the selected address for confirmation. A verified Gmail login can be enabled for an existing verified password workspace under invariant 5. Its original onboarding status applies.
+
 > Last verified: 2026-11-02 — The signup field extracts the invite parameter from a pasted signup link before preflight and submission. Admin displays the full shareable URL for manual copying. A recipient with an unavailable code can switch to the access-request form. Google sign-in always requests an account choice. On an invitation callback, only the signed-in user who redeemed that exact code continues to the dashboard. An owner approving a pending request with an existing invite resolves the pending row. Issued invitations remain email-bound and single-use.
 
 > Last verified: 2026-10-23 — A dedicated-stage sign-in exposed an unconfigured Google OAuth button. Sign-in now reuses the existing public `invites.authProviders` credential-presence query; both sign-in and signup show Google only after an explicit true response, with no OAuth button or empty OR separator while loading/unconfigured. Email/password and verification/recovery remain available. Configured deployments retain their Google action; no provider, credential, admission or production configuration changed. Focused rendered interaction checks cover loading, unavailable, configured Google click and actual email/password submission. This UI fix requires a frontend build/deployment; it does not configure Google OAuth or establish native account acceptance.
@@ -371,10 +373,7 @@ Not visible to graphify:
 4. **Password admission additionally requires the code.** An OAuth email is provider-verified; a
    password email is self-asserted, so the address alone must never admit. Enforced by the
    `password admission is asymmetric` block; mutation-proven (reddens 2).
-5. **Cross-provider account linking is unsupported and fails closed.** The first provider to redeem
-   spends the invite; the second is refused rather than silently merged. This is a beta limitation,
-   not a bug — tell users "sign in with the provider you used at signup". **Mailbox connection is
-   unaffected**: one account can still connect both Gmail and Outlook.
+5. **Verified Gmail access to a password workspace requires explicit enablement.** Set the production-only runtime setting `AUTH_GOOGLE_PASSWORD_LINK_EMAIL` to the requested mailbox. This enables one initial Google binding. Both Google and the password account must have verified the same exact Gmail address. The redeemed password invitation must point to the unique non-owner user, and that user must have no Google binding or erasure in progress. The auth transaction attaches the Google subject to the original user ID. Changing the setting later does not revoke an already established Google identity. Other provider changes continue to fail closed.
 6. **Admission never grants authority.** `admitIdentity` writes only `email` / `name` / `image` /
    `emailVerificationTime`. `owner` is granted solely by `owner.bootstrapOwner`. Enforced by "a
    returning identity keeps its owner bit".
