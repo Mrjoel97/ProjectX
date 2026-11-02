@@ -10,7 +10,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import * as providerUtils from "../node_modules/@convex-dev/auth/dist/server/provider_utils.js";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { google, microsoft, password } from "./auth";
 import {
@@ -203,6 +203,16 @@ describe("waitlist capture and owner-gated issuance", () => {
     expect(row?.status).toBe("approved");
   });
 
+  test("explicit approval reconciles a pending request with an already issued invite", async () => {
+    const h = await harness();
+    const email = "already-issued@example.com";
+    const original = await h.t.mutation(internal.invites.__seedInvite, { email });
+    const waitlistId = await h.t.mutation(api.invites.requestAccess, { email });
+    expect((await h.asOwner.mutation(api.invites.approve, { waitlistId })).code).toBe(
+      original.code,
+    );
+    expect(await h.asOwner.query(api.invites.pending, {})).toEqual([]);
+  });
   test("two approved addresses never receive the same code", async () => {
     const h = await harness();
     const codes = new Set<string>();
@@ -282,7 +292,17 @@ describe("public preflight", () => {
   test("an unknown or already-redeemed code reports invalid without saying which", async () => {
     const h = await harness();
     const invite = await approvedInvite(h, "used@example.com");
-    await admit(h.t, { profile: { email: "used@example.com", oauthSubject: "g-1" } });
+    const userId = await admit(h.t, {
+      profile: { email: "used@example.com", oauthSubject: "g-1" },
+    });
+    const own = h.t.withIdentity({ subject: userId + "|own_session" });
+    expect((await own.query(api.invites.preflight, { code: invite.code })).belongsToSession).toBe(
+      true,
+    );
+    expect(await h.asOwner.query(api.invites.preflight, { code: invite.code })).toEqual({
+      valid: false,
+      invitedEmailMasked: null,
+    });
 
     expect(await h.t.query(api.invites.preflight, { code: invite.code })).toEqual({
       valid: false,
@@ -621,6 +641,9 @@ describe("the fixtures' provider shapes are the ones the runtime actually produc
   };
   const real = (p: unknown) => materializeProvider(p);
 
+  test("Google always asks which account to use, including returning sign-ins", () => {
+    expect(real(google)).toMatchObject({ authorization: { params: { prompt: "select_account" } } });
+  });
   test("Password materializes to the exact {id, type} the credentials fixture claims", () => {
     const p = real(password);
     // `ConvexCredentials` literally returns `id: "credentials"`; only the `merge(provider,

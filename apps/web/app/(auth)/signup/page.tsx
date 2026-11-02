@@ -5,7 +5,7 @@ import { api } from "@pikar/backend/api";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { PasswordField, TextField } from "../fields";
 import {
   ArrowIcon,
@@ -34,6 +34,18 @@ export default function SignUpRoute() {
       <SignUp />
     </Suspense>
   );
+}
+
+function codeFromInput(input: string) {
+  const value = input.trim();
+  if (!/^(https?:\/\/|\/signup\?)/i.test(value)) return input;
+  try {
+    const link = new URL(value, window.location.origin);
+    if (link.pathname === "/signup") return link.searchParams.get("invite") ?? input;
+  } catch {
+    // Continue displaying incomplete input while the person edits it.
+  }
+  return input;
 }
 
 function SignUp() {
@@ -67,7 +79,11 @@ function SignUp() {
   // `r=1` means we sent this browser to a provider and it came back still signed out. That is
   // either a cancelled consent screen or a refused admission, and the page cannot tell which —
   // so the copy must be true of both.
-  const returnedSignedOut = params.get("r") === "1";
+  const returnedFromProvider = params.get("r") === "1";
+  const matchedAccount = returnedFromProvider && preflight?.belongsToSession === true;
+  useEffect(() => {
+    if (matchedAccount) router.replace("/dashboard");
+  }, [matchedAccount, router]);
 
   // A provider round trip loses component state, so the code has to survive in the URL.
   const oauthReturn = `/signup?invite=${encodeURIComponent(code.trim())}&r=1`;
@@ -137,6 +153,8 @@ function SignUp() {
     }
   }
 
+  if (matchedAccount) return <p role="status">Opening your invited workspace…</p>;
+
   if (challenge)
     return (
       <PasswordChallenge
@@ -169,10 +187,10 @@ function SignUp() {
         </p>
       )}
 
-      {returnedSignedOut && !error && (
+      {returnedFromProvider && preflight !== undefined && !error && (
         <p className="auth-error" role="alert">
-          You're not signed in. Either the sign-in was cancelled, or this invite doesn't match the
-          account you used. An invite works only for the address it was sent to.
+          This invitation did not confirm the account you selected. Choose the Google or Microsoft
+          account with the exact invited email, or use your original email and password.
         </p>
       )}
 
@@ -180,7 +198,7 @@ function SignUp() {
         label="Invite code"
         icon={<StarIcon size={16} />}
         value={code}
-        onChange={setCode}
+        onChange={(value) => setCode(codeFromInput(value))}
         placeholder="ABCD-EFGH-JKMN-PQRS"
         autoComplete="off"
       />
@@ -191,7 +209,7 @@ function SignUp() {
         style={{ marginTop: "-0.4rem" }}
       >
         {!code.trim()
-          ? "Enter the invite code from your invitation."
+          ? "Paste your invitation link or enter its code."
           : preflight === undefined
             ? "Checking your invite…"
             : codeAccepted
@@ -228,7 +246,18 @@ function SignUp() {
           </p>
           <p className="auth-switch">
             Haven't created an account? Check the code above or{" "}
-            <Link href="/signup">request access</Link>.
+            <button
+              type="button"
+              className="auth-linklike"
+              onClick={() => {
+                setCode("");
+                setRedeeming(false);
+                setError(null);
+              }}
+            >
+              request access
+            </button>
+            .
           </p>
         </section>
       )}
