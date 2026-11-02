@@ -347,8 +347,9 @@ function SignUp() {
           )}
 
           <p className="auth-switch" style={{ marginBottom: "0.2rem" }}>
-            Sign in with the same provider you used at signup — accounts aren't linked across
-            providers during the beta.
+            Use your original sign-in method.
+            {providers?.google &&
+              " You can also use Google if it is enabled for your verified Gmail address."}
           </p>
         </>
       )}

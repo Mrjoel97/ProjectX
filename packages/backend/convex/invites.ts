@@ -23,7 +23,7 @@ import type { AnyDataModel, GenericMutationCtx } from "convex/server";
 import { v } from "convex/values";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
-import { ownerMutation, ownerQuery } from "./lib/functions";
+import { ownerMutation, ownerQuery, tenantQuery } from "./lib/functions";
 import { internalMutation } from "./lib/tenantLifecycle";
 
 /** Crockford-style: no I, L, O or U, so a code read off a screen cannot be mistyped into another
@@ -208,6 +208,12 @@ export const preflight = query({
   },
 });
 
+/** Only the current workspace identity may be shown after Google returns. */
+export const signedInEmail = tenantQuery({
+  args: {},
+  handler: async (ctx) => (await ctx.db.get(ctx.userId))?.email ?? null,
+});
+
 /** Owner-only. Pending waitlist rows, oldest first. No invite codes in this queue. */
 export const pending = ownerQuery({
   args: {},
@@ -370,7 +376,7 @@ type AdmitArgs = {
  * `${provider.id}|${oauthSubject}` — provider-qualified, because the same raw `sub` from two
  * different issuers is two different people.
  *
- * CROSS-PROVIDER LINKING IS DELIBERATELY UNSUPPORTED for the beta and fails closed: an invite is
+ * Except for the verified Gmail/password path below, cross-provider linking fails closed: an invite is
  * spent by the first provider that redeems it, so "sign in with Google then again with Microsoft"
  * is refused rather than silently merged into one account. Mailbox connection is a separate
  * consent and is unaffected — a user can still connect both Gmail and Outlook.
@@ -458,7 +464,60 @@ export async function admitIdentity(
   // One refusal for "no invite", "wrong address" and "already used". The signup page maps it to
   // one generic message, so a stranger cannot use the error to learn whether an address is on
   // the list.
-  if (!invite || invite.redeemedAt !== undefined) throw new Error("INVITE_REQUIRED");
+  if (!invite) throw new Error("INVITE_REQUIRED");
+  if (invite.redeemedAt !== undefined) {
+    // Google is authoritative for its own Gmail addresses. Both sides must already
+    // prove the exact address. Never use the browser session as the destination.
+    if (
+      args.existingUserId ||
+      args.type !== "oauth" ||
+      args.provider.id !== "google" ||
+      args.provider.type !== "oidc" ||
+      args.profile.emailVerified !== true ||
+      typeof args.profile.oauthSubject !== "string" ||
+      !args.profile.oauthSubject.trim() ||
+      !email.endsWith("@gmail.com") ||
+      normalizeEmail(process.env.AUTH_GOOGLE_PASSWORD_LINK_EMAIL) !== email ||
+      !invite.redeemedUserId ||
+      invite.redeemedSubject !== "password|" + email
+    )
+      throw new Error("INVITE_REQUIRED");
+    const target = invite.redeemedUserId;
+    const [users, passwords, googleAccount, revocation] = await Promise.all([
+      db
+        .query("users")
+        .withIndex("email", (q) => q.eq("email", email))
+        .take(2),
+      db
+        .query("authAccounts")
+        .withIndex("userIdAndProvider", (q) => q.eq("userId", target).eq("provider", "password"))
+        .take(2),
+      db
+        .query("authAccounts")
+        .withIndex("userIdAndProvider", (q) => q.eq("userId", target).eq("provider", "google"))
+        .first(),
+      db
+        .query("authRevocations")
+        .withIndex("by_userId", (q) => q.eq("userId", target))
+        .unique(),
+    ]);
+    const user = users[0],
+      account = passwords[0];
+    if (
+      users.length !== 1 ||
+      user?._id !== target ||
+      user.owner ||
+      !user.emailVerificationTime ||
+      passwords.length !== 1 ||
+      normalizeEmail(account?.providerAccountId) !== email ||
+      normalizeEmail(account?.emailVerified) !== email ||
+      googleAccount ||
+      revocation?.state
+    )
+      throw new Error("INVITE_REQUIRED");
+    // Convex Auth inserts the issuer/subject account binding in this same transaction.
+    return target;
+  }
 
   if (isCredentials && normalizeCode(args.profile.inviteCode) !== invite.code) {
     throw new Error("INVITE_CODE_REQUIRED");

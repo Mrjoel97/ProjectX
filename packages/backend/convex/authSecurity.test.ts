@@ -53,6 +53,60 @@ async function signup(t: ReturnType<typeof harness>) {
     },
   });
 }
+test("a verified Gmail Google callback binds to the OTP-verified password workspace even with a different browser session", async () => {
+  const t = harness();
+  const email = "workspace.fixture@gmail.com";
+  vi.stubEnv("AUTH_GOOGLE_PASSWORD_LINK_EMAIL", email);
+  const invite = await t.mutation(internal.invites.__seedInvite, { email });
+  await t.action(api.auth.signIn, {
+    provider: "password",
+    params: {
+      flow: "signUp",
+      email,
+      password: "original-password",
+      inviteCode: invite.code,
+    },
+  });
+  const original = await t.run((ctx) => ctx.db.query("users").unique());
+  if (!original) throw new Error("fixture signup failed");
+  const profile = { email, emailVerified: true, oauthSubject: "test-google-sub" };
+  const signature = "test-google-callback";
+  await t.run(async (ctx) => {
+    const parent = await ctx.db.insert("users", { email: "parent.fixture@gmail.com", owner: true });
+    const sessionId = await ctx.db.insert("authSessions", {
+      userId: parent,
+      expirationTime: Date.now() + 60000,
+    });
+    await ctx.db.insert("authVerifiers", { signature, sessionId });
+  });
+  const callback = () =>
+    t.mutation(internal.auth.store, {
+      args: {
+        type: "userOAuth",
+        provider: "google",
+        providerAccountId: profile.oauthSubject,
+        profile,
+        signature,
+      },
+    });
+  await expect(callback()).rejects.toThrow("INVITE_REQUIRED");
+  await t.action(api.auth.signIn, {
+    provider: "password",
+    params: { flow: "email-verification", email, code: lastCode() },
+  });
+  vi.stubEnv("AUTH_GOOGLE_PASSWORD_LINK_EMAIL", "other.fixture@gmail.com");
+  await expect(callback()).rejects.toThrow("INVITE_REQUIRED");
+  vi.stubEnv("AUTH_GOOGLE_PASSWORD_LINK_EMAIL", email);
+  await callback();
+  const accounts = await t.run((ctx) => ctx.db.query("authAccounts").collect());
+  expect(accounts.map((a) => a.provider).sort()).toEqual(["google", "password"]);
+  expect(accounts.every((a) => a.userId === original._id)).toBe(true);
+  expect(await t.run((ctx) => ctx.db.query("users").collect())).toHaveLength(2);
+  expect(
+    await t.withIdentity({ subject: original._id + "|fixture" }).query(api.onboarding.status, {}),
+  ).toEqual({ needsOnboarding: true });
+});
+
 function lastCode() {
   const code = sent.at(-1)?.text.split("\n\n")[1];
   if (!code) throw new Error("test message missing code");

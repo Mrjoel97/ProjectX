@@ -154,6 +154,11 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     whatBreaks: "Sign-in redirects resolve to the wrong origin.",
   },
   {
+    name: "AUTH_GOOGLE_PASSWORD_LINK_EMAIL",
+    tier: "feature",
+    whatBreaks: "First-time Google sign-in for a verified password workspace stays disabled.",
+  },
+  {
     name: "AUTH_GOOGLE_ID",
     tier: "required",
     whatBreaks: "Google sign-in. Distinct from the Gmail MAILBOX grant below.",
