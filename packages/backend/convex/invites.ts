@@ -186,7 +186,10 @@ export const preflight = query({
     invitedEmailMasked: v.union(v.string(), v.null()),
     belongsToSession: v.optional(v.literal(true)),
   }),
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ valid: boolean; invitedEmailMasked: string | null; belongsToSession?: true }> => {
     const code = normalizeCode(args.code);
     const refused = { valid: false, invitedEmailMasked: null };
     if (!code) return refused;
