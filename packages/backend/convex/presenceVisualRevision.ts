@@ -1,9 +1,13 @@
+import { approvedWebsiteTemplate } from "@pikar/contracts/approvedPresenceReference";
 import { validateDesignProfileRef } from "@pikar/core/designKnowledge";
 import {
   renderDesignedWebDocumentBytes,
   WEB_DESIGN_RENDERER_VERSION,
 } from "@pikar/core/webDesignRenderer";
-import { canonicalWebLayoutPlan, validateWebLayoutPlan } from "@pikar/core/webLayoutPlan";
+import {
+  canonicalWebLayoutPlan,
+  validateWebLayoutPlanForDocument,
+} from "@pikar/core/webLayoutPlan";
 import { assessWebQuality } from "@pikar/core/webQuality";
 import { sha256Bytes, validateWebDocument } from "@pikar/core/webRuntime";
 import { makeFunctionReference } from "convex/server";
@@ -83,10 +87,17 @@ export const request = tenantMutation({
       .order("desc")
       .first();
     if (latest?._id !== version._id) throw Error("PRESENCE_REVISION_STALE");
-    const profile = version.recipeRef.designProfile;
+    const template = approvedWebsiteTemplate(
+      project.kind,
+      version.providerReceipt.approvedDesignReference,
+    );
+    const profile = {
+      ...version.recipeRef.designProfile,
+      ...(template ? { approvedTemplate: template } : {}),
+    };
     if (
       !validateDesignProfileRef(profile) ||
-      !validateWebLayoutPlan(profile.layoutPlan) ||
+      !validateWebLayoutPlanForDocument(version.document, profile.layoutPlan) ||
       sha256Bytes(
         new TextEncoder().encode(JSON.stringify(canonicalWebLayoutPlan(profile.layoutPlan))),
       ) !== version.providerReceipt.layoutHash
@@ -136,7 +147,7 @@ export const request = tenantMutation({
       expectedRevision: project.revision,
       document,
       createdBy: ctx.userId,
-      recipeRef: version.recipeRef,
+      recipeRef: { ...version.recipeRef, designProfile: profile },
       sourceRefs: version.sourceRefs,
       sourceWarnings: version.sourceWarnings,
       providerReceipt: receipt,

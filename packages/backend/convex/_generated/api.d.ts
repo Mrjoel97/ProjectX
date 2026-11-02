@@ -75,6 +75,7 @@ import type * as knowledgeSearch from "../knowledgeSearch.js";
 import type * as knowledgeVaultDrive from "../knowledgeVaultDrive.js";
 import type * as lib_agenda from "../lib/agenda.js";
 import type * as lib_allowlist from "../lib/allowlist.js";
+import type * as lib_approvedPresenceReference from "../lib/approvedPresenceReference.js";
 import type * as lib_authEmail from "../lib/authEmail.js";
 import type * as lib_bufferMcp from "../lib/bufferMcp.js";
 import type * as lib_dispatchShared from "../lib/dispatchShared.js";
@@ -99,6 +100,7 @@ import type * as lib_presenceRequiredPipeline from "../lib/presenceRequiredPipel
 import type * as lib_presenceVisionReview from "../lib/presenceVisionReview.js";
 import type * as lib_presentationPptx from "../lib/presentationPptx.js";
 import type * as lib_stitchDesignClient from "../lib/stitchDesignClient.js";
+import type * as lib_stitchVisionImage from "../lib/stitchVisionImage.js";
 import type * as lib_tenantLifecycle from "../lib/tenantLifecycle.js";
 import type * as lib_toolContextArgs from "../lib/toolContextArgs.js";
 import type * as lib_webResearchTools from "../lib/webResearchTools.js";
@@ -311,6 +313,7 @@ declare const fullApi: ApiFromModules<{
   knowledgeVaultDrive: typeof knowledgeVaultDrive;
   "lib/agenda": typeof lib_agenda;
   "lib/allowlist": typeof lib_allowlist;
+  "lib/approvedPresenceReference": typeof lib_approvedPresenceReference;
   "lib/authEmail": typeof lib_authEmail;
   "lib/bufferMcp": typeof lib_bufferMcp;
   "lib/dispatchShared": typeof lib_dispatchShared;
@@ -335,6 +338,7 @@ declare const fullApi: ApiFromModules<{
   "lib/presenceVisionReview": typeof lib_presenceVisionReview;
   "lib/presentationPptx": typeof lib_presentationPptx;
   "lib/stitchDesignClient": typeof lib_stitchDesignClient;
+  "lib/stitchVisionImage": typeof lib_stitchVisionImage;
   "lib/tenantLifecycle": typeof lib_tenantLifecycle;
   "lib/toolContextArgs": typeof lib_toolContextArgs;
   "lib/webResearchTools": typeof lib_webResearchTools;

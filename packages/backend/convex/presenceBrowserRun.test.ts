@@ -389,3 +389,37 @@ test("valid exact report plus billed vision passes with tenant-owned evidence", 
   );
   expect(spend.some((row) => row.phase === "actual" && row.tenantId === args.tenantId)).toBe(true);
 });
+
+test("configured HTTPS application origin supports production review without the protected Vercel alias", async () => {
+  const { t, args } = await setup();
+  vi.stubEnv("SITE_URL", "https://www.pikar-ai.com");
+  vi.stubEnv("PRESENCE_BROWSER_REVIEW_URL", "https://www.pikar-ai.com/api/presence/review");
+  expect((await t.action(run, args)).status).toBe("passed");
+  expect(fetch).toHaveBeenCalledWith(
+    "https://www.pikar-ai.com/api/presence/review",
+    expect.objectContaining({ redirect: "error" }),
+  );
+});
+
+test.each([
+  "https://www.pikar-ai.com.evil.test/api/presence/review",
+  "https://evil.test/api/presence/review",
+  "https://www.pikar-ai.com:444/api/presence/review",
+  "http://www.pikar-ai.com/api/presence/review",
+  "https://attacker@www.pikar-ai.com/api/presence/review",
+  "https://www.pikar-ai.com/api/presence/review?target=evil",
+  "https://www.pikar-ai.com/api/presence/review#fragment",
+  "https://www.pikar-ai.com/other",
+  "not-a-url",
+])("invalid configured worker %s cannot receive the review bearer", async (endpoint) => {
+  const { t, args, versionId } = await setup();
+  vi.stubEnv("SITE_URL", "https://www.pikar-ai.com");
+  vi.stubEnv("PRESENCE_BROWSER_REVIEW_URL", endpoint);
+  expect(await t.action(run, args)).toEqual({
+    status: "pending",
+    reason: "browser_worker_configuration_invalid",
+  });
+  expect(fetch).not.toHaveBeenCalled();
+  expect(reviewPresenceScreenshots).not.toHaveBeenCalled();
+  expect((await t.run((ctx) => ctx.db.get(versionId)))?.browserReviewJob).toBeUndefined();
+});

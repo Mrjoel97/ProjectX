@@ -32,6 +32,7 @@ export function buildOnlinePresenceTools(context: {
     ...asset,
     properties: {
       ...asset.properties,
+      caption: { type: "string", minLength: 1, maxLength: 512 },
       crop: { type: "string", enum: ["cover", "contain"] },
       aspect: { type: "string", enum: ["landscape", "portrait", "square"] },
       focalPoint: {
@@ -122,7 +123,35 @@ export function buildOnlinePresenceTools(context: {
               summary: { type: "string", maxLength: 4000 },
               audience: { type: "string", maxLength: 1000 },
               offer: { type: "string", maxLength: 4000 },
-              services: { type: "array", items: { type: "string", maxLength: 512 }, maxItems: 8 },
+              approvedDesignReference: {
+                type: "string",
+                const: "fieldwork-v1",
+                description:
+                  "Select only when the user explicitly asks to use the approved Fieldwork design reference. Never choose by default.",
+              },
+              services: {
+                type: "array",
+                maxItems: 8,
+                items: {
+                  oneOf: [
+                    { type: "string", maxLength: 512 },
+                    {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["title"],
+                      properties: {
+                        title: { type: "string", maxLength: 256 },
+                        description: { type: "string", maxLength: 4000 },
+                        details: {
+                          type: "array",
+                          maxItems: 3,
+                          items: { type: "string", maxLength: 512 },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
               about: { type: "string", maxLength: 4000 },
               ctaLabel: {
                 type: "string",

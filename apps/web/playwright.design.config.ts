@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 /** Offline rendered-artifact checks: no application server, auth, registry or model provider. */
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "online-presence-design.spec.ts",
+  testMatch: ["online-presence-design.spec.ts", "fieldwork-reference.spec.ts"],
   outputDir: "../../.tmp/web-design-browser",
   fullyParallel: true,
   workers: 2,

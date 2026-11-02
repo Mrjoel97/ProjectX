@@ -221,8 +221,8 @@ export async function ensureThreadAndPlan(
 
 /** Start a dedicated attended website workflow using the existing conversation driver. */
 export const startOnlinePresence = tenantAction({
-  args: { text: v.string() },
-  handler: async (ctx, { text }): Promise<{ threadId: string }> => {
+  args: { text: v.string(), approvedDesignReference: v.optional(v.literal("fieldwork-v1")) },
+  handler: async (ctx, { text, approvedDesignReference }): Promise<{ threadId: string }> => {
     if (!text.trim() || text.length > 8000) throw new Error("INVALID_PRESENCE_REQUEST");
     const { threadId, planId } = await ensureThreadAndPlan(ctx, undefined, text);
     await ctx.runMutation(internal.onlinePresence.ensureSession, {
@@ -230,6 +230,7 @@ export const startOnlinePresence = tenantAction({
       threadId,
       planId,
       text,
+      ...(approvedDesignReference ? { approvedDesignReference } : {}),
     });
     return ctx.runAction(api.cockpit.sendCockpitMessage, { threadId, text });
   },

@@ -1,3 +1,7 @@
+import {
+  approvedWebsiteTemplate,
+  getApprovedPresenceReferenceIdentity,
+} from "@pikar/contracts/approvedPresenceReference";
 import { validateDesignProfileRef } from "@pikar/core/designKnowledge";
 import { merchantSetupSourceRefs } from "@pikar/core/merchantSetup";
 import {
@@ -9,7 +13,10 @@ import {
   type OnlinePresenceWarning,
 } from "@pikar/core/onlinePresence";
 import { parseWebAssetRef } from "@pikar/core/webAssets";
-import { canonicalWebLayoutPlan, validateWebLayoutPlan } from "@pikar/core/webLayoutPlan";
+import {
+  canonicalWebLayoutPlan,
+  validateWebLayoutPlanForDocument,
+} from "@pikar/core/webLayoutPlan";
 import { materializeWebRecipe, validateWebRecipeMedia } from "@pikar/core/webRecipes";
 import { sha256Bytes } from "@pikar/core/webRuntime";
 import { makeFunctionReference } from "convex/server";
@@ -17,6 +24,7 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
+import { canonicalEvidenceHash } from "./lib/presencePublication";
 import { assertTenantWritable, internalMutation } from "./lib/tenantLifecycle";
 import { type ShopSetupReview, shopSetupReviewForTenant } from "./onlinePresenceShop";
 import { imageSource, listImageCandidates, resolveDocumentAssets } from "./webAssets";
@@ -53,7 +61,13 @@ async function ownedSession(
 /** Only the authenticated cockpit calls this with an actual human message. It is deliberately
  * absent from ONLINE_PRESENCE_TOOLS: generated prose cannot become a user statement. */
 export const ensureSession = internalMutation({
-  args: { tenantId: v.string(), threadId: v.string(), planId: v.id("plans"), text: v.string() },
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    planId: v.id("plans"),
+    text: v.string(),
+    approvedDesignReference: v.optional(v.literal("fieldwork-v1")),
+  },
   handler: async (ctx, args): Promise<{ revision: number; sourceRef: string }> => {
     await assertTenantWritable(ctx, args.tenantId);
     const plan = await ownedPlan(ctx, args.tenantId, args.planId);
@@ -93,6 +107,9 @@ export const ensureSession = internalMutation({
     else
       await ctx.db.insert("onlinePresenceSessions", {
         tenantId: args.tenantId,
+        ...(args.approvedDesignReference
+          ? { brief: { approvedDesignReference: args.approvedDesignReference } }
+          : {}),
         threadId: args.threadId,
         planId: args.planId,
         humanMessages,
@@ -461,6 +478,7 @@ export const saveBrief = internalMutation({
     clearFields: v.optional(
       v.array(
         v.union(
+          v.literal("approvedDesignReference"),
           v.literal("offer"),
           v.literal("services"),
           v.literal("about"),
@@ -828,10 +846,23 @@ export const buildProject = internalMutation({
     const completion = args.designCompletion;
     if (
       !validateDesignProfileRef(completion.profile) ||
-      !validateWebLayoutPlan(completion.profile.layoutPlan)
+      !validateWebLayoutPlanForDocument(prepared.document, completion.profile.layoutPlan)
     )
       throw Error("PRESENCE_DESIGN_PROFILE_INVALID");
     const providerReceipt = completion.providerReceipt as WebProviderReceipt;
+    const selectedReference = session.brief?.approvedDesignReference;
+    const expectedReference =
+      selectedReference === undefined
+        ? undefined
+        : getApprovedPresenceReferenceIdentity(selectedReference);
+    if (
+      (selectedReference !== undefined && !expectedReference) ||
+      completion.profile.approvedTemplate !==
+        approvedWebsiteTemplate(prepared.document.kind, expectedReference) ||
+      canonicalEvidenceHash(providerReceipt.approvedDesignReference ?? null) !==
+        canonicalEvidenceHash(expectedReference ?? null)
+    )
+      throw Error("PRESENCE_APPROVED_REFERENCE_CHANGED");
     if (
       providerReceipt.briefHash !== briefHash ||
       providerReceipt.sourceFingerprint !== sourceFingerprint ||

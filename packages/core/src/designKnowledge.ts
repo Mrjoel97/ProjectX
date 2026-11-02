@@ -77,6 +77,7 @@ export type DesignBrief = {
 };
 
 export type DesignProfileRef = {
+  readonly approvedTemplate?: "fieldwork-v1";
   readonly layoutPlan?: WebLayoutPlan;
   readonly artDirection?: ArtDirection;
   readonly surfaceStyle?: SurfaceStyle;
@@ -298,6 +299,7 @@ export function validateDesignProfileRef(input: unknown): input is DesignProfile
       "artDirection",
       "surfaceStyle",
       "layoutPlan",
+      "approvedTemplate",
     ])
   )
     return false;
@@ -328,6 +330,10 @@ export function validateDesignProfileRef(input: unknown): input is DesignProfile
       input.surfaceStyle !== "glass" &&
       input.surfaceStyle !== "clay") ||
     (input.layoutPlan !== undefined && !validateWebLayoutPlan(input.layoutPlan)) ||
+    (input.approvedTemplate !== undefined &&
+      (input.approvedTemplate !== "fieldwork-v1" ||
+        !isRecord(input.layoutPlan) ||
+        input.layoutPlan.version !== 3)) ||
     (input.pageOverride !== undefined &&
       (typeof input.pageOverride !== "string" || input.pageOverride.length > 64))
   )

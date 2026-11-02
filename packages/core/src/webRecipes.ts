@@ -16,7 +16,7 @@ import {
 } from "./webRuntime";
 
 export const WEB_RECIPE_SCHEMA_VERSION = 1 as const;
-export const WEB_RECIPE_COMPILER_ID = "web-recipes-v8" as const;
+export const WEB_RECIPE_COMPILER_ID = "web-recipes-v9" as const;
 export type WebRecipeMedia = {
   readonly logo?: { readonly storageRef: string; readonly alt: string };
   readonly hero?: Omit<WebMediaNode, "kind" | "placement">;
@@ -35,7 +35,7 @@ export function validateWebRecipeMedia(value: unknown): value is WebRecipeMedia 
     return false;
   const image = (entry: unknown) =>
     isRecord(entry) &&
-    hasOnly(entry, ["storageRef", "alt", "crop", "aspect", "focalPoint"]) &&
+    hasOnly(entry, ["storageRef", "alt", "caption", "crop", "aspect", "focalPoint"]) &&
     validateWebMediaInput(entry);
   if (value.hero !== undefined && !image(value.hero)) return false;
   return (
@@ -55,7 +55,14 @@ export type WebRecipeRegistryName =
 export type WebRecipeField = {
   readonly id: string;
   readonly label: string;
-  readonly type: "text" | "text-list" | "email" | "catalogue-list" | "dials" | "media";
+  readonly type:
+    | "text"
+    | "text-list"
+    | "service-list"
+    | "email"
+    | "catalogue-list"
+    | "dials"
+    | "media";
   readonly required: boolean;
   readonly maxLength?: number;
 };
@@ -77,6 +84,9 @@ export type WebRecipeDefinition = {
   readonly bodyHash: string;
 };
 
+export type WebService =
+  | string
+  | { readonly title: string; readonly description?: string; readonly details?: readonly string[] };
 export type BusinessSiteInput = {
   readonly surfaceStyle?: SurfaceStyle;
   readonly media?: WebRecipeMedia;
@@ -85,7 +95,7 @@ export type BusinessSiteInput = {
   readonly brandName: string;
   readonly headline: string;
   readonly summary?: string;
-  readonly services?: readonly string[];
+  readonly services?: readonly WebService[];
   readonly about?: string;
   readonly ctaLabel?: string;
   readonly ctaHref?: string;
@@ -165,6 +175,18 @@ const optionalText = (value: unknown, max = 4_000): value is string | undefined 
   value === undefined || text(value, max);
 const textList = (value: unknown, maxItems = 8): value is readonly string[] =>
   Array.isArray(value) && value.length <= maxItems && value.every((item) => text(item, 512));
+export const validateWebServices = (value: unknown): value is readonly WebService[] =>
+  Array.isArray(value) &&
+  value.length <= 8 &&
+  value.every((item) =>
+    typeof item === "string"
+      ? text(item, 512)
+      : isRecord(item) &&
+        Object.keys(item).every((key) => ["title", "description", "details"].includes(key)) &&
+        text(item.title, 256) &&
+        optionalText(item.description) &&
+        (item.details === undefined || textList(item.details, 3)),
+  );
 const id = (value: unknown): value is string =>
   typeof value === "string" && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(value);
 const localPath = (value: unknown): value is string =>
@@ -353,7 +375,7 @@ export function validateWebRecipeInput(
     if (input.projectSlug !== undefined && input.pageMode !== "multi-page")
       issue(errors, "projectSlug", "page_mode_required");
     if (!optionalText(input.summary)) issue(errors, "summary", "invalid_text");
-    if (input.services !== undefined && !textList(input.services))
+    if (input.services !== undefined && !validateWebServices(input.services))
       issue(errors, "services", "invalid_text_list");
     if (!optionalText(input.about)) issue(errors, "about", "invalid_text");
     if (!optionalText(input.contactConsent, 512))
@@ -396,7 +418,7 @@ const definitionSeed = [
       { id: "brandName", label: "Brand name", type: "text", required: true, maxLength: 128 },
       { id: "headline", label: "Headline", type: "text", required: true, maxLength: 256 },
       { id: "summary", label: "Summary", type: "text", required: false, maxLength: 4000 },
-      { id: "services", label: "Services", type: "text-list", required: false, maxLength: 512 },
+      { id: "services", label: "Services", type: "service-list", required: false, maxLength: 512 },
       { id: "about", label: "About", type: "text", required: false, maxLength: 4000 },
       {
         id: "pageMode",
@@ -632,7 +654,12 @@ export const WEB_RECIPES = WEB_RECIPE_DEFINITIONS;
 
 function documentForBusiness(input: BusinessSiteInput): WebDocument {
   const nodes: WebDocument["pages"][number]["nodes"] = [
-    { kind: "hero", heading: input.headline, ...(input.summary ? { body: input.summary } : {}) },
+    {
+      kind: "hero",
+      id: "page-hero",
+      heading: input.headline,
+      ...(input.summary ? { body: input.summary } : {}),
+    },
     ...(input.ctaLabel && input.ctaHref
       ? [
           {
@@ -650,7 +677,27 @@ function documentForBusiness(input: BusinessSiteInput): WebDocument {
             kind: "section" as const,
             id: "services",
             heading: "Services",
-            children: input.services.map((service) => ({ kind: "text" as const, text: service })),
+            children: input.services.map((service, index) =>
+              typeof service === "string" || (!service.description && !service.details?.length)
+                ? {
+                    kind: "text" as const,
+                    text: typeof service === "string" ? service : service.title,
+                  }
+                : {
+                    kind: "section" as const,
+                    id: `service-${index + 1}`,
+                    heading: service.title,
+                    children: [
+                      ...(service.description
+                        ? [{ kind: "text" as const, text: service.description }]
+                        : []),
+                      ...(service.details ?? []).map((detail) => ({
+                        kind: "text" as const,
+                        text: detail,
+                      })),
+                    ],
+                  },
+            ),
           },
         ]
       : []),
@@ -689,7 +736,7 @@ function documentForBusiness(input: BusinessSiteInput): WebDocument {
               slug: "about",
               title: `About ${input.brandName}`,
               nodes: [
-                { kind: "hero" as const, heading: "About" },
+                { kind: "hero" as const, id: "page-hero", heading: "About" },
                 { kind: "text" as const, text: input.about },
               ],
             },
@@ -701,7 +748,7 @@ function documentForBusiness(input: BusinessSiteInput): WebDocument {
               slug: "services",
               title: "Services",
               nodes: [
-                { kind: "hero" as const, heading: "Services" },
+                { kind: "hero" as const, id: "page-hero", heading: "Services" },
                 ...nodes.filter((node) => node.kind === "section" && node.id === "services"),
               ],
             },
@@ -713,7 +760,7 @@ function documentForBusiness(input: BusinessSiteInput): WebDocument {
               slug: "contact",
               title: `Contact ${input.brandName}`,
               nodes: [
-                { kind: "hero" as const, heading: "Contact" },
+                { kind: "hero" as const, id: "page-hero", heading: "Contact" },
                 ...nodes.filter((node) => node.kind === "form" || node.kind === "cta"),
               ],
             },
@@ -755,7 +802,12 @@ function documentForBusiness(input: BusinessSiteInput): WebDocument {
 
 function documentForCampaign(input: CampaignLandingInput): WebDocument {
   const nodes: WebDocument["pages"][number]["nodes"] = [
-    { kind: "hero", heading: input.headline, ...(input.offer ? { body: input.offer } : {}) },
+    {
+      kind: "hero",
+      id: "page-hero",
+      heading: input.headline,
+      ...(input.offer ? { body: input.offer } : {}),
+    },
     ...(input.proofPoints?.length
       ? [
           {
@@ -821,8 +873,15 @@ function documentForStorefront(input: StorefrontCatalogueInput): WebDocument {
         title: input.brandName,
         nodes: [
           ...(input.intro
-            ? [{ kind: "hero" as const, heading: input.brandName, body: input.intro }]
-            : [{ kind: "hero" as const, heading: input.brandName }]),
+            ? [
+                {
+                  kind: "hero" as const,
+                  id: "page-hero",
+                  heading: input.brandName,
+                  body: input.intro,
+                },
+              ]
+            : [{ kind: "hero" as const, id: "page-hero", heading: input.brandName }]),
           { kind: "catalogue" as const, heading: "Catalogue", items: input.items },
         ],
       },

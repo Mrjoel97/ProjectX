@@ -24,6 +24,7 @@ export default function SitesPage() {
   const selected = params.get("project");
   const version = Number(params.get("version"));
   const [request, setRequest] = useState("");
+  const [useApprovedReference, setUseApprovedReference] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const begin = async () => {
@@ -32,9 +33,13 @@ export default function SitesPage() {
     setNotice(null);
     try {
       const result = await start({
+        ...(useApprovedReference ? { approvedDesignReference: "fieldwork-v1" as const } : {}),
         text:
-          request.trim() ||
-          "Create a business website using my approved business foundation and documents. Ask only for information you still need.",
+          (request.trim() ||
+            "Create a business website using my approved business foundation and documents. Ask only for information you still need.") +
+          (useApprovedReference
+            ? "\nUse the approved Fieldwork design reference (fieldwork-v1) for visual direction only. Preserve my own business facts."
+            : ""),
       });
       router.push(
         `/dashboard/workspace?thread=${encodeURIComponent(result.threadId)}&label=Your%20website`,
@@ -63,11 +68,29 @@ export default function SitesPage() {
           and bring you a version to review.
         </p>
       </header>
+      <section style={card} aria-labelledby="approved-design-preview">
+        <p className="caps-label">Approved design reference</p>
+        <h2 id="approved-design-preview">Approved design preview · Fieldwork</h2>
+        <p style={{ color: "var(--ink-soft)" }}>
+          The approved visual direction, with its image gallery and refined typography. This is a
+          design reference; forms and purchases are not connected. It does not demonstrate that
+          generated sites preserve this design yet.
+        </p>
+        <a
+          className={styles.back}
+          href="/presence-examples/fieldwork.html"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Open approved design preview →
+        </a>
+      </section>
       <section aria-labelledby="presence-examples">
-        <h2 id="presence-examples">Find your direction</h2>
+        <h2 id="presence-examples">Technical samples</h2>
         <p style={{ color: "var(--ink-soft)", marginBottom: 24 }}>
-          Explore a website, a landing page and a shop. These fictional examples use generated
-          illustrations; your agent builds around your own business.
+          Simplified website, landing page and shop samples for inspecting pages and interactions.
+          These are renderer samples, not Kimi + Stitch outputs or the approved design. Content and
+          generated illustrations are fictional.
         </p>
         <div className={styles.gallery}>
           {PRESENCE_EXAMPLES.map((example) => (
@@ -82,23 +105,13 @@ export default function SitesPage() {
                 width={960}
                 height={640}
               />
-              <p className={styles.type}>
-                {example.kind} · {example.style}
-              </p>
+              <p className={styles.type}>Technical sample · {example.kind}</p>
               <h3>{example.title}</h3>
               <p>{example.description}</p>
-              <span className={styles.open}>Explore example →</span>
+              <span className={styles.open}>Inspect technical sample →</span>
             </Link>
           ))}
         </div>
-        <p style={{ marginTop: 24 }}>
-          <a href="/presence-examples/fieldwork.html" target="_blank" rel="noopener noreferrer">
-            Explore the refined studio design with its image gallery →
-          </a>
-          <span style={{ display: "block", color: "var(--ink-soft)", marginTop: 6 }}>
-            A fictional design preview; forms and purchases are not connected.
-          </span>
-        </p>
       </section>
       <section style={card} aria-labelledby="presence-start">
         <h2 id="presence-start">Let Pikar build your website</h2>
@@ -107,7 +120,7 @@ export default function SitesPage() {
           <textarea
             value={request}
             onChange={(event) => setRequest(event.target.value)}
-            maxLength={8000}
+            maxLength={7800}
             rows={3}
             placeholder="A website for my business, a campaign landing page, or help preparing my shop…"
             style={{
@@ -119,6 +132,16 @@ export default function SitesPage() {
               background: "var(--canvas)",
             }}
           />
+        </label>
+        <label
+          style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16, minHeight: 44 }}
+        >
+          <input
+            type="checkbox"
+            checked={useApprovedReference}
+            onChange={(event) => setUseApprovedReference(event.target.checked)}
+          />
+          Use the approved Fieldwork design direction with my business content
         </label>
         <button
           type="button"

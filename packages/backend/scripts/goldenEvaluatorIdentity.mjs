@@ -45,6 +45,8 @@ export const EVALUATOR_FILES = [
   "packages/backend/convex/lib/presenceVisionReview.ts",
   "packages/backend/convex/lib/presenceModelLimits.ts",
   "packages/backend/convex/lib/presencePolicy.ts",
+  "packages/backend/convex/lib/approvedPresenceReference.ts",
+  "packages/contracts/src/approvedPresenceReference.ts",
   "packages/contracts/src/skills/presenceDesignPolicy.ts",
   "apps/web/proxy.ts",
   "apps/web/app/api/presence/review/route.ts",

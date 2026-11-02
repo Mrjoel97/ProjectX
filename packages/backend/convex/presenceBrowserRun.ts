@@ -52,16 +52,36 @@ export const run = internalAction({
     const secret = process.env.PRESENCE_BROWSER_REVIEW_SECRET;
     if (!endpoint || !secret || secret.length < 32)
       return { status: "pending", reason: "browser_worker_unconfigured" };
-    const url = new URL(endpoint);
-    if (
-      url.protocol !== "https:" ||
-      !url.hostname.endsWith(".vercel.app") ||
-      url.pathname !== "/api/presence/review" ||
-      url.search ||
-      url.hash ||
-      url.username ||
-      url.password
-    )
+    let validEndpoint = false;
+    try {
+      const url = new URL(endpoint);
+      let configuredOrigin: string | undefined;
+      if (process.env.SITE_URL) {
+        const site = new URL(process.env.SITE_URL);
+        if (
+          site.protocol === "https:" &&
+          !site.username &&
+          !site.password &&
+          !site.port &&
+          site.pathname === "/" &&
+          !site.search &&
+          !site.hash
+        )
+          configuredOrigin = site.origin;
+      }
+      validEndpoint =
+        url.protocol === "https:" &&
+        !url.port &&
+        (url.origin === configuredOrigin || url.hostname.endsWith(".vercel.app")) &&
+        url.pathname === "/api/presence/review" &&
+        !url.search &&
+        !url.hash &&
+        !url.username &&
+        !url.password;
+    } catch {
+      // Malformed server configuration must fail before any bearer-bearing request.
+    }
+    if (!validEndpoint)
       return { status: "pending", reason: "browser_worker_configuration_invalid" };
     const read = () => ctx.runQuery(internal.presenceBrowserReview.runtimeInputs, args);
     const source = await read();
@@ -259,6 +279,9 @@ export const run = internalAction({
           revision: source.revision,
           runRef,
           beforeCall,
+          ...(source.providerReceipt.approvedDesignReference
+            ? { approvedDesignReference: source.providerReceipt.approvedDesignReference }
+            : {}),
           referenceImage: {
             bytes: new Uint8Array(await reference.arrayBuffer()),
             mimeType: reference.type,

@@ -31,6 +31,43 @@ const assess = (overrides: Record<string, unknown> = {}, sources = [source]) =>
   assessOnlinePresenceBrief({ ...brief, ...overrides }, sources);
 
 describe("online presence revision contract", () => {
+  test("design references are explicit, bounded and retained through revisions", () => {
+    const unselected = assess();
+    expect(unselected.ok && unselected.brief.approvedDesignReference).toBeUndefined();
+    const selected = assess({ approvedDesignReference: "fieldwork-v1" });
+    expect(selected.ok && selected.brief.approvedDesignReference).toBe("fieldwork-v1");
+    expect(assess({ approvedDesignReference: "https://untrusted.example/design" }).ok).toBe(false);
+    const edited = mergeOnlinePresenceBrief(
+      { ...brief, approvedDesignReference: "fieldwork-v1" },
+      { ...brief, headline: "New heading" },
+    );
+    expect(edited.ok && edited.brief.approvedDesignReference).toBe("fieldwork-v1");
+    const cleared = mergeOnlinePresenceBrief(
+      { ...brief, approvedDesignReference: "fieldwork-v1" },
+      brief,
+      ["approvedDesignReference"],
+    );
+    expect(cleared.ok && cleared.brief.approvedDesignReference).toBeUndefined();
+  });
+  test("retains structured service source copy through brief assessment and headline revisions", () => {
+    const services = [
+      {
+        title: "Garden planning",
+        description: "Plans around your home.",
+        details: ["Layout", "Planting"],
+      },
+    ];
+    const result = assess({ services });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw Error("Expected sourced service structure");
+    expect(result.input).toMatchObject({ services });
+    const revision = mergeOnlinePresenceBrief(
+      { ...brief, services },
+      { ...brief, headline: "A calmer garden" },
+    );
+    expect(revision.ok).toBe(true);
+    if (revision.ok) expect(revision.brief.services).toEqual(services);
+  });
   const previous = {
     ...brief,
     services: ["Layout", "Print", "Unsupported third service"],

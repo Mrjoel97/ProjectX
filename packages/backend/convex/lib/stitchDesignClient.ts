@@ -135,7 +135,7 @@ function validRequest(value: StitchDesignRequest): boolean {
     /^(?:sha256:)?[a-f0-9]{64}$/.test(scope.briefHash) &&
     typeof row.prompt === "string" &&
     row.prompt.trim().length > 0 &&
-    new TextEncoder().encode(row.prompt).byteLength <= 24000 &&
+    new TextEncoder().encode(row.prompt).byteLength <= 64000 &&
     // biome-ignore lint/suspicious/noControlCharactersInRegex: Reject control characters at the untrusted input boundary.
     !/[\u0000\u000b\u000c]/.test(row.prompt) &&
     ["DESKTOP", "MOBILE", "TABLET"].includes(String(row.deviceType))

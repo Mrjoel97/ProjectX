@@ -16,6 +16,8 @@ describe("legacy recipe artifact compatibility", () => {
     "web-design-renderer-v6",
     "web-design-renderer-v7",
     "web-design-renderer-v15",
+    "web-design-renderer-v16",
+    "web-design-renderer-v17",
   ])("editing %s keeps prior public bytes and origin intact", async (rendererVersion) => {
     const t = convexTest(schema, modules);
     const userId = await t.run((ctx) => ctx.db.insert("users", {}));

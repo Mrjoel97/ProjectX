@@ -1,6 +1,9 @@
+import {
+  APPROVED_FIELDWORK_REFERENCE,
+  getApprovedPresenceReferenceIdentity,
+} from "@pikar/contracts/approvedPresenceReference";
 // @vitest-environment node
 import { presenceDesignPolicySkillBody } from "@pikar/contracts/skills/presenceDesignPolicy";
-
 import { selectDesignProfile } from "@pikar/core/designKnowledge";
 import { sha256Bytes } from "@pikar/core/webRuntime";
 import { generateText } from "ai";
@@ -12,6 +15,7 @@ import limiterSchema from "../node_modules/@convex-dev/rate-limiter/src/componen
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
+import { loadApprovedPresenceReference } from "./lib/approvedPresenceReference";
 import {
   generateStitchDesignEvidence,
   recoverStitchDesignEvidence,
@@ -23,6 +27,7 @@ import schema from "./schema";
 const state = vi.hoisted(() => ({
   snapshot: {} as Record<string, unknown>,
   finalizeFails: false,
+  finalizationError: "synthetic transient finalization failure",
   finalizations: 0,
 }));
 vi.mock("./onlinePresence", async () => {
@@ -35,7 +40,7 @@ vi.mock("./onlinePresence", async () => {
       args: { ...args, designCompletion: v.any() },
       handler: async (_ctx, args) => {
         state.finalizations++;
-        if (state.finalizeFails) throw Error("synthetic transient finalization failure");
+        if (state.finalizeFails) throw Error(state.finalizationError);
         return {
           ok: true,
           revision: args.expectedRevision + 1,
@@ -49,6 +54,7 @@ vi.mock("ai", async (importOriginal) => ({
   ...(await importOriginal<typeof import("ai")>()),
   generateText: vi.fn(),
 }));
+vi.mock("./lib/approvedPresenceReference", () => ({ loadApprovedPresenceReference: vi.fn() }));
 vi.mock("./lib/models", () => ({ resolveModel: (modelId: string) => ({ modelId }) }));
 vi.mock("./lib/paidBudgetModel", () => ({ paidBudgetModel: (args: unknown) => args }));
 vi.mock("./lib/stitchDesignClient", () => ({
@@ -65,7 +71,8 @@ const limiters = import.meta.glob(
 const run = makeFunctionReference<"action">("onlinePresenceDesign:build");
 const hash = (v: unknown) => sha256Bytes(new TextEncoder().encode(JSON.stringify(v)));
 const layoutPlan = {
-  version: 2,
+  version: 3,
+  sections: [{ pageSlug: "home", nodeId: "services", composition: "numbered-services" }],
   designTokens: {
     colors: {
       paper: "#fffaf0",
@@ -90,7 +97,9 @@ const layoutPlan = {
 let calls: string[] = [];
 beforeEach(() => {
   calls = [];
+  vi.mocked(loadApprovedPresenceReference).mockReset();
   state.finalizeFails = false;
+  state.finalizationError = "synthetic transient finalization failure";
   state.finalizations = 0;
   vi.stubEnv("STITCH_API_KEY", "synthetic");
   vi.stubEnv("OPENROUTER_API_KEY", "synthetic");
@@ -120,15 +129,19 @@ beforeEach(() => {
     expect(options.maxRetries).toBe(0);
     expect(options.messages?.[0]).toMatchObject({
       role: "user",
-      content: [{ type: "text" }, { type: "file", mediaType: "image/png" }],
+      content: expect.arrayContaining([
+        { type: "file", mediaType: "image/png", data: expect.any(Uint8Array) },
+      ]),
     });
     const content = options.messages?.[0]?.content as
       | Array<{ type: string; text?: string }>
       | undefined;
-    const text = content?.[0]?.text;
+    const text = content?.find(
+      (item) => item.type === "text" && item.text?.includes('"layoutPlan"'),
+    )?.text;
     if (typeof text !== "string") throw Error("Expected provider prompt text");
     const input = JSON.parse(text);
-    expect(input.layoutPlan.version).toBe(2);
+    expect(input.layoutPlan.version).toBe(3);
     expect(input.untrustedStitchReference).toBeTruthy();
     if (input.untrustedStitchReference.startsWith("reference"))
       expect(input.untrustedStitchReference.endsWith("END_OF_COMPLETE_REFERENCE")).toBe(true);
@@ -154,7 +167,7 @@ beforeEach(() => {
   });
 });
 afterEach(() => vi.unstubAllEnvs());
-async function setup() {
+async function setup(approvedDesignReference?: "fieldwork-v1") {
   const t = convexTest(schema, modules);
   await t.run((ctx) =>
     ctx.db.insert("skills", {
@@ -172,7 +185,11 @@ async function setup() {
     tenantId,
     threadId: "native-design",
   });
-  const brief = { kind: "website", businessName: "Fieldwork" },
+  const brief = {
+      kind: "website",
+      businessName: "Fieldwork",
+      ...(approvedDesignReference ? { approvedDesignReference } : {}),
+    },
     sourceSnapshots = [{ ref: "source", revision: "revision1" }];
   await t.run((ctx) =>
     ctx.db.insert("onlinePresenceSessions", {
@@ -208,6 +225,12 @@ async function setup() {
           nodes: [
             { kind: "hero", heading: "Identity with purpose" },
             {
+              kind: "section",
+              id: "services",
+              heading: "Services",
+              children: [{ kind: "text", text: "Brand identity and websites" }],
+            },
+            {
               kind: "media",
               storageRef: `webasset:photo:${"a".repeat(64)}`,
               alt: "Studio materials",
@@ -225,6 +248,7 @@ test("ordinary tenant runs both required providers, reserves honestly and persis
   const result = await t.action(run, args);
   expect(result.ok).toBe(true);
   expect(calls).toEqual(["stitch", "kimi"]);
+  expect(loadApprovedPresenceReference).not.toHaveBeenCalled();
   expect(result.artifact.providerReceipt).toMatchObject({
     pipelineVersion: "stitch-kimi-required-v1",
     pendingBrowser: true,
@@ -380,4 +404,76 @@ test.each([
   expect(generateText).not.toHaveBeenCalled();
   expect(state.finalizations).toBe(0);
   expect(await t.run((ctx) => ctx.db.query("spendEvents").collect())).toEqual([]);
+});
+
+test("provider layout cannot refer to another page or an invented section", async () => {
+  const { t, args } = await setup();
+  vi.mocked(generateText).mockResolvedValueOnce({
+    text: JSON.stringify({
+      layoutPlan: {
+        ...layoutPlan,
+        sections: [{ pageSlug: "foreign", nodeId: "services", composition: "numbered-services" }],
+      },
+    }),
+    response: { modelId: "moonshotai/kimi-k3.1-pro" },
+    finishReason: "stop",
+  } as never);
+  const result = await t.action(run, args);
+  expect(result.ok).toBe(false);
+  expect(state.finalizations).toBe(0);
+});
+
+test("explicit approved reference reaches both providers and binds the completed receipt", async () => {
+  const { t, args } = await setup("fieldwork-v1");
+  const identity = getApprovedPresenceReferenceIdentity("fieldwork-v1")!;
+  const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
+  vi.mocked(loadApprovedPresenceReference).mockResolvedValue({
+    identity,
+    html: "SELECTED_APPROVED_VISUAL",
+    desktopImage: {
+      bytes,
+      mimeType: "image/png",
+      sha256: APPROVED_FIELDWORK_REFERENCE.desktop.sha256,
+    },
+    mobileImage: {
+      bytes,
+      mimeType: "image/png",
+      sha256: APPROVED_FIELDWORK_REFERENCE.mobile.sha256,
+    },
+  });
+  const result = await t.action(run, args);
+  expect(result.ok).toBe(true);
+  expect(result.artifact.providerReceipt.approvedDesignReference).toEqual(identity);
+  expect(loadApprovedPresenceReference).toHaveBeenCalledOnce();
+  expect(vi.mocked(generateStitchDesignEvidence).mock.calls[0]?.[0].prompt).toContain(
+    "SELECTED_APPROVED_VISUAL",
+  );
+  const content = vi.mocked(generateText).mock.calls[0]?.[0].messages?.[0]?.content;
+  expect(JSON.stringify(content)).toContain("SELECTED_APPROVED_VISUAL");
+  expect(Array.isArray(content) && content.filter((item) => item.type === "file")).toHaveLength(3);
+});
+test("selected approved reference cannot silently disappear before provider generation", async () => {
+  const { t, args } = await setup("fieldwork-v1");
+  vi.mocked(loadApprovedPresenceReference).mockRejectedValue(
+    Error("APPROVED_REFERENCE_UNAVAILABLE"),
+  );
+  await expect(t.action(run, args)).rejects.toThrow("APPROVED_REFERENCE_UNAVAILABLE");
+  expect(generateStitchDesignEvidence).not.toHaveBeenCalled();
+  expect(generateText).not.toHaveBeenCalled();
+});
+
+test.each([
+  "PRESENCE_APPROVED_REFERENCE_CHANGED",
+  "private-provider-url?key=secret",
+])("finalization diagnostics disclose only static internal codes: %s", async (message) => {
+  const { t, args } = await setup();
+  state.finalizeFails = true;
+  state.finalizationError = message;
+  expect((await t.action(run, args)).ok).toBe(false);
+  const audits = await t.run((ctx) => ctx.db.query("audit").collect());
+  const stopped = audits.find((row) => row.payload.stopped === true);
+  expect(stopped?.payload.internalFailureCode).toBe(
+    message.startsWith("PRESENCE_") ? message : undefined,
+  );
+  expect(JSON.stringify(audits)).not.toContain("secret");
 });
