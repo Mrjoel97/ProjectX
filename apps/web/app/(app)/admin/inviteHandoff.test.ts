@@ -58,12 +58,16 @@ test("the invite handoff survives approval removing the pending request", async 
     expect(mocks.approve).toHaveBeenCalledWith({ waitlistId: "fixture-request" });
     expect(container.textContent).toContain("No one is waiting");
     expect(container.textContent).toContain("Invitation ready for tester@example.test");
-    expect(container.textContent).toContain("/signup?invite=ABCD-EFGH-JKMN-PQRS");
+    expect(container.textContent).toContain(
+      window.location.origin + "/signup?invite=ABCD-EFGH-JKMN-PQRS",
+    );
     expect(container.textContent).toContain("Copy invite link");
     expect(container.textContent).not.toContain("Approve & mint invite");
     // A new component has no approval response in memory: the saved invitation still renders.
     await act(async () => root.render(createElement(AdminView, { key: "after-reload" })));
-    expect(container.textContent).toContain("/signup?invite=ABCD-EFGH-JKMN-PQRS");
+    expect(container.textContent).toContain(
+      window.location.origin + "/signup?invite=ABCD-EFGH-JKMN-PQRS",
+    );
     expect(container.textContent).toContain("Copy invite link");
     mocks.issued = [
       {

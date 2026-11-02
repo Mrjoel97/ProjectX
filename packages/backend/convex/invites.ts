@@ -18,6 +18,7 @@
 // first genuinely public entry in that list; see the note there. What keeps it safe is that
 // neither public function reads or returns tenant-owned data, and neither returns a code, an id,
 // a subject, or an unmasked address.
+import { getAuthUserId } from "@convex-dev/auth/server";
 import type { AnyDataModel, GenericMutationCtx } from "convex/server";
 import { v } from "convex/values";
 import type { DataModel, Id } from "./_generated/dataModel";
@@ -183,8 +184,12 @@ export const preflight = query({
   returns: v.object({
     valid: v.boolean(),
     invitedEmailMasked: v.union(v.string(), v.null()),
+    belongsToSession: v.optional(v.literal(true)),
   }),
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ valid: boolean; invitedEmailMasked: string | null; belongsToSession?: true }> => {
     const code = normalizeCode(args.code);
     const refused = { valid: false, invitedEmailMasked: null };
     if (!code) return refused;
@@ -192,7 +197,13 @@ export const preflight = query({
       .query("betaInvites")
       .withIndex("by_code", (q) => q.eq("code", code))
       .unique();
-    if (!invite || invite.redeemedAt !== undefined) return refused;
+    if (!invite) return refused;
+    if (invite.redeemedAt !== undefined) {
+      if (invite.redeemedUserId && invite.redeemedUserId === (await getAuthUserId(ctx))) {
+        return { ...refused, belongsToSession: true as const };
+      }
+      return refused;
+    }
     return { valid: true, invitedEmailMasked: maskEmail(invite.email) };
   },
 });
@@ -266,6 +277,8 @@ export const approve = ownerMutation({
       .withIndex("by_email", (q) => q.eq("email", row.email))
       .unique();
     if (existing) {
+      if (row.status === "pending")
+        await ctx.db.patch(row._id, { status: "approved", approvedAt: Date.now() });
       return { inviteId: existing._id, code: existing.code, email: existing.email };
     }
 

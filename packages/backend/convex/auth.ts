@@ -80,7 +80,7 @@ export const password = ConvexCredentials({
  * subject, so it needs its own copy under a name the package does not strip.
  */
 export const google = Google({
-  authorization: { params: { scope: "openid email profile" } },
+  authorization: { params: { scope: "openid email profile", prompt: "select_account" } },
   profile: (p) => ({
     id: p.sub,
     oauthSubject: p.sub,
