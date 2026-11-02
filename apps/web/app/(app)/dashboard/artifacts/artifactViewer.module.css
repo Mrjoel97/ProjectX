@@ -559,3 +559,61 @@
 :global([data-workspace-active="true"]) .pdfScroll {
   padding: 12px;
 }
+.viewerBar {
+  display: contents;
+}
+.downloadButton svg,
+.viewSwitch svg {
+  display: none;
+}
+:global([data-workspace-active]) .viewerBar {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 4px;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--card);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+:global([data-workspace-active]) .viewerBar .header,
+:global([data-workspace-active]) .viewerBar .controls {
+  display: contents;
+}
+:global([data-workspace-active]) .viewerBar .identity {
+  flex: 1 1 0;
+}
+:global([data-workspace-active]) .viewerBar .controlGroup,
+:global([data-workspace-active]) .viewerBar .viewSwitch {
+  flex: none;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+}
+:global([data-workspace-active]) .viewerBar .actionLabel,
+:global([data-workspace-active]) .viewerBar .typeLabel,
+:global([data-workspace-active]) .viewerBar .controlGroup:empty {
+  display: none;
+}
+:global([data-workspace-active]) .viewerBar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  min-width: 24px;
+  padding: 0 3px;
+}
+:global([data-workspace-active]) .viewerBar button svg {
+  display: block;
+}
+:global([data-workspace-active]) .viewerBar button:focus-visible {
+  outline-offset: -2px;
+}
+@media (pointer: coarse) {
+  :global([data-workspace-active]) .viewerBar button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

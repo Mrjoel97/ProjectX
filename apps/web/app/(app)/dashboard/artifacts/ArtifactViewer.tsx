@@ -11,6 +11,7 @@ import { useConvex, useQuery } from "convex/react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { MarkdownDocument } from "../MarkdownDocument";
 import type { VaultDoc } from "../vault/DocGrid";
+import { DownloadIcon, FileTextIcon } from "../vault/icons";
 import { binaryMediaKind, isSpreadsheet } from "../vault/previewState";
 import type { SheetRowsView } from "../vault/SheetGrid";
 import styles from "./artifactViewer.module.css";
@@ -332,116 +333,145 @@ export function ArtifactViewerBody({
 
   return (
     <section className={styles.viewer} aria-label={`${artifact.title} artifact viewer`}>
-      <header className={styles.header}>
-        <div className={styles.identity}>
-          <span className={styles.typeLabel}>{label}</span>
-          <h2 title={artifact.title}>{artifact.title}</h2>
-        </div>
-        <div className={styles.controlGroup}>
-          {downloadAvailable ? (
-            <button
-              className={styles.downloadButton}
-              type="button"
-              onClick={() => void download()}
-              disabled={downloadBusy}
-            >
-              {downloadBusy ? "Preparing…" : "Download original"}
-            </button>
-          ) : null}
-          {onClose ? (
-            <button type="button" aria-label="Close artifact" onClick={onClose}>
-              ×
-            </button>
-          ) : null}
-        </div>
-      </header>
+      <div className={styles.viewerBar}>
+        <header className={styles.header}>
+          <div className={styles.identity}>
+            <span className={styles.typeLabel}>{label}</span>
+            <h2 title={artifact.title}>{artifact.title}</h2>
+          </div>
+          <div className={styles.controlGroup}>
+            {downloadAvailable ? (
+              <button
+                className={styles.downloadButton}
+                title={downloadBusy ? "Preparing download…" : "Download original"}
+                aria-label={downloadBusy ? "Preparing download…" : "Download original"}
+                aria-busy={downloadBusy}
+                type="button"
+                onClick={() => void download()}
+                disabled={downloadBusy}
+              >
+                <DownloadIcon size={16} />
+                <span className={styles.actionLabel}>
+                  {downloadBusy ? "Preparing…" : "Download original"}
+                </span>
+              </button>
+            ) : null}
+            {onClose ? (
+              <button type="button" aria-label="Close artifact" onClick={onClose}>
+                ×
+              </button>
+            ) : null}
+          </div>
+        </header>
+        {presentation || currentSheet || canZoom || (pdf && artifact.markdown && artifact.text) ? (
+          <div className={styles.controls} role="toolbar" aria-label="Artifact controls">
+            <div className={styles.controlGroup}>
+              {pdf && artifact.markdown && artifact.text ? (
+                <div className={styles.viewSwitch}>
+                  <button
+                    type="button"
+                    aria-pressed={Boolean(reading)}
+                    title="Reading"
+                    aria-label="Reading"
+                    onClick={() => setMode("reading")}
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 6c-3-2-6-2.5-10-2v15c4-.5 7 0 10 2 3-2 6-2.5 10-2V4c-4-.5-7 0-10 2Zm0 0v15" />
+                    </svg>
+                    <span className={styles.actionLabel}>Reading</span>
+                  </button>
+                  <button
+                    type="button"
+                    title="Original PDF"
+                    aria-label="Original PDF"
+                    aria-pressed={!reading}
+                    onClick={() => setMode("original")}
+                  >
+                    <FileTextIcon size={16} />
+                    <span className={styles.actionLabel}>Original PDF</span>
+                  </button>
+                </div>
+              ) : null}
+              {presentation ? (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Previous slide"
+                    disabled={currentPage === 0}
+                    onClick={() => setPage(currentPage - 1)}
+                  >
+                    ‹
+                  </button>
+                  <span className={styles.muted} aria-live="polite">
+                    Slide {currentPage + 1} of {presentation.slides.length}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Next slide"
+                    disabled={currentPage === presentation.slides.length - 1}
+                    onClick={() => setPage(currentPage + 1)}
+                  >
+                    ›
+                  </button>
+                </>
+              ) : null}
+              {currentSheet ? (
+                <label className={styles.sheetPicker}>
+                  Worksheet{" "}
+                  <select
+                    aria-label="Worksheet"
+                    value={Math.min(sheet, (artifact.sheets?.sheets.length ?? 1) - 1)}
+                    onChange={(event) => setSheet(Number(event.target.value))}
+                  >
+                    {artifact.sheets?.sheets.map((entry, index) => (
+                      <option key={`${index}:${entry.name}`} value={index}>
+                        {entry.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+            {canZoom && !video ? (
+              <div className={styles.controlGroup}>
+                <button
+                  type="button"
+                  aria-label="Zoom out"
+                  disabled={zoom <= 0.5}
+                  onClick={() => setZoom((value) => Math.max(0.5, value - 0.25))}
+                >
+                  −
+                </button>
+                <span className={styles.zoomValue}>{Math.round(zoom * 100)}%</span>
+                <button
+                  type="button"
+                  aria-label="Zoom in"
+                  disabled={zoom >= 2}
+                  onClick={() => setZoom((value) => Math.min(2, value + 0.25))}
+                >
+                  +
+                </button>
+                <button type="button" onClick={() => setZoom(1)}>
+                  Fit
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
       {downloadError ? (
         <p className={styles.downloadError} role="alert">
           {downloadError}
         </p>
-      ) : null}
-      {presentation || currentSheet || canZoom || (pdf && artifact.markdown && artifact.text) ? (
-        <div className={styles.controls} role="toolbar" aria-label="Artifact controls">
-          <div className={styles.controlGroup}>
-            {pdf && artifact.markdown && artifact.text ? (
-              <div className={styles.viewSwitch}>
-                <button
-                  type="button"
-                  aria-pressed={Boolean(reading)}
-                  onClick={() => setMode("reading")}
-                >
-                  Reading
-                </button>
-                <button type="button" aria-pressed={!reading} onClick={() => setMode("original")}>
-                  Original PDF
-                </button>
-              </div>
-            ) : null}
-            {presentation ? (
-              <>
-                <button
-                  type="button"
-                  aria-label="Previous slide"
-                  disabled={currentPage === 0}
-                  onClick={() => setPage(currentPage - 1)}
-                >
-                  ‹
-                </button>
-                <span className={styles.muted} aria-live="polite">
-                  Slide {currentPage + 1} of {presentation.slides.length}
-                </span>
-                <button
-                  type="button"
-                  aria-label="Next slide"
-                  disabled={currentPage === presentation.slides.length - 1}
-                  onClick={() => setPage(currentPage + 1)}
-                >
-                  ›
-                </button>
-              </>
-            ) : null}
-            {currentSheet ? (
-              <label className={styles.sheetPicker}>
-                Worksheet{" "}
-                <select
-                  aria-label="Worksheet"
-                  value={Math.min(sheet, (artifact.sheets?.sheets.length ?? 1) - 1)}
-                  onChange={(event) => setSheet(Number(event.target.value))}
-                >
-                  {artifact.sheets?.sheets.map((entry, index) => (
-                    <option key={`${index}:${entry.name}`} value={index}>
-                      {entry.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-          </div>
-          {canZoom && !video ? (
-            <div className={styles.controlGroup}>
-              <button
-                type="button"
-                aria-label="Zoom out"
-                disabled={zoom <= 0.5}
-                onClick={() => setZoom((value) => Math.max(0.5, value - 0.25))}
-              >
-                −
-              </button>
-              <span className={styles.zoomValue}>{Math.round(zoom * 100)}%</span>
-              <button
-                type="button"
-                aria-label="Zoom in"
-                disabled={zoom >= 2}
-                onClick={() => setZoom((value) => Math.min(2, value + 0.25))}
-              >
-                +
-              </button>
-              <button type="button" onClick={() => setZoom(1)}>
-                Fit
-              </button>
-            </div>
-          ) : null}
-        </div>
       ) : null}
       <div className={`${styles.content} ${pdf && !reading ? styles.pdfContent : ""}`}>
         {content}
