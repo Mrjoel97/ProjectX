@@ -128,6 +128,7 @@ export default function SignIn() {
       <button
         type="button"
         className="auth-google"
+        style={{ marginBlockStart: "0.75rem" }}
         disabled={busy}
         onClick={() => {
           setPassword("");
