@@ -176,7 +176,7 @@ export function AdminView() {
             {invite.code ? (
               <>
                 <code style={{ wordBreak: "break-all", color: "var(--ink)" }}>
-                  /signup?invite={invite.code}
+                  {window.location.origin}/signup?invite={encodeURIComponent(invite.code)}
                 </code>
                 <div>
                   <button

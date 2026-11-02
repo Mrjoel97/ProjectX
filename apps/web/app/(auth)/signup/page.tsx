@@ -36,6 +36,18 @@ export default function SignUpRoute() {
   );
 }
 
+function codeFromInput(input: string) {
+  const value = input.trim();
+  if (!/^(https?:\/\/|\/signup\?)/i.test(value)) return input;
+  try {
+    const link = new URL(value, window.location.origin);
+    if (link.pathname === "/signup") return link.searchParams.get("invite") ?? input;
+  } catch {
+    // Continue displaying incomplete input while the person edits it.
+  }
+  return input;
+}
+
 function SignUp() {
   const { signIn } = useAuthActions();
   const router = useRouter();
@@ -180,7 +192,7 @@ function SignUp() {
         label="Invite code"
         icon={<StarIcon size={16} />}
         value={code}
-        onChange={setCode}
+        onChange={(value) => setCode(codeFromInput(value))}
         placeholder="ABCD-EFGH-JKMN-PQRS"
         autoComplete="off"
       />
@@ -191,7 +203,7 @@ function SignUp() {
         style={{ marginTop: "-0.4rem" }}
       >
         {!code.trim()
-          ? "Enter the invite code from your invitation."
+          ? "Paste your invitation link or enter its code."
           : preflight === undefined
             ? "Checking your invite…"
             : codeAccepted
@@ -228,7 +240,18 @@ function SignUp() {
           </p>
           <p className="auth-switch">
             Haven't created an account? Check the code above or{" "}
-            <Link href="/signup">request access</Link>.
+            <button
+              type="button"
+              className="auth-linklike"
+              onClick={() => {
+                setCode("");
+                setRedeeming(false);
+                setError(null);
+              }}
+            >
+              request access
+            </button>
+            .
           </p>
         </section>
       )}

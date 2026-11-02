@@ -236,6 +236,7 @@ test.each([
     expect(container.textContent).toContain("Your email has not been checked yet.");
     expect(container.textContent).toContain("including any +suffix");
     for (const [label, value] of [
+      ["Invite code", "https://www.pikar-ai.com/signup?invite=ABCD-EFGH-JKMN-PQRS"],
       ["Full Name", "Fixture"],
       ["Email Address", "test+fixture@example.test"],
       ["Password", "fixture-password"],
@@ -256,7 +257,7 @@ test.each([
       name: "Fixture",
       email: "test+fixture@example.test",
       password: "fixture-password",
-      inviteCode: "fixture-code",
+      inviteCode: "ABCD-EFGH-JKMN-PQRS",
       flow: "signUp",
     });
     expect(container.textContent).toContain("A connection or service problem can also cause this.");
