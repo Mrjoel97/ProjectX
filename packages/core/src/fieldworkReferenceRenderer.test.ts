@@ -83,12 +83,14 @@ describe("Fieldwork selected component slots", () => {
     const contact = render("contact");
     expect(contact).toContain('action="/p/harbor/contact/forms/contact"');
     expect(contact).toContain(input.contactConsent);
-    expect(contact).toContain("<h1>Contact</h1>");
+    expect(contact).toContain('<h1 id="fieldwork:page-heading">Contact</h1>');
     expect(contact).toContain('<legend class="fieldwork-sr-only">Contact</legend>');
     expect(home).toContain("<legend>Contact</legend>");
     const services = render("services");
-    expect(services).toContain("<h1>Services</h1>");
-    expect(services).toContain('<div class="fieldwork-sr-only"><h2>Services</h2></div>');
+    expect(services).toContain('<h1 id="fieldwork:page-heading">Services</h1>');
+    expect(services).not.toContain("<h2>Services</h2>");
+    expect(services).toContain('id="services" aria-labelledby="fieldwork:page-heading"');
+    expect(services).toContain("<h2>Visual identity design</h2>");
     expect(home).toContain('<div class="section-heading"><h2>Services</h2></div>');
     expect(hasUnsafeWebMarkup(home)).toBe(false);
   });

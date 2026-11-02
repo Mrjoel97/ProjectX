@@ -20,6 +20,7 @@ const paragraph = (text: string, cls = "") => `<p${cls ? ` class="${cls}"` : ""}
 
 // First-party adaptations for operational routes and content lengths absent in the visual reference.
 const adaptation = `
+.service h2{margin:0;max-width:22ch;font:400 clamp(1.8rem,2.8vw,2.6rem)/1.15 var(--serif);letter-spacing:-.02em}@media(max-width:760px){.service h2{font-size:1.9rem}}
 .fieldwork-sr-only{position:absolute!important;width:1px;height:1px;padding:0!important;margin:-1px!important;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
 body{min-height:100vh;display:flex;flex-direction:column}main{flex:1;min-width:0}.site-header{position:relative;top:auto}.site-header a,.button{min-width:44px;min-height:44px}.wordmark{display:inline-flex;align-items:center;gap:.5rem}.wordmark img{max-width:48px;max-height:44px}.hero-image{inset:0}.hero-bottom p{max-width:57ch}.hero-bottom form{margin:0}.hero-bottom .button{white-space:normal}.hero-content h1,.section h2,.service h3{overflow-wrap:break-word}.contact form{margin-inline:auto;text-align:start}.contact-teaser form{margin-block:0}.contact-teaser legend{padding:0;font-size:clamp(2.3rem,4.2vw,4rem);line-height:1.12;margin-bottom:1.5rem}.hero-caption{position:absolute;bottom:.75rem;right:.75rem;max-width:45ch;margin:0;padding:.4rem .7rem;background:rgba(20,25,20,.87);color:#fff;font-size:.75rem}.contact fieldset{border:0;padding:0;margin:0;display:grid;gap:1.2rem}.contact form{margin-top:2rem;max-width:42rem}.contact legend{font-family:var(--serif);font-size:1.5rem;margin-bottom:1rem}.contact label{display:block;line-height:1.5}.contact input:not([type=checkbox]){display:block;width:100%;border:1px solid var(--muted);padding:.8rem;background:var(--white);font:inherit}.contact label:has(input[type=checkbox]){display:flex;align-items:center;min-height:44px;gap:.75rem}.contact input[type=checkbox]{width:24px;height:24px;flex:none}.contact button,.hero-bottom button{cursor:pointer}.contact button{justify-self:start}.inner-intro{padding-bottom:clamp(24px,4vw,48px)}.inner-intro h1{font:400 clamp(3rem,7vw,6rem)/1.04 var(--serif);margin:.3em 0}.inner-intro+.section{padding-top:clamp(40px,5vw,68px)}.material-track{scroll-behavior:auto}.material-viewport{max-width:100%}.material-track figure{margin:0}.material-track img{display:block}.material-gallery:not(.gallery-carousel) .material-track{flex-wrap:wrap}.service .detail{margin-top:.5rem}.skip-link{position:absolute;left:1rem;top:-100px;z-index:5;padding:.8rem;background:var(--white);color:var(--ink)}.skip-link:focus{top:0}footer a{min-width:44px;min-height:44px;display:inline-flex;align-items:center}.service-list>*{min-width:0}
 @media(max-width:760px){.site-header{flex-wrap:wrap}.site-header nav{flex-wrap:wrap}.hero-content{padding-inline:clamp(1.2rem,6vw,2.4rem)}.hero-bottom{display:flex;flex-direction:column;align-items:start;gap:1rem}.hero-bottom>p{margin:0}.hero-content h1{max-width:100%}}
@@ -38,7 +39,7 @@ function cta(node: WebCtaNode, route: WebRouteContext) {
     : `<a class="button" href="${target}">${e(node.label)}</a>`;
 }
 
-function serviceRows(node: WebSectionNode) {
+function serviceRows(node: WebSectionNode, titleTag: "h2" | "h3") {
   return node.children
     .map((child, index) => {
       if (child.kind !== "text" && (child.kind !== "section" || !child.heading)) return refuse();
@@ -51,7 +52,7 @@ function serviceRows(node: WebSectionNode) {
               )
               .join("")
           : "";
-      return `<article class="service"${attribute(child.kind === "section" ? child.id : undefined)}><span class="service-number">${String(index + 1).padStart(2, "0")}</span><div><h3>${e(title)}</h3></div>${description}</article>`;
+      return `<article class="service"${attribute(child.kind === "section" ? child.id : undefined)}><span class="service-number">${String(index + 1).padStart(2, "0")}</span><div><${titleTag}>${e(title)}</${titleTag}></div>${description}</article>`;
     })
     .join("");
 }
@@ -131,7 +132,7 @@ export function renderFieldworkReferenceDocument(
   const heroTitle = heading(hero.id, hero.heading, isHome);
   const intro = isHome
     ? `<section class="hero"${attribute(hero.id)}>${heroImage ? mediaImage(heroImage, route, true) : ""}<div class="hero-content">${hero.eyebrow ? paragraph(hero.eyebrow, "eyebrow") : ""}<h1>${heroTitle}</h1><div class="hero-bottom">${hero.body ? paragraph(hero.body) : ""}${heroAction}</div></div>${heroImage?.caption ? paragraph(heroImage.caption, "hero-caption") : ""}</section>`
-    : `<section class="section inner-intro"${attribute(hero.id)}>${hero.eyebrow ? paragraph(hero.eyebrow, "eyebrow") : ""}<h1>${heroTitle}</h1>${hero.body ? paragraph(hero.body, "lead") : ""}${heroImage ? mediaImage(heroImage, route) + (heroImage.caption ? paragraph(heroImage.caption) : "") : ""}${buttons[0] ? heroAction : ""}</section>`;
+    : `<section class="section inner-intro"${attribute(hero.id)}>${hero.eyebrow ? paragraph(hero.eyebrow, "eyebrow") : ""}<h1 id="fieldwork:page-heading">${heroTitle}</h1>${hero.body ? paragraph(hero.body, "lead") : ""}${heroImage ? mediaImage(heroImage, route) + (heroImage.caption ? paragraph(heroImage.caption) : "") : ""}${buttons[0] ? heroAction : ""}</section>`;
   const blocks: { order: number; html: string }[] = [];
   let galleryCount = 0,
     autoplay = false;
@@ -140,11 +141,12 @@ export function renderFieldworkReferenceDocument(
       (s) => s.pageSlug === page.slug && s.nodeId === n.id,
     )?.composition;
     const sharedServicesTitle = !isHome && n.id === "services" && n.heading === hero.heading;
-    const title = n.heading
-      ? `<div class="${sharedServicesTitle ? "fieldwork-sr-only" : "section-heading"}"><h2>${heading(n.id, n.heading)}</h2></div>`
-      : "";
+    const title =
+      n.heading && !sharedServicesTitle
+        ? `<div class="section-heading"><h2>${heading(n.id, n.heading)}</h2></div>`
+        : "";
     const wrap = (cls: string, body: string) =>
-      `<section class="section ${cls}"${attribute(n.id)}>${title}${body}</section>`;
+      `<section class="section ${cls}"${attribute(n.id)}${sharedServicesTitle ? ' aria-labelledby="fieldwork:page-heading"' : ""}>${title}${body}</section>`;
     switch (type) {
       case "editorial-lead":
         return {
@@ -166,7 +168,10 @@ export function renderFieldworkReferenceDocument(
       case "service-panels":
         return {
           order: 4,
-          html: wrap("services", `<div class="service-list">${serviceRows(n)}</div>`),
+          html: wrap(
+            "services",
+            `<div class="service-list">${serviceRows(n, sharedServicesTitle ? "h2" : "h3")}</div>`,
+          ),
         };
       case "image-caption": {
         if (++galleryCount > 1) return refuse();
