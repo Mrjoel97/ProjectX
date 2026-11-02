@@ -5,7 +5,7 @@ import { api } from "@pikar/backend/api";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { PasswordField, TextField } from "../fields";
 import {
   ArrowIcon,
@@ -79,7 +79,11 @@ function SignUp() {
   // `r=1` means we sent this browser to a provider and it came back still signed out. That is
   // either a cancelled consent screen or a refused admission, and the page cannot tell which —
   // so the copy must be true of both.
-  const returnedSignedOut = params.get("r") === "1";
+  const returnedFromProvider = params.get("r") === "1";
+  const matchedAccount = returnedFromProvider && preflight?.belongsToSession === true;
+  useEffect(() => {
+    if (matchedAccount) router.replace("/dashboard");
+  }, [matchedAccount, router]);
 
   // A provider round trip loses component state, so the code has to survive in the URL.
   const oauthReturn = `/signup?invite=${encodeURIComponent(code.trim())}&r=1`;
@@ -149,6 +153,8 @@ function SignUp() {
     }
   }
 
+  if (matchedAccount) return <p role="status">Opening your invited workspace…</p>;
+
   if (challenge)
     return (
       <PasswordChallenge
@@ -181,10 +187,10 @@ function SignUp() {
         </p>
       )}
 
-      {returnedSignedOut && !error && (
+      {returnedFromProvider && preflight !== undefined && !error && (
         <p className="auth-error" role="alert">
-          You're not signed in. Either the sign-in was cancelled, or this invite doesn't match the
-          account you used. An invite works only for the address it was sent to.
+          This invitation did not confirm the account you selected. Choose the Google or Microsoft
+          account with the exact invited email, or use your original email and password.
         </p>
       )}
 

@@ -156,6 +156,10 @@ export default function SignIn() {
           >
             <GoogleIcon /> {busy ? "Connecting…" : "Continue with Google"}
           </button>
+          <p className="auth-switch">
+            Choose the Google account you registered with. If you registered with an email and
+            password, use those above.
+          </p>
         </>
       )}
 

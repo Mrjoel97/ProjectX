@@ -9,6 +9,9 @@ import SignUpRoute from "./page";
 const mocks = vi.hoisted(() => ({
   signIn: vi.fn(),
   push: vi.fn(),
+  replace: vi.fn(),
+  returned: false,
+  belongsToSession: false,
   valid: true,
   providersLoading: false,
   google: true,
@@ -22,11 +25,16 @@ vi.mock("convex/react", () => ({
       ? mocks.providersLoading
         ? undefined
         : { google: mocks.google, microsoft: mocks.microsoft, password: true }
-      : { valid: mocks.valid, invitedEmailMasked: "t***@example.test" },
+      : {
+          valid: mocks.valid,
+          belongsToSession: mocks.belongsToSession,
+          invitedEmailMasked: "t***@example.test",
+        },
 }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mocks.push }),
-  useSearchParams: () => new URLSearchParams("invite=fixture-code"),
+  useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
+  useSearchParams: () =>
+    new URLSearchParams(mocks.returned ? "invite=fixture-code&r=1" : "invite=fixture-code"),
 }));
 // Keep this test focused on page submission/state; reusable field styling is independent.
 vi.mock("../fields", () => {
@@ -132,6 +140,9 @@ test.each([
 });
 
 afterEach(() => {
+  mocks.returned = false;
+  mocks.belongsToSession = false;
+  mocks.replace.mockReset();
   vi.unstubAllGlobals();
   mocks.signIn.mockReset();
   mocks.push.mockReset();
@@ -267,5 +278,23 @@ test.each([
   } finally {
     await act(async () => root.unmount());
     container.remove();
+  }
+});
+
+test("OAuth return opens only the workspace that redeemed the invitation", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  mocks.returned = true;
+  mocks.valid = false;
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(createElement(SignUpRoute)));
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("did not confirm the account");
+    mocks.belongsToSession = true;
+    await act(async () => root.render(createElement(SignUpRoute)));
+    expect(mocks.replace).toHaveBeenCalledWith("/dashboard");
+  } finally {
+    await act(async () => root.unmount());
   }
 });
