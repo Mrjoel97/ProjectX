@@ -100,6 +100,7 @@ import type * as lib_presenceRequiredPipeline from "../lib/presenceRequiredPipel
 import type * as lib_presenceVisionReview from "../lib/presenceVisionReview.js";
 import type * as lib_presentationPptx from "../lib/presentationPptx.js";
 import type * as lib_stitchDesignClient from "../lib/stitchDesignClient.js";
+import type * as lib_stitchVisionImage from "../lib/stitchVisionImage.js";
 import type * as lib_tenantLifecycle from "../lib/tenantLifecycle.js";
 import type * as lib_toolContextArgs from "../lib/toolContextArgs.js";
 import type * as lib_webResearchTools from "../lib/webResearchTools.js";
@@ -337,6 +338,7 @@ declare const fullApi: ApiFromModules<{
   "lib/presenceVisionReview": typeof lib_presenceVisionReview;
   "lib/presentationPptx": typeof lib_presentationPptx;
   "lib/stitchDesignClient": typeof lib_stitchDesignClient;
+  "lib/stitchVisionImage": typeof lib_stitchVisionImage;
   "lib/tenantLifecycle": typeof lib_tenantLifecycle;
   "lib/toolContextArgs": typeof lib_toolContextArgs;
   "lib/webResearchTools": typeof lib_webResearchTools;
