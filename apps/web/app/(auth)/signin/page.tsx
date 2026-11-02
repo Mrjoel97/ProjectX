@@ -119,7 +119,12 @@ export default function SignIn() {
           placeholder="Enter your password"
           autoComplete="current-password"
         />
-        <button type="submit" className="auth-submit" disabled={busy}>
+        <button
+          type="submit"
+          className="auth-submit"
+          style={{ marginBlockStart: "0.75rem" }}
+          disabled={busy}
+        >
           {busy ? "Signing in…" : "Sign In"}
           {!busy && <ArrowIcon />}
         </button>
