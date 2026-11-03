@@ -40,6 +40,7 @@ export function paidBudgetModel(args: {
     purpose?: "vision-review";
   };
   beforeCall?: () => Promise<void>;
+  onReserved?: (reservationId: Id<"spendEvents">) => Promise<void>;
 }): ReturnType<typeof wrapLanguageModel> {
   const kimi = args.modelId === "or/moonshotai/kimi-k3.1-pro";
   if (
@@ -92,6 +93,17 @@ export function paidBudgetModel(args: {
           ...(args.websiteDesign ? { websiteDesign: args.websiteDesign } : {}),
           ...(args.managedServiceRunId ? { managedServiceRunId: args.managedServiceRunId } : {}),
         });
+        try {
+          await args.onReserved?.(reservationId);
+        } catch (error) {
+          // The provider has not been invoked. Release this known unused reservation only.
+          await args.ctx.runMutation(internal.guardrails.settlePaidCall, {
+            tenantId: args.tenantId,
+            reservationId,
+            costUsd: 0,
+          });
+          throw error;
+        }
         let result: Awaited<ReturnType<typeof doGenerate>>;
         try {
           result = await doGenerate();

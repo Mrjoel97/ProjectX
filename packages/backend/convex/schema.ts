@@ -38,7 +38,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 const webRecipeName = literals(WEB_RECIPE_SKILL_NAMES);
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 104 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 108 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -46,6 +46,7 @@ const webRecipeName = literals(WEB_RECIPE_SKILL_NAMES);
 // │                                                                            │
 // │ ── Governance & Audit ──────────────────────────────────── ~L150           │
 // │   audit, deadLetters, skills, tenantSkills, savedPrompts, managedServices, │
+// │   customerSpecialists, customerSpecialistVersions, customerWorkflows, customerWorkflowRuns, │
 // │   managedServiceRuns, managedServiceStandingApprovals,                   │
 // │   managedServiceOccurrences, serviceOutcomeObservations                 │
 // │   knowledgeSearches, pendingTimeouts, exportCursors, guardrailConfig       │
@@ -3367,6 +3368,87 @@ export default defineSchema({
   // (tenancy is a `tenantId: string` column on every row). ONE ROW PER TENANT, read through
   // by_tenant. New table ⇒ no migration (prior-phase discipline).
   // Drafts stay outside Vault; active identifies an immutable approved snapshot.
+  customerWorkflows: defineTable({
+    tenantId: v.string(),
+    name: v.string(),
+    revision: v.number(),
+    specialistId: v.id("customerSpecialists"),
+    specialistRevision: v.number(),
+    steps: v.array(v.string()),
+    archived: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_tenant", ["tenantId"]),
+  customerWorkflowRuns: defineTable({
+    tenantId: v.string(),
+    workflowId: v.id("customerWorkflows"),
+    workflowRevision: v.number(),
+    name: v.string(),
+    steps: v.array(v.string()),
+    specialistId: v.id("customerSpecialists"),
+    specialistRevision: v.number(),
+    executorSkillVersion: v.number(),
+    knowledge: v.array(
+      v.object({
+        documentId: v.id("vaultDocuments"),
+        contentHash: v.string(),
+        title: v.string(),
+        text: v.string(),
+        truncated: v.boolean(),
+      }),
+    ),
+    brief: v.string(),
+    requestId: v.string(),
+    status: v.union(
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("needs_review"),
+    ),
+    agentStarted: v.boolean(),
+    modelCompleted: v.boolean(),
+    resultHash: v.optional(v.string()),
+    resultIncomplete: v.optional(v.boolean()),
+    reservationId: v.optional(v.id("spendEvents")),
+    threadId: v.optional(v.string()),
+    planId: v.optional(v.id("plans")),
+    outputDocumentId: v.optional(v.id("vaultDocuments")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_request", ["tenantId", "requestId"])
+    .index("by_tenant_status", ["tenantId", "status"])
+    .index("by_workflow_status", ["workflowId", "status"]),
+  customerSpecialists: defineTable({
+    tenantId: v.string(),
+    name: v.string(),
+    objective: v.string(),
+    audience: v.string(),
+    instructions: v.string(),
+    knowledgeDocumentIds: v.array(v.id("vaultDocuments")),
+    revision: v.number(),
+    archived: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant_archived", ["tenantId", "archived"])
+    .index("by_tenant", ["tenantId"]),
+
+  customerSpecialistVersions: defineTable({
+    tenantId: v.string(),
+    specialistId: v.id("customerSpecialists"),
+    revision: v.number(),
+    name: v.string(),
+    objective: v.string(),
+    audience: v.string(),
+    instructions: v.string(),
+    knowledgeDocumentIds: v.array(v.id("vaultDocuments")),
+    createdAt: v.number(),
+  })
+    .index("by_specialist_revision", ["specialistId", "revision"])
+    .index("by_tenant", ["tenantId"]),
+
   brandKits: defineTable({
     tenantId: v.string(),
     revision: v.number(),

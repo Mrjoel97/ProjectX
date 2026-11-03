@@ -15,6 +15,13 @@ const state = vi.hoisted(() => ({
   queries: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: state.push }) }));
+vi.mock("@convex-dev/auth/react", () => ({ useAuthToken: () => null }));
+vi.mock("./CustomerSpecialistsPanel", () => ({
+  CustomerSpecialistsPanel: () => <h2>My specialists</h2>,
+}));
+vi.mock("./CustomerWorkflowsPanel", () => ({
+  CustomerWorkflowsPanel: () => <h2>My workflows</h2>,
+}));
 vi.mock("./ManagedServicesPanel", () => ({
   ManagedServicesPanel: () => <h2>Let Pikar handle the work</h2>,
 }));

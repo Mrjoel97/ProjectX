@@ -1,3 +1,5 @@
+> Last verified 2026-11-03. The library separates customer-authored specialists and report workflows from built-in templates. Customer pilot runs produce one composite report with an original PDF through the governed runtime.
+
 > Last verified: 2026-10-29 — Skills and Workflows now defaults to Workflows and retains only Workflows/Skills tabs. Social service setup moved to Marketing; workflow starting, preview and owner controls are unchanged. Navigation regression tests pass.
 
 > Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social and recurring-service changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.

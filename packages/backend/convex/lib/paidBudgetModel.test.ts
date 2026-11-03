@@ -21,6 +21,30 @@ function model() {
   });
 }
 describe("paid model middleware", () => {
+  test("a failed reservation link releases its known unused hold before any provider call", async () => {
+    const inner = model();
+    const provider = vi.spyOn(inner, "doGenerate");
+    const runMutation = vi.fn(async (..._args: unknown[]) => "reservation");
+    const wrapped = paidBudgetModel({
+      ctx: { runMutation } as never,
+      tenantId: "customer",
+      model: inner,
+      modelId: "or/moonshotai/kimi-k3.1-pro",
+      onReserved: async () => {
+        throw new Error("RUN_REVOKED");
+      },
+    });
+    await expect(generateText({ model: wrapped, prompt: "report", maxRetries: 0 })).rejects.toThrow(
+      "RUN_REVOKED",
+    );
+    expect(provider).not.toHaveBeenCalled();
+    expect(runMutation).toHaveBeenCalledTimes(2);
+    expect(runMutation.mock.calls[1]?.[1]).toEqual({
+      tenantId: "customer",
+      reservationId: "reservation",
+      costUsd: 0,
+    });
+  });
   test.each([
     undefined,
     "vision-review",
@@ -139,7 +163,7 @@ describe("paid model middleware", () => {
       const inner = model();
       const generate = inner.doGenerate.bind(inner);
       inner.doGenerate = async (args) => ({ ...(await generate(args)), response: { body } });
-      const runMutation = vi.fn(async () => "reservation");
+      const runMutation = vi.fn(async (..._args: unknown[]) => "reservation");
       const wrapped = paidBudgetModel({
         ctx: { runMutation } as never,
         tenantId: "customer",
@@ -216,7 +240,7 @@ describe("paid model middleware", () => {
     const inner = model();
     const generate = inner.doGenerate.bind(inner);
     inner.doGenerate = async (args) => ({ ...(await generate(args)), providerMetadata: {} });
-    const runMutation = vi.fn(async () => "reservation");
+    const runMutation = vi.fn(async (..._args: unknown[]) => "reservation");
     const wrapped = paidBudgetModel({
       ctx: { runMutation } as never,
       tenantId: "t",
@@ -233,7 +257,7 @@ describe("paid model middleware", () => {
     inner.doGenerate = vi.fn(async () => {
       throw new Error("lost response");
     });
-    const runMutation = vi.fn(async () => "reservation");
+    const runMutation = vi.fn(async (..._args: unknown[]) => "reservation");
     const wrapped = paidBudgetModel({
       ctx: { runMutation } as never,
       tenantId: "t",

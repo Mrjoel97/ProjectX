@@ -1,4 +1,5 @@
 "use client";
+import { useAuthToken } from "@convex-dev/auth/react";
 import { api } from "@pikar/backend/api";
 import { useAction, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
@@ -9,6 +10,9 @@ import { SkillAuthoringPanel } from "../workspace/SkillAuthoringPanel";
 import { WorkflowPackOwnerControls } from "../workspace/WorkflowPackOwnerControls";
 import { WorkflowPackOwnerPreview } from "../workspace/WorkflowPackOwnerPreview";
 import { WorkflowPackQuickStarts } from "../workspace/WorkflowPackQuickStarts";
+import { workspaceStorageOwner } from "../workspace/workspaceTabState";
+import { CustomerSpecialistsPanel } from "./CustomerSpecialistsPanel";
+import { CustomerWorkflowsPanel } from "./CustomerWorkflowsPanel";
 
 export default function SkillsAndWorkflowsPage() {
   return (
@@ -24,6 +28,7 @@ export default function SkillsAndWorkflowsPage() {
 }
 
 function SkillsAndWorkflowsLibrary() {
+  const libraryOwner = workspaceStorageOwner(useAuthToken());
   const router = useRouter();
   const tabs = ["workflows", "skills"] as const;
   const [section, setSection] = useState<(typeof tabs)[number]>("workflows");
@@ -147,7 +152,7 @@ function SkillsAndWorkflowsLibrary() {
         </p>
         <h1 style={{ margin: "0.25rem 0", color: "var(--ink)" }}>Skills and Workflows</h1>
         <p style={{ margin: 0, color: "var(--ink-soft)" }}>
-          Start a guided workflow or review your business skills.
+          Create specialists for your business and run repeatable workflows.
         </p>
       </header>
       <section
@@ -238,6 +243,8 @@ function SkillsAndWorkflowsLibrary() {
             <p role="alert">Workflows could not be loaded. Refresh this page to try again.</p>
           }
         >
+          <CustomerWorkflowsPanel key={libraryOwner} openThread={openThread} />
+          <h2>Built-in workflows</h2>
           <p style={{ color: "var(--ink-soft)", marginTop: 0 }}>
             Starting a workflow opens its own conversation in My Workspace. You review any proposed
             action before it runs.
@@ -283,6 +290,8 @@ function SkillsAndWorkflowsLibrary() {
           label="skill-library"
           fallback={<p role="alert">Skills could not be loaded. Refresh this page to try again.</p>}
         >
+          <CustomerSpecialistsPanel key={libraryOwner} />
+          <h2>Built-in skill adaptations</h2>
           <SkillAuthoringPanel canAuthor={viewer?.isOwner === true} />
           {viewer?.isOwner === true && (
             <p>

@@ -57,6 +57,10 @@ export const TENANT_TABLE_CLASSIFICATION = {
   skills: "global",
   tenantSkills: "tenant_owned",
   savedPrompts: "tenant_owned",
+  customerSpecialists: "tenant_owned",
+  customerSpecialistVersions: "tenant_owned",
+  customerWorkflows: "tenant_owned",
+  customerWorkflowRuns: "tenant_owned",
   managedServices: "tenant_owned", // Inert setup and goal text export/erase with their owner.
   managedServiceRuns: "tenant_owned", // Attended run refs; authoritative costs stay in spendEvents.
   managedServiceStandingApprovals: "tenant_owned", // Inert structured permission; no credential/arming.
