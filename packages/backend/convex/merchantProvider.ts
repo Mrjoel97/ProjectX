@@ -62,7 +62,7 @@ export async function refreshMerchantForTenant(
       if (!account.providerAccountId)
         return { ok: false, ready: false, reason: "merchant_onboarding_required" };
       const value = await client.stripe(
-        `/v2/core/accounts/${encodeURIComponent(account.providerAccountId)}?include[]=configuration.merchant&include[]=defaults&include[]=identity`,
+        `/v2/core/accounts/${encodeURIComponent(account.providerAccountId)}?include[0]=configuration.merchant&include[1]=defaults&include[2]=identity`,
       );
       identity = {
         providerAccountId: account.providerAccountId,
@@ -205,7 +205,6 @@ export const connect = tenantAction({
           use_case: {
             type: "account_onboarding",
             account_onboarding: {
-              configurations: ["merchant"],
               refresh_url: returnUrl,
               return_url: returnUrl,
             },

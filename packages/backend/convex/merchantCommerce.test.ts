@@ -200,9 +200,90 @@ async function setup(t: ReturnType<typeof harness>) {
 }
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 describe("merchant payment integration", () => {
+  test.each([
+    "active",
+    "restricted",
+  ])("Stripe refresh uses indexed includes and respects %s capability", async (capability) => {
+    const t = harness(),
+      a = await setup(t),
+      actor = t.withIdentity({ subject: `${a.userId}|session` });
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      expect(url.origin + url.pathname).toBe(
+        "https://api.stripe.com/v2/core/accounts/acct_fixture",
+      );
+      if (url.searchParams.has("include[]"))
+        return Response.json({ error: { code: "invalid_fields" } }, { status: 400 });
+      expect([...url.searchParams.entries()]).toEqual([
+        ["include[0]", "configuration.merchant"],
+        ["include[1]", "defaults"],
+        ["include[2]", "identity"],
+      ]);
+      return Response.json({
+        id: "acct_fixture",
+        object: "v2.core.account",
+        livemode: false,
+        dashboard: "full",
+        identity: { country: "TZ" },
+        defaults: {
+          currency: "gbp",
+          responsibilities: { fees_collector: "stripe", losses_collector: "stripe" },
+        },
+        configuration: { merchant: { capabilities: { card_payments: { status: capability } } } },
+      });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const result = await actor.action(makeFunctionReference<"action">("merchantProvider:refresh"), {
+      projectId: a.projectId,
+      provider: "stripe",
+    });
+    expect(result).toMatchObject({ ok: capability === "active", ready: capability === "active" });
+    if (capability === "restricted") expect(result.reason).toBe("MERCHANT_ACCOUNT_NOT_READY");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const account = await t.run((ctx) => ctx.db.get(a.accountId));
+    expect(account?.status).toBe(capability === "active" ? "ready" : "unavailable");
+  });
+  test("Stripe onboarding resumes the owned test account with accepted account-link fields", async () => {
+    const t = harness(),
+      a = await setup(t),
+      actor = t.withIdentity({ subject: `${a.userId}|session` });
+    vi.stubEnv("SITE_URL", "https://www.pikar-ai.com");
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      expect(String(input)).toBe("https://api.stripe.com/v2/core/account_links");
+      const body = JSON.parse(String(init?.body));
+      // The pinned Stripe API rejects configurations on this request, even though
+      // configurations can appear on the returned account-link object.
+      if (body.use_case.account_onboarding.configurations !== undefined)
+        return Response.json({ error: { code: "invalid_fields" } }, { status: 400 });
+      expect(body.account).toBe("acct_fixture");
+      expect(body.use_case).toEqual({
+        type: "account_onboarding",
+        account_onboarding: {
+          refresh_url: `https://www.pikar-ai.com/dashboard/sites?project=${a.projectId}&merchant=return`,
+          return_url: `https://www.pikar-ai.com/dashboard/sites?project=${a.projectId}&merchant=return`,
+        },
+      });
+      return Response.json({
+        account: "acct_fixture",
+        livemode: false,
+        url: "https://connect.stripe.com/setup/test-fixture",
+      });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const result = await actor.action(makeFunctionReference<"action">("merchantProvider:connect"), {
+      projectId: a.projectId,
+      provider: "stripe",
+      shareDataConsent: true,
+    });
+    expect(result).toEqual({ ok: true, url: "https://connect.stripe.com/setup/test-fixture" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const account = await t.run((ctx) => ctx.db.get(a.accountId));
+    expect(account).toMatchObject({ providerAccountId: "acct_fixture", status: "connecting" });
+  });
   test("merchant buyer data exports only to its tenant without access secrets and financial history prevents partial erasure", async () => {
     const t = harness(),
       a = await setup(t),
