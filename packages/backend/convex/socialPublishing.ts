@@ -10,6 +10,7 @@ import { internalQuery, type MutationCtx } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { assertTenantWritable, internalMutation } from "./lib/tenantLifecycle";
 import {
+  socialPostPublishingEnabled,
   socialProvider,
   youtubeConnectionMetadataBound,
   youtubeMetadataFresh,
@@ -201,6 +202,7 @@ export const posts = tenantQuery({
     return Promise.all(
       rows.map(async (p) => ({
         ...p,
+        publishEnabled: socialPostPublishingEnabled(p),
         ...(p.provider === "youtube" &&
         (!youtubeMetadataFresh(youtubePostMetadataBound(p, youtube)) ||
           !youtubeMetadataFresh(youtubeConnectionMetadataBound(youtube)) ||
@@ -235,8 +237,7 @@ export const approvePost = tenantMutation({
     if (p.kind === "tiktok" && p.customerChoicesConfirmed !== true)
       throw new Error("SOCIAL_TIKTOK_CUSTOMER_CHOICES_REQUIRED");
     assertSocialScopes(row.scopes, publishingScopes(p.kind));
-    if (process.env[`SOCIAL_${p.provider.toUpperCase()}_PUBLISH_ENABLED`] !== "true")
-      throw new Error("SOCIAL_PUBLISH_NOT_QUALIFIED");
+    if (!socialPostPublishingEnabled(p)) throw new Error("SOCIAL_PUBLISH_NOT_QUALIFIED");
     await ctx.db.patch(p._id, {
       status: "approved",
       approvedAt: Date.now(),
@@ -261,8 +262,7 @@ export const claimPost = internalMutation({
       if (p.kind === "tiktok" && p.customerChoicesConfirmed !== true)
         throw new Error("SOCIAL_TIKTOK_CUSTOMER_CHOICES_REQUIRED");
       assertSocialScopes(row.scopes, publishingScopes(p.kind));
-      if (process.env[`SOCIAL_${p.provider.toUpperCase()}_PUBLISH_ENABLED`] !== "true")
-        throw new Error("SOCIAL_PUBLISH_NOT_QUALIFIED");
+      if (!socialPostPublishingEnabled(p)) throw new Error("SOCIAL_PUBLISH_NOT_QUALIFIED");
     } catch {
       await ctx.db.patch(p._id, {
         status: "failed",
