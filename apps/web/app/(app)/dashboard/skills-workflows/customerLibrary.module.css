@@ -1,0 +1,145 @@
+.library {
+  margin-bottom: 2rem;
+  color: var(--ink);
+}
+.heading,
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.heading h2,
+.item h3 {
+  margin: 0;
+}
+.hint {
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.form,
+.item {
+  margin-top: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--card);
+  min-width: 0;
+}
+.form {
+  display: grid;
+  gap: 1rem;
+}
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.form label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.form input,
+.form textarea,
+.form select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  color: var(--ink);
+  background: var(--card);
+  font: inherit;
+  font-weight: 400;
+}
+.form textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+.library button,
+.library a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  color: var(--ink);
+  background: var(--card);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.library button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.library .primary {
+  color: var(--card);
+  background: var(--teal-900);
+  border-color: var(--teal-900);
+}
+.library :is(button, input, textarea, select, a):focus-visible {
+  outline: 2px solid var(--teal-900);
+  outline-offset: 3px;
+}
+.knowledge {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.knowledge legend {
+  margin-bottom: 0.6rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+.knowledgeChoices {
+  max-height: 220px;
+  overflow-y: auto;
+}
+.knowledgeChoices label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 44px;
+  font-weight: 400;
+}
+.knowledgeChoices input {
+  width: 18px;
+  min-height: 18px;
+  flex: none;
+}
+.actions {
+  justify-content: flex-start;
+}
+.runForm {
+  margin: 1rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--rule);
+  border-radius: 0;
+  padding: 1rem 0 0;
+}
+.steps {
+  padding-left: 1.25rem;
+  color: var(--ink-soft);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.item p {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .form,
+  .item {
+    padding: 1rem;
+  }
+}

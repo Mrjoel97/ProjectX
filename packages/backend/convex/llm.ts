@@ -5137,6 +5137,7 @@ async function runAgentLoop(
     evalContext?: EvalContext;
     evalBudgetId?: Id<"spendEvents">;
     managedServiceRunId?: Id<"managedServiceRuns">;
+    customerWorkflowRunId?: Id<"customerWorkflowRuns">;
     researchControlId?: Id<"researchControls">;
     researchRequestId?: string;
     primary: PricedModel;
@@ -5254,6 +5255,7 @@ async function runAgentLoop(
     timeoutMs,
     softCutoffMs,
   } = args;
+  const customerWorkflowRunId = args.customerWorkflowRunId;
   const serviceContext = { ctx, tenantId, planId, threadId, managedServiceRunId };
   const serviceScope = managedServiceRunId
     ? await readManagedServiceScope(serviceContext)
@@ -5450,6 +5452,23 @@ async function runAgentLoop(
               model: m.model,
               modelId: m.id,
               managedServiceRunId,
+              ...(customerWorkflowRunId
+                ? {
+                    beforeCall: async () => {
+                      await ctx.runQuery(internal.customerWorkflows.executionContext, {
+                        tenantId,
+                        runId: customerWorkflowRunId,
+                      });
+                    },
+                    onReserved: async (reservationId: Id<"spendEvents">) => {
+                      await ctx.runMutation(internal.customerWorkflows.recordReservation, {
+                        tenantId,
+                        runId: customerWorkflowRunId,
+                        reservationId,
+                      });
+                    },
+                  }
+                : {}),
               onCost: (cost) => {
                 costUsd += cost;
               },
@@ -5473,10 +5492,18 @@ async function runAgentLoop(
           }
         : { prompt }),
       tools,
-      ...(managedServiceRunId
+      ...(managedServiceRunId || customerWorkflowRunId
         ? {
             prepareStep: async () => {
-              await readManagedServiceScope(serviceContext);
+              if (managedServiceRunId) await readManagedServiceScope(serviceContext);
+              if (customerWorkflowRunId) {
+                await ctx.runQuery(internal.customerWorkflows.executionContext, {
+                  tenantId,
+                  runId: customerWorkflowRunId,
+                });
+                const permission = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+                if (!permission.ok) throw new Error("CUSTOMER_WORKFLOW_GOVERNED_STOP");
+              }
               return {};
             },
           }
@@ -5491,7 +5518,7 @@ async function runAgentLoop(
       stopWhen: [stepCountIs(stepBudget), outOfClock],
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       abortSignal: AbortSignal.timeout(budgetMs),
-      maxRetries: activeBudgetId || managedServiceRunId ? 0 : maxRetries,
+      maxRetries: activeBudgetId || managedServiceRunId || customerWorkflowRunId ? 0 : maxRetries,
       // ── The activity trace (CKPT-05) — this IS the whole emitter ──────────────────────────────
       // ai@7 emits these natively, so not one of the 14 tool wrappers is edited (ponytail rung 4:
       // a native framework feature covers it). Both callbacks are AWAITED by the SDK
@@ -5761,7 +5788,7 @@ async function runAgentLoop(
   try {
     return await run(primary, 1, 0);
   } catch (e) {
-    if (managedServiceRunId) throw e; // A service never replays an uncertain paid turn on another model.
+    if (managedServiceRunId || customerWorkflowRunId) throw e; // A scoped run never replays an uncertain paid turn on another model.
     if (!isFallbackEligible(e)) throw e; // our bug / config → propagate (the driver saves an error turn)
     // 33.2: the rollover is RECORDED. Until now the loop swallowed the primary's failure and the
     // run succeeded on the fallback with nothing in any plane saying so — the 33.2 bake-off scored
@@ -5816,6 +5843,7 @@ export async function runSpecialistTurn(
     planId: Id<"plans">;
     skillName: string;
     toolNames: readonly string[];
+    customerWorkflowRunId?: Id<"customerWorkflowRuns">;
     prompt: string;
     visualInput?: ImageInput;
     evalContext?: EvalContext;
@@ -5905,6 +5933,8 @@ export async function runSpecialistTurn(
     evalRevenueFixtureId,
   } = args;
   const tenantSkillIds = args.tenantSkillIds;
+  if (args.customerWorkflowRunId && (skillName !== DOCUMENT_DRAFTER_SKILL || toolNames.length > 0))
+    throw new Error("CUSTOMER_WORKFLOW_GRANT_INVALID");
   if (args.visualInput && skillName !== "vertical-design")
     throw new Error("VISUAL_SKILL_UNSUPPORTED");
   if (args.evalContext && verticalIdForSkill(skillName) === null)
@@ -6009,6 +6039,7 @@ export async function runSpecialistTurn(
     tenantId,
     planId,
     system: skill.body,
+    customerWorkflowRunId: args.customerWorkflowRunId,
     structuredResearch: isResearch,
     prompt: pinnedBrandSpine ? `${prompt}\n\n${pinnedBrandSpine}` : prompt,
     visualInput: args.visualInput,

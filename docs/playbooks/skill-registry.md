@@ -1,3 +1,11 @@
+> Last verified 2026-11-04. New customer workflow runs pin the document-drafter registry name and version. Pre-existing run receipts retain their original executor version.
+
+> Last verified 2026-11-04. The source fingerprint includes the tenant-first specialist and workflow indexes.
+
+> Last verified 2026-11-04. Regenerated the evaluator identity after refreshing the shared website recipe fingerprint for the customer workflow schema.
+
+> Last verified 2026-11-03. Customer specialist configurations are private task data under ADR-072. The pilot pins the active global cockpit registry version at manual run consent. Golden and vertical source identities include the scoped execution dependencies.
+
 > Last verified: 2026-11-04 — The Executive reads weekly review and workflow pack decisions. The golden and vertical evaluator inventories now track the agenda, pack event and decision sources. Offline identity checks verify that edits retire the corresponding evidence.
 
 > Last verified: 2026-11-04 — The source fingerprint includes the private TikTok review guard. The evaluation cases are unchanged.

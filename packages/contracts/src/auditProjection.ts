@@ -154,6 +154,8 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
     "currency",
     "charges",
   ],
+  "customer_specialist.saved": ["specialistRef", "revision", "sourceCount"],
+  "customer_specialist.archived": ["specialistRef", "revision"],
   "brand_kit.approved": ["docId", "revision", "contentHash"],
   "blueprint.confirmed": [
     "docId",

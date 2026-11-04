@@ -1,3 +1,7 @@
+> Last verified 2026-11-04. Custom report workflows can request exact table values using a Table line with field names and units.
+
+> Last verified 2026-11-03. The library separates customer-authored specialists and report workflows from built-in templates. Customer pilot runs produce one composite report with an original PDF through the governed runtime.
+
 > Last verified: 2026-11-04 — The Command Center checks the latest run of each curated pack and presents the newest open decision. When all are dismissed, the most recent decision can be restored. Dismissals persist separately for each pack on the owned plan. A partial, refused, blocked, failed or completed result opens its conversation, where the user can review any outstanding proposal. A new run supersedes only that pack’s previous result. Submitted or rejected proposals are settled. An ambiguous or oversized run history yields no suggestion.
 
 > Last verified: 2026-11-04 — Skills and Workflows links to the existing social service in Marketing. Setup and schedule approval use the same controls as onboarding.

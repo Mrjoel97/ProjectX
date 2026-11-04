@@ -55,7 +55,7 @@ describe("tenant table classification registry", () => {
     // + Buffer connections, transient OAuth, campaign posts and reports = 71.
     // + Zernio connection credentials and cached reports = 73.
     // Combined presence/commerce, media, native social and managed-service schema inventory.
-    expect(schemaTables).toHaveLength(104);
+    expect(schemaTables).toHaveLength(108);
 
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
