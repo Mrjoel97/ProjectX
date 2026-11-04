@@ -79,6 +79,7 @@ const names = (references: unknown[]): string[] =>
 type QueryAnswers = {
   agenda?: unknown;
   decision?: unknown;
+  workflowDecision?: unknown;
   /** `workflowPackDiscovery.listPacks` — ACTIVE packs only. Absent = still loading. */
   packs?: unknown;
   summary?: unknown;
@@ -106,6 +107,8 @@ function mount(component: unknown, answers: QueryAnswers) {
         return answers.agenda;
       case "serviceOutcomes:agendaDecision":
         return answers.decision;
+      case "workflowPackOutcomes:agendaDecision":
+        return answers.workflowDecision;
       case "workflowPackDiscovery:listPacks":
         return answers.packs;
       default:
@@ -962,6 +965,7 @@ describe("one subscription failing or loading never blanks the others", () => {
       "recommendation",
       "agenda",
       "service-decision",
+      "workflow-decision",
       "first-thing",
       "constraint",
       "stats",
@@ -970,7 +974,7 @@ describe("one subscription failing or loading never blanks the others", () => {
     ]) {
       expect(source).toContain(`<SectionBoundary section="${section}">`);
     }
-    expect(source.match(/<SectionBoundary /g) ?? []).toHaveLength(8);
+    expect(source.match(/<SectionBoundary /g) ?? []).toHaveLength(9);
     // A single page-wide boundary is exactly the 26-10 FinanceTabs bug.
     expect(source).not.toMatch(/<SectionBoundary[^>]*>\s*<div className="cc"/);
   });
@@ -1161,7 +1165,11 @@ describe("the agenda proposes and never acts", () => {
 
   test("the weekly agenda renders before a service has a result", () => {
     const { html, queries } = mount(ConnectedAgenda, { agenda: AGENDA });
-    expect(queries).toEqual(["agenda:current", "serviceOutcomes:agendaDecision"]);
+    expect(queries).toEqual([
+      "agenda:current",
+      "serviceOutcomes:agendaDecision",
+      "workflowPackOutcomes:agendaDecision",
+    ]);
     expect(html).toContain('data-cc-section="agenda"');
     expect(html).toContain("Awaiting your approval");
     expect(html).not.toContain("Social marketing follow-up");
@@ -1190,6 +1198,46 @@ describe("the agenda proposes and never acts", () => {
     expect(hidden).not.toContain(decision.reason);
     expect(hidden).not.toContain(`href="${decision.href}"`);
     expect(hidden).toContain("Restore suggestion");
+  });
+  test("a curated workflow result opens its own workspace and can be restored after dismissal", () => {
+    const workflowDecision = {
+      key: "result",
+      title: "Review the offer",
+      reason: "An offer is ready for review.",
+      href: "/dashboard/workspace?thread=owned-pack",
+      actionLabel: "Review offer",
+      observedAt: 100,
+      dismissed: false,
+    };
+    const visible = mount(ConnectedAgenda, { agenda: null, workflowDecision }).html;
+    expect(visible).toContain("Workflow follow-up");
+    expect(visible).toContain('href="/dashboard/workspace?thread=owned-pack"');
+    expect(visible).not.toContain("Social marketing follow-up");
+    const dismissed = mount(ConnectedAgenda, {
+      agenda: null,
+      workflowDecision: { ...workflowDecision, dismissed: true },
+    }).html;
+    expect(dismissed).toContain("Restore suggestion");
+    expect(dismissed).not.toContain("An offer is ready for review.");
+  });
+  test("the completed review step displays the recorded response and its next action", () => {
+    const item = AGENDA?.items[0];
+    if (!AGENDA || !item) throw new Error("fixture");
+    const followUp = {
+      title: "Revise the review",
+      reason: "You requested a change.",
+      actionLabel: "Review the result",
+      href: "/dashboard/workspace?thread=proactive-review",
+      feedback: "needs_change",
+      canGiveFeedback: true,
+      planId: "plan",
+    };
+    const html = mount(ConnectedAgenda, {
+      agenda: { ...AGENDA, items: [{ ...item, status: "acted", followUp }] },
+    }).html;
+    expect(html).toContain("You requested a change.");
+    expect(html).toContain('aria-pressed="true">Needs a change');
+    expect(html).not.toContain("Stage for approval");
   });
 });
 

@@ -1,3 +1,5 @@
+> Last verified: 2026-11-04 — The Executive can read weekly business reviews and open workflow and social follow-ups using readWorkflowAgenda. It uses the same scoped reads as the dashboard and honors dismissal.
+
 > Last verified: 2026-11-04 — The latest eligible social run supplies one follow-up shared by the Command Center and Executive. Dismissal is bound to the decision key. A changed recommendation or new relevant evidence can reopen a decision. An unread in-app result notice is coalesced per business.
 
 > Last verified: 2026-10-29 — Social Marketing service setup and scheduling now live under Marketing, not Skills and Workflows. Marketing separates Services, Publishing, Reports, Leads & links, and Connections; sections load on first visit and retain draft state during tab changes. Keyboard navigation and per-section errors are preserved. Service review links target Marketing. No grants, budgets, schedules or publication rules changed.

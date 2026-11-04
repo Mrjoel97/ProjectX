@@ -1486,6 +1486,7 @@ export default defineSchema({
   // ONE row per guided conversation; the approve-gate object + idempotency CAS (DECISION #1).
   plans: defineTable({
     tenantId: v.string(),
+    dismissedPackDecisionKeys: v.optional(v.record(v.string(), v.string())),
     threadId: v.string(), // agent thread → renders PLAN/DRAFT/REPORT cards for this thread
     status: v.union(
       // PINNED lifecycle enum, shared by agent + delivery lanes:
@@ -2365,6 +2366,13 @@ export default defineSchema({
     lastSeenAt: v.number(),
     statusChangedAt: v.number(),
     planId: v.optional(v.id("plans")), // the proposal's plan row — the review thread's ONE row
+    outcomeFeedback: v.optional(
+      v.object({
+        planId: v.id("plans"),
+        reviewedAt: v.number(),
+        feedback: v.union(v.literal("helped"), v.literal("needs_change")),
+      }),
+    ),
   })
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_key", ["tenantId", "key"]),
@@ -2405,6 +2413,7 @@ export default defineSchema({
       v.literal("readZernioEngagement"),
       v.literal("stageBufferPost"),
       v.literal("readSocialService"),
+      v.literal("readWorkflowAgenda"),
       v.literal("startSocialService"),
       v.literal("setMode"),
       v.literal("setSendTime"),
@@ -4083,6 +4092,7 @@ export default defineSchema({
   })
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
     .index("by_tenant_pack_createdAt", ["tenantId", "packId", "createdAt"])
+    .index("by_tenant_pack_event_createdAt", ["tenantId", "packId", "event", "createdAt"])
     .index("by_tenant_run", ["tenantId", "runId"])
     // 27-07: the plan-decision join. `cockpit.ts`'s approve / discard / re-propose terminals must
     // answer "was THIS plan row staged by a pack run?" on every ordinary email plan too, so the

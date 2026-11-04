@@ -177,6 +177,13 @@ async function completeJourneyBeforeDelivery(
     primary: [toolStep("proposePlan", {}), textStep(REPLY)],
     fallback: [toolStep("proposePlan", {}), textStep(REPLY)],
   });
+  // Observe the production event writer and classifier before the proposal leaves the agenda.
+  const actor = t.withIdentity({ subject: `${userId}|session_a` });
+  expect(await actor.query(api.workflowPackOutcomes.agendaDecision, {})).toMatchObject({
+    href: `/dashboard/workspace?thread=${THREAD}&plan=${planId}`,
+    actionLabel: "Review proposal",
+    dismissed: false,
+  });
   // The human gate — a `tenantMutation`, reached with the tenant's own identity.
   const approved = await t
     .withIdentity({ subject: `${userId}|session_a` })
@@ -191,11 +198,105 @@ const report = (t: T, userId: string) =>
   t.withIdentity({ subject: `${userId}|session_a` }).query(api.workflowPackOutcomes.forTenant, {});
 
 describe("one complete journey produces non-zero, internally consistent counters", () => {
+  test("a real run terminal opens a private follow-up and the next run supersedes a dismissed result", async () => {
+    const t = harness();
+    const tenantId = String(await t.run((ctx) => ctx.db.insert("users", {})));
+    const other = String(await t.run((ctx) => ctx.db.insert("users", {})));
+    const mine = t.withIdentity({ subject: `${tenantId}|a` });
+    const foreign = t.withIdentity({ subject: `${other}|b` });
+    const planId = await t.mutation(internal.plans.insertPlan, { tenantId, threadId: THREAD });
+    const ref = { tenantId, packId: "business-pulse" as const, threadId: THREAD, runId: "first" };
+    const read = () => mine.query(api.workflowPackOutcomes.agendaDecision, {});
+    await t.mutation(internal.workflowPackEventLog.record, {
+      ...ref,
+      event: "run_started",
+      planId,
+    });
+    expect(await read()).toBeNull();
+    await t.mutation(internal.workflowPackEventLog.record, {
+      ...ref,
+      event: "run_completed",
+      outcome: "partial",
+      planId,
+    });
+    const partial = await read();
+    expect(partial).toMatchObject({
+      title: "Business pulse",
+      actionLabel: "Review gaps",
+      href: `/dashboard/workspace?thread=${encodeURIComponent(THREAD)}&plan=${planId}`,
+      dismissed: false,
+    });
+    if (!partial) throw new Error("missing pack decision");
+    const dismiss = { key: partial.key, dismissed: true };
+    expect(await foreign.query(api.workflowPackOutcomes.agendaDecision, {})).toBeNull();
+    expect(await foreign.mutation(api.workflowPackOutcomes.setDecisionDismissed, dismiss)).toBe(
+      false,
+    );
+    expect(await mine.mutation(api.workflowPackOutcomes.setDecisionDismissed, dismiss)).toBe(true);
+    expect(await read()).toMatchObject({ dismissed: true });
+    const later = { ...ref, runId: "second" };
+    await t.mutation(internal.workflowPackEventLog.record, {
+      ...later,
+      event: "run_started",
+      planId,
+    });
+    expect(await read()).toBeNull();
+    await t.mutation(internal.workflowPackEventLog.record, {
+      ...later,
+      event: "run_failed",
+      outcome: "blocked",
+    });
+    expect(await read()).toMatchObject({ actionLabel: "Review blocker", dismissed: false });
+    expect(await mine.mutation(api.workflowPackOutcomes.setDecisionDismissed, dismiss)).toBe(false);
+  });
+  test("one pack cannot hide another pack's actionable result while running or after dismissal", async () => {
+    const t = harness();
+    const tenantId = String(await t.run((ctx) => ctx.db.insert("users", {})));
+    const user = t.withIdentity({ subject: `${tenantId}|session` });
+    const planId = await t.mutation(internal.plans.insertPlan, { tenantId, threadId: THREAD });
+    const run = { tenantId, threadId: THREAD, planId };
+    const pulse = { ...run, packId: "business-pulse" as const, runId: "pulse" };
+    const campaign = { ...run, packId: "campaign-plan" as const, runId: "campaign" };
+    const read = () => user.query(api.workflowPackOutcomes.agendaDecision, {});
+    await t.mutation(internal.workflowPackEventLog.record, { ...pulse, event: "run_started" });
+    await t.mutation(internal.workflowPackEventLog.record, {
+      ...pulse,
+      event: "run_completed",
+      outcome: "useful",
+    });
+    await t.mutation(internal.workflowPackEventLog.record, { ...campaign, event: "run_started" });
+    expect(await read()).toMatchObject({ title: "Business pulse" });
+    await t.mutation(internal.workflowPackEventLog.record, {
+      ...campaign,
+      event: "run_failed",
+      outcome: "blocked",
+    });
+    const blocked = await read();
+    expect(blocked?.actionLabel).toBe("Review blocker");
+    if (!blocked) throw new Error("missing campaign blocker");
+    await user.mutation(api.workflowPackOutcomes.setDecisionDismissed, {
+      key: blocked.key,
+      dismissed: true,
+    });
+    const prior = await read();
+    expect(prior).toMatchObject({ title: "Business pulse", dismissed: false });
+    if (!prior) throw new Error("missing earlier result");
+    await user.mutation(api.workflowPackOutcomes.setDecisionDismissed, {
+      key: prior.key,
+      dismissed: true,
+    });
+    expect(await read()).toMatchObject({ key: blocked.key, dismissed: true });
+  });
   test("the whole pilot report fills in from real terminals", async () => {
     const t = harness();
     const userId = String(await t.run((ctx) => ctx.db.insert("users", {})));
     await completeJourney(t, userId);
     const out = await report(t, userId);
+    expect(
+      await t
+        .withIdentity({ subject: `${userId}|session_a` })
+        .query(api.workflowPackOutcomes.agendaDecision, {}),
+    ).toBeNull();
 
     // The run happened, and every one of its events shares the one run id.
     expect(out.runCount).toBe(1);

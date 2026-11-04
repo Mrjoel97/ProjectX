@@ -7,8 +7,10 @@
 // terminal is dispatch.test.ts's job; both terminals call `markAgendaProposed` at the same seam.
 import { REVIEW_THREAD_ID } from "@pikar/core";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
+import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
@@ -189,6 +191,70 @@ describe("the weekly sync stages ONE proposal through the actOnGap spine", () =>
 });
 
 describe("the Command Center read is bounded, cited, goal-linked and tenant-scoped", () => {
+  test("completion creates a review decision; owned feedback changes the follow-up, and other tenants and superseded reviews cannot answer it", async ({
+    onTestFinished,
+  }) => {
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    const t = newTest();
+    t.registerComponent(
+      "workflow",
+      workflowSchema,
+      import.meta.glob("../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts"),
+    );
+    t.registerComponent(
+      "workflow/workpool",
+      workpoolSchema,
+      import.meta.glob("../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts"),
+    );
+    const owner = t.withIdentity({ subject: TENANT });
+    const other = t.withIdentity({ subject: OTHER });
+    await seedReview(t, 1_000);
+    await sync(t);
+    const plan = await planOf(t);
+    if (!plan) throw new Error("missing staged proposal");
+    const args = {
+      key: KEY,
+      planId: plan._id,
+      reviewedAt: 1_000,
+      feedback: "needs_change" as const,
+    };
+    expect(await owner.mutation(api.agenda.recordOutcomeFeedback, args)).toEqual({ ok: false });
+    const view = () => owner.query(api.agenda.current, {});
+    expect(await owner.mutation(api.cockpit.executePlan, { planId: plan._id })).toMatchObject({
+      ok: true,
+    });
+    expect((await view())?.items[0]?.followUp).toMatchObject({
+      canGiveFeedback: true,
+      feedback: null,
+      href: `/dashboard/workspace?thread=${REVIEW_THREAD_ID}&plan=${plan._id}`,
+    });
+    expect(await sync(t)).toEqual({ staged: false });
+    expect(await other.mutation(api.agenda.recordOutcomeFeedback, args)).toEqual({ ok: false });
+    expect(await owner.mutation(api.agenda.recordOutcomeFeedback, args)).toEqual({ ok: true });
+    expect((await view())?.items[0]?.followUp).toMatchObject({
+      feedback: "needs_change",
+      title: "Revise the approach",
+    });
+    expect(
+      await owner.mutation(api.agenda.recordOutcomeFeedback, { ...args, feedback: "helped" }),
+    ).toEqual({ ok: true });
+    expect((await view())?.items[0]?.followUp).toMatchObject({
+      feedback: "helped",
+      title: "Check what changed",
+    });
+    const dismiss = { key: KEY, planId: plan._id, reviewedAt: 1_000 };
+    expect(await other.mutation(api.agenda.dismiss, dismiss)).toEqual({ ok: false });
+    expect(await owner.mutation(api.agenda.dismiss, { ...dismiss, reviewedAt: 999 })).toEqual({
+      ok: false,
+    });
+    expect(await owner.mutation(api.agenda.dismiss, dismiss)).toEqual({ ok: true });
+    expect((await view())?.items).toHaveLength(0);
+    await seedReview(t, 2_000);
+    expect(await owner.mutation(api.agenda.recordOutcomeFeedback, args)).toEqual({ ok: false });
+  });
   test("no review yet → null; a review with nothing on it → empty lists, not an error", async () => {
     const t = newTest();
     const asT = t.withIdentity({ subject: TENANT });

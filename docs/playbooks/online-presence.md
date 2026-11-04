@@ -1,3 +1,5 @@
+> Last verified: 2026-11-04 — The Executive reads weekly review and workflow pack decisions. The golden and vertical evaluator inventories now track the agenda, pack event and decision sources. Offline identity checks verify that edits retire the corresponding evidence.
+
 > Last verified: 2026-11-04 — Social service follow-up changes shared runtime sources. The evaluator fingerprint was regenerated from the implementation. Existing evaluation and activation records keep their original source identity.
 
 > Presentation correction — 2026-11-01: Sites now leads with the approved Fieldwork design reference. Quiet Form, Stillwater and Soft Form are explicitly simplified technical renderer samples, not Kimi + Stitch outputs or fidelity evidence. The approved preview has no connected forms or commerce. Relabeling and reordering examples does not repair or qualify the generation/publishing pipeline; preservation of the approved design still requires independent native evidence.

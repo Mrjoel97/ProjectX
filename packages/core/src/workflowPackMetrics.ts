@@ -18,6 +18,46 @@
 
 import { WORKFLOW_PACK_IDS } from "./workflowPacks";
 
+/** Follow-up for the latest completed pack. A user decision settles the proposal. */
+export function packFollowUp(outcome: PackOutcome, needsApproval: boolean) {
+  if (needsApproval)
+    return {
+      reason: "The workflow prepared a proposal and is waiting for your decision.",
+      actionLabel: "Review proposal",
+    };
+  const choices: Record<PackOutcome, { reason: string; actionLabel: string }> = {
+    useful: {
+      reason: "The workflow finished preparing its result. Review it in the conversation.",
+      actionLabel: "Review result",
+    },
+    partial: {
+      reason:
+        "The workflow returned a partial result. Review its limitations and supply missing information.",
+      actionLabel: "Review gaps",
+    },
+    refused: {
+      reason: "The workflow declined the request. Read its explanation before changing the brief.",
+      actionLabel: "Review request",
+    },
+    blocked: {
+      reason:
+        "The workflow could not proceed. Check the reason in the conversation before trying again.",
+      actionLabel: "Review blocker",
+    },
+    failed: {
+      reason:
+        "The workflow ended with an error. Check the conversation before deciding whether to try again.",
+      actionLabel: "Review interrupted work",
+    },
+    no_findings: {
+      reason:
+        "The workflow reported no findings. Review what it checked before deciding whether to broaden the request.",
+      actionLabel: "Review coverage",
+    },
+  };
+  return choices[outcome];
+}
+
 /** The revenue stream is measurement-only: it is not a seventh discoverable Phase 27 pack. */
 export const WORKFLOW_EVENT_STREAM_IDS = [...WORKFLOW_PACK_IDS, "revenue"] as const;
 export type WorkflowEventStreamId = (typeof WORKFLOW_EVENT_STREAM_IDS)[number];
