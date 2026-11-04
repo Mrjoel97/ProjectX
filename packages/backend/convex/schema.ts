@@ -3419,7 +3419,7 @@ export default defineSchema({
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_request", ["tenantId", "requestId"])
     .index("by_tenant_status", ["tenantId", "status"])
-    .index("by_workflow_status", ["workflowId", "status"]),
+    .index("by_tenant_workflow_status", ["tenantId", "workflowId", "status"]),
   customerSpecialists: defineTable({
     tenantId: v.string(),
     name: v.string(),
@@ -3446,7 +3446,7 @@ export default defineSchema({
     knowledgeDocumentIds: v.array(v.id("vaultDocuments")),
     createdAt: v.number(),
   })
-    .index("by_specialist_revision", ["specialistId", "revision"])
+    .index("by_tenant_specialist_revision", ["tenantId", "specialistId", "revision"])
     .index("by_tenant", ["tenantId"]),
 
   brandKits: defineTable({

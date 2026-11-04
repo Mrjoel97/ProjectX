@@ -1,3 +1,5 @@
+> Last verified 2026-11-04. The source fingerprint includes the tenant-first specialist and workflow indexes.
+
 > Last verified 2026-11-04. The customer workflow pilot adds tenant-owned tables to the shared schema. The website recipe evaluator fingerprint was regenerated and its source check passed.
 
 > Presentation correction — 2026-11-01: Sites now leads with the approved Fieldwork design reference. Quiet Form, Stillwater and Soft Form are explicitly simplified technical renderer samples, not Kimi + Stitch outputs or fidelity evidence. The approved preview has no connected forms or commerce. Relabeling and reordering examples does not repair or qualify the generation/publishing pipeline; preservation of the approved design still requires independent native evidence.

@@ -1,3 +1,5 @@
+> Last verified 2026-11-04. The audit projection includes the saved and archived specialist events with reference and numeric fields.
+
 > Last verified 2026-11-03. The four customer specialist/workflow tables are classified as tenant-owned for native export and erasure. Specialist audit records contain references, revision numbers and source counts.
 
 > Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social, recurring-service and indexed watchdog changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.

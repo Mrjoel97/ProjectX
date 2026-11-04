@@ -1,3 +1,5 @@
+> Last verified 2026-11-04. The source fingerprint includes the tenant-first specialist and workflow indexes.
+
 > Last verified 2026-11-04. Regenerated the evaluator identity after refreshing the shared website recipe fingerprint for the customer workflow schema.
 
 > Last verified 2026-11-03. Evaluator source inventories include the customer workflow runtime and pilot policy imported by shared model execution. Corpus case bytes retain their own fixed identity.

@@ -1,3 +1,5 @@
+> Last verified 2026-11-04. Specialist-version and outstanding-run lookups use tenant-first compound indexes.
+
 # Customer specialists and manual workflows
 
 > Last verified 2026-11-03. Local pilot implementation under ADR-072 verified through the public action with a fixture provider. Hosted acceptance pending.

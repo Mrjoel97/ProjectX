@@ -78,8 +78,8 @@ export async function getCustomerSpecialistVersion(
   }
   const snapshot = await ctx.db
     .query("customerSpecialistVersions")
-    .withIndex("by_specialist_revision", (q) =>
-      q.eq("specialistId", specialistId).eq("revision", revision),
+    .withIndex("by_tenant_specialist_revision", (q) =>
+      q.eq("tenantId", tenantId).eq("specialistId", specialistId).eq("revision", revision),
     )
     .unique();
   if (!snapshot || snapshot.tenantId !== tenantId) throw new Error("SPECIALIST_UNAVAILABLE");

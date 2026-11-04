@@ -180,8 +180,8 @@ export const claim = internalMutation({
     for (const status of ["running", "needs_review"] as const) {
       const active = await ctx.db
         .query("customerWorkflowRuns")
-        .withIndex("by_workflow_status", (q) =>
-          q.eq("workflowId", workflow._id).eq("status", status),
+        .withIndex("by_tenant_workflow_status", (q) =>
+          q.eq("tenantId", args.tenantId).eq("workflowId", workflow._id).eq("status", status),
         )
         .first();
       if (active) throw new Error("WORKFLOW_RUN_UNRESOLVED");
