@@ -302,14 +302,14 @@ async function createFromActiveRecipe(
   });
 }
 
-/** Trusted service materialization; registry identity and qualification are server-owned. */
+/** The design workflow may prepare a private catalogue using a qualified active recipe.
+ * Merchant readiness is enforced separately at publication and serving. */
 export async function materializeActiveRecipe(
   ctx: QueryCtx | MutationCtx,
   id: WebRecipeId,
   values: unknown,
 ) {
-  if (id === "storefront-catalogue") throw new Error("COMMERCE_UNAVAILABLE");
-  const resolved = await activeRecipe(ctx, id, false);
+  const resolved = await activeRecipe(ctx, id, true);
   const materialized = materializeWebRecipeWithProvenance(id, values);
   if (materialized.recipe.registryName !== resolved.identity.name)
     throw new Error("WEB_RECIPE_UNAVAILABLE");
