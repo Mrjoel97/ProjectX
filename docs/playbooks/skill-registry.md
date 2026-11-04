@@ -1,6 +1,7 @@
 > Last verified: 2026-11-04 — The source fingerprint includes the private TikTok review guard. The evaluation cases are unchanged.
 
 > Last verified: 2026-11-03 — Mechanically refreshed evaluator source fingerprints for TikTok token renewal. Existing 46 golden and 40 vertical cases are unchanged; offline checks pass. No new model evaluation or qualification evidence is claimed.
+> Last verified: 2026-11-04 — Social service follow-up changes shared runtime sources. The evaluator fingerprint was regenerated from the implementation. Existing evaluation and activation records keep their original source identity.
 
 > Last verified: 2026-10-29 — Media Director v13 treats approved example films as quality references rather than mandatory aesthetics. Each concept must justify its product/audience/brand fit, and batch variants must differ intentionally. Caption copy stays bound to spoken words; title placement, motion and duplicate-message review remain explicit creative checks. Canonical Markdown and the bundled seed mirror are synchronized. This source update is not hosted registry activation or paid creative qualification.
 

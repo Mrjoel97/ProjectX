@@ -78,6 +78,7 @@ const names = (references: unknown[]): string[] =>
 
 type QueryAnswers = {
   agenda?: unknown;
+  decision?: unknown;
   /** `workflowPackDiscovery.listPacks` — ACTIVE packs only. Absent = still loading. */
   packs?: unknown;
   summary?: unknown;
@@ -103,6 +104,8 @@ function mount(component: unknown, answers: QueryAnswers) {
         return answers.briefing;
       case "agenda:current":
         return answers.agenda;
+      case "serviceOutcomes:agendaDecision":
+        return answers.decision;
       case "workflowPackDiscovery:listPacks":
         return answers.packs;
       default:
@@ -958,6 +961,7 @@ describe("one subscription failing or loading never blanks the others", () => {
     for (const section of [
       "recommendation",
       "agenda",
+      "service-decision",
       "first-thing",
       "constraint",
       "stats",
@@ -966,7 +970,7 @@ describe("one subscription failing or loading never blanks the others", () => {
     ]) {
       expect(source).toContain(`<SectionBoundary section="${section}">`);
     }
-    expect(source.match(/<SectionBoundary /g) ?? []).toHaveLength(7);
+    expect(source.match(/<SectionBoundary /g) ?? []).toHaveLength(8);
     // A single page-wide boundary is exactly the 26-10 FinanceTabs bug.
     expect(source).not.toMatch(/<SectionBoundary[^>]*>\s*<div className="cc"/);
   });
@@ -1143,7 +1147,7 @@ describe("the agenda proposes and never acts", () => {
     expect(none).toContain("Your first weekly review runs Monday.");
     const clear = renderAgenda({ reviewedAt: 1, items: [], asks: [] });
     expect(clear).toContain('data-cc-state="empty"');
-    expect(clear).toContain("Nothing is waiting.");
+    expect(clear).toContain("The last weekly review found no blocking constraint.");
     expect(
       renderAgenda({ reviewedAt: 1, items: "x", asks: [] } as unknown as AgendaView),
     ).toContain('data-cc-state="error"');
@@ -1155,11 +1159,37 @@ describe("the agenda proposes and never acts", () => {
     expect(html).toContain("Staged. It is waiting in approvals.");
   });
 
-  test("the connected section reads agenda.current and nothing else", () => {
+  test("the weekly agenda renders before a service has a result", () => {
     const { html, queries } = mount(ConnectedAgenda, { agenda: AGENDA });
-    expect(queries).toEqual(["agenda:current"]);
+    expect(queries).toEqual(["agenda:current", "serviceOutcomes:agendaDecision"]);
     expect(html).toContain('data-cc-section="agenda"');
     expect(html).toContain("Awaiting your approval");
+    expect(html).not.toContain("Social marketing follow-up");
+  });
+
+  test("a service decision appears ahead of the first weekly review, with its reason and action", () => {
+    const decision = {
+      key: "latest-result",
+      title: "Review the latest draft",
+      reason: "Your prepared draft is ready for feedback.",
+      actionLabel: "Review draft",
+      href: "/dashboard/marketing#social-service",
+      observedAt: Date.UTC(2026, 10, 2),
+      dismissed: false,
+    };
+    const visible = mount(ConnectedAgenda, { agenda: null, decision }).html;
+    expect(visible).toContain(decision.title);
+    expect(visible).toContain(decision.reason);
+    expect(visible).toContain(`href="${decision.href}"`);
+    expect(visible).toContain("Dismiss suggestion");
+    expect(visible).toContain("Your first weekly review runs Monday.");
+    const hidden = mount(ConnectedAgenda, {
+      agenda: null,
+      decision: { ...decision, dismissed: true },
+    }).html;
+    expect(hidden).not.toContain(decision.reason);
+    expect(hidden).not.toContain(`href="${decision.href}"`);
+    expect(hidden).toContain("Restore suggestion");
   });
 });
 

@@ -37,7 +37,7 @@ export function buildManagedServiceTools(
   return {
     readSocialService: tool<Record<string, never>, unknown, Record<string, never>>({
       description:
-        "Read your saved social service setup, readiness, business sources and latest outcomes. Does not start work, connect accounts or change settings.",
+        "Read your saved social service setup, readiness, business sources and latest outcomes. For follow-up, brain.agendaDecision is the current open decision shown in your Command Center.",
       inputSchema: noArguments,
       execute: async () => {
         const service = await saved();

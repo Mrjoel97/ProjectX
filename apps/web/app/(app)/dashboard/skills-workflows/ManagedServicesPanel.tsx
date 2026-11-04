@@ -93,7 +93,11 @@ export function ManagedServicesPanel() {
     }
   };
   return (
-    <section aria-labelledby="managed-services-heading" style={{ display: "grid", gap: 16 }}>
+    <section
+      id="social-service"
+      aria-labelledby="managed-services-heading"
+      style={{ display: "grid", gap: 16 }}
+    >
       <div style={{ ...row, justifyContent: "space-between" }}>
         <div>
           <h2 id="managed-services-heading" style={{ margin: 0, fontSize: "1.25rem" }}>
@@ -141,7 +145,10 @@ export function ManagedServicesPanel() {
               options={options}
               bufferConnected={buffer?.connected === true}
               zernioConnected={zernio?.status === "connected"}
-              onSaved={() => setEditing(undefined)}
+              onSaved={() => {
+                setEditing(undefined);
+                setNotice("Social marketing setup saved. Review the next step on your service.");
+              }}
               onCancel={social ? () => setEditing(undefined) : undefined}
             />
           )}
@@ -360,13 +367,10 @@ function ServiceSetup({
           style={{ ...control, maxWidth: 180 }}
         />
       </label>
-      <div style={row}>
-        <label style={row}>
-          <input type="checkbox" disabled />
-          Run on a schedule
-        </label>
-        <span style={muted}>Save this setup first, then review and approve a schedule.</span>
-      </div>
+      <p style={muted}>
+        After saving, confirm any missing business details. Then choose a schedule and review its
+        spending limit and end date.
+      </p>
       {error && (
         <p role="alert" style={{ margin: 0 }}>
           {error}
@@ -484,6 +488,14 @@ function ServiceCard({
         </span>
       </div>
       <p style={{ margin: 0, overflowWrap: "anywhere" }}>{service.goal}</p>
+      {supportsEditor &&
+        service.controlState === "active" &&
+        !pending &&
+        (service.readiness.reasons.includes("business_information_required") ? (
+          <a href="#social-business-details">Continue with your business details</a>
+        ) : service.readiness.ready ? (
+          <a href="#social-schedule">View schedule and activation options</a>
+        ) : null)}
       <ServiceGoalLink
         serviceId={service.id}
         revision={service.revision}
@@ -535,16 +547,18 @@ function ServiceCard({
         )}
       </div>
       {supportsEditor && (
-        <ServiceKnowledgeConversation
-          serviceId={serviceId}
-          disabled={Boolean(pending) || busy || service.controlState !== "active"}
-          budgetLimitCents={service.budgetLimitCents}
-          runReadiness={{
-            revision: service.revision,
-            controlRevision: service.controlRevision,
-            reasons: service.readiness.reasons,
-          }}
-        />
+        <div id="social-business-details">
+          <ServiceKnowledgeConversation
+            serviceId={serviceId}
+            disabled={Boolean(pending) || busy || service.controlState !== "active"}
+            budgetLimitCents={service.budgetLimitCents}
+            runReadiness={{
+              revision: service.revision,
+              controlRevision: service.controlRevision,
+              reasons: service.readiness.reasons,
+            }}
+          />
+        </div>
       )}
       {supportsEditor && (
         <ServiceRecurrencePanel service={service} disabled={Boolean(pending) || busy} />

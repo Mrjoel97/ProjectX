@@ -109,6 +109,27 @@ test("authorization loss explains reconnect and fresh approval without silently 
   expect(host.textContent).toContain("approve a new schedule");
   expect(mocks.configure).not.toHaveBeenCalled();
 });
+test("active schedule shows the next run and expiry in the approved business timezone", async () => {
+  const timeZone = "Africa/Dar_es_Salaam";
+  const nextDueAtMs = Date.parse("2026-11-05T21:30:00Z");
+  const expiresAtMs = Date.parse("2026-11-06T22:15:00Z");
+  mocks.status = {
+    qualified: true,
+    approval: {
+      enabled: true,
+      nextDueAtMs,
+      expiresAtMs,
+      schedule: { cadence: "daily", hour: 0, minute: 30, timeZone },
+    },
+  };
+  await act(async () => root.render(<ServiceRecurrencePanel service={service} />));
+  expect(host.textContent).toContain("Automatic work is on");
+  for (const at of [nextDueAtMs, expiresAtMs])
+    expect(host.textContent).toContain(
+      new Date(at).toLocaleString(undefined, { timeZone, timeZoneName: "short" }),
+    );
+  expect(mocks.configure).not.toHaveBeenCalled();
+});
 test("pausing automatic work uses current service controls and never starts another run", async () => {
   mocks.status = {
     qualified: true,
