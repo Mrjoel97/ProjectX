@@ -97,6 +97,57 @@ function report(likes: number, fetchedAt = Date.now()): ZernioReport {
     ],
   };
 }
+
+test("the dashboard and Executive share the goal-linked decision and respect dismissal, withdrawal and stale responses", async () => {
+  const h = await setup();
+  await h.t.run((ctx) => ctx.db.patch(h.serviceId, { goalId: h.goalId }));
+  const read = () => h.a.query(api.serviceOutcomes.agendaDecision, {});
+  const brain = () =>
+    h.a.query(api.serviceOutcomes.serviceBrainView, { serviceId: "social-marketing" });
+  const set = (key: string, dismissed: boolean) =>
+    h.a.mutation(api.serviceOutcomes.setDecisionDismissed, { key, dismissed });
+  const initial = await read();
+  if (!initial) throw new Error("Missing initial decision");
+  expect(initial?.reason).toContain("More qualified enquiries");
+  expect((await brain())?.agendaDecision).toEqual(initial);
+  expect(await h.b.query(api.serviceOutcomes.agendaDecision, {})).toBeNull();
+  expect(
+    await h.b.mutation(api.serviceOutcomes.setDecisionDismissed, {
+      key: initial.key,
+      dismissed: true,
+    }),
+  ).toBe(false);
+  expect(await set(initial.key, true)).toBe(true);
+  expect(await set(initial.key, true)).toBe(true);
+  expect((await read())?.dismissed).toBe(true);
+  expect((await brain())?.agendaDecision).toBeNull();
+  expect(await set(initial.key, false)).toBe(true);
+  const now = Date.now();
+  await complete(h, report(1, now - 1000));
+  await complete(h, report(2, now));
+  await h.a.mutation(api.serviceOutcomes.recordUsefulness, {
+    runId: h.runId,
+    usefulness: "accepted",
+  });
+  const observed = await read();
+  if (!observed) throw new Error("Missing evidence decision");
+  expect(observed?.title).toBe("Review your latest account observations");
+  expect(await set(initial.key, true)).toBe(false);
+  expect(await set(observed.key, true)).toBe(true);
+  await complete(h, report(3));
+  expect((await read())?.dismissed).toBe(false);
+  await h.t.run((ctx) => ctx.db.patch(h.connection, { selectedAccountIds: [] }));
+  expect((await read())?.title).toBe("Check your reporting connection");
+  await h.a.mutation(api.serviceOutcomes.recordUsefulness, {
+    runId: h.runId,
+    usefulness: "rejected",
+  });
+  expect((await read())?.title).toBe("Revise your social brief");
+  await h.t.run((ctx) => ctx.db.patch(h.serviceId, { controlState: "paused" }));
+  expect(await read()).toBeNull();
+  await h.t.run((ctx) => ctx.db.patch(h.serviceId, { controlState: "active", revision: 2 }));
+  expect(await read()).toBeNull();
+});
 async function complete(h: Awaited<ReturnType<typeof setup>>, value: ZernioReport, revision = 1) {
   await h.t.run((ctx) => ctx.db.patch(h.connection, { lease: "lease" }));
   return h.t.mutation(internal.zernio.finishReport, {
@@ -210,10 +261,27 @@ test("stored provider permalink receipts link only current owned publishing and 
   const linked = await h.a.query(api.serviceOutcomes.runOutcome, { runId: h.runId });
   expect(linked.social[0]?.publisherAttribution).toBe("buffer_receipt_linked");
   expect(linked.social[0]?.evidence?.metrics.likes).toBe(0);
+  await h.a.mutation(api.serviceOutcomes.recordUsefulness, {
+    runId: h.runId,
+    usefulness: "accepted",
+  });
+  const decision = () => h.a.query(api.serviceOutcomes.agendaDecision, {});
+  expect(await decision()).toMatchObject({
+    title: "Use the latest post as a baseline",
+    href: "/dashboard/marketing#reports",
+  });
+  expect((await decision())?.reason).toContain("count of 0");
+  const second = report(4, Date.now());
+  const later = second.accounts[0]?.posts[0];
+  if (!later) throw new Error("post fixture missing");
+  later.nativePostUrl = nativePostUrl;
+  await complete(h, second);
+  expect((await decision())?.reason).toContain("changed from 0 to 4");
   await h.t.run((ctx) => ctx.db.patch(bufferConnection, { selectedChannelIds: [] }));
   const withdrawn = await h.a.query(api.serviceOutcomes.runOutcome, { runId: h.runId });
   expect(withdrawn.social[0]?.publisherAttribution).toBe("unverified");
   expect(withdrawn.social[0]?.evidence).toBeNull();
+  expect((await decision())?.title).toBe("Review your latest account observations");
 });
 test("stale completion and duplicate native accounts cannot invent accepted history", async () => {
   const h = await setup();

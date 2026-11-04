@@ -10,7 +10,14 @@ import {
 } from "@pikar/core/marketing";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { Component, type CSSProperties, type ReactNode, useState } from "react";
+import {
+  Component,
+  type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import { ManagedServicesPanel } from "../skills-workflows/ManagedServicesPanel";
 import { BufferMarketing } from "./BufferPanel";
 import { SocialConnections } from "./SocialPanel";
@@ -458,9 +465,24 @@ type MarketingTab = (typeof marketingTabs)[number]["id"];
 export function MarketingView() {
   const [section, setSection] = useState<MarketingTab>("services");
   const [visited, setVisited] = useState<MarketingTab[]>(["services"]);
-  const select = (id: MarketingTab) => {
+  const show = useCallback((id: MarketingTab) => {
     setSection(id);
     setVisited((current) => (current.includes(id) ? current : [...current, id]));
+  }, []);
+  useEffect(() => {
+    const followLink = () => {
+      const fragment = window.location.hash.slice(1);
+      const tab = marketingTabs.find(({ id }) => id === fragment);
+      if (tab) show(tab.id);
+      else if (fragment.startsWith("social-") || !fragment) show("services");
+    };
+    followLink();
+    window.addEventListener("hashchange", followLink);
+    return () => window.removeEventListener("hashchange", followLink);
+  }, [show]);
+  const select = (id: MarketingTab) => {
+    show(id);
+    window.history.replaceState(window.history.state, "", `#${id}`);
   };
   return (
     <main

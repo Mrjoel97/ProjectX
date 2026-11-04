@@ -370,8 +370,8 @@ export type AgendaView = {
  * tenant's own words (document titles, a goal) — never model output.
  */
 const AGENDA_COPY = {
-  noReview: "Your first weekly review runs Monday. The agenda fills from it.",
-  clear: "Nothing is waiting. The last review found no blocking constraint.",
+  noReview: "Your first weekly review runs Monday.",
+  clear: "The last weekly review found no blocking constraint.",
   lede: "From your weekly review. Nothing here runs until you approve it.",
   ask: "Pikar needs one fact from you",
   staged: "Staged. It is waiting in approvals.",
@@ -398,11 +398,13 @@ const small: CSSProperties = { ...muted, fontSize: "0.85rem" };
  */
 export function AgendaCard({
   agenda,
+  children,
   note,
   onStage,
   onDismiss,
 }: {
   agenda: AgendaView | Loading;
+  children?: ReactNode;
   note: string | null;
   onStage: (gapIndex: number) => void;
   onDismiss: (key: string) => void;
@@ -412,6 +414,7 @@ export function AgendaCard({
       <p className="caps-label" id="cc-agenda-label">
         Your agenda
       </p>
+      {children}
       {agenda === undefined ? (
         <CommandCenterState state="loading" />
       ) : agenda === null ? (
@@ -839,7 +842,86 @@ export function ConnectedAgenda() {
         )
       }
       onDismiss={(key) => void dismiss({ key })}
-    />
+    >
+      <SectionBoundary section="service-decision">
+        <ConnectedServiceDecision />
+      </SectionBoundary>
+    </AgendaCard>
+  );
+}
+
+export function ConnectedServiceDecision() {
+  const decision = useQuery(api.serviceOutcomes.agendaDecision, {});
+  if (!decision) return null;
+  return <ServiceDecision key={decision.key} decision={decision} />;
+}
+
+function ServiceDecision({
+  decision,
+}: {
+  decision: {
+    key: string;
+    title: string;
+    reason: string;
+    actionLabel: string;
+    href: string;
+    observedAt: number;
+    dismissed: boolean;
+  };
+}) {
+  const setDismissed = useMutation(api.serviceOutcomes.setDecisionDismissed);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  async function toggle() {
+    if (busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const saved = await setDismissed({ key: decision.key, dismissed: !decision.dismissed });
+      if (!saved) setMessage("Pikar has updated this suggestion. Check the latest result.");
+    } catch {
+      setMessage("Your change could not be saved. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const updated = new Date(decision.observedAt);
+  return (
+    <div style={agendaRow} data-cc-section="service-decision">
+      {decision.dismissed ? (
+        <p style={muted}>Social marketing suggestion dismissed.</p>
+      ) : (
+        <>
+          <p className="caps-label">Social marketing follow-up</p>
+          <h2 style={heading}>{decision.title}</h2>
+          <p style={muted}>{decision.reason}</p>
+          <p style={small}>
+            Run updated{" "}
+            <time dateTime={updated.toISOString()}>
+              {updated.toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            </time>
+          </p>
+        </>
+      )}
+      <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
+        {decision.dismissed ? null : (
+          <Link href={decision.href} className="cta-dark">
+            {decision.actionLabel} <ArrowIcon size={14} />
+          </Link>
+        )}
+        <button type="button" className="cta-ghost" disabled={busy} onClick={() => void toggle()}>
+          {busy ? "Saving…" : decision.dismissed ? "Restore suggestion" : "Dismiss suggestion"}
+        </button>
+      </div>
+      <div role="status" style={small}>
+        {message}
+      </div>
+    </div>
   );
 }
 

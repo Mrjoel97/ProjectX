@@ -80,9 +80,21 @@ beforeEach(() => {
 });
 afterEach(async () => {
   await act(async () => root.unmount());
+  window.history.replaceState(null, "", window.location.pathname);
   host.remove();
 });
 describe("Marketing surface", () => {
+  it("opens the requested follow-up on arrival and follows another decision in the same tab", async () => {
+    window.history.replaceState(null, "", "#publishing");
+    await act(async () => root.render(<MarketingView />));
+    expect(host.querySelector("#marketing-publishing-panel")?.hasAttribute("hidden")).toBe(false);
+    await act(async () => {
+      window.history.replaceState(null, "", "#reports");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(host.querySelector("#marketing-reports-panel")?.hasAttribute("hidden")).toBe(false);
+    expect(mocks.record).not.toHaveBeenCalled();
+  });
   it("opens services, loads other sections on demand and retains drafts when navigating by keyboard", async () => {
     await act(async () => root.render(<MarketingView />));
     expect(host.querySelector('input[name="email"]')).toBeNull();

@@ -9,6 +9,7 @@ import FoundationOnboarding from "./FoundationOnboarding";
 const state = vi.hoisted(() => ({
   revision: 1,
   phase: "enrichment",
+  published: [] as { id: string; title: string; status: string }[],
   answers: [] as { eventId: string; section: string; text: string; intent: string }[],
   edit: vi.fn().mockResolvedValue(2),
   start: vi.fn(),
@@ -76,6 +77,8 @@ vi.mock("convex/react", () => ({
           blueprint: "# Proposed Blueprint",
           previousBlueprint: "# Current Blueprint",
         };
+      case "foundation:publication":
+        return state.published;
       default:
         return [];
     }
@@ -89,6 +92,7 @@ function button(host: HTMLElement, text: string) {
 afterEach(() => {
   state.revision = 1;
   state.phase = "enrichment";
+  state.published = [];
   state.answers = [];
   state.status = "idle";
   state.voiceError = null;
@@ -109,6 +113,23 @@ test("only an on-screen approval publishes the exact displayed revision and hash
     expect(state.publish).not.toHaveBeenCalled();
     await act(async () => button(host, "Approve revision 1").click());
     expect(state.publish).toHaveBeenCalledExactlyOnceWith({ revision: 1, reviewHash: "hash_1" });
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
+test("a published business foundation offers the social service setup handoff", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  try {
+    await act(async () => root.render(<FoundationOnboarding />));
+    const handoff = 'a[href="/dashboard/marketing#social-service"]';
+    expect(host.querySelector(handoff)).toBeNull();
+    state.published = [{ id: "doc", title: "Business overview", status: "ready" }];
+    await act(async () => root.render(<FoundationOnboarding />));
+    expect(host.querySelector(handoff)?.textContent).toBe("Set up social marketing");
+    expect(state.start).not.toHaveBeenCalled();
   } finally {
     await act(async () => root.unmount());
   }

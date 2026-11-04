@@ -1,4 +1,5 @@
 import {
+  chooseSocialDecision,
   SERVICE_OBSERVATION_LIMIT,
   serviceReportIdentity,
   serviceReportMovement,
@@ -361,6 +362,91 @@ export const runOutcome = tenantQuery({
   handler: readRunOutcome,
 });
 
+async function readCurrentDecision(ctx: QueryCtx & { tenantId: string }) {
+  const service = await ctx.db
+    .query("managedServices")
+    .withIndex("by_tenant_service", (q) =>
+      q.eq("tenantId", ctx.tenantId).eq("serviceId", "social-marketing"),
+    )
+    .unique();
+  if (service?.controlState !== "active") return null;
+  const run = await ctx.db
+    .query("managedServiceRuns")
+    .withIndex("by_service_createdAt", (q) =>
+      q.eq("tenantId", ctx.tenantId).eq("serviceId", service._id),
+    )
+    .order("desc")
+    .first();
+  if (!run || !canPropose(service, run)) return null;
+  const outcome = await readRunOutcome(ctx, { runId: run._id });
+  const view = await decisionForRun(ctx, service, run, outcome);
+  return view ? { runId: run._id, view } : null;
+}
+
+function canPropose(service: Doc<"managedServices">, run: Doc<"managedServiceRuns">) {
+  return (
+    service.serviceId === "social-marketing" &&
+    service.controlState === "active" &&
+    run.configRevision === service.revision &&
+    run.state !== "claimed" &&
+    run.state !== "running"
+  );
+}
+
+async function decisionForRun(
+  ctx: QueryCtx & { tenantId: string },
+  service: Doc<"managedServices">,
+  run: Doc<"managedServiceRuns">,
+  outcome: Awaited<ReturnType<typeof readRunOutcome>>,
+) {
+  if (!canPropose(service, run)) return null;
+  const next = chooseSocialDecision(outcome, service.operationIds.includes("social.report"));
+  if (!next) return null;
+  // Retrieval-only refreshes do not create a new decision. Changed observations can reopen
+  // an evidence review; unrelated report changes must not resurrect dismissed draft reviews.
+  const evidence =
+    next.code === "compare" || next.code === "plan_next_cycle"
+      ? (outcome.reporting.observations[0]?.snapshotHash ?? "")
+      : "";
+  const key = await contentHash(JSON.stringify([run._id, next.code, evidence]));
+  const { title, actionLabel, href } = next;
+  const goal =
+    outcome.goal?.status === "active" && outcome.goal.goalId === service.goalId
+      ? await ctx.db.get(outcome.goal.goalId)
+      : null;
+  const reason =
+    goal?.tenantId === ctx.tenantId
+      ? `${next.reason} Your goal is “${goal.text.slice(0, 180)}”.`
+      : next.reason;
+  return {
+    key,
+    title,
+    reason,
+    actionLabel,
+    href,
+    observedAt: run.updatedAt,
+    dismissed: run.dismissedDecisionKey === key,
+  };
+}
+
+export const agendaDecision = tenantQuery({
+  args: {},
+  handler: async (ctx) => (await readCurrentDecision(ctx))?.view ?? null,
+});
+
+export const setDecisionDismissed = tenantMutation({
+  args: { key: v.string(), dismissed: v.boolean() },
+  handler: async (ctx, args) => {
+    const current = await readCurrentDecision(ctx);
+    if (!current || current.view.key !== args.key) return false;
+    if (current.view.dismissed !== args.dismissed)
+      await ctx.db.patch(current.runId, {
+        dismissedDecisionKey: args.dismissed ? args.key : undefined,
+      });
+    return true;
+  },
+});
+
 /** A cited view, not a new business-fact store or a goal-achievement writer. */
 export const serviceBrainView = tenantQuery({
   args: { serviceId: v.string() },
@@ -424,6 +510,8 @@ export const serviceBrainView = tenantQuery({
       .order("desc")
       .first();
     const latestOutcome = latest ? await readRunOutcome(ctx, { runId: latest._id }) : null;
+    const decision =
+      latest && latestOutcome ? await decisionForRun(ctx, service, latest, latestOutcome) : null;
     const nextActions: string[] = [];
     if (!goal || goal.tenantId !== ctx.tenantId) nextActions.push("link_goal");
     if (!profile) nextActions.push("provide_business_profile");
@@ -456,6 +544,7 @@ export const serviceBrainView = tenantQuery({
           }
         : null,
       latestOutcome,
+      agendaDecision: decision?.dismissed ? null : decision,
       businessKnowledge: await readBusinessLedgerForTenant(ctx, ctx.tenantId),
       nextActions: [...new Set(nextActions)].slice(0, 10),
       businessImprovement: "not_established" as const,
