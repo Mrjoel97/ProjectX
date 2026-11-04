@@ -1,3 +1,5 @@
+> Last verified: 2026-11-04 — The Executive reads weekly review and workflow pack decisions. The golden and vertical evaluator inventories now track the agenda, pack event and decision sources. Offline identity checks verify that edits retire the corresponding evidence.
+
 > Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social and recurring-service changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
 
 > Combined-source checkpoint: 2026-10-24 — This isolated candidate retains the persisted native-media workflow and the direct-social read/draft boundaries. Dated source fingerprints and pre-native workflow descriptions below belong to their original checkpoints. Regenerate exact merged-source identities and pass final-candidate CI before release; this merge does not activate skills or grant new agent authority.

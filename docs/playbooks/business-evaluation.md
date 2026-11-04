@@ -6,6 +6,8 @@
 
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-11-04 — When weekly review work crosses approval, its agenda item links to that exact plan in the review conversation. Feedback opens when the plan is done. The user can request a change or report that it helped, prompting a revision or a request for supporting evidence. Writes check tenant, current review, gap and plan. Feedback does not advance a goal or trigger paid work.
+
 > Last verified: 2026-09-11 — the internal evaluation and gap-action paths preserve an optional
 > trusted `evalBudgetId`. Retrieval receives the same ledger reference, and gap dispatch carries
 > it across the scheduled durable starter into the specialist. The public `actOnGap` validator

@@ -2311,6 +2311,7 @@ const VERB: Record<string, [running: string, done: string]> = {
   readBufferChannels: ["Reading your Buffer channels…", "Read your Buffer channels"],
   readBufferEngagement: ["Reading social engagement…", "Read social engagement"],
   readZernioEngagement: ["Reading your social report…", "Read your social report"],
+  readWorkflowAgenda: ["Checking your workflow follow-ups…", "Checked your workflow follow-ups"],
   readSocialService: ["Checking your social service…", "Checked your social service"],
   startSocialService: ["Starting your social service…", "Checked the start request"],
   stageBufferPost: ["Preparing a campaign post…", "Campaign post ready for review"],

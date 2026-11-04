@@ -11,9 +11,12 @@ import {
   type AgendaStatus,
   agendaStatusFromPlan,
   REVIEW_THREAD_ID,
+  reviewFollowUp,
   segmentForRoute,
 } from "@pikar/core";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 import { applyActOnGap } from "./evaluations";
 import { syncAgenda } from "./lib/agenda";
 import { tenantMutation, tenantQuery } from "./lib/functions";
@@ -55,6 +58,9 @@ export type AgendaItem = {
   citations: string[];
   /** The active goal this gap blocks, if one is anchored on the gap's segment. The user's own text. */
   goal: string | null;
+  followUp:
+    | (NonNullable<ReturnType<typeof reviewFollowUp>> & { planId: Id<"plans">; href: string })
+    | null;
 };
 export type AgendaAsk = { section: string; needs: string };
 export type AgendaView = { reviewedAt: number; items: AgendaItem[]; asks: AgendaAsk[] };
@@ -93,13 +99,25 @@ export const current = tenantQuery({
       .sort((a, b) => a.leverageRank - b.leverageRank)
       .slice(0, AGENDA_LIMIT);
     for (const row of currentRows) {
-      let status: AgendaStatus = row.status;
-      if (status === "proposed" && row.planId) {
-        const plan = await ctx.db.get(row.planId);
-        status = (plan && agendaStatusFromPlan(plan.status)) || status;
-      }
+      const linkedPlan =
+        row.planId && (row.status === "proposed" || row.status === "acted")
+          ? await ctx.db.get(row.planId)
+          : null;
+      const plan =
+        linkedPlan?.tenantId === ctx.tenantId && linkedPlan.threadId === REVIEW_THREAD_ID
+          ? linkedPlan
+          : null;
+      const status = (plan && agendaStatusFromPlan(plan.status)) || row.status;
       if (status === "dismissed") continue;
       const gap = latest.gaps[row.gapIndex];
+      const previous = row.outcomeFeedback;
+      const feedback =
+        plan && previous?.planId === plan._id && previous.reviewedAt === latest.createdAt
+          ? previous.feedback
+          : null;
+      const followUp = plan
+        ? reviewFollowUp(plan.status, feedback, gap?.proofMetric ?? null)
+        : null;
       const segment = segmentForRoute(row.route);
       const goal = segment
         ? await ctx.db
@@ -118,10 +136,80 @@ export const current = tenantQuery({
         gapIndex: row.gapIndex,
         citations,
         goal: goal?.text ?? null,
+        followUp:
+          followUp && plan
+            ? {
+                ...followUp,
+                planId: plan._id,
+                href: `/dashboard/workspace?thread=${encodeURIComponent(plan.threadId)}&plan=${encodeURIComponent(plan._id)}`,
+              }
+            : null,
       });
     }
     const asks = latest.notEnoughData.slice(0, Math.max(0, AGENDA_LIMIT - items.length));
     return { reviewedAt: latest.createdAt, items, asks };
+  },
+});
+
+async function currentCompletedItem(
+  ctx: QueryCtx & { tenantId: string },
+  args: { key: string; planId: Id<"plans">; reviewedAt: number },
+) {
+  const latest = await ctx.db
+    .query("evaluations")
+    .withIndex("by_tenant_thread", (q) =>
+      q.eq("tenantId", ctx.tenantId).eq("threadId", REVIEW_THREAD_ID),
+    )
+    .order("desc")
+    .first();
+  if (!latest || latest.createdAt !== args.reviewedAt) return null;
+  const row = await ctx.db
+    .query("agenda")
+    .withIndex("by_tenant_key", (q) => q.eq("tenantId", ctx.tenantId).eq("key", args.key))
+    .unique();
+  if (
+    !row ||
+    row.lastSeenAt !== args.reviewedAt ||
+    row.planId !== args.planId ||
+    (row.status !== "proposed" && row.status !== "acted")
+  )
+    return null;
+  const plan = await ctx.db.get(args.planId);
+  if (
+    !plan ||
+    plan.tenantId !== ctx.tenantId ||
+    plan.threadId !== REVIEW_THREAD_ID ||
+    plan.status !== "done"
+  )
+    return null;
+  return row;
+}
+
+/** The user's judgment on this specific review and output. Never a measured business result. */
+export const recordOutcomeFeedback = tenantMutation({
+  args: {
+    key: v.string(),
+    reviewedAt: v.number(),
+    planId: v.id("plans"),
+    feedback: v.union(v.literal("helped"), v.literal("needs_change")),
+  },
+  handler: async (ctx, args): Promise<{ ok: boolean }> => {
+    const row = await currentCompletedItem(ctx, args);
+    if (!row) return { ok: false };
+    if (
+      row.outcomeFeedback?.planId !== args.planId ||
+      row.outcomeFeedback.reviewedAt !== args.reviewedAt ||
+      row.outcomeFeedback.feedback !== args.feedback
+    ) {
+      await ctx.db.patch(row._id, {
+        outcomeFeedback: {
+          planId: args.planId,
+          reviewedAt: args.reviewedAt,
+          feedback: args.feedback,
+        },
+      });
+    }
+    return { ok: true };
   },
 });
 
@@ -130,8 +218,15 @@ export const current = tenantQuery({
  * whose proposal is waiting at the gate is answered THERE — Approve or Discard — never here.
  */
 export const dismiss = tenantMutation({
-  args: { key: v.string() },
-  handler: async (ctx, { key }): Promise<{ ok: boolean }> => {
+  args: { key: v.string(), reviewedAt: v.optional(v.number()), planId: v.optional(v.id("plans")) },
+  handler: async (ctx, { key, reviewedAt, planId }): Promise<{ ok: boolean }> => {
+    if (planId !== undefined || reviewedAt !== undefined) {
+      if (!planId || reviewedAt === undefined) return { ok: false };
+      const row = await currentCompletedItem(ctx, { key, reviewedAt, planId });
+      if (!row) return { ok: false };
+      await ctx.db.patch(row._id, { status: "dismissed", statusChangedAt: Date.now() });
+      return { ok: true };
+    }
     const row = await ctx.db
       .query("agenda")
       .withIndex("by_tenant_key", (q) => q.eq("tenantId", ctx.tenantId).eq("key", key))

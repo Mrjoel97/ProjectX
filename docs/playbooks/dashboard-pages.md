@@ -1,3 +1,5 @@
+> Last verified: 2026-11-04 — The Command Center presents business-review feedback alongside the current user-owned workflow and social decisions. Each card uses the native tenant query and links to the relevant work.
+
 > Last verified: 2026-11-04 — A live November 4 decision reproduced a cached Marketing fragment on client-side navigation. Agenda actions now navigate directly to the complete destination.
 
 > Last verified: 2026-11-04 — Your agenda also reads the current social service follow-up. It is available before the first weekly business review. Each action opens its Marketing destination, and users can dismiss or restore a suggestion.
