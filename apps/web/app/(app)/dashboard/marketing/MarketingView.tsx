@@ -471,7 +471,8 @@ export function MarketingView() {
   }, []);
   useEffect(() => {
     const followLink = () => {
-      const fragment = window.location.hash.slice(1);
+      // A cached navigation can include the previous section before the requested one.
+      const fragment = window.location.hash.split("#").at(-1) ?? "";
       const tab = marketingTabs.find(({ id }) => id === fragment);
       if (tab) show(tab.id);
       else if (fragment.startsWith("social-") || !fragment) show("services");

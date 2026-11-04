@@ -910,9 +910,9 @@ function ServiceDecision({
       )}
       <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
         {decision.dismissed ? null : (
-          <Link href={decision.href} className="cta-dark">
+          <a href={decision.href} className="cta-dark">
             {decision.actionLabel} <ArrowIcon size={14} />
-          </Link>
+          </a>
         )}
         <button type="button" className="cta-ghost" disabled={busy} onClick={() => void toggle()}>
           {busy ? "Saving…" : decision.dismissed ? "Restore suggestion" : "Dismiss suggestion"}

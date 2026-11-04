@@ -1,3 +1,5 @@
+> Last verified: 2026-11-04 — A live November 4 decision reproduced a cached Marketing fragment on client-side navigation. Agenda actions now navigate directly to the complete destination.
+
 > Last verified: 2026-11-04 — Your agenda also reads the current social service follow-up. It is available before the first weekly business review. Each action opens its Marketing destination, and users can dismiss or restore a suggestion.
 
 > Last verified: 2026-10-29 — Social Marketing service setup and scheduling now live under Marketing, not Skills and Workflows. Marketing separates Services, Publishing, Reports, Leads & links, and Connections; sections load on first visit and retain draft state during tab changes. Keyboard navigation and per-section errors are preserved. Service review links target Marketing. No grants, budgets, schedules or publication rules changed.

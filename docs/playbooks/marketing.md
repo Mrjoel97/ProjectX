@@ -1,3 +1,5 @@
+> Last verified: 2026-11-04 — Marketing opens the last requested section on a cached fragment such as #social-service#publishing. The regression reproduces the URL observed on staging.
+
 > Last verified: 2026-11-04 — Links ending in #publishing and #reports open their respective Marketing tabs. #social-service opens Services. Switching tabs preserves drafts for the current visit.
 
 > Last verified: 2026-10-29 — Social Marketing service setup and scheduling now live under Marketing, not Skills and Workflows. Marketing separates Services, Publishing, Reports, Leads & links, and Connections; sections load on first visit and retain draft state during tab changes. Keyboard navigation and per-section errors are preserved. Service review links target Marketing. No grants, budgets, schedules or publication rules changed.

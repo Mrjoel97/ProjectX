@@ -85,7 +85,7 @@ afterEach(async () => {
 });
 describe("Marketing surface", () => {
   it("opens the requested follow-up on arrival and follows another decision in the same tab", async () => {
-    window.history.replaceState(null, "", "#publishing");
+    window.history.replaceState(null, "", "#social-service#publishing");
     await act(async () => root.render(<MarketingView />));
     expect(host.querySelector("#marketing-publishing-panel")?.hasAttribute("hidden")).toBe(false);
     await act(async () => {
