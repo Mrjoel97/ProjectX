@@ -1,6 +1,7 @@
 "use node";
 
-import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
+import { DOCUMENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
+import { completedWorkflowReport, requestedTableFields } from "@pikar/core/customerWorkflowReport";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -57,7 +58,15 @@ export const run = tenantAction({
       // Customer-authored configuration stays in the user message. The governing instructions
       // load from the exact active registry version approved when this run was claimed.
       const prompt = JSON.stringify({
-        requestedDeliverable: "One complete Markdown report, delivered as a PDF and reading view",
+        requestedDeliverable: {
+          format: "final document",
+          fields: ["title", "markdown"],
+          tableFields: requestedTableFields([
+            ...snapshot.steps,
+            snapshot.brief,
+            snapshot.specialist.instructions,
+          ]),
+        },
         specialist: {
           name: snapshot.specialist.name,
           objective: snapshot.specialist.objective,
@@ -73,34 +82,49 @@ export const run = tenantAction({
         planId: context.planId,
         threadId,
         turnId: String(runId),
-        skillName: COCKPIT_AGENT_SKILL,
-        skillVersions: { [COCKPIT_AGENT_SKILL]: snapshot.executorSkillVersion },
+        skillName: DOCUMENT_DRAFTER_SKILL,
+        skillVersions: { [DOCUMENT_DRAFTER_SKILL]: snapshot.executorSkillVersion },
         toolNames: [],
         prompt,
         customerWorkflowRunId: runId,
       });
-      const incomplete = result.truncated || result.declaredUnsupported || !result.reply.trim();
+      const report = completedWorkflowReport(
+        result.reply,
+        [...snapshot.steps, snapshot.specialist.instructions],
+        snapshot.brief,
+      );
+      const incomplete = result.truncated || result.declaredUnsupported || !report;
       await ctx.runMutation(internal.customerWorkflows.recordResult, {
         tenantId: ctx.tenantId,
         runId,
-        resultHash: await contentHash(result.reply),
+        resultHash: await contentHash(report?.markdown ?? result.reply),
         incomplete,
       });
       await ctx.runQuery(internal.customerWorkflows.executionContext, {
         tenantId: ctx.tenantId,
         runId,
       });
-      if (result.reply.trim()) {
+      if (report && !incomplete) {
         await saveMarkdownDocument(ctx, {
           tenantId: ctx.tenantId,
           planId: context.planId,
           threadId,
-          title: snapshot.name,
-          markdown: result.reply,
+          title: report.title,
+          markdown: report.markdown,
         });
         await cockpitAgent.saveMessage(ctx, {
           threadId,
-          message: { role: "assistant", content: result.reply },
+          message: { role: "assistant", content: report.markdown },
+          skipEmbeddings: true,
+        });
+      } else {
+        await cockpitAgent.saveMessage(ctx, {
+          threadId,
+          message: {
+            role: "assistant",
+            content:
+              "The draft did not pass the report checks. Review the requested fields, units and source facts before starting a new run.",
+          },
           skipEmbeddings: true,
         });
       }

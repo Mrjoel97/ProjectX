@@ -1,3 +1,5 @@
+> Last verified 2026-11-04. Custom report workflows can request exact table values using a Table line with field names and units.
+
 > Last verified 2026-11-03. The library separates customer-authored specialists and report workflows from built-in templates. Customer pilot runs produce one composite report with an original PDF through the governed runtime.
 
 > Last verified: 2026-10-29 — Skills and Workflows now defaults to Workflows and retains only Workflows/Skills tabs. Social service setup moved to Marketing; workflow starting, preview and owner controls are unchanged. Navigation regression tests pass.

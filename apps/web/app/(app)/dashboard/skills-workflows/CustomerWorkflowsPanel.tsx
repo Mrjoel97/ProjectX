@@ -256,7 +256,8 @@ export function CustomerWorkflowsPanel({
           </label>
           <p className={styles.hint}>
             Write up to {CUSTOMER_WORKFLOW_STEP_LIMIT} requirements, one per line. The specialist
-            brings the results together in one PDF report.
+            brings the results together in one PDF report. To require specific table values, add a
+            line such as “Table: Wholesale price ($), Gross margin (%)”.
           </p>
           <div className={styles.actions}>
             <button className={styles.primary} type="submit" disabled={busy}>

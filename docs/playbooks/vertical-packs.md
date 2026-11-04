@@ -1,3 +1,5 @@
+> Last verified 2026-11-04. Source identities include customer report parsing and the updated schema.
+
 > Last verified 2026-11-04. The source fingerprint includes the tenant-first specialist and workflow indexes.
 
 > Last verified 2026-11-04. Regenerated the evaluator identity after refreshing the shared website recipe fingerprint for the customer workflow schema.

@@ -1,4 +1,4 @@
-import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
+import { DOCUMENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
 import {
   validateCustomerWorkflow,
   validateCustomerWorkflowBrief,
@@ -188,7 +188,9 @@ export const claim = internalMutation({
     }
     const skill = await ctx.db
       .query("skills")
-      .withIndex("by_name_status", (q) => q.eq("name", COCKPIT_AGENT_SKILL).eq("status", "active"))
+      .withIndex("by_name_status", (q) =>
+        q.eq("name", DOCUMENT_DRAFTER_SKILL).eq("status", "active"),
+      )
       .unique();
     if (!skill) throw new Error("WORKFLOW_EXECUTOR_UNAVAILABLE");
     const now = Date.now();
@@ -200,6 +202,7 @@ export const claim = internalMutation({
       steps: workflow.steps,
       specialistId: workflow.specialistId,
       specialistRevision: workflow.specialistRevision,
+      executorSkillName: DOCUMENT_DRAFTER_SKILL,
       executorSkillVersion: skill.version,
       brief,
       knowledge,

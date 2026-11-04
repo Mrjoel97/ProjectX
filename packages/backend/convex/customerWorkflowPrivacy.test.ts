@@ -1,4 +1,4 @@
-import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
+import { DOCUMENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
 import { deletableTables, exportableTables } from "@pikar/core/tenantData";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
@@ -28,7 +28,7 @@ test("native export and erasure cover workflow definitions and pinned run briefs
   vi.stubEnv("CUSTOMER_WORKFLOWS_PILOT_TENANTS", JSON.stringify([aId, bId]));
   await t.run((ctx) =>
     ctx.db.insert("skills", {
-      name: COCKPIT_AGENT_SKILL,
+      name: DOCUMENT_DRAFTER_SKILL,
       version: 1,
       body: "Registered executor fixture",
       status: "active",

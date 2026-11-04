@@ -1,4 +1,4 @@
-import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
+import { DOCUMENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -33,7 +33,7 @@ async function fixture() {
   const b = t.withIdentity({ subject: "pilot_b" });
   await t.run((ctx) =>
     ctx.db.insert("skills", {
-      name: COCKPIT_AGENT_SKILL,
+      name: DOCUMENT_DRAFTER_SKILL,
       version: 1,
       body: "Registered executor",
       status: "active",

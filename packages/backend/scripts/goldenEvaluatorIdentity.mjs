@@ -123,6 +123,7 @@ export const EVALUATOR_FILES = [
   "packages/backend/convex/lib/customerWorkflowPilot.ts",
   "packages/core/src/customerSpecialists.ts",
   "packages/core/src/customerWorkflows.ts",
+  "packages/core/src/customerWorkflowReport.ts",
   "packages/core/src/customerWorkflowPilot.ts",
   "packages/backend/convex/managedServiceTools.ts",
   "packages/backend/convex/serviceConversations.ts",

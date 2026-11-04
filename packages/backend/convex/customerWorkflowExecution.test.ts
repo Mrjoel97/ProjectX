@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
+import { DOCUMENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
@@ -14,7 +14,12 @@ const modelTurn = vi.hoisted(() =>
     content: [
       {
         type: "text",
-        text: `# Buyer report\n\n${JSON.stringify(options).includes("linen jacket") ? "A linen jacket" : "A cotton shirt"}`,
+        text: JSON.stringify({
+          title: "Buyer report",
+          markdown: JSON.stringify(options).includes("outline-only fixture")
+            ? "Here is the plan for the report."
+            : `## Buyer decision\n\n${JSON.stringify(options).includes("linen jacket") ? "A linen jacket" : "A cotton shirt"}\n\n| Measure | Value |\n|---|---|\n| Minimum order | 12 units |`,
+        }),
       },
     ],
     finishReason: { unified: "stop", raw: "stop" },
@@ -65,7 +70,7 @@ test("ordinary customer runs twice into separate owned chats with actual PDF fil
   const customer = t.withIdentity({ subject: "pilot_a" });
   await t.run((ctx) =>
     ctx.db.insert("skills", {
-      name: COCKPIT_AGENT_SKILL,
+      name: DOCUMENT_DRAFTER_SKILL,
       version: 1,
       body: "Registered executor",
       status: "active",
@@ -88,7 +93,7 @@ test("ordinary customer runs twice into separate owned chats with actual PDF fil
       name: "Retail report",
       specialistId: specialist.specialistId,
       specialistRevision: 1,
-      steps: ["Explain the product", "Draft the buyer message"],
+      steps: ["Explain the product", "Table: Minimum order (units)"],
     },
   );
   const run = makeFunctionReference<"action">("customerWorkflowExecution:run");
@@ -177,4 +182,16 @@ test("ordinary customer runs twice into separate owned chats with actual PDF fil
     const bytes = await t.run(async (ctx) => (await ctx.storage.get(storageId))?.text());
     expect(bytes?.startsWith("%PDF-")).toBe(true);
   }
+  const rejected = await customer.action(run, {
+    ...input,
+    brief: "outline-only fixture",
+    requestId: "customer-run-incomplete-003",
+  });
+  expect(rejected.status).toBe("failed");
+  const inventory = await customer.query(api.workspaceArtifacts.list, {
+    threadId: rejected.threadId,
+    stream: "documents",
+    paginationOpts: { cursor: null, numItems: 10 },
+  });
+  expect(inventory.page).toHaveLength(0);
 });

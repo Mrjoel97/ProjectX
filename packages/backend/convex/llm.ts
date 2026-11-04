@@ -5933,7 +5933,7 @@ export async function runSpecialistTurn(
     evalRevenueFixtureId,
   } = args;
   const tenantSkillIds = args.tenantSkillIds;
-  if (args.customerWorkflowRunId && (skillName !== COCKPIT_AGENT_SKILL || toolNames.length > 0))
+  if (args.customerWorkflowRunId && (skillName !== DOCUMENT_DRAFTER_SKILL || toolNames.length > 0))
     throw new Error("CUSTOMER_WORKFLOW_GRANT_INVALID");
   if (args.visualInput && skillName !== "vertical-design")
     throw new Error("VISUAL_SKILL_UNSUPPORTED");

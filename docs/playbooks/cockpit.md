@@ -1,3 +1,5 @@
+> Last verified 2026-11-04. Manual report runs publish validated document content through the workspace reader and PDF writer. Incomplete drafts produce a status message.
+
 > Last verified 2026-11-03. The Skills and Workflows library now offers customer-owned specialist definitions and reusable report requirements for admitted tenants. Each explicit run creates its own conversation and document output.
 
 > Last verified: 2026-10-30 — The welcome heading remains on a new chat; sending the first message immediately switches to a full workspace canvas, before a thread ID arrives. Existing conversations use the same layout; New chat restores the welcome. Output tabs and controls are compact on desktop, with larger touch targets on coarse pointers. Active outputs lose the inset frame; chat resizing, output selection and Expand remain available.

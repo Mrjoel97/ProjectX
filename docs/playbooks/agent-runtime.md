@@ -1,3 +1,5 @@
+> Last verified 2026-11-04. Customer report runs use the active document-drafter with an empty tool list and the existing paid-call fence.
+
 > Last verified 2026-11-03. Customer workflows add a scoped manual run ID to the shared loop, pin the active cockpit version and enforce pilot admission before provider work. Runtime source inventories include the new pilot dependencies.
 
 > Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social and recurring-service changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.

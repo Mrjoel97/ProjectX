@@ -1,3 +1,5 @@
+> Last verified 2026-11-04. The document drafter returns a reader-facing title and Markdown body. A Table line can require named values and units in rows or columns. Missing values, malformed tables and incorrect margins on supported single-product dollar briefs fail completion before file publication. Prose-only reports are supported.
+
 > Last verified 2026-11-04. Specialist-version and outstanding-run lookups use tenant-first compound indexes.
 
 # Customer specialists and manual workflows
@@ -29,3 +31,5 @@ Use core validation, backend tenant/run tests and UI tests to check the ordinary
 ## Rollout
 
 Start with explicit pilot tenant IDs after the candidate passes its checks. Removing a tenant closes subsequent generation boundaries. Review open runs and provider receipts before retrying an ambiguous attempt. Follow the existing verified release pipeline for code changes.
+
+Hosted Dune table trial (2026-11-04): a non-owner generated one downloadable report with six requested measures. The PDF showed the correct 42% gross margin, 24-unit minimum, 1,392-dollar opening order and eight-week lead time. The call settled at USD 0.00044985. The narrative introduced unsupported shopper demographics. Table validation checks structure, selected values and units; it does not verify every factual statement. Keep broader rollout pending grounding acceptance.

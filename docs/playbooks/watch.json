@@ -704,6 +704,7 @@
   "customer-workflows.md": [
     "packages/core/src/customerSpecialists",
     "packages/core/src/customerWorkflows",
+    "packages/core/src/customerWorkflowReport",
     "packages/core/src/customerWorkflowPilot",
     "packages/backend/convex/customerSpecialists",
     "packages/backend/convex/customerWorkflow",

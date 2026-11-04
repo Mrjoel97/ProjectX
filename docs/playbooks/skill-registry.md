@@ -1,3 +1,5 @@
+> Last verified 2026-11-04. New customer workflow runs pin the document-drafter registry name and version. Pre-existing run receipts retain their original executor version.
+
 > Last verified 2026-11-04. The source fingerprint includes the tenant-first specialist and workflow indexes.
 
 > Last verified 2026-11-04. Regenerated the evaluator identity after refreshing the shared website recipe fingerprint for the customer workflow schema.

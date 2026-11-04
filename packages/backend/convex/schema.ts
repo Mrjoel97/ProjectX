@@ -3387,6 +3387,7 @@ export default defineSchema({
     steps: v.array(v.string()),
     specialistId: v.id("customerSpecialists"),
     specialistRevision: v.number(),
+    executorSkillName: v.optional(v.string()),
     executorSkillVersion: v.number(),
     knowledge: v.array(
       v.object({
