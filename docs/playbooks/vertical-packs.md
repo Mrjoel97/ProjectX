@@ -1,3 +1,5 @@
+> Last verified 2026-11-04. Regenerated the evaluator identity after refreshing the shared website recipe fingerprint for the customer workflow schema.
+
 > Last verified 2026-11-03. Evaluator source inventories include the customer workflow runtime and pilot policy imported by shared model execution. Corpus case bytes retain their own fixed identity.
 
 > Last verified: 2026-10-29 — Social Marketing service setup and scheduling now live under Marketing, not Skills and Workflows. Marketing separates Services, Publishing, Reports, Leads & links, and Connections; sections load on first visit and retain draft state during tab changes. Keyboard navigation and per-section errors are preserved. Service review links target Marketing. No grants, budgets, schedules or publication rules changed.

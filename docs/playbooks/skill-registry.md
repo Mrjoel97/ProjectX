@@ -1,3 +1,5 @@
+> Last verified 2026-11-04. Regenerated the evaluator identity after refreshing the shared website recipe fingerprint for the customer workflow schema.
+
 > Last verified 2026-11-03. Customer specialist configurations are private task data under ADR-072. The pilot pins the active global cockpit registry version at manual run consent. Golden and vertical source identities include the scoped execution dependencies.
 
 > Last verified: 2026-10-29 — Media Director v13 treats approved example films as quality references rather than mandatory aesthetics. Each concept must justify its product/audience/brand fit, and batch variants must differ intentionally. Caption copy stays bound to spoken words; title placement, motion and duplicate-message review remain explicit creative checks. Canonical Markdown and the bundled seed mirror are synchronized. This source update is not hosted registry activation or paid creative qualification.
