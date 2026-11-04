@@ -202,9 +202,12 @@ async function vault(t: Stack["t"], tenantId: string, overrides: Record<string, 
 }
 
 /** Isolated database fixture only. These are test rows, never a deployed qualification receipt. */
-async function activeRecipe(t: Stack["t"]) {
-  const definition = WEB_RECIPE_DEFINITIONS.find((entry) => entry.id === "business-site");
-  if (!definition) throw new Error("Missing business recipe");
+async function activeRecipe(
+  t: Stack["t"],
+  recipeId: "business-site" | "storefront-catalogue" = "business-site",
+) {
+  const definition = WEB_RECIPE_DEFINITIONS.find((entry) => entry.id === recipeId);
+  if (!definition) throw new Error("Missing recipe");
   const id = await t.run((ctx) =>
     ctx.db.insert("skills", {
       name: definition.registryName,
@@ -389,6 +392,57 @@ test("shop intent asks for catalogue facts without creating a pretend shop", asy
   expect(row?.status).toBe("collecting");
   expect(row?.brief.kind).toBe("shop");
   expect(await t.run((ctx) => ctx.db.query("webProjects").collect())).toEqual([]);
+});
+
+test("the design workflow builds a private catalogue for a regular tenant before merchant setup", async () => {
+  const { t, tenantId, planId, session, brief, threadId } = await setup(
+    "Acme sells a Garden postcard, a printed garden illustration for homeowners.",
+  );
+  const saved = await t.mutation(internal.onlinePresence.saveBrief, {
+    tenantId,
+    planId,
+    expectedRevision: session.revision,
+    brief: {
+      ...brief,
+      kind: "shop",
+      catalogue: [
+        { id: "postcard", name: "Garden postcard", description: "A printed garden illustration." },
+      ],
+    },
+  });
+  expect(saved.ok).toBe(true);
+  const build = { tenantId, planId, expectedRevision: saved.revision };
+  await expect(t.mutation(internal.onlinePresence.designSnapshot, build)).rejects.toThrow(
+    "WEB_RECIPE_UNAVAILABLE",
+  );
+  await activeRecipe(t, "storefront-catalogue");
+  expect(await t.mutation(internal.onlinePresence.buildProject, build)).toMatchObject({
+    ok: false,
+    reason: "required_design_pipeline",
+  });
+  const built = await offlineProviderBuild(t, build);
+  if (!built.artifact) throw new Error("Missing private catalogue");
+  const tenant = t.withIdentity({ subject: `${tenantId}|session` });
+  const project = await tenant.query(api.webProjects.getProject, {
+    projectId: built.artifact.projectId,
+  });
+  expect(project?.kind).toBe("storefront");
+  expect(project?.publishedVersion).toBeUndefined();
+  const row = await tenant.query(api.onlinePresence.sessionForThread, { threadId });
+  expect(row?.projectId).toBe(built.artifact.projectId);
+  const versions = await t.run((ctx) => ctx.db.query("webProjectVersions").take(2));
+  expect(versions).toHaveLength(1);
+  expect(versions[0]?.recipeRef?.name).toBe("web-recipe-storefront-catalogue");
+  expect(versions[0]?.providerReceipt?.pipelineVersion).toBe("stitch-kimi-required-v1");
+  expect(JSON.stringify(versions[0]?.document)).toContain("Garden postcard");
+  const publication = await tenant.mutation(api.webProjects.publishVersion, {
+    projectId: built.artifact.projectId,
+    version: built.artifact.version,
+    contentHash: built.artifact.contentHash,
+    expectedRevision: project!.revision,
+  });
+  expect(publication).toMatchObject({ ok: false, code: "COMMERCE_UNAVAILABLE" });
+  expect(await t.run((ctx) => ctx.db.query("tenantMerchantPayments").take(1))).toEqual([]);
 });
 
 test("source ownership and session revision are checked at every save", async () => {
