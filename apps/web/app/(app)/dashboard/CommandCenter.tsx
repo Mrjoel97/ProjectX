@@ -360,6 +360,15 @@ export type AgendaView = {
     gapIndex: number;
     citations: string[];
     goal: string | null;
+    followUp?: {
+      title: string;
+      reason: string;
+      actionLabel: string;
+      href: string;
+      feedback: "helped" | "needs_change" | null;
+      canGiveFeedback: boolean;
+      planId: import("convex/values").GenericId<"plans">;
+    } | null;
   }[];
   asks: { section: string; needs: string }[];
 } | null;
@@ -392,9 +401,7 @@ const strong: CSSProperties = { ...muted, fontWeight: 600, color: "var(--ink)" }
 const small: CSSProperties = { ...muted, fontSize: "0.85rem" };
 
 /**
- * PROPOSE-ONLY, by construction: the only mutations a row can reach are `evaluations.actOnGap`
- * (stages a proposal that waits at the Approve gate — the review card's own button) and
- * `agenda.dismiss`. No row can send, schedule or execute anything.
+ * A review row can stage a proposal, show the result or record feedback.
  */
 export function AgendaCard({
   agenda,
@@ -402,12 +409,20 @@ export function AgendaCard({
   note,
   onStage,
   onDismiss,
+  onFeedback,
+  feedbackPending,
 }: {
   agenda: AgendaView | Loading;
   children?: ReactNode;
   note: string | null;
   onStage: (gapIndex: number) => void;
-  onDismiss: (key: string) => void;
+  onDismiss: (key: string, planId?: import("convex/values").GenericId<"plans">) => void;
+  onFeedback?: (
+    key: string,
+    planId: import("convex/values").GenericId<"plans">,
+    feedback: "helped" | "needs_change",
+  ) => void;
+  feedbackPending?: boolean;
 }) {
   return (
     <section style={card} aria-labelledby="cc-agenda-label" data-cc-section="agenda">
@@ -437,7 +452,51 @@ export function AgendaCard({
                 ) : null}
                 {item.goal ? <p style={small}>Toward your goal: {item.goal}</p> : null}
                 {item.proofMetric ? <p style={small}>Done when: {item.proofMetric}</p> : null}
-                {item.status === "proposed" ? (
+                {item.followUp ? (
+                  <>
+                    <h3 style={strong}>{item.followUp.title}</h3>
+                    <p style={muted}>{item.followUp.reason}</p>
+                    <a href={item.followUp.href} style={linkStyle}>
+                      {item.followUp.actionLabel} <ArrowIcon size={14} />
+                    </a>
+                    {item.followUp.canGiveFeedback && onFeedback && (
+                      <fieldset
+                        aria-label="Was this work useful?"
+                        style={{
+                          display: "flex",
+                          gap: "0.6rem",
+                          flexWrap: "wrap",
+                          border: 0,
+                          padding: 0,
+                          margin: 0,
+                        }}
+                      >
+                        {(["helped", "needs_change"] as const).map((choice) => (
+                          <button
+                            key={choice}
+                            type="button"
+                            className="cta-ghost"
+                            disabled={feedbackPending}
+                            aria-pressed={item.followUp?.feedback === choice}
+                            onClick={() => {
+                              if (item.followUp) onFeedback(item.key, item.followUp.planId, choice);
+                            }}
+                          >
+                            {choice === "helped" ? "This helped" : "Needs a change"}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className="cta-ghost"
+                          disabled={feedbackPending}
+                          onClick={() => onDismiss(item.key, item.followUp?.planId)}
+                        >
+                          Dismiss follow-up
+                        </button>
+                      </fieldset>
+                    )}
+                  </>
+                ) : item.status === "proposed" ? (
                   <Link href="/dashboard/approvals" style={linkStyle}>
                     Review in approvals <ArrowIcon size={14} />
                   </Link>
@@ -831,20 +890,52 @@ export function ConnectedAgenda() {
   const agenda = useQuery(api.agenda.current, {});
   const actOnGap = useMutation(api.evaluations.actOnGap);
   const dismiss = useMutation(api.agenda.dismiss);
+  const recordFeedback = useMutation(api.agenda.recordOutcomeFeedback);
+  const [feedbackPending, setFeedbackPending] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   return (
     <AgendaCard
       agenda={agenda}
       note={note}
+      feedbackPending={feedbackPending}
+      onFeedback={async (key, planId, feedback) => {
+        if (!agenda || feedbackPending) return;
+        setFeedbackPending(true);
+        try {
+          const result = await recordFeedback({
+            key,
+            planId,
+            reviewedAt: agenda.reviewedAt,
+            feedback,
+          });
+          setNote(
+            result.ok ? "Your feedback was saved." : "This review changed. Check the latest step.",
+          );
+        } catch {
+          setNote("Your feedback could not be saved. Please try again.");
+        } finally {
+          setFeedbackPending(false);
+        }
+      }}
       onStage={(gapIndex) =>
         void actOnGap({ threadId: REVIEW_THREAD_ID, gapIndex }).then((res) =>
           setNote(res.ok ? AGENDA_COPY.staged : AGENDA_COPY[res.reason]),
         )
       }
-      onDismiss={(key) => void dismiss({ key })}
+      onDismiss={(key, planId) => {
+        const args = planId && agenda ? { key, planId, reviewedAt: agenda.reviewedAt } : { key };
+        void dismiss(args)
+          .then(({ ok }) =>
+            setNote(ok ? "Step dismissed." : "This review changed. Check the latest step."),
+          )
+          .catch(() => setNote("This step could not be dismissed. Please try again."));
+      }}
     >
       <SectionBoundary section="service-decision">
         <ConnectedServiceDecision />
+      </SectionBoundary>
+      <SectionBoundary section="workflow-decision">
+        <ConnectedWorkflowDecision />
       </SectionBoundary>
     </AgendaCard>
   );
@@ -852,13 +943,39 @@ export function ConnectedAgenda() {
 
 export function ConnectedServiceDecision() {
   const decision = useQuery(api.serviceOutcomes.agendaDecision, {});
+  const setDismissed = useMutation(api.serviceOutcomes.setDecisionDismissed);
   if (!decision) return null;
-  return <ServiceDecision key={decision.key} decision={decision} />;
+  return (
+    <ServiceDecision
+      key={decision.key}
+      decision={decision}
+      label="Social marketing"
+      setDismissed={setDismissed}
+    />
+  );
+}
+
+export function ConnectedWorkflowDecision() {
+  const decision = useQuery(api.workflowPackOutcomes.agendaDecision, {});
+  const setDismissed = useMutation(api.workflowPackOutcomes.setDecisionDismissed);
+  if (!decision) return null;
+  return (
+    <ServiceDecision
+      key={decision.key}
+      decision={decision}
+      label="Workflow"
+      setDismissed={setDismissed}
+    />
+  );
 }
 
 function ServiceDecision({
   decision,
+  label,
+  setDismissed,
 }: {
+  label: "Social marketing" | "Workflow";
+  setDismissed: (args: { key: string; dismissed: boolean }) => Promise<boolean>;
   decision: {
     key: string;
     title: string;
@@ -869,7 +986,6 @@ function ServiceDecision({
     dismissed: boolean;
   };
 }) {
-  const setDismissed = useMutation(api.serviceOutcomes.setDecisionDismissed);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   async function toggle() {
@@ -888,12 +1004,15 @@ function ServiceDecision({
 
   const updated = new Date(decision.observedAt);
   return (
-    <div style={agendaRow} data-cc-section="service-decision">
+    <div
+      style={agendaRow}
+      data-cc-section={label === "Workflow" ? "workflow-decision" : "service-decision"}
+    >
       {decision.dismissed ? (
-        <p style={muted}>Social marketing suggestion dismissed.</p>
+        <p style={muted}>{label} suggestion dismissed.</p>
       ) : (
         <>
-          <p className="caps-label">Social marketing follow-up</p>
+          <p className="caps-label">{`${label} follow-up`}</p>
           <h2 style={heading}>{decision.title}</h2>
           <p style={muted}>{decision.reason}</p>
           <p style={small}>

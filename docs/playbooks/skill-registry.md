@@ -6,6 +6,8 @@
 
 > Last verified 2026-11-03. Customer specialist configurations are private task data under ADR-072. The pilot pins the active global cockpit registry version at manual run consent. Golden and vertical source identities include the scoped execution dependencies.
 
+> Last verified: 2026-11-04 — The Executive reads weekly review and workflow pack decisions. The golden and vertical evaluator inventories now track the agenda, pack event and decision sources. Offline identity checks verify that edits retire the corresponding evidence.
+
 > Last verified: 2026-11-04 — The source fingerprint includes the private TikTok review guard. The evaluation cases are unchanged.
 
 > Last verified: 2026-11-03 — Mechanically refreshed evaluator source fingerprints for TikTok token renewal. Existing 46 golden and 40 vertical cases are unchanged; offline checks pass. No new model evaluation or qualification evidence is claimed.

@@ -28,15 +28,19 @@ import {
   type PackMetricEvent,
   type PackOutcome,
   type PlanDecisionCounts,
+  packFollowUp,
   planDecisions,
   recommendationAcceptance,
   type TimeToFirstUsefulOutcome,
   timeToFirstUsefulOutcome,
   unsupportedClaimRate,
+  WORKFLOW_PACK_IDS,
+  WORKFLOW_PACKS,
+  type WorkflowPackId,
 } from "@pikar/core";
 import { v } from "convex/values";
 import type { QueryCtx } from "./_generated/server";
-import { tenantQuery } from "./lib/functions";
+import { tenantMutation, tenantQuery } from "./lib/functions";
 import { onboardingCompletedAt } from "./onboarding";
 import { PACK_EVENT_PAGE_MAX, toMetricEvent } from "./workflowPackEventLog";
 
@@ -46,6 +50,94 @@ import { PACK_EVENT_PAGE_MAX, toMetricEvent } from "./workflowPackEventLog";
  * 1,000 extra reads inside one query. The newest runs are the ones a pilot dashboard is looking at.
  */
 export const PACK_RUN_JOIN_MAX = 25;
+
+async function decisionForPack(ctx: QueryCtx & { tenantId: string }, packId: WorkflowPackId) {
+  const start = await ctx.db
+    .query("workflowPackEvents")
+    .withIndex("by_tenant_pack_event_createdAt", (q) =>
+      q.eq("tenantId", ctx.tenantId).eq("packId", packId).eq("event", "run_started"),
+    )
+    .order("desc")
+    .first();
+  if (!start?.planId || !start.threadId) return null;
+  const plan = await ctx.db.get(start.planId);
+  if (!plan || plan.tenantId !== ctx.tenantId || plan.threadId !== start.threadId) return null;
+  if (plan.status !== "collecting" && plan.status !== "proposed") return null;
+  const rows = await ctx.db
+    .query("workflowPackEvents")
+    .withIndex("by_tenant_run", (q) => q.eq("tenantId", ctx.tenantId).eq("runId", start.runId))
+    .order("desc")
+    .take(51);
+  // Ambiguous or oversized histories cannot support a recommendation.
+  if (rows.length > 50 || rows.filter((row) => row.event === "run_started").length !== 1)
+    return null;
+  if (
+    rows.some(
+      (row) =>
+        row.packId !== start.packId ||
+        (row.planId && row.planId !== plan._id) ||
+        (row.threadId && row.threadId !== start.threadId) ||
+        row.event === "plan_approved" ||
+        row.event === "plan_rejected",
+    )
+  )
+    return null;
+  const terminals = rows.filter(
+    (row) => row.event === "run_completed" || row.event === "run_failed",
+  );
+  const terminal = terminals[0];
+  if (terminals.length !== 1 || !terminal?.outcome || terminal.threadId !== start.threadId)
+    return null;
+  const needsApproval =
+    plan.status === "proposed" &&
+    rows.some((row) => row.event === "plan_proposed" && row.planId === plan._id);
+  const copy = packFollowUp(terminal.outcome, needsApproval);
+  const edit = needsApproval && rows.find((row) => row.event === "plan_edited");
+  const key = `${terminal._id}:${needsApproval ? "proposal" : terminal.outcome}${edit ? `:${edit._id}` : ""}`;
+  return {
+    planId: plan._id,
+    packId,
+    recordedAt: terminal._creationTime,
+    dismissedKeys: plan.dismissedPackDecisionKeys ?? {},
+    view: {
+      key,
+      title: WORKFLOW_PACKS[packId].title,
+      ...copy,
+      href: `/dashboard/workspace?thread=${encodeURIComponent(plan.threadId)}&plan=${encodeURIComponent(plan._id)}`,
+      observedAt: terminal.createdAt,
+      dismissed: plan.dismissedPackDecisionKeys?.[packId] === key,
+    },
+  };
+}
+
+async function latestPackDecision(ctx: QueryCtx & { tenantId: string }) {
+  const decisions = (await Promise.all(WORKFLOW_PACK_IDS.map((id) => decisionForPack(ctx, id))))
+    .filter((d) => d !== null)
+    .sort(
+      (a, b) => Number(a.view.dismissed) - Number(b.view.dismissed) || b.recordedAt - a.recordedAt,
+    );
+  return decisions[0] ?? null;
+}
+
+export const agendaDecision = tenantQuery({
+  args: {},
+  handler: async (ctx) => (await latestPackDecision(ctx))?.view ?? null,
+});
+
+export const setDecisionDismissed = tenantMutation({
+  args: { key: v.string(), dismissed: v.boolean() },
+  handler: async (ctx, args) => {
+    const current = await latestPackDecision(ctx);
+    if (!current || current.view.key !== args.key) return false;
+    if (current.view.dismissed !== args.dismissed) {
+      const keys = { ...current.dismissedKeys };
+      if (args.dismissed) keys[current.packId] = args.key;
+      else delete keys[current.packId];
+      await ctx.db.patch(current.planId, { dismissedPackDecisionKeys: keys });
+    }
+    return true;
+  },
+});
 
 const packIdArg = v.union(
   v.literal("business-pulse"),
