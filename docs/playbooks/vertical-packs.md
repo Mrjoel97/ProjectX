@@ -1,3 +1,4 @@
+> Last verified: 2026-11-04 — Refreshed evaluator source identity for the YouTube review controls; evaluation cases are unchanged.
 > Last verified 2026-11-04. Source identities include customer report parsing and the updated schema.
 
 > Last verified 2026-11-04. The source fingerprint includes the tenant-first specialist and workflow indexes.

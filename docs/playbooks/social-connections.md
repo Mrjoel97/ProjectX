@@ -1,3 +1,5 @@
+> Last verified: 2026-11-04 — For Google verification, the connection flag may be review:<tenant-id> with metadata cleanup enabled. Only that workspace can start and complete consent. The publishing flag can authorize one named private YouTube draft revision, checked again at dispatch. Close the review windows after the demonstration.
+
 > Last verified: 2026-11-04 — For a private TikTok review, set the publishing flag to review:<saved-post-ID>:<revision> only for the approved window. Approval, queue claim and final write check the immutable revision and SELF_ONLY privacy. The ordinary provider-wide switch stays off. Remove the review value after the single submission, including on failure. TikTok sandbox media ownership may use its own TIKTOK_SANDBOX_VERIFICATION_FILENAME and TIKTOK_SANDBOX_VERIFICATION_CONTENT alongside the existing production proof.
 
 > Last verified: 2026-11-03 — TikTok support reply and official Draft configuration read back. Ninety focused OAuth, publishing, disconnect and callback checks pass; no deployment, new grant, post or review submission is claimed. Meta remains inactive pending business registration.

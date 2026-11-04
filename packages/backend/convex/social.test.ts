@@ -57,6 +57,28 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe("native social tenant isolation", () => {
+  test("the YouTube review connection is tenant-bound through activation", async () => {
+    const h = await setup();
+    vi.stubEnv("SOCIAL_YOUTUBE_CONNECT_ENABLED", `review:${h.tenantId}`);
+    vi.stubEnv("YOUTUBE_OAUTH_CLIENT_ID", "synthetic-app");
+    vi.stubEnv("YOUTUBE_OAUTH_CLIENT_SECRET", "synthetic-secret");
+    vi.stubEnv("CONNECTOR_CREDENTIAL_KEY_V1", btoa("k".repeat(32)));
+    vi.stubEnv("CONVEX_SITE_URL", "https://test.convex.site");
+    vi.stubEnv("SITE_URL", "https://test.example");
+    const available = async (client: typeof h.asOwner) =>
+      (await client.query(api.social.status, {})).find((row) => row.provider === "youtube")
+        ?.configured;
+    expect(await available(h.asOwner)).toBe(true);
+    expect(await available(h.asOther)).toBe(false);
+    await expect(
+      h.asOther.action(api.socialActions.startConnect, { provider: "youtube" }),
+    ).rejects.toThrow("SOCIAL_NOT_CONFIGURED");
+    await pending(h, "youtube");
+    vi.stubEnv("SOCIAL_YOUTUBE_CONNECT_ENABLED", "review:another-tenant");
+    expect(
+      await h.asOwner.mutation(api.social.completeConnect, { provider: "youtube", receipt }),
+    ).toMatchObject({ connected: false });
+  });
   test.each(
     SOCIAL_PROVIDERS,
   )("%s receipt activates only the initiating tenant once", async (provider) => {

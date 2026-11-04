@@ -217,7 +217,7 @@ export const startConnect = tenantAction({
     ),
   },
   handler: async (ctx, { provider, intent = "identity" }): Promise<{ url: string }> => {
-    if (provider === "youtube" && !youtubeConnectionEnabled())
+    if (provider === "youtube" && !youtubeConnectionEnabled(ctx.tenantId))
       throw new Error("SOCIAL_NOT_CONFIGURED");
     const existing = await ctx.runQuery(internal.social.connection, {
       tenantId: ctx.tenantId,

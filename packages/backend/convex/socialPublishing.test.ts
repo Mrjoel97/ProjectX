@@ -475,11 +475,14 @@ async function videoPost(provider: "youtube" | "tiktok") {
   await h.t.run((ctx) => ctx.db.patch(postId, { status: "approved" }));
   return { ...h, postId, storageId, videoConnectionId: connectionId };
 }
-test("a TikTok review window permits only the named private draft revision", async () => {
-  const h = await videoPost("tiktok");
+test.each([
+  "tiktok",
+  "youtube",
+] as const)("a %s review window permits only the named private draft revision", async (provider) => {
+  const h = await videoPost(provider);
   const post = await h.t.run((ctx) => ctx.db.get(h.postId));
   if (!post) throw new Error("missing fixture post");
-  const gate = "SOCIAL_TIKTOK_PUBLISH_ENABLED";
+  const gate = `SOCIAL_${provider.toUpperCase()}_PUBLISH_ENABLED`;
   const approve = () =>
     h.owner.mutation(api.socialPublishing.approvePost, {
       postId: h.postId,
@@ -494,9 +497,11 @@ test("a TikTok review window permits only the named private draft revision", asy
     await expect(approve()).rejects.toThrow("SOCIAL_PUBLISH_NOT_QUALIFIED");
   }
   vi.stubEnv(gate, `review:${h.postId}:${post.revision}`);
-  await h.t.run((ctx) => ctx.db.patch(h.postId, { privacy: "PUBLIC_TO_EVERYONE" }));
+  await h.t.run((ctx) =>
+    ctx.db.patch(h.postId, { privacy: provider === "youtube" ? "public" : "PUBLIC_TO_EVERYONE" }),
+  );
   await expect(approve()).rejects.toThrow("SOCIAL_PUBLISH_NOT_QUALIFIED");
-  await h.t.run((ctx) => ctx.db.patch(h.postId, { privacy: "SELF_ONLY" }));
+  await h.t.run((ctx) => ctx.db.patch(h.postId, { privacy: post.privacy }));
   expect((await h.owner.query(api.socialPublishing.posts, {}))[0]?.publishEnabled).toBe(true);
   await approve();
   vi.stubEnv(gate, "false");
