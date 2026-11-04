@@ -22,14 +22,15 @@ export function socialPostPublishingEnabled(post: {
   const gate = process.env[`SOCIAL_${provider.toUpperCase()}_PUBLISH_ENABLED`];
   if (gate === "true") return true;
   return (
-    post.provider === "tiktok" &&
-    post.privacy === "SELF_ONLY" &&
+    ((provider === "tiktok" && post.privacy === "SELF_ONLY") ||
+      (provider === "youtube" && post.privacy === "private")) &&
     gate === `review:${post._id}:${post.revision}`
   );
 }
-export function youtubeConnectionEnabled() {
+export function youtubeConnectionEnabled(tenantId: string) {
+  const gate = process.env.SOCIAL_YOUTUBE_CONNECT_ENABLED;
   return (
-    process.env.SOCIAL_YOUTUBE_CONNECT_ENABLED === "true" &&
+    (gate === "true" || gate === `review:${tenantId}`) &&
     process.env.SOCIAL_YOUTUBE_METADATA_CLEANUP_ENABLED === "true"
   );
 }
@@ -106,7 +107,7 @@ export const status = tenantQuery({
           .unique();
         const prefix = provider === "youtube" ? "YOUTUBE" : provider.toUpperCase();
         const configured =
-          (provider !== "youtube" || youtubeConnectionEnabled()) &&
+          (provider !== "youtube" || youtubeConnectionEnabled(ctx.tenantId)) &&
           !!process.env[`${prefix}_OAUTH_CLIENT_ID`] &&
           !!process.env[`${prefix}_OAUTH_CLIENT_SECRET`] &&
           !!process.env.CONNECTOR_CREDENTIAL_KEY_V1 &&
@@ -187,7 +188,7 @@ export const consumeState = internalMutation({
     )
       return null;
     await assertTenantWritable(ctx, row.tenantId);
-    if (a.provider === "youtube" && !youtubeConnectionEnabled()) {
+    if (a.provider === "youtube" && !youtubeConnectionEnabled(row.tenantId)) {
       await ctx.db.delete(row._id);
       return null;
     }
@@ -223,7 +224,7 @@ export const storePendingGrant = internalMutation({
       row.expiresAt <= Date.now()
     )
       throw new Error("SOCIAL_INVALID_STATE");
-    if (a.provider === "youtube" && !youtubeConnectionEnabled()) {
+    if (a.provider === "youtube" && !youtubeConnectionEnabled(row.tenantId)) {
       await ctx.db.delete(row._id);
       return false;
     }
@@ -259,7 +260,7 @@ export const completeConnect = tenantMutation({
       !pending.scopes
     )
       throw new Error("SOCIAL_INVALID_STATE");
-    if (a.provider === "youtube" && !youtubeConnectionEnabled()) {
+    if (a.provider === "youtube" && !youtubeConnectionEnabled(ctx.tenantId)) {
       await ctx.db.delete(pending._id);
       return { connected: false as const, reason: "SOCIAL_NOT_CONFIGURED" };
     }

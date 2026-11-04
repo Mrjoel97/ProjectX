@@ -1,3 +1,5 @@
+> Last verified: 2026-11-04 — Refreshed evaluator source identity for the YouTube review controls; evaluation cases are unchanged.
+
 > Last verified: 2026-11-04 — The source fingerprint includes the private TikTok review guard. The evaluation cases are unchanged.
 
 > Last verified: 2026-11-03 — Mechanically refreshed evaluator source fingerprints for TikTok token renewal. Existing 46 golden and 40 vertical cases are unchanged; offline checks pass. No new model evaluation or qualification evidence is claimed.
