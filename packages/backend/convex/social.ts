@@ -11,6 +11,21 @@ export const socialProvider = v.union(
   v.literal("tiktok"),
   v.literal("youtube"),
 );
+/** A review window is bound to one saved private draft and its immutable revision. */
+export function socialPostPublishingEnabled(post: {
+  provider: string;
+  _id: string;
+  revision: number;
+  privacy?: string;
+}) {
+  const gate = process.env[`SOCIAL_${post.provider.toUpperCase()}_PUBLISH_ENABLED`];
+  if (gate === "true") return true;
+  return (
+    post.provider === "tiktok" &&
+    post.privacy === "SELF_ONLY" &&
+    gate === `review:${post._id}:${post.revision}`
+  );
+}
 export function youtubeConnectionEnabled() {
   return (
     process.env.SOCIAL_YOUTUBE_CONNECT_ENABLED === "true" &&

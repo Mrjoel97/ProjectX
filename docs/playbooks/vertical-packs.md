@@ -1,3 +1,5 @@
+> Last verified: 2026-11-04 — The source fingerprint includes the private TikTok review guard. The evaluation cases are unchanged.
+
 > Last verified: 2026-11-03 — Mechanically refreshed evaluator source fingerprints for TikTok token renewal. Existing 46 golden and 40 vertical cases are unchanged; offline checks pass. No new model evaluation or qualification evidence is claimed.
 
 > Last verified: 2026-10-29 — Social Marketing service setup and scheduling now live under Marketing, not Skills and Workflows. Marketing separates Services, Publishing, Reports, Leads & links, and Connections; sections load on first visit and retain draft state during tab changes. Keyboard navigation and per-section errors are preserved. Service review links target Marketing. No grants, budgets, schedules or publication rules changed.

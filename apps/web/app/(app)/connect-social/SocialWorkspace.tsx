@@ -783,7 +783,7 @@ export default function SocialWorkspace({
                     editId === p._id ||
                     selectionDirty ||
                     (row.selectionRevision ?? 0) !== (p.selectionRevision ?? 0) ||
-                    !row.publishEnabled ||
+                    !(p.publishEnabled ?? row.publishEnabled) ||
                     (p.kind === "tiktok" &&
                       (!p.customerChoicesConfirmed ||
                         !creator ||

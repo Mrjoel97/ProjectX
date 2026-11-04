@@ -23,7 +23,7 @@ import type { ActionCtx } from "./_generated/server";
 
 import { tenantAction } from "./lib/functions";
 import { internalAction } from "./lib/tenantLifecycle";
-import { socialProvider } from "./social";
+import { socialPostPublishingEnabled, socialProvider } from "./social";
 import { authorized, verifyYouTubeMetadata } from "./socialActions";
 
 const graph = () =>
@@ -323,8 +323,7 @@ export const publishPost = internalAction({
       if (selected.selectionRevision !== post.selectionRevision)
         throw new Error("SOCIAL_SELECTION_CHANGED");
       async function recheck() {
-        if (process.env[`SOCIAL_${post!.provider.toUpperCase()}_PUBLISH_ENABLED`] !== "true")
-          throw new Error("SOCIAL_PUBLISH_NOT_QUALIFIED");
+        if (!socialPostPublishingEnabled(post!)) throw new Error("SOCIAL_PUBLISH_NOT_QUALIFIED");
         const current = await ctx.runQuery(internal.socialPublishing.selectedConnection, {
           tenantId: a.tenantId,
           provider: post!.provider,
