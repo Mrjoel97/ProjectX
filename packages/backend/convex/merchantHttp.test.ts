@@ -9,6 +9,60 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("public merchant boundary", () => {
+  test("a public buyer cannot submit a private Flutterwave pilot order", async () => {
+    const t = convexTest(schema, modules);
+    const result = await t.fetch("/merchant/checkout/test-shop", {
+      method: "POST",
+      headers: {
+        Origin: "https://some.convex.site",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "provider=flutterwave&country=TZ&qty:item=1",
+    });
+    expect(result.status).toBe(400);
+    expect(await t.run((ctx) => ctx.db.query("tenantOrders").collect())).toEqual([]);
+  });
+  test("v3 Flutterwave webhook requires its secret before looking up an order", async () => {
+    const t = convexTest(schema, modules),
+      fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_SECRET_KEY", "FLWSECK_TEST-fixture-X");
+    vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_WEBHOOK_SECRET", "test-webhook-hash");
+    vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_ACCOUNT_ID", "12345");
+    vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_TENANT_ID", "test-tenant");
+    vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_PROJECT_ID", "test-project");
+    const event = {
+      event: "charge.completed",
+      data: {
+        id: 42,
+        account_id: 12345,
+        tx_ref: `pikar-flw-${"a".repeat(64)}`,
+        status: "successful",
+      },
+    };
+    const send = (body: unknown, secret?: string) =>
+      t.fetch("/merchant/flutterwave/webhook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(secret ? { "verif-hash": secret } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+    expect((await send(event)).status).toBe(401);
+    expect((await send(event, "wrong")).status).toBe(401);
+    const secret = "test-webhook-hash";
+    expect((await send({ ...event, data: { ...event.data, id: -1 } }, secret)).status).toBe(400);
+    expect(
+      (await send({ ...event, data: { ...event.data, account_id: 777 } }, secret)).status,
+    ).toBe(200);
+    expect(
+      (await send({ ...event, data: { ...event.data, tx_ref: "unrelated" } }, secret)).status,
+    ).toBe(200);
+    expect(await (await send(event, secret)).text()).toBe("ignored");
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(await t.run((ctx) => ctx.db.query("tenantMerchantEvents").collect())).toEqual([]);
+  });
   test("actual streamed bodies are bounded even with absent or dishonest content-length", async () => {
     const body = new ReadableStream({
       start(controller) {

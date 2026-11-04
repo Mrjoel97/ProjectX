@@ -67,7 +67,7 @@ export type CheckoutIdempotencyInput = {
 };
 
 /** Merchant commerce is separate from Pikar billing and read-only finance connectors. */
-export type MerchantProvider = "stripe" | "paypal";
+export type MerchantProvider = "stripe" | "paypal" | "flutterwave";
 export type MerchantEnvironment = "test" | "live";
 export type MerchantOperation =
   | "checkout"
@@ -104,7 +104,7 @@ export type MerchantCapability = {
   readonly environment: MerchantEnvironment;
   readonly merchantAccountRef: string;
   readonly providerAccountRef: string;
-  readonly flow: "stripe_connect_direct" | "paypal_merchant_checkout";
+  readonly flow: "stripe_connect_direct" | "paypal_merchant_checkout" | "flutterwave_standard";
   readonly status: "unverified" | "verified" | "unsupported";
   readonly sellerCountry: string;
   readonly buyerCountries: readonly string[];

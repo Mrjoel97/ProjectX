@@ -15,19 +15,37 @@ const mocks = vi.hoisted(() => ({
   orders: { orders: [], truncated: false } as any,
   connect: vi.fn(),
   refresh: vi.fn(),
+  prepare: vi.fn(),
+  checkout: vi.fn(),
+  order: null as {
+    _id: string;
+    projectId: string;
+    status: string;
+    snapshot: { currency: string; country: string; totalMinor: number; lines: { sku: string }[] };
+  } | null,
   start: vi.fn(),
   push: vi.fn(),
 }));
 vi.mock("convex/react", () => ({
-  useQuery: (reference: Parameters<typeof getFunctionName>[0]) =>
-    getFunctionName(reference) === "merchantCommerce:status" ? mocks.status : mocks.orders,
+  useMutation: () => mocks.prepare,
+  useQuery: (reference: Parameters<typeof getFunctionName>[0], args: unknown) => {
+    if (args === "skip") return undefined;
+    const name = getFunctionName(reference);
+    return name === "merchantCommerce:status"
+      ? mocks.status
+      : name === "tenantOrders:getOrder"
+        ? mocks.order
+        : mocks.orders;
+  },
   useAction: (reference: Parameters<typeof getFunctionName>[0]) => {
     const name = getFunctionName(reference);
     return name === "merchantProvider:connect"
       ? mocks.connect
       : name === "merchantProvider:refresh"
         ? mocks.refresh
-        : mocks.start;
+        : name === "merchantProvider:checkout"
+          ? mocks.checkout
+          : mocks.start;
   },
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
@@ -70,6 +88,10 @@ const button = (text: string) =>
     entry.textContent?.includes(text),
   ) as HTMLButtonElement;
 beforeEach(() => {
+  sessionStorage.clear();
+  mocks.prepare.mockReset();
+  mocks.checkout.mockReset();
+  mocks.order = null;
   mocks.status = status();
   mocks.orders = { orders: [], truncated: false };
   mocks.connect
@@ -88,6 +110,87 @@ afterEach(async () => {
 });
 
 describe("merchant operations readback", () => {
+  it("resumes a reserved item on reload and opens checkout for the verified order total", async () => {
+    const id = "aaaaaaaaaaaaaaaaaaaaaaaa";
+    sessionStorage.setItem("pikar:flw-order:owned-project", id);
+    mocks.status = {
+      ...status(),
+      privateFlutterwavePilot: {
+        items: [],
+        canStartTest: true,
+        verifiedTestPayment: false,
+        blockers: [],
+      },
+    };
+    mocks.order = {
+      _id: id,
+      projectId: "owned-project",
+      status: "pending",
+      snapshot: {
+        country: "TZ",
+        currency: "TZS",
+        totalMinor: 100000,
+        lines: [{ sku: "postcard" }],
+      },
+    };
+    const url = "https://checkout.flutterwave.com/v3/hosted/pay/test123";
+    mocks.checkout.mockResolvedValue({ ok: true, url });
+    await render();
+    expect(host.textContent).toContain(formatMerchantMoney(100000, "TZS"));
+    const email = host.querySelector("input[type=email]") as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+        email,
+        "buyer@example.test",
+      );
+      email.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button("Request test checkout").click());
+    expect(mocks.checkout).toHaveBeenCalledWith({
+      orderId: id,
+      provider: "flutterwave",
+      buyerEmail: "buyer@example.test",
+    });
+    expect(host.querySelector(`a[href="${url}"]`)).toBeTruthy();
+    expect(mocks.prepare).not.toHaveBeenCalled();
+  });
+  it("connects the private Tanzanian wallet with the confirmed currency and requires a verified receipt", async () => {
+    mocks.status = {
+      ...status(),
+      providers: [
+        {
+          provider: "flutterwave",
+          configured: true,
+          status: "not_connected",
+          canConnect: true,
+          blockers: [],
+          connectionContext: { sellerCountry: "TZ", currency: "TZS" },
+        },
+      ],
+      privateFlutterwavePilot: {
+        items: [],
+        canStartTest: false,
+        verifiedTestPayment: false,
+        blockers: [],
+      },
+    };
+    mocks.connect.mockResolvedValue({ ok: true });
+    await render();
+    await act(async () =>
+      (host.querySelector('input[type="checkbox"]') as HTMLInputElement).click(),
+    );
+    await act(async () => button("Connect Flutterwave").click());
+    expect(mocks.connect).toHaveBeenCalledWith({
+      projectId: "owned-project",
+      provider: "flutterwave",
+      shareDataConsent: true,
+      sellerCountry: "TZ",
+      currency: "TZS",
+    });
+    expect(host.textContent).toContain("Test wallet checked");
+    expect(host.textContent).not.toContain("Flutterwave confirmed a test payment");
+    expect(mocks.checkout).not.toHaveBeenCalled();
+  });
   it("holds setup while loading and shows missing facts without exposing provider configuration names", async () => {
     mocks.status = undefined;
     await render();

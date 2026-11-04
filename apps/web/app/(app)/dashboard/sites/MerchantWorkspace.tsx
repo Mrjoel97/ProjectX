@@ -5,6 +5,7 @@ import { useAction, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { FlutterwaveTestOrder } from "./FlutterwaveTestOrder";
 import styles from "./merchant.module.css";
 import { formatMerchantMoney } from "./merchantPresentation";
 import { ShopSetupReview } from "./ShopSetupReview";
@@ -12,8 +13,9 @@ import { ShopSetupReview } from "./ShopSetupReview";
 export { formatMerchantMoney } from "./merchantPresentation";
 
 type ProjectId = FunctionArgs<typeof api.webProjects.getProject>["projectId"];
-type Provider = "stripe" | "paypal";
-const providerName = (provider: Provider) => (provider === "stripe" ? "Stripe" : "PayPal");
+type Provider = "stripe" | "paypal" | "flutterwave";
+const providerName = (provider: Provider) =>
+  ({ stripe: "Stripe", paypal: "PayPal", flutterwave: "Flutterwave" })[provider];
 
 /** Only server-returned, provider-owned test onboarding URLs can leave this screen. */
 export function safeMerchantConnectionUrl(value: string, provider: Provider): string | null {
@@ -22,7 +24,9 @@ export function safeMerchantConnectionUrl(value: string, provider: Provider): st
     const hosts =
       provider === "stripe"
         ? ["accounts.stripe.com", "connect.stripe.com", "checkout.stripe.com"]
-        : ["www.sandbox.paypal.com", "sandbox.paypal.com"];
+        : provider === "paypal"
+          ? ["www.sandbox.paypal.com", "sandbox.paypal.com"]
+          : [];
     return url.protocol === "https:" &&
       !url.username &&
       !url.password &&
@@ -49,6 +53,10 @@ const explanations: Record<string, string> = {
     "Confirm permission before sharing account information with the payment provider.",
   unsupported_country: "This payment connection does not support the confirmed seller country.",
   unsupported_currency: "This payment connection does not support the confirmed currency.",
+  confirmed_tanzanian_shop_policy_required: "Confirm TZS prices and a selling policy for Tanzania.",
+  exact_native_shop_setup_review_required:
+    "Review and approve the current products and policy below.",
+  private_pilot_test_only: "This checkout is available in your private test shop.",
 };
 const explain = (reason?: string) => {
   const code = reason?.includes(":") ? reason.split(":").at(-1) : reason;
@@ -99,6 +107,7 @@ export function MerchantWorkspace({ projectId }: { projectId: string }) {
   const orders = orderReadback?.orders;
   const connect = useAction(api.merchantProvider.connect);
   const refresh = useAction(api.merchantProvider.refresh);
+  const reconcile = useAction(api.merchantProvider.reconcile);
   const start = useAction(api.cockpit.startOnlinePresence);
   const router = useRouter();
   const [consents, setConsents] = useState<Partial<Record<Provider, boolean>>>({});
@@ -194,11 +203,13 @@ export function MerchantWorkspace({ projectId }: { projectId: string }) {
               </span>
             </header>
             <p>
-              {account.status === "ready"
-                ? "The server has verified this test account. Returning from the provider alone does not verify payments."
-                : account.canConnect
-                  ? "Complete the provider's secure onboarding. Pikar does not collect your payment password."
-                  : "This test connection is not available yet. Pikar can explain the remaining setup."}
+              {account.provider === "flutterwave"
+                ? "Connect the test wallet for this Tanzanian shop to try an order in shillings."
+                : account.status === "ready"
+                  ? "The server has verified this test account. Returning from the provider alone does not verify payments."
+                  : account.canConnect
+                    ? "Complete the provider's secure onboarding. Pikar does not collect your payment password."
+                    : "This test connection is not available yet. Pikar can explain the remaining setup."}
             </p>
             {account.canConnect && account.status !== "ready" && (
               <>
@@ -231,6 +242,10 @@ export function MerchantWorkspace({ projectId }: { projectId: string }) {
                       });
                       if (!result.ok) {
                         setNotice(explain(result.reason));
+                        return;
+                      }
+                      if (account.provider === "flutterwave") {
+                        setNotice("Test wallet checked. Review your shop setup below.");
                         return;
                       }
                       const url = result.url
@@ -282,6 +297,13 @@ export function MerchantWorkspace({ projectId }: { projectId: string }) {
           </article>
         ))}
       </div>
+      {status.privateFlutterwavePilot && (
+        <FlutterwaveTestOrder
+          key={projectId}
+          projectId={id}
+          pilot={status.privateFlutterwavePilot}
+        />
+      )}
       <section className={styles.automation} aria-labelledby="shop-automation">
         <h3 id="shop-automation">Operating policy</h3>
         {status.automation ? (
@@ -344,6 +366,24 @@ export function MerchantWorkspace({ projectId }: { projectId: string }) {
                       action.
                     </p>
                   )}
+                  {order.provider === "flutterwave" &&
+                    !["paid", "refunded", "partially_refunded"].includes(order.paymentStatus) && (
+                      <button
+                        type="button"
+                        className={styles.refresh}
+                        disabled={busy !== null}
+                        onClick={() =>
+                          void run("verify-order", async () => {
+                            await reconcile({ paymentId: order.paymentId });
+                            setNotice(
+                              "Payment checked with Flutterwave. See the recorded order status.",
+                            );
+                          })
+                        }
+                      >
+                        Check payment with Flutterwave
+                      </button>
+                    )}
                   {order.fulfilments.length > 0 && (
                     <p>
                       {order.fulfilments

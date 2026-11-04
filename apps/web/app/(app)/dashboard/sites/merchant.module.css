@@ -82,6 +82,28 @@
   gap: 24px;
   margin-block: 28px;
 }
+.testOrder {
+  display: grid;
+  gap: 12px;
+  max-width: 32rem;
+  margin-top: 16px;
+}
+.testOrder label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+.testOrder select,
+.testOrder input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
 .provider {
   min-width: 0;
   padding: 24px;

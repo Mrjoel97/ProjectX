@@ -8,6 +8,16 @@ Prepare a sourced shop operating package with the existing online-presence agent
 
 Stripe is the first sandbox release provider. PayPal is independently gated and optional. GBP never defaults the seller country to Britain; the actual provider-verified country/currency and supported capabilities decide admission. Read-only finance connectors and Pikar's subscription billing are separate authorities and credentials.
 
+## Private Tanzania checkout test
+
+The authenticated shop owner can test Flutterwave v3 Standard in one explicitly selected, unpublished Tanzanian storefront. Review and approve a TZS operating package in Sites. Use whole-shilling order totals (1,000 TZS is stored as 100,000 minor units). Existing prices keep their original currency. This pilot has a checkout-only capability.
+
+In the dedicated staging deployment configure `MERCHANT_FLUTTERWAVE_TEST_TENANT_ID`, `MERCHANT_FLUTTERWAVE_TEST_PROJECT_ID`, `MERCHANT_FLUTTERWAVE_TEST_ACCOUNT_ID` (numeric merchant account ID), `MERCHANT_FLUTTERWAVE_TEST_SECRET_KEY` (v3 test key), and `MERCHANT_FLUTTERWAVE_TEST_WEBHOOK_SECRET`. In the Flutterwave **test** dashboard, register the same secret hash and the staging HTTPS endpoint `https://third-gecko-977.convex.site/merchant/flutterwave/webhook`. The v3 receiver authenticates the `verif-hash` header. Other API versions require their own credential and notification contracts.
+
+In Sites, connect the test wallet, select one available item and review the full order total. Enter a test buyer email and request the hosted checkout. A TZS wallet read confirms credential access. The app verifies the merchant account ID when reading the transaction. A browser return or notification alone cannot confirm a payment. Check the order in Sites to reconcile an interrupted delivery. Confirm the exact merchant, reference, amount and currency, a single inventory movement and the private test receipt before treating the provider as qualified.
+
+For the provider contracts see [Flutterwave checkout](https://developer.flutterwave.com/reference/checkout), [Tanzania mobile money](https://developer.flutterwave.com/docs/tanzania) and [transaction verification](https://developer.flutterwave.com/docs/transaction-verification).
+
 ## Key files
 
 - `contracts/src/tenantCommerce.ts` and `core/tenantCommerce.ts`, `tenantInventory.ts`, `tenantOrder.ts`, `tenantMerchant.ts`: closed catalogue, exact money, quote/stock/payment/refund/fulfilment state and merchant capability rules.
