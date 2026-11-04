@@ -40,11 +40,14 @@ export async function syncAgenda(
   const byKey = new Map(rows.map((r) => [r.key, r]));
   const now = Date.now();
   // 1. What the plan row says about a pending proposal: approved → acted, discarded → dismissed.
+  const inProgress = new Set<string>();
   for (const row of rows) {
-    if (row.status !== "proposed" || !row.planId) continue;
+    if ((row.status !== "proposed" && row.status !== "acted") || !row.planId) continue;
     const plan = await ctx.db.get(row.planId);
-    const settled = plan ? agendaStatusFromPlan(plan.status) : null;
-    if (settled) {
+    if (!plan || plan.tenantId !== tenantId || plan.threadId !== REVIEW_THREAD_ID) continue;
+    const settled = agendaStatusFromPlan(plan.status);
+    if (settled === "acted" && plan.status !== "done") inProgress.add(row.key);
+    if (settled && settled !== row.status) {
       await ctx.db.patch(row._id, { status: settled, statusChangedAt: now });
       row.status = settled;
     }
@@ -55,7 +58,10 @@ export async function syncAgenda(
     const key = gapKey(gap);
     const prev = byKey.get(key);
     const cameBack = prev !== undefined && previousAt !== null && prev.lastSeenAt < previousAt;
-    const status = nextAgendaStatus(prev?.status ?? null, cameBack);
+    const status =
+      prev?.status === "acted" && (prev.lastSeenAt === latest.createdAt || inProgress.has(key))
+        ? "acted"
+        : nextAgendaStatus(prev?.status ?? null, cameBack);
     if (prev) {
       await ctx.db.patch(prev._id, {
         status,

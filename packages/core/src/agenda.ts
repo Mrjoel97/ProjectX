@@ -52,6 +52,53 @@ export function segmentForRoute(route: string): string | null {
 /** The Command Center shows at most this many rows — the audit's "next three actions". */
 export const AGENDA_LIMIT = 3;
 
+export type ReviewOutcomeFeedback = "helped" | "needs_change";
+
+/** Only a finished proposal can receive usefulness feedback. An approval alone tells us nothing about its result. */
+export function reviewFollowUp(
+  status: string,
+  feedback: ReviewOutcomeFeedback | null,
+  proofMetric: string | null,
+) {
+  if (status === "done") {
+    const evidence = proofMetric ? ` Check this against the review's measure: ${proofMetric}` : "";
+    if (feedback === "needs_change")
+      return {
+        title: "Revise the approach",
+        reason: `You said this work needs a change. Tell Pikar what to adjust in the review conversation.${evidence}`,
+        actionLabel: "Discuss the change",
+        feedback,
+        canGiveFeedback: true,
+      };
+    if (feedback === "helped")
+      return {
+        title: "Check what changed",
+        reason: `You found the work helpful. Record what you observed so the next review can compare it.${evidence}`,
+        actionLabel: "Share an observation",
+        feedback,
+        canGiveFeedback: true,
+      };
+    return {
+      title: "Review the completed work",
+      reason: `Pikar finished this proposal. Was the result useful?${evidence}`,
+      actionLabel: "Open review conversation",
+      feedback,
+      canGiveFeedback: true,
+    };
+  }
+  if (agendaStatusFromPlan(status) !== "acted") return null;
+  return {
+    title: "Follow the approved work",
+    reason:
+      status === "scheduled"
+        ? "The work is scheduled. Check its progress in the review conversation."
+        : "You approved the work. Pikar is waiting for the final result.",
+    actionLabel: "Check progress",
+    feedback: null,
+    canGiveFeedback: false,
+  };
+}
+
 /** Code-owned status words for the agenda card. Never the enum slug. */
 export const AGENDA_STATUS_WORD: Record<AgendaStatus, string> = {
   open: "Open",

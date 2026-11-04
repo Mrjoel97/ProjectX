@@ -16,7 +16,7 @@ function fixture(userId: string | null = "tenant-a") {
   };
   const keys = new Set<string>();
   const brainState = { runId: "prior-run" };
-  const runQuery = vi.fn(async (reference: unknown, _args: unknown) => {
+  const runQuery = vi.fn(async (reference: unknown, _args: unknown): Promise<unknown> => {
     if (getFunctionName(reference as never) === "managedServices:status") return config;
     if (getFunctionName(reference as never) === "managedServiceRuns:list")
       return {
@@ -65,6 +65,29 @@ function fixture(userId: string | null = "tenant-a") {
   return { ctx, tools, execute, runQuery, runAction, config, brainState };
 }
 describe("attended Executive service access", () => {
+  test("reads the same review as the dashboard and omits dismissed workflow suggestions", async () => {
+    const h = fixture();
+    h.runQuery
+      .mockResolvedValueOnce({ items: [], asks: [] })
+      .mockResolvedValueOnce({ dismissed: true })
+      .mockResolvedValueOnce(null);
+    expect(await h.execute("readWorkflowAgenda")).toEqual({
+      businessReview: { items: [], asks: [] },
+      workflowPack: null,
+      socialMarketing: null,
+    });
+    expect(h.runQuery.mock.calls.map(([ref]) => getFunctionName(ref as never))).toEqual([
+      "agenda:current",
+      "workflowPackOutcomes:agendaDecision",
+      "serviceOutcomes:agendaDecision",
+    ]);
+    expect(h.runAction).not.toHaveBeenCalled();
+    const foreign = fixture("other");
+    await expect(foreign.execute("readWorkflowAgenda")).rejects.toThrow(
+      "SERVICE_AUTHENTICATION_REQUIRED",
+    );
+    expect(foreign.runQuery).not.toHaveBeenCalled();
+  });
   test("separate native reads cannot attach a newer outcome to an older run", async () => {
     const h = fixture();
     h.brainState.runId = "newer-run";

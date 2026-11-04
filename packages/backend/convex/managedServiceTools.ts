@@ -13,6 +13,7 @@ const noArguments = jsonSchema<Record<string, never>>({
   additionalProperties: false,
 });
 type ManagedServiceTools = {
+  readWorkflowAgenda: Tool<Record<string, never>, unknown>;
   readSocialService: Tool<Record<string, never>, unknown>;
   startSocialService: Tool<Record<string, never>, unknown>;
   saveSocialServiceAnswer: Tool<{ key: ServiceKnowledgeKey; value: string }, unknown>;
@@ -35,6 +36,24 @@ export function buildManagedServiceTools(
   const path = (threadId: string | null) =>
     threadId ? `/dashboard/workspace?thread=${encodeURIComponent(threadId)}` : null;
   return {
+    readWorkflowAgenda: tool<Record<string, never>, unknown, Record<string, never>>({
+      description:
+        "Read the current business review and open workflow follow-ups from the user's Command Center.",
+      inputSchema: noArguments,
+      execute: async () => {
+        await authenticated();
+        const [businessReview, pack, social] = await Promise.all([
+          ctx.runQuery(api.agenda.current, {}),
+          ctx.runQuery(api.workflowPackOutcomes.agendaDecision, {}),
+          ctx.runQuery(api.serviceOutcomes.agendaDecision, {}),
+        ]);
+        return {
+          businessReview,
+          workflowPack: pack?.dismissed ? null : pack,
+          socialMarketing: social?.dismissed ? null : social,
+        };
+      },
+    }),
     readSocialService: tool<Record<string, never>, unknown, Record<string, never>>({
       description:
         "Read your saved social service setup, readiness, business sources and latest outcomes. For follow-up, brain.agendaDecision is the current open decision shown in your Command Center.",
