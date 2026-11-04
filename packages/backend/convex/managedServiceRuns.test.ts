@@ -511,7 +511,9 @@ test("worker reuses existing loop once and stores the actual result only in the 
       .collect(),
   );
   expect(notices).toHaveLength(1);
-  expect(notices[0].message).not.toContain("NEEDLE");
+  expect(notices[0]?.message).toBe(
+    "Your social service has an update. Open your Command Center to review it.",
+  );
   expect(await asA.query(api.serviceOutcomes.agendaDecision, {})).toMatchObject({
     title: "Was the latest social work useful?",
     dismissed: false,
