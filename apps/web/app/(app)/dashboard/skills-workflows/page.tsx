@@ -149,6 +149,10 @@ function SkillsAndWorkflowsLibrary() {
         <p style={{ margin: 0, color: "var(--ink-soft)" }}>
           Start a guided workflow or review your business skills.
         </p>
+        <p style={{ marginBottom: 0 }}>
+          For recurring drafts and engagement reports,{" "}
+          <Link href="/dashboard/marketing#social-service">set up or manage social marketing</Link>.
+        </p>
       </header>
       <section
         aria-labelledby="online-presence-workflow"

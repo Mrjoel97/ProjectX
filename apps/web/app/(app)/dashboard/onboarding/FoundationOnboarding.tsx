@@ -698,6 +698,11 @@ export default function FoundationOnboarding({
               <Link href="/dashboard/vault">Open Knowledge Vault</Link>
               <Link href="/dashboard/profile">Open Business Blueprint</Link>
               <Link href="/dashboard/workspace">Enter your workspace</Link>
+              <p>
+                Ready to put your business profile to work?{" "}
+                <Link href="/dashboard/marketing#social-service">Set up social marketing</Link> to
+                have Pikar prepare drafts or engagement reports on your schedule.
+              </p>
               <p>You can return here to continue business setup.</p>
             </section>
           )}

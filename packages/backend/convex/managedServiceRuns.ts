@@ -3,7 +3,7 @@ import { MANAGED_SERVICE_RUN_LIFETIME_MS } from "@pikar/core/managedServices";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalQuery } from "./_generated/server";
 import { appendAudit } from "./audit";
 import { cockpitAgent, ensureThreadAndPlan } from "./cockpit";
@@ -37,6 +37,42 @@ const view = (run: Doc<"managedServiceRuns">) => ({
 });
 const supported = (service: Doc<"managedServices">) =>
   service.operationIds.every((op) => op === "social.prepare" || op === "social.report");
+
+// A single in-app notice points to the live decision. This stays inside the terminal
+// transaction, so concurrent completions or a repeated workflow callback cannot duplicate it.
+async function notifySocialResult(ctx: MutationCtx, run: Doc<"managedServiceRuns">) {
+  const service = await ctx.db.get(run.serviceId);
+  if (
+    service?.serviceId !== "social-marketing" ||
+    service.tenantId !== run.tenantId ||
+    service.revision !== run.configRevision ||
+    service.controlState !== "active"
+  )
+    return;
+  const latest = await ctx.db
+    .query("managedServiceRuns")
+    .withIndex("by_service_createdAt", (q) =>
+      q.eq("tenantId", run.tenantId).eq("serviceId", run.serviceId),
+    )
+    .order("desc")
+    .first();
+  if (latest?._id !== run._id) return;
+  const kind = "social_service_result";
+  const unread = await ctx.db
+    .query("notifications")
+    .withIndex("by_tenant_kind_read", (q) =>
+      q.eq("tenantId", run.tenantId).eq("kind", kind).eq("read", false),
+    )
+    .first();
+  if (!unread)
+    await ctx.db.insert("notifications", {
+      tenantId: run.tenantId,
+      kind,
+      read: false,
+      createdAt: Date.now(),
+      message: "Your social service has an update. Open your Command Center to review it.",
+    });
+}
 
 async function currentService(ctx: QueryCtx, run: Doc<"managedServiceRuns">) {
   if (
@@ -263,6 +299,7 @@ export const setupFailed = internalMutation({
       terminalCode: "setup_incomplete",
       updatedAt: Date.now(),
     });
+    await notifySocialResult(ctx, run);
     await reconcileStandingServiceAccounting(ctx, run.tenantId, run._id, true);
   },
 });
@@ -384,6 +421,7 @@ export const finish = internalMutation({
       updatedAt: Date.now(),
     });
     await reconcileStandingServiceAccounting(ctx, run.tenantId, run._id, !uncertain);
+    await notifySocialResult(ctx, run);
   },
 });
 
@@ -405,6 +443,7 @@ export const onComplete = internalMutation({
       updatedAt: Date.now(),
     });
     await reconcileStandingServiceAccounting(ctx, run.tenantId, run._id, false);
+    await notifySocialResult(ctx, run);
   },
 });
 

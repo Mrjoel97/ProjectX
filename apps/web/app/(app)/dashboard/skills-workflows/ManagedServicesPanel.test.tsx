@@ -249,10 +249,8 @@ test("setup uses server-owned pins and chosen accounts, with review and budget b
   expect(host.textContent).not.toContain(skill.bodyHash);
   expect(host.textContent).not.toContain("buffer-owned-pin");
   expect(host.textContent).toContain("You review posts before anything is scheduled");
-  expect(
-    host.querySelector<HTMLInputElement>('input[type="checkbox"]:disabled')?.parentElement
-      ?.textContent,
-  ).toContain("Run on a schedule");
+  expect(host.textContent).toContain("Social marketing setup saved");
+  expect(state.configure).not.toHaveBeenCalled();
 });
 
 test("an activity with no connected account can be saved as a draft without starting work", async () => {

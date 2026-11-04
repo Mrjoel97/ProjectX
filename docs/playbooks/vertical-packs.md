@@ -1,3 +1,5 @@
+> Last verified: 2026-11-04 — Social service follow-up changes shared runtime sources. The evaluator fingerprint was regenerated from the implementation. Existing evaluation and activation records keep their original source identity.
+
 > Last verified: 2026-10-29 — Social Marketing service setup and scheduling now live under Marketing, not Skills and Workflows. Marketing separates Services, Publishing, Reports, Leads & links, and Connections; sections load on first visit and retain draft state during tab changes. Keyboard navigation and per-section errors are preserved. Service review links target Marketing. No grants, budgets, schedules or publication rules changed.
 
 > Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social, recurring-service and indexed watchdog changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.

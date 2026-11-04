@@ -17,6 +17,10 @@ progress:
 
 # Project State
 
+## Social service follow-through — 2026-11-04
+
+The Executive and Command Center share one decision from the latest eligible social run. Social service setup is accessible from completed onboarding and Skills and Workflows. The [Phase 51 verification record](phases/51-brain-and-service-outcomes/51-04-SUMMARY.md) separates native integration and responsive browser evidence from the remaining hosted journey.
+
 ## Release integration record — 2026-10-30
 
 The primary frontmatter retains the latest main execution checkpoint and its counters; those counters are not a recomputed total for this merge. Both independently named Phase 53 lanes remain in their original directories and keep their historical identifiers: `53-agentic-online-presence` and `53-media-and-document-production`. Their records and dated acceptance claims do not qualify the combined release. The online-presence branch also recorded the following historical frontmatter before integration:

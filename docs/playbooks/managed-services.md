@@ -1,3 +1,5 @@
+> Last verified: 2026-11-04 — The latest eligible social run supplies one follow-up shared by the Command Center and Executive. Dismissal is bound to the decision key. A changed recommendation or new relevant evidence can reopen a decision. An unread in-app result notice is coalesced per business.
+
 > Last verified: 2026-10-29 — Social Marketing service setup and scheduling now live under Marketing, not Skills and Workflows. Marketing separates Services, Publishing, Reports, Leads & links, and Connections; sections load on first visit and retain draft state during tab changes. Keyboard navigation and per-section errors are preserved. Service review links target Marketing. No grants, budgets, schedules or publication rules changed.
 
 > Last verified: 2026-10-29 — Production postflight for release 9d9a111f found an outdated new-service scheduling notice. Setup now directs the user to save first and then review and approve a schedule. Existing saved-service scheduling controls, readiness checks and explicit approval are unchanged. No service is started or scheduled by this copy correction.
