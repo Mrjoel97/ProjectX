@@ -2,6 +2,8 @@
 
 > Last verified 2026-11-03. The four customer specialist/workflow tables are classified as tenant-owned for native export and erasure. Specialist audit records contain references, revision numbers and source counts.
 
+> Last verified: 2026-11-04 — The social_service_result in-app notice uses a fixed message and opens the Command Center agenda. The terminal writer coalesces unread notices and keeps goal text and metrics out of notification rows.
+
 > Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social, recurring-service and indexed watchdog changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
 
 > Last verified: 2026-10-26 — brandKits is classified as tenant-owned lifecycle data. Proposed identity content remains outside audit payloads; approved Vault snapshots retain tenant ownership and hash verification. Tenant table inventory and brand lifecycle tests pass locally.

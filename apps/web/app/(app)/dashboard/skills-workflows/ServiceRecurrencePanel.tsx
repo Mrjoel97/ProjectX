@@ -31,6 +31,8 @@ const explanations: Record<string, string> = {
     "A previous run needs checking. Resolve its outcome before approving a new schedule.",
 };
 const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const scheduleDate = (timestamp: number, timeZone: string) =>
+  new Date(timestamp).toLocaleString(undefined, { timeZone, timeZoneName: "short" });
 
 export function ServiceRecurrencePanel({
   service,
@@ -50,6 +52,7 @@ export function ServiceRecurrencePanel({
     status?.qualified && service.readiness.ready && service.controlState === "active" && !disabled;
   return (
     <section
+      id="social-schedule"
       aria-label="Automatic social work"
       style={{ borderTop: "1px solid var(--rule)", paddingTop: 20, display: "grid", gap: 12 }}
     >
@@ -81,9 +84,9 @@ export function ServiceRecurrencePanel({
               </p>
               <p>
                 {approval.nextDueAtMs
-                  ? `Next run: ${new Date(approval.nextDueAtMs).toLocaleString()}.`
+                  ? `Next run: ${scheduleDate(approval.nextDueAtMs, approval.schedule.timeZone)}.`
                   : "No more runs fall within this approval."}{" "}
-                Approval ends {new Date(approval.expiresAtMs).toLocaleString()}.
+                Approval ends {scheduleDate(approval.expiresAtMs, approval.schedule.timeZone)}.
               </p>
             </div>
           ) : (

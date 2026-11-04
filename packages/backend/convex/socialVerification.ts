@@ -9,9 +9,13 @@ export const receive = httpAction(async (_ctx, request) => {
   };
   if (request.method !== "GET")
     return new Response(null, { status: 405, headers: { ...headers, Allow: "GET" } });
-  const filename = process.env.TIKTOK_URL_VERIFICATION_FILENAME;
-  const content = process.env.TIKTOK_URL_VERIFICATION_CONTENT;
   const url = new URL(request.url);
+  const sandboxFile = process.env.TIKTOK_SANDBOX_VERIFICATION_FILENAME;
+  const isSandbox = !!sandboxFile && url.pathname === "/social/media/" + sandboxFile;
+  const filename = isSandbox ? sandboxFile : process.env.TIKTOK_URL_VERIFICATION_FILENAME;
+  const content = isSandbox
+    ? process.env.TIKTOK_SANDBOX_VERIFICATION_CONTENT
+    : process.env.TIKTOK_URL_VERIFICATION_CONTENT;
   if (
     !filename ||
     filename.length > 160 ||

@@ -28,6 +28,14 @@ test("serves the exact public proof bytes at only its configured path with no me
   expect(await t.run((ctx) => ctx.db.query("socialPosts").collect())).toEqual([]);
   expect((await t.fetch("/social/media?postId=bad&ticket=" + "a".repeat(43))).status).toBe(404);
 });
+test("serves distinct production and sandbox proof files simultaneously", async () => {
+  const t = setup();
+  vi.stubEnv("TIKTOK_SANDBOX_VERIFICATION_FILENAME", "tiktokSandbox.txt");
+  vi.stubEnv("TIKTOK_SANDBOX_VERIFICATION_CONTENT", "sandbox proof");
+  expect(await (await t.fetch("/social/media/" + filename)).text()).toBe(content);
+  expect(await (await t.fetch("/social/media/tiktokSandbox.txt")).text()).toBe("sandbox proof");
+  expect((await t.fetch("/social/media/tiktokSandbox.txt?ticket=x")).status).toBe(404);
+});
 test.each([
   "/social/media/tiktokDifferent.txt",
   "/social/media/",

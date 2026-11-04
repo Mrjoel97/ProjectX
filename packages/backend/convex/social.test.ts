@@ -1,5 +1,6 @@
 import { SOCIAL_PROVIDERS, SOCIAL_SCOPES, socialHash } from "@pikar/core/social";
 import { socialHmac } from "@pikar/core/socialWebhook";
+import { importCredentialKey, openCredential, sealCredential } from "@pikar/revenue";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -198,6 +199,65 @@ describe("native social tenant isolation", () => {
 });
 
 describe("direct OAuth and token refresh orchestration", () => {
+  test.each([
+    "expired",
+    "missing rotation",
+  ])("TikTok %s requires reconnect without reusing a token", async (failure) => {
+    const h = await setup();
+    const key = btoa("k".repeat(32));
+    vi.stubEnv("CONNECTOR_CREDENTIAL_KEY_V1", key);
+    vi.stubEnv("TIKTOK_OAUTH_CLIENT_ID", "synthetic-app");
+    vi.stubEnv("TIKTOK_OAUTH_CLIENT_SECRET", "synthetic-secret");
+    const sealed = await sealCredential(
+      await importCredentialKey(key, "v1"),
+      {
+        tenantId: h.tenantId,
+        provider: "tiktok",
+        connectionId: "rotation",
+        environment: "production",
+      },
+      JSON.stringify({
+        accessToken: "synthetic-access",
+        refreshToken: "synthetic-refresh",
+        refreshExpiresAt: Date.now() + (failure === "expired" ? -1000 : 3600000),
+        accountId: "creator",
+      }),
+    );
+    await h.t.run((ctx) =>
+      ctx.db.insert("socialConnections", {
+        tenantId: h.tenantId,
+        provider: "tiktok",
+        connectionId: "rotation",
+        accountIdHash: "hash",
+        accountName: "Test creator",
+        ciphertextB64: sealed.ciphertextB64,
+        ivB64: sealed.ivB64,
+        keyVersion: "v1",
+        scopes: ["user.info.basic"],
+        expiresAt: Date.now() - 1000,
+        revision: 1,
+        updatedAt: Date.now(),
+        status: "connected",
+      }),
+    );
+    const fetcher = vi.fn(async () =>
+      Response.json({ access_token: "replacement", expires_in: 7200 }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    await expect(
+      h.asOwner.action(api.socialActions.verifyConnection, { provider: "tiktok" }),
+    ).rejects.toThrow("SOCIAL_RECONNECT");
+    const row = await h.t.query(internal.social.connection, {
+      tenantId: h.tenantId,
+      provider: "tiktok",
+    });
+    expect(row?.status).toBe("reconnect_required");
+    expect(row?.ciphertextB64).toBeUndefined();
+    await expect(
+      h.asOwner.action(api.socialActions.verifyConnection, { provider: "tiktok" }),
+    ).rejects.toThrow("SOCIAL_RECONNECT");
+    expect(fetcher).toHaveBeenCalledTimes(failure === "expired" ? 0 : 1);
+  });
   test.each(
     SOCIAL_PROVIDERS,
   )("%s roundtrip verifies identity and stores only encrypted tokens", async (provider) => {
@@ -211,17 +271,30 @@ describe("direct OAuth and token refresh orchestration", () => {
     vi.stubEnv("CONVEX_SITE_URL", "https://synthetic.convex.site");
     vi.stubEnv("SITE_URL", "https://pikar.example");
     vi.stubEnv("META_GRAPH_API_VERSION", "v25.0");
-    const fetcher = vi.fn(async (input: string | URL | Request) => {
+    let refreshSequence = 0;
+    const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       if (url === "https://pubsubhubbub.appspot.com/subscribe")
         return new Response(null, { status: 202 });
-      if (url.includes("/token") || url.includes("/oauth/access_token"))
+      if (url.includes("/token") || url.includes("/oauth/access_token")) {
+        if (provider === "tiktok") {
+          const body = new URLSearchParams(String(init?.body));
+          if (body.get("grant_type") === "refresh_token") {
+            expect(body.get("refresh_token")).toBe(`synthetic-refresh-token-${refreshSequence}`);
+            refreshSequence++;
+          }
+        }
         return Response.json({
           access_token: "synthetic-access-token",
-          refresh_token: "synthetic-refresh-token",
-          expires_in: 3600,
+          refresh_token:
+            provider === "tiktok"
+              ? `synthetic-refresh-token-${refreshSequence}`
+              : "synthetic-refresh-token",
+          expires_in: provider === "tiktok" ? 7200 : 3600,
+          ...(provider === "tiktok" ? { refresh_expires_in: 180 * 86400 } : {}),
           scope: SOCIAL_SCOPES[provider].join(provider === "tiktok" ? "," : " "),
         });
+      }
       if (url.endsWith("/me/permissions"))
         return Response.json({
           data: SOCIAL_SCOPES.meta.map((permission) => ({ permission, status: "granted" })),
@@ -259,6 +332,27 @@ describe("direct OAuth and token refresh orchestration", () => {
     await h.asOwner.mutation(api.social.completeConnect, { provider, receipt: callback.receipt! });
     const saved = await h.t.query(internal.social.connection, { tenantId: h.tenantId, provider });
     expect(JSON.stringify(saved)).not.toMatch(/synthetic-access-token|synthetic-refresh-token/);
+    if (provider === "tiktok" && saved?.ciphertextB64 && saved.ivB64) {
+      const grant = JSON.parse(
+        await openCredential(
+          await importCredentialKey(btoa("k".repeat(32)), "v1"),
+          {
+            tenantId: h.tenantId,
+            provider,
+            connectionId: saved.connectionId,
+            environment: "production",
+          },
+          {
+            ciphertextB64: saved.ciphertextB64,
+            ivB64: saved.ivB64,
+            keyVersion: "v1",
+            algorithm: "AES-256-GCM",
+          },
+        ),
+      );
+      expect(grant.refreshExpiresAt).toBeGreaterThan(Date.now() + 179 * 86400000);
+      expect(grant.refreshExpiresAt).toBeLessThanOrEqual(Date.now() + 180 * 86400000);
+    }
     expect(
       (await h.asOwner.action(api.socialActions.verifyConnection, { provider })).verified,
     ).toBe(true);
@@ -272,6 +366,12 @@ describe("direct OAuth and token refresh orchestration", () => {
         provider,
       });
       expect(refreshed!.revision).toBe(2);
+      if (provider === "tiktok") {
+        expect(refreshed!.expiresAt).toBeGreaterThan(Date.now() + 7190000);
+        await h.t.run((ctx) => ctx.db.patch(refreshed!._id, { expiresAt: Date.now() - 1000 }));
+        await h.asOwner.action(api.socialActions.verifyConnection, { provider });
+        expect(refreshSequence).toBe(2);
+      }
     }
     if (provider === "youtube") {
       vi.stubEnv("YOUTUBE_WEBHOOK_SECRET", "s".repeat(32));

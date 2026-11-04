@@ -1,3 +1,5 @@
+import agentTest from "@convex-dev/agent/test";
+import workflowTest from "@convex-dev/workflow/test";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { confirmServiceKnowledgeFixture } from "../__fixtures__/serviceKnowledge";
@@ -6,6 +8,7 @@ import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/comp
 import { api, internal } from "./_generated/api";
 import { rateLimiter } from "./guardrails";
 import { contentHash } from "./lib/hash";
+import { internalAction } from "./lib/tenantLifecycle";
 import {
   claimStandingOccurrence,
   configureStandingService,
@@ -27,8 +30,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-async function fixture() {
-  const t = convexTest(schema, modules);
+async function fixture(testModules = modules) {
+  const t = convexTest(schema, testModules);
   t.registerComponent(
     "rateLimiter",
     rateLimiterSchema,
@@ -248,6 +251,102 @@ test("atomic due tick claims one full envelope, one linked native run and the ne
   const next = await f.t.run((ctx) => ctx.db.get(approval.approvalId));
   // Fall-back's second 01:31 never gets another run. The following local day is25 elapsed hours.
   expect(next?.nextDueAtMs).toBe(Date.parse("2026-11-02T06:31:00Z"));
+});
+
+test("an approved scheduled goal produces an owned decision, and feedback supersedes dismissal", async () => {
+  const f = await fixture({
+    ...modules,
+    "./llm.ts": async () => ({
+      runCockpitAgent: internalAction(async () => ({
+        reply: "Here is the proposed plan.",
+        blocked: false,
+      })),
+    }),
+  });
+  agentTest.register(f.t);
+  workflowTest.register(f.t);
+  const user = f.t.withIdentity({ subject: `${f.tenantId}|session` });
+  const foreign = f.t.withIdentity({ subject: "other-business|session" });
+  const goalText = "Get more local enquiries";
+  const goal = await user.mutation(api.goals.addGoal, { segmentId: "leads", text: goalText });
+  const bound = await user.mutation(api.serviceOutcomes.bindGoal, {
+    serviceId: f.serviceId,
+    goalId: goal.id,
+    expectedRevision: 1,
+    expectedControlRevision: 1,
+  });
+  const approval = await user.mutation(api.managedServiceRecurrence.configure, {
+    serviceId: "social-marketing",
+    expectedRevision: bound.revision,
+    expectedControlRevision: bound.controlRevision,
+    expectedApprovalRevision: 1,
+    expiresAtMs: now + 86400_000,
+    schedule: {
+      cadence: "daily",
+      weekday: null,
+      hour: 1,
+      minute: 31,
+      timeZone: "America/New_York",
+    },
+  });
+  vi.setSystemTime(now + 60_000);
+  const due = await f.t.mutation(internal.managedServiceRecurrence.tick, {
+    tenantId: f.tenantId,
+    approvalId: approval.approvalId,
+    expectedApprovalRevision: approval.revision,
+    expectedControlRevision: bound.controlRevision,
+    expectedDueAtMs: now + 60_000,
+  });
+  const runId = due.runId;
+  if (!runId) throw new Error(`Scheduled run not admitted: ${due.decision}`);
+  const runArgs = { tenantId: f.tenantId, runId };
+  await f.t.action(internal.managedServiceRecurrenceExecution.start, runArgs);
+  expect(await f.t.run((ctx) => ctx.db.get(runId))).toMatchObject({
+    state: "running",
+    goalId: goal.id,
+  });
+  expect(await user.query(api.serviceOutcomes.agendaDecision, {})).toBeNull();
+  // Invoke the scheduled workflow step at its native boundary with a synthetic Executive reply.
+  await f.t.action(internal.managedServiceExecution.execute, runArgs);
+  expect(await f.t.run((ctx) => ctx.db.query("notifications").collect())).toMatchObject([
+    { tenantId: f.tenantId, kind: "social_service_result" },
+  ]);
+  expect(await f.rows()).toMatchObject([
+    { runId, state: "terminal", terminalOutcome: "completed" },
+  ]);
+  const outcome = await user.query(api.serviceOutcomes.runOutcome, { runId });
+  expect(outcome).toMatchObject({
+    operational: "completed",
+    usefulness: "unreviewed",
+    goal: { goalId: goal.id, status: "active" },
+    businessImprovement: "not_established",
+  });
+  const decision = await user.query(api.serviceOutcomes.agendaDecision, {});
+  if (!decision) throw new Error("Missing scheduled result decision");
+  expect(decision.reason).toContain(goalText);
+  expect(await foreign.query(api.serviceOutcomes.agendaDecision, {})).toBeNull();
+  await expect(
+    foreign.mutation(api.serviceOutcomes.setDecisionDismissed, {
+      key: decision.key,
+      dismissed: true,
+    }),
+  ).resolves.toBe(false);
+  await user.mutation(api.serviceOutcomes.setDecisionDismissed, {
+    key: decision.key,
+    dismissed: true,
+  });
+  expect(await user.query(api.serviceOutcomes.agendaDecision, {})).toMatchObject({
+    key: decision.key,
+    dismissed: true,
+  });
+  await user.mutation(api.serviceOutcomes.recordUsefulness, { runId, usefulness: "rejected" });
+  const revised = await user.query(api.serviceOutcomes.agendaDecision, {});
+  expect(revised).toMatchObject({ title: "Revise your social brief", dismissed: false });
+  expect(revised?.key).not.toEqual(decision.key);
+  await expect(
+    user.mutation(api.serviceOutcomes.setDecisionDismissed, { key: decision.key, dismissed: true }),
+  ).resolves.toBe(false);
+  expect(await f.rows()).toHaveLength(1);
 });
 
 test("withdrawn confirmed knowledge stops a due callback before run creation or whole-budget reservation", async () => {

@@ -6,6 +6,11 @@
 
 > Last verified 2026-11-03. Evaluator source inventories include the customer workflow runtime and pilot policy imported by shared model execution. Corpus case bytes retain their own fixed identity.
 
+> Last verified: 2026-11-04 — The source fingerprint includes the private TikTok review guard. The evaluation cases are unchanged.
+
+> Last verified: 2026-11-03 — Mechanically refreshed evaluator source fingerprints for TikTok token renewal. Existing 46 golden and 40 vertical cases are unchanged; offline checks pass. No new model evaluation or qualification evidence is claimed.
+> Last verified: 2026-11-04 — Social service follow-up changes shared runtime sources. The evaluator fingerprint was regenerated from the implementation. Existing evaluation and activation records keep their original source identity.
+
 > Last verified: 2026-10-29 — Social Marketing service setup and scheduling now live under Marketing, not Skills and Workflows. Marketing separates Services, Publishing, Reports, Leads & links, and Connections; sections load on first visit and retain draft state during tab changes. Keyboard navigation and per-section errors are preserved. Service review links target Marketing. No grants, budgets, schedules or publication rules changed.
 
 > Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social, recurring-service and indexed watchdog changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.

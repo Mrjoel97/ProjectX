@@ -502,6 +502,22 @@ test("worker reuses existing loop once and stores the actual result only in the 
     reply: "DUPLICATE",
   });
   expect((await messages(run.threadId)).page).toHaveLength(1);
+  const notices = await t.run((ctx) =>
+    ctx.db
+      .query("notifications")
+      .withIndex("by_tenant_kind_read", (q) =>
+        q.eq("tenantId", a).eq("kind", "social_service_result").eq("read", false),
+      )
+      .collect(),
+  );
+  expect(notices).toHaveLength(1);
+  expect(notices[0]?.message).toBe(
+    "Your social service has an update. Open your Command Center to review it.",
+  );
+  expect(await asA.query(api.serviceOutcomes.agendaDecision, {})).toMatchObject({
+    title: "Was the latest social work useful?",
+    dismissed: false,
+  });
 });
 
 test("worker/provider failure stays unknown with no raw error/result disclosure or retry", async () => {

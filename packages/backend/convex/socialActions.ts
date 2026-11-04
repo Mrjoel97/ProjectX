@@ -23,7 +23,13 @@ import { tenantAction } from "./lib/functions";
 import { internalAction } from "./lib/tenantLifecycle";
 import { socialProvider, youtubeConnectionEnabled } from "./social";
 
-type Grant = { accessToken: string; refreshToken?: string; accountId: string; scopes: string[] };
+type Grant = {
+  accessToken: string;
+  refreshToken?: string;
+  refreshExpiresAt?: number;
+  accountId: string;
+  scopes: string[];
+};
 function config(provider: SocialProvider) {
   const prefix = provider === "youtube" ? "YOUTUBE" : provider.toUpperCase();
   const clientId = process.env[`${prefix}_OAUTH_CLIENT_ID`]?.trim();
@@ -354,6 +360,9 @@ export const callback = internalAction({
       ...(await seal(pending.tenantId, a.provider, pending.connectionId, {
         accessToken,
         ...(refreshToken ? { refreshToken } : {}),
+        ...(a.provider === "tiktok" && result.refresh_expires_in !== undefined
+          ? { refreshExpiresAt: socialExpiry(result.refresh_expires_in) }
+          : {}),
         accountId: account.id,
         scopes,
       })),
@@ -393,6 +402,9 @@ export async function authorized(
   const grant: Grant = {
     accessToken: socialString(value.accessToken, 8192),
     ...(typeof value.refreshToken === "string" ? { refreshToken: value.refreshToken } : {}),
+    ...(typeof value.refreshExpiresAt === "number"
+      ? { refreshExpiresAt: value.refreshExpiresAt }
+      : {}),
     accountId: socialString(value.accountId),
     scopes: row.scopes,
   };
@@ -410,6 +422,8 @@ export async function authorized(
     throw new Error("SOCIAL_REFRESH_BUSY");
   try {
     if (!grant.refreshToken) throw new Error("SOCIAL_RECONNECT");
+    if (grant.refreshExpiresAt !== undefined && grant.refreshExpiresAt <= Date.now())
+      throw new Error("SOCIAL_RECONNECT");
     const result = await tokens(provider, {
       grant_type: "refresh_token",
       refresh_token: grant.refreshToken,
@@ -418,9 +432,12 @@ export async function authorized(
       ...grant,
       accessToken: socialString(result.access_token, 8192),
       refreshToken:
-        typeof result.refresh_token === "string"
+        provider === "tiktok" || typeof result.refresh_token === "string"
           ? socialString(result.refresh_token, 8192)
           : grant.refreshToken,
+      ...(provider === "tiktok" && result.refresh_expires_in !== undefined
+        ? { refreshExpiresAt: socialExpiry(result.refresh_expires_in) }
+        : {}),
       scopes: await grantedScopes(
         provider,
         result,

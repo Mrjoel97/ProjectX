@@ -1,4 +1,5 @@
 import { nativeSocialPostReference } from "./buffer";
+import type { projectSocialServiceOutcome } from "./socialServiceOutcome";
 import type { ZernioReport } from "./zernio";
 import { ZERNIO_METRICS } from "./zernioPilot";
 
@@ -163,4 +164,141 @@ export function serviceReportMovement(
       };
     }),
   );
+}
+
+const servicePage = "/dashboard/marketing#social-service";
+const publishingPage = "/dashboard/marketing#publishing";
+const reportingPage = "/dashboard/marketing#reports";
+
+type DecisionEvidence = {
+  operational: string;
+  usefulness: string;
+  reporting: {
+    state: string;
+    sourceFailure: boolean;
+    movement: ReturnType<typeof serviceReportMovement> | null;
+  };
+  social: ReadonlyArray<
+    Pick<ReturnType<typeof projectSocialServiceOutcome>, "evidence" | "nextAction">
+  >;
+};
+
+export function chooseSocialDecision(outcome: DecisionEvidence, reports: boolean) {
+  const decision = (
+    code: string,
+    title: string,
+    reason: string,
+    actionLabel: string,
+    href = servicePage,
+  ) => ({ code, title, reason, actionLabel, href });
+  if (outcome.operational === "unknown")
+    return decision(
+      "reconcile",
+      "Check the interrupted social run",
+      "Its final status is uncertain. Check the record before starting more work.",
+      "Check run",
+    );
+  if (outcome.operational === "failed" || outcome.operational === "stopped")
+    return decision(
+      "recover",
+      "Review the interrupted social run",
+      "The latest run ended before the service completed its work.",
+      "Review run",
+    );
+  if (outcome.usefulness === "rejected")
+    return decision(
+      "revise",
+      "Revise your social brief",
+      "You marked the latest result as needing improvement. Review the brief before preparing another batch.",
+      "Review service setup",
+    );
+  if (
+    outcome.social.some(
+      (post) =>
+        post.nextAction === "check_buffer_before_retry" ||
+        post.nextAction === "review_failed_publication",
+    )
+  )
+    return decision(
+      "check_publication",
+      "Check the posting status",
+      "A saved post has an unresolved or failed publication. Check its status before trying again.",
+      "Review posts",
+      publishingPage,
+    );
+  if (outcome.social.some((post) => post.nextAction === "review_draft"))
+    return decision(
+      "review_drafts",
+      "Review your prepared social drafts",
+      "The latest run has saved drafts waiting for your review.",
+      "Review drafts",
+      publishingPage,
+    );
+  if (outcome.usefulness === "unreviewed")
+    return decision(
+      "review_result",
+      "Was the latest social work useful?",
+      "Your social run completed. Review its output and tell Pikar what to change.",
+      "Review result",
+    );
+  if (reports && outcome.reporting.state === "unavailable")
+    return decision(
+      "check_reporting",
+      "Check your reporting connection",
+      "The selected reporting accounts cannot currently supply evidence for this run.",
+      "Open reporting",
+      reportingPage,
+    );
+  if (reports && outcome.reporting.state === "stale")
+    return decision(
+      "refresh_report",
+      "Refresh the social report",
+      "The latest report needs a successful refresh before it can guide another cycle.",
+      "Open reporting",
+      reportingPage,
+    );
+  const linked = outcome.social.find(
+    (post) =>
+      post.nextAction === "review_results_and_propose_next_cycle" &&
+      post.evidence?.freshness.upstream === "fresh" &&
+      post.evidence.freshness.retrieval === "fresh",
+  );
+  if (linked?.evidence && !outcome.reporting.sourceFailure) {
+    const evidence = linked.evidence;
+    const comparison = outcome.reporting.movement
+      ?.find(
+        (row) =>
+          row.accountId === evidence.accountId &&
+          row.platform === evidence.platform &&
+          row.postId === evidence.postId &&
+          row.source === evidence.source,
+      )
+      ?.metrics.find((metric) => metric.delta !== null && metric.delta !== 0);
+    if (comparison)
+      return decision(
+        "plan_next_cycle",
+        "Test a variation of your last post",
+        `Lifetime ${comparison.metric} on the linked ${evidence.platform} post changed from ${comparison.previous} to ${comparison.current}. Try a draft on the same topic with a different opening, then compare the posts at the same age.`,
+        "Review results",
+        reportingPage,
+      );
+    const example = Object.entries(evidence.metrics)[0];
+    if (example)
+      return decision(
+        "plan_next_cycle",
+        "Use the latest post as a baseline",
+        `The linked ${evidence.platform} post has a lifetime ${example[0]} count of ${example[1]}. Keep this as a baseline and check the next comparable observation before changing the plan.`,
+        "Review results",
+        reportingPage,
+      );
+  }
+  if (reports && outcome.reporting.state === "ready")
+    return decision(
+      "compare",
+      "Review your latest account observations",
+      "Two account snapshots are available. Compare their coverage and dates before changing your social plan.",
+      "Review evidence",
+      reportingPage,
+    );
+  return null;
 }

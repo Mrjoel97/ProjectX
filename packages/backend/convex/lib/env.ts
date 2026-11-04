@@ -310,6 +310,16 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
       "The TikTok URL-ownership proof route returns 404 without valid public challenge content and its matching filename.",
   },
   {
+    name: "TIKTOK_SANDBOX_VERIFICATION_FILENAME",
+    tier: "feature",
+    whatBreaks: "The sandbox cannot verify its media URL without its exact challenge filename.",
+  },
+  {
+    name: "TIKTOK_SANDBOX_VERIFICATION_CONTENT",
+    tier: "feature",
+    whatBreaks: "The sandbox media verification route requires matching public proof content.",
+  },
+  {
     name: "YOUTUBE_OAUTH_CLIENT_ID",
     tier: "feature",
     whatBreaks:

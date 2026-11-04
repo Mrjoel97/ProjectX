@@ -1,3 +1,5 @@
+> Last verified: 2026-11-04 — Published Foundation offers a direct link to social service setup. The user reviews accounts, budget, schedule, timezone and expiry before recurring work can start.
+
 > Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social and recurring-service changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
 
 > Last verified: 2026-10-26 — Business Profile includes a Brand kit tab with a generated proposal, palette preview, identity guidelines, explicit approval and discard. Approval names the saved revision/hash and publishes to Knowledge Vault. Proposed revisions retain the existing approved brand until accepted. No paid production sample or hosted UI acceptance is claimed.

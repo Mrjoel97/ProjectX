@@ -125,6 +125,8 @@ test("workflows opens first; services belongs in Marketing and keyboard navigati
   await act(async () => root.render(<Page />));
   expect(host.querySelector("#services-tab")).toBeNull();
   expect(host.querySelector("#services-panel")).toBeNull();
+  expect(host.querySelector('a[href="/dashboard/marketing#social-service"]')).not.toBeNull();
+  expect(state.start).not.toHaveBeenCalled();
   expect(host.querySelector("#workflows-tab")?.getAttribute("aria-selected")).toBe("true");
   await act(async () =>
     host

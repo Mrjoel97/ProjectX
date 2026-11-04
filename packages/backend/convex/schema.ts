@@ -485,6 +485,7 @@ export default defineSchema({
     goalId: v.optional(v.id("goals")),
     usefulness: v.optional(v.union(v.literal("accepted"), v.literal("rejected"))),
     usefulnessAt: v.optional(v.number()),
+    dismissedDecisionKey: v.optional(v.string()),
     configRevision: v.number(),
     controlRevision: v.number(),
     budgetLimitCents: v.number(),

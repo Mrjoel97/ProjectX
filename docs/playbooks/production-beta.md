@@ -1,5 +1,7 @@
 > Last verified 2026-11-03. CUSTOMER_WORKFLOWS_PILOT_TENANTS registers an explicit JSON tenant allowlist. Missing or malformed configuration closes customer workflow admission.
 
+> Last verified: 2026-11-04 — TikTok's sandbox ownership proof has separately named optional settings. Production readiness still requires general social publishing off. Close every single-draft review window before releasing a build.
+
 > Last verified: 2026-11-02 — AUTH_GOOGLE_PASSWORD_LINK_EMAIL is optional and scopes first-time Google binding to one verified Gmail password workspace. See beta-admission.md for eligibility and normal sign-in checks.
 
 > Last verified: 2026-10-24 — Main c765168d owned-domain YouTube callback settings remain part of the combined source. Integrating the media candidate changes no hosted environment values or publication flags. Exact-source CI and separate staging/release admission still apply.
