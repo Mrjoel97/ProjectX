@@ -1917,9 +1917,7 @@ test("the social URL handoff's claim is tenant, human approval and live qualific
   expect(claim).toContain(
     'if (!p || p.tenantId !== a.tenantId || p.status !== "approved") return null;',
   );
-  expect(claim).toContain(
-    'process.env[`SOCIAL_${p.provider.toUpperCase()}_PUBLISH_ENABLED`] !== "true"',
-  );
+  expect(claim).toContain("if (!socialPostPublishingEnabled(p))");
   expect(claim).toContain("p.selectionRevision");
   const approve = source.slice(
     source.indexOf("export const approvePost = tenantMutation("),

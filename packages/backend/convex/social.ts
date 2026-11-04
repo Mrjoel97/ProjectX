@@ -18,7 +18,8 @@ export function socialPostPublishingEnabled(post: {
   revision: number;
   privacy?: string;
 }) {
-  const gate = process.env[`SOCIAL_${post.provider.toUpperCase()}_PUBLISH_ENABLED`];
+  const { provider } = post;
+  const gate = process.env[`SOCIAL_${provider.toUpperCase()}_PUBLISH_ENABLED`];
   if (gate === "true") return true;
   return (
     post.provider === "tiktok" &&
