@@ -1,3 +1,5 @@
+> Last verified 2026-11-03. The shared tenant-data registry now classifies four additional customer specialist/workflow tables. Native tenant export and erasure include their owned configuration and run content.
+
 # Playbook: Tenant merchant checkout and shop operations
 
 > Last verified: 2026-10-24 against the isolated working tree. Focused local checks passed; no live payment qualification or provider execution is claimed. See ADR-065 and online-presence.md.

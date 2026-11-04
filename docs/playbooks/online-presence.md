@@ -1,3 +1,9 @@
+> Last verified 2026-11-04. The website evaluator fingerprint incorporates the optional report executor name in the shared schema.
+
+> Last verified 2026-11-04. The source fingerprint includes the tenant-first specialist and workflow indexes.
+
+> Last verified 2026-11-04. The customer workflow pilot adds tenant-owned tables to the shared schema. The website recipe evaluator fingerprint was regenerated and its source check passed.
+
 > Last verified: 2026-11-04 — The Executive reads weekly review and workflow pack decisions. The golden and vertical evaluator inventories now track the agenda, pack event and decision sources. Offline identity checks verify that edits retire the corresponding evidence.
 
 > Last verified: 2026-11-04 — Social service follow-up changes shared runtime sources. The evaluator fingerprint was regenerated from the implementation. Existing evaluation and activation records keep their original source identity.

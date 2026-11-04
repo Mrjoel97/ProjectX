@@ -35,6 +35,12 @@ export type EnvSpec = {
 
 export const ENV_MANIFEST: readonly EnvSpec[] = [
   {
+    name: "CUSTOMER_WORKFLOWS_PILOT_TENANTS",
+    tier: "feature",
+    whatBreaks:
+      "Customer-created specialists and manual workflows require an explicit JSON tenant allowlist.",
+  },
+  {
     name: "MERCHANT_PAYPAL_PARTNER_ATTRIBUTION_ID",
     tier: "feature",
     whatBreaks: "PayPal partner attribution is unavailable for merchant sandbox onboarding.",

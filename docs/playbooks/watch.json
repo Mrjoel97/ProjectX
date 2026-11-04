@@ -700,5 +700,17 @@
     "apps/web/app/(app)/dashboard/sites/ShopSetupReview",
     "apps/web/app/(app)/dashboard/sites/merchantPresentation",
     "apps/web/app/(app)/dashboard/sites/merchant.module.css"
+  ],
+  "customer-workflows.md": [
+    "packages/core/src/customerSpecialists",
+    "packages/core/src/customerWorkflows",
+    "packages/core/src/customerWorkflowReport",
+    "packages/core/src/customerWorkflowPilot",
+    "packages/backend/convex/customerSpecialists",
+    "packages/backend/convex/customerWorkflow",
+    "packages/backend/convex/customerWorkflowRuns",
+    "packages/backend/convex/lib/customerWorkflowPilot",
+    "apps/web/app/(app)/dashboard/skills-workflows/Customer",
+    "apps/web/app/(app)/dashboard/skills-workflows/customerLibrary"
   ]
 }

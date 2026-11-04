@@ -1,4 +1,12 @@
 > Last verified: 2026-11-04 — Refreshed evaluator source identity for the YouTube review controls; evaluation cases are unchanged.
+> Last verified 2026-11-04. Source identities include customer report parsing and the updated schema.
+
+> Last verified 2026-11-04. The source fingerprint includes the tenant-first specialist and workflow indexes.
+
+> Last verified 2026-11-04. Regenerated the evaluator identity after refreshing the shared website recipe fingerprint for the customer workflow schema.
+
+> Last verified 2026-11-03. Evaluator source inventories include the customer workflow runtime and pilot policy imported by shared model execution. Corpus case bytes retain their own fixed identity.
+
 > Last verified: 2026-11-04 — The Executive reads weekly review and workflow pack decisions. The golden and vertical evaluator inventories now track the agenda, pack event and decision sources. Offline identity checks verify that edits retire the corresponding evidence.
 
 > Last verified: 2026-11-04 — The source fingerprint includes the private TikTok review guard. The evaluation cases are unchanged.

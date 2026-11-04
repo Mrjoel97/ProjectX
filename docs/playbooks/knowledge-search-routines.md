@@ -1,3 +1,5 @@
+> Last verified 2026-11-03. The explicit module inventory includes customer specialist storage, manual workflow execution and pilot admission. These operations start from authenticated customer actions and record exact run snapshots.
+
 > Integration checkpoint: 2026-10-29 — This release candidate combines the media/direct-social and recurring-service changes. Dated verification notes below retain their original source and scope; prior passing checks do not certify this combined source. Final combined-source CI, remaining authenticated acceptance and production release are still pending. No phase completion, registry activation or platform approval is asserted by this documentation merge.
 
 > Last verified: 2026-10-26 — The closed Convex module inventory now explicitly includes brandKits. It adds reviewed brand drafting/publication and no recurring scheduler. Exact namespace coverage and forbidden recurrence-token checks remain intact.

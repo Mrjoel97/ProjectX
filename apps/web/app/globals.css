@@ -2092,6 +2092,16 @@ button.clay-card:hover {
   border-bottom: 0;
 }
 
+/* Short comparisons fit the reading pane even beside chat or on a phone. */
+.markdown-table-scroll table:not(:has(th:nth-child(4))) {
+  min-width: 0;
+}
+.markdown-table-scroll table:not(:has(th:nth-child(4))) :is(th, td) {
+  min-width: 0;
+  padding-inline: 0.5rem;
+  overflow-wrap: anywhere;
+}
+
 .markdown-document--compact {
   font-size: inherit;
   line-height: 1.55;
