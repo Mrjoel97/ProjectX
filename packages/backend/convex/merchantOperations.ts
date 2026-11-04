@@ -452,6 +452,7 @@ export const prepareRefund = internalMutation({
   },
   handler: async (ctx, args) => {
     const payment = await ownedPayment(ctx, args.tenantId, args.paymentId);
+    if (payment.provider === "flutterwave") throw Error("MERCHANT_REFUND_UNAVAILABLE");
     if (
       payment.revision !== args.expectedRevision ||
       !/^[A-Za-z0-9_-]{8,80}$/.test(args.requestKey)
@@ -565,6 +566,8 @@ export const refund = tenantAction({
       tenantId: ctx.tenantId,
       paymentId: args.paymentId,
     })) as { payment: Doc<"tenantMerchantPayments"> };
+    if (context.payment.provider === "flutterwave")
+      return { ok: false, reason: "flutterwave_test_refund_unavailable" };
     const refreshed = await refreshMerchantForTenant(
       ctx,
       ctx.tenantId,
@@ -613,7 +616,7 @@ export const refund = tenantAction({
             : value.status === "failed" || value.status === "canceled"
               ? "failed"
               : "pending";
-      } else {
+      } else if (state.provider === "paypal") {
         value = await client.paypal(
           `/v2/payments/captures/${encodeURIComponent(state.paymentRef)}/refund`,
           "POST",
@@ -637,7 +640,7 @@ export const refund = tenantAction({
             : value.status === "FAILED" || value.status === "CANCELLED"
               ? "failed"
               : "pending";
-      }
+      } else throw Error("MERCHANT_REFUND_UNAVAILABLE");
       const receipt: NormalizedMerchantRefundReceipt = {
         ...state,
         providerRefundRef,

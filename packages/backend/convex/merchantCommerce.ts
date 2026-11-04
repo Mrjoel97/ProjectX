@@ -25,10 +25,14 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalQuery } from "./_generated/server";
 import { appendAudit } from "./audit";
 import { tenantMutation, tenantQuery } from "./lib/functions";
-import { missingMerchantConfiguration } from "./lib/merchantProviderClient";
+import {
+  flutterwavePilotMatches,
+  flutterwaveReference,
+  missingMerchantConfiguration,
+} from "./lib/merchantProviderClient";
 import { assertTenantWritable, internalMutation } from "./lib/tenantLifecycle";
 
-const provider = v.union(v.literal("stripe"), v.literal("paypal"));
+const provider = v.union(v.literal("stripe"), v.literal("paypal"), v.literal("flutterwave"));
 type Db = QueryCtx | MutationCtx;
 export async function merchantProject(ctx: Db, tenantId: string, projectId: Id<"webProjects">) {
   const project = await ctx.db.get(projectId);
@@ -115,6 +119,13 @@ export async function merchantReadiness(
   )
     blockers.push("current_catalogue_version_required");
   const productConfigRefs: string[] = [];
+  const pilotItems: {
+    presentationItemId: string;
+    productId: Id<"tenantProducts">;
+    sku: string;
+    productRevision: number;
+    unitMinor: number;
+  }[] = [];
   for (const id of catalogueIds) {
     const mapping = projectMappings.find((row) => row.presentationItemId === id);
     const product = mapping ? await ctx.db.get(mapping.productId) : null;
@@ -145,6 +156,21 @@ export async function merchantReadiness(
     if (!stock || (stock.kind === "untracked" && !stock.approvedUntracked))
       blockers.push("stock_policy_required");
     if (
+      product.currency === "TZS" &&
+      stock &&
+      (stock.kind === "finite"
+        ? (stock.onHand ?? 0) > (stock.reserved ?? 0)
+        : stock.approvedUntracked)
+    ) {
+      pilotItems.push({
+        presentationItemId: id,
+        productId: product._id,
+        sku: product.sku,
+        productRevision: product.revision,
+        unitMinor: product.priceMinor,
+      });
+    }
+    if (
       product.goodsKind === "digital" &&
       (!product.digitalDeliveryDocumentId || !product.digitalDeliverySourceHash)
     )
@@ -155,8 +181,16 @@ export async function merchantReadiness(
     .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
     .take(501);
   if (events.length >= 501) blockers.push("provider_proof_review_bound_exceeded");
+  const flutterwavePilot =
+    project.publishedVersion === undefined && flutterwavePilotMatches(tenantId, projectId);
+  if (
+    flutterwavePilot &&
+    (policy?.currency !== "TZS" || policy.countries.length !== 1 || policy.countries[0] !== "TZ")
+  )
+    blockers.push("confirmed_tanzanian_shop_policy_required");
   const providers = [];
-  for (const name of ["stripe", "paypal"] as const) {
+  const names = flutterwavePilot ? (["flutterwave"] as const) : (["stripe", "paypal"] as const);
+  for (const name of names) {
     const account = await ctx.db
       .query("tenantMerchantAccounts")
       .withIndex("by_tenant_project_provider", (q) =>
@@ -167,7 +201,16 @@ export async function merchantReadiness(
     const capability = account?.capability as MerchantCapability | undefined;
     const ready =
       account?.status === "ready" &&
+      account.environment === "test" &&
+      (name !== "flutterwave" ||
+        (!!account.providerAccountId &&
+          flutterwavePilotMatches(tenantId, projectId, account.providerAccountId))) &&
       capability?.status === "verified" &&
+      capability.tenantId === tenantId &&
+      capability.provider === name &&
+      capability.merchantAccountRef === account._id &&
+      capability.providerAccountRef === account.providerAccountId &&
+      capability.environment === "test" &&
       capability.expiresAt > Date.now();
     const reasons = [
       ...(missingKeyNames.length ? ["provider_configuration_required"] : []),
@@ -202,13 +245,19 @@ export async function merchantReadiness(
         payment.provider === name &&
         payment.merchantAccountId === account?._id &&
         state?.status === "paid" &&
+        state.tenantId === tenantId &&
+        state.orderId === payment.orderId &&
         state.provider === name &&
         state.environment === "test" &&
         state.merchantAccountRef === account?._id &&
         state.providerAccountRef === account?.providerAccountId &&
+        (name !== "flutterwave" ||
+          flutterwavePilotMatches(tenantId, projectId, state.providerAccountRef)) &&
         state.totalMinor > 0 &&
         state.currency === policy?.currency &&
         order?.tenantId === tenantId &&
+        order.projectId === projectId &&
+        order.snapshot.currency === state.currency &&
         order.snapshotHash === state.quoteHash &&
         order.snapshot.totalMinor === state.totalMinor &&
         state.events.some(
@@ -226,19 +275,22 @@ export async function merchantReadiness(
     providers.push({
       provider: name,
       requiredForRelease: name === "stripe",
+      publicCheckoutEligible: name !== "flutterwave",
       configured: missingKeyNames.length === 0,
       canConnect: missingKeyNames.length === 0,
       status: account?.status ?? "not_connected",
       missingKeyNames,
       blockers: reasons,
-      ...(ready
-        ? {
-            connectionContext: {
-              sellerCountry: account!.sellerCountry,
-              currency: account!.currency,
-            },
-          }
-        : {}),
+      ...(name === "flutterwave"
+        ? { connectionContext: { sellerCountry: "TZ", currency: "TZS" } }
+        : ready
+          ? {
+              connectionContext: {
+                sellerCountry: account!.sellerCountry,
+                currency: account!.currency,
+              },
+            }
+          : {}),
     });
   }
   const automation = await ctx.db
@@ -293,9 +345,19 @@ export async function merchantReadiness(
     projectId,
     environment: "test" as const,
     testOnly: true,
-    releaseProviders: ["stripe"] as const,
-    publicCheckoutReady: blockers.length === 0,
-    blockers: [...new Set(blockers)],
+    releaseProviders: flutterwavePilot ? [] : (["stripe"] as const),
+    publicCheckoutReady: !flutterwavePilot && blockers.length === 0,
+    blockers: [...new Set(flutterwavePilot ? [...blockers, "private_pilot_test_only"] : blockers)],
+    privateFlutterwavePilot: flutterwavePilot
+      ? {
+          items: pilotItems,
+          canStartTest:
+            blockers.length === 0 &&
+            providers[0]!.blockers.every((reason) => reason === "verified_test_payment_required"),
+          verifiedTestPayment: !providers[0]!.blockers.includes("verified_test_payment_required"),
+          blockers: [...new Set([...blockers, ...providers[0]!.blockers])],
+        }
+      : null,
     providers,
     automation: automation
       ? {
@@ -460,10 +522,18 @@ export const beginAccount = internalMutation({
     currency: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await merchantProject(ctx, args.tenantId, args.projectId);
+    const project = await merchantProject(ctx, args.tenantId, args.projectId);
+    if (
+      args.provider === "flutterwave" &&
+      (project.publishedVersion !== undefined ||
+        !flutterwavePilotMatches(args.tenantId, args.projectId))
+    )
+      throw Error("MERCHANT_PRIVATE_PILOT_UNAVAILABLE");
     if (
       (args.sellerCountry !== undefined && !/^[A-Z]{2}$/.test(args.sellerCountry)) ||
-      (args.currency !== undefined && !["USD", "EUR", "GBP"].includes(args.currency))
+      (args.provider === "flutterwave"
+        ? args.sellerCountry !== "TZ" || args.currency !== "TZS"
+        : args.currency !== undefined && !["USD", "EUR", "GBP"].includes(args.currency))
     )
       throw Error("MERCHANT_COUNTRY_CURRENCY_INVALID");
     const previous = await ctx.db
@@ -520,6 +590,14 @@ export const updateAccount = internalMutation({
     )
       throw Error("MERCHANT_ACCOUNT_REBIND_FORBIDDEN");
     const capability = args.capability as MerchantCapability | undefined;
+    const providerAccountId = args.providerAccountId ?? account.providerAccountId;
+    if (
+      account.provider === "flutterwave" &&
+      (capability || args.providerAccountId) &&
+      (!providerAccountId ||
+        !flutterwavePilotMatches(args.tenantId, account.projectId, providerAccountId))
+    )
+      throw Error("MERCHANT_PRIVATE_PILOT_UNAVAILABLE");
     if (
       capability &&
       (capability.tenantId !== args.tenantId ||
@@ -565,7 +643,16 @@ export const checkoutContext = internalQuery({
       .query("tenantMerchantPayments")
       .withIndex("by_tenant_order", (q) => q.eq("tenantId", args.tenantId).eq("orderId", order._id))
       .unique();
-    return { order, account, payment };
+    const project =
+      args.provider === "flutterwave"
+        ? await merchantProject(ctx, args.tenantId, order.projectId)
+        : null;
+    return {
+      order,
+      account,
+      payment,
+      privateFlutterwaveProject: !!project && project.publishedVersion === undefined,
+    };
   },
 });
 export const prepareCheckout = internalMutation({
@@ -583,6 +670,11 @@ export const prepareCheckout = internalMutation({
       )
       .unique();
     if (!account || account.status !== "ready") throw Error("MERCHANT_ONBOARDING_REQUIRED");
+    if (args.provider === "flutterwave") {
+      const status = await merchantReadiness(ctx, args.tenantId, order.projectId);
+      if (!status.privateFlutterwavePilot?.canStartTest)
+        throw Error("MERCHANT_PRIVATE_PILOT_UNAVAILABLE");
+    }
     const local = await ctx.db
       .query("tenantOrderAttempts")
       .withIndex("by_tenant_order", (q) => q.eq("tenantId", args.tenantId).eq("orderId", order._id))
@@ -631,6 +723,52 @@ export const prepareCheckout = internalMutation({
     return (await ctx.db.get(id))!;
   },
 });
+// Flutterwave Standard has no documented idempotency key for creating a hosted session.
+// Bind the reference before the external POST; an ambiguous response can only be reconciled.
+export const claimFlutterwaveCheckout = internalMutation({
+  args: {
+    tenantId: v.string(),
+    paymentId: v.id("tenantMerchantPayments"),
+    providerOrderId: v.string(),
+    buyerTokenHash: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const payment = await ctx.db.get(args.paymentId);
+    if (
+      !payment ||
+      payment.tenantId !== args.tenantId ||
+      payment.provider !== "flutterwave" ||
+      payment.state.environment !== "test" ||
+      payment.state.provider !== "flutterwave" ||
+      !payment.state.providerAccountRef ||
+      !flutterwavePilotMatches(args.tenantId, payment.projectId, payment.state.providerAccountRef)
+    )
+      throw Error("MERCHANT_PAYMENT_UNAVAILABLE");
+    const project = await merchantProject(ctx, args.tenantId, payment.projectId);
+    if (project.publishedVersion !== undefined) throw Error("MERCHANT_PRIVATE_PILOT_UNAVAILABLE");
+    if (payment.providerOrderId || payment.buyerTokenHash || payment.state.status !== "pending")
+      return false;
+    if (
+      args.providerOrderId !== flutterwaveReference(payment.state) ||
+      !/^[a-f0-9]{64}$/.test(args.buyerTokenHash)
+    )
+      throw Error("MERCHANT_CHECKOUT_REFERENCE_INVALID");
+    const collision = await ctx.db
+      .query("tenantMerchantPayments")
+      .withIndex("by_provider_order", (q) =>
+        q.eq("provider", "flutterwave").eq("providerOrderId", args.providerOrderId),
+      )
+      .first();
+    if (collision) throw Error("MERCHANT_PAYMENT_REBIND_FORBIDDEN");
+    await ctx.db.patch(payment._id, {
+      providerOrderId: args.providerOrderId,
+      buyerTokenHash: args.buyerTokenHash,
+      revision: payment.revision + 1,
+      updatedAt: Date.now(),
+    });
+    return true;
+  },
+});
 export const updateCheckout = internalMutation({
   args: {
     tenantId: v.string(),
@@ -659,7 +797,9 @@ export const updateCheckout = internalMutation({
       ...(args.providerOrderId ? { providerOrderId: args.providerOrderId } : {}),
       ...(args.checkoutUrl ? { checkoutUrl: args.checkoutUrl } : {}),
       ...(args.buyerTokenHash ? { buyerTokenHash: args.buyerTokenHash } : {}),
-      ...(args.unknown ? { state: { ...payment.state, status: "unknown" } } : {}),
+      ...(args.unknown && payment.state.status === "pending"
+        ? { state: { ...payment.state, status: "unknown" } }
+        : {}),
       revision: payment.revision + 1,
       updatedAt: Date.now(),
     });
@@ -676,6 +816,13 @@ export const providerPayment = internalQuery({
       .unique();
     if (
       !payment ||
+      (payment.provider === "flutterwave" &&
+        (!payment.state.providerAccountRef ||
+          !flutterwavePilotMatches(
+            payment.tenantId,
+            payment.projectId,
+            payment.state.providerAccountRef,
+          ))) ||
       (args.providerAccountId !== undefined &&
         payment.state.providerAccountRef !== args.providerAccountId)
     )
@@ -717,6 +864,12 @@ export const applyPayment = internalMutation({
     if (!payment || payment.tenantId !== args.tenantId) throw Error("MERCHANT_PAYMENT_UNAVAILABLE");
     const state = payment.state as MerchantCheckoutAttempt,
       receipt = args.receipt as NormalizedMerchantPaymentReceipt;
+    if (
+      payment.provider === "flutterwave" &&
+      (!state.providerAccountRef ||
+        !flutterwavePilotMatches(args.tenantId, payment.projectId, state.providerAccountRef))
+    )
+      throw Error("MERCHANT_PRIVATE_PILOT_UNAVAILABLE");
     const checked = validateMerchantPaymentReceipt(state, receipt);
     if (!checked.ok) throw Error(`MERCHANT_RECEIPT_${checked.reason}`);
     if (checked.value.duplicate) return { duplicate: true, status: state.status };

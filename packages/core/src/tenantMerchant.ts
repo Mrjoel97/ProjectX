@@ -33,8 +33,13 @@ const country = (value: unknown): value is string =>
   typeof value === "string" && /^[A-Z]{2}$/.test(value);
 const quoteHash = (value: unknown): value is string =>
   typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value);
+const checkoutFlows = {
+  stripe: "stripe_connect_direct",
+  paypal: "paypal_merchant_checkout",
+  flutterwave: "flutterwave_standard",
+} as const satisfies Record<MerchantProvider, MerchantCapability["flow"]>;
 const provider = (value: unknown): value is MerchantProvider =>
-  value === "stripe" || value === "paypal";
+  typeof value === "string" && Object.hasOwn(checkoutFlows, value);
 /** Exact primitive tuple hashing; never hashes buyer/card/credential content. */
 export const merchantActionHash = (tuple: readonly (string | number)[]): string =>
   `sha256:${sha256Bytes(new TextEncoder().encode(JSON.stringify(tuple)))}`;
@@ -77,13 +82,15 @@ export function admitMerchantCheckout(
     !time(capability.expiresAt) ||
     capability.verifiedAt > request.now ||
     capability.expiresAt <= request.now ||
-    capability.flow !==
-      (request.provider === "stripe" ? "stripe_connect_direct" : "paypal_merchant_checkout") ||
+    capability.flow !== checkoutFlows[request.provider] ||
+    (request.provider === "flutterwave" && request.operation === "refund") ||
     !Array.isArray(capability.operations) ||
     !capability.operations.includes(request.operation ?? "checkout")
   )
     return fail("configuration_required");
   if (
+    (request.provider === "flutterwave" &&
+      (request.sellerCountry !== "TZ" || request.buyerCountry !== "TZ")) ||
     !country(request.sellerCountry) ||
     !country(request.buyerCountry) ||
     capability.sellerCountry !== request.sellerCountry ||
@@ -92,6 +99,8 @@ export function admitMerchantCheckout(
   )
     return fail("unsupported_country");
   if (
+    (request.provider === "flutterwave" &&
+      (request.currency !== "TZS" || request.settlementCurrency !== "TZS")) ||
     !currency(request.currency) ||
     !currency(request.settlementCurrency) ||
     !Array.isArray(capability.presentmentCurrencies) ||
@@ -208,6 +217,7 @@ export function validateMerchantPaymentReceipt(
   if (attempt.environment !== "test") return fail("live_mode_disabled");
   if (
     !verified(receipt.verification) ||
+    (attempt.provider === "flutterwave" && receipt.verification.method !== "provider_read") ||
     !ref(receipt.eventRef) ||
     !ref(receipt.attemptId) ||
     !["pending", "succeeded", "failed", "cancelled"].includes(receipt.outcome)
@@ -399,8 +409,9 @@ export function admitMerchantOperation(
     return fail("foreign");
   if (
     capability.status !== "verified" ||
-    capability.flow !==
-      (attempt.provider === "stripe" ? "stripe_connect_direct" : "paypal_merchant_checkout") ||
+    !provider(attempt.provider) ||
+    attempt.provider === "flutterwave" ||
+    capability.flow !== checkoutFlows[attempt.provider] ||
     !ref(capability.evidenceRef) ||
     !time(capability.verifiedAt) ||
     capability.verifiedAt > now ||

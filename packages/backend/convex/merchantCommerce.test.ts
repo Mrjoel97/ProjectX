@@ -4,7 +4,7 @@ import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
-import { makeMerchantCapability } from "./lib/merchantProviderClient";
+import { flutterwaveReference, makeMerchantCapability } from "./lib/merchantProviderClient";
 import { configureAutomationForTenant, merchantProductConfigRef } from "./merchantCommerce";
 import { bindDigitalDeliveryForTenant } from "./merchantOperations";
 import schema from "./schema";
@@ -27,7 +27,10 @@ function harness() {
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   return t;
 }
-async function setup(t: ReturnType<typeof harness>) {
+async function setup(t: ReturnType<typeof harness>, provider: "stripe" | "flutterwave" = "stripe") {
+  const isFlutterwave = provider === "flutterwave";
+  const currency = isFlutterwave ? "TZS" : "GBP";
+  const providerAccountId = isFlutterwave ? "12345" : "acct_fixture";
   vi.stubEnv("MERCHANT_STRIPE_TEST_SECRET_KEY", "sk_test_fixture");
   vi.stubEnv("MERCHANT_STRIPE_TEST_WEBHOOK_SECRET", "whsec_fixture");
   return t.run(async (ctx) => {
@@ -80,7 +83,7 @@ async function setup(t: ReturnType<typeof harness>) {
     const product = await createProductForTenant(ctx, tenantId, {
       sku: "lamp",
       variant: "one",
-      currency: "GBP",
+      currency,
       priceMinor: 1000,
       status: "active",
       goodsKind: "physical",
@@ -90,7 +93,7 @@ async function setup(t: ReturnType<typeof harness>) {
       projectId,
       expectedRevision: 0,
       sellerOfRecordRef: "merchant-confirmed",
-      currency: "GBP",
+      currency,
       countries: ["TZ"],
       taxRounding: "half_up",
       physical: {
@@ -146,13 +149,13 @@ async function setup(t: ReturnType<typeof harness>) {
     const accountId = await ctx.db.insert("tenantMerchantAccounts", {
       tenantId,
       projectId,
-      provider: "stripe",
+      provider,
       environment: "test",
       sellerCountry: "TZ",
-      currency: "GBP",
+      currency,
       revision: 1,
       status: "ready",
-      providerAccountId: "acct_fixture",
+      providerAccountId,
       trackingId: "fixture",
       createdAt: now,
       updatedAt: now,
@@ -161,14 +164,21 @@ async function setup(t: ReturnType<typeof harness>) {
       capability: makeMerchantCapability({
         tenantId,
         accountId,
-        providerAccountId: "acct_fixture",
-        provider: "stripe",
+        providerAccountId,
+        provider,
         sellerCountry: "TZ",
-        currency: "GBP",
+        currency,
         buyerCountries: ["TZ"],
         now,
       }),
     });
+    if (isFlutterwave) {
+      vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_SECRET_KEY", "FLWSECK_TEST-fixture-X");
+      vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_WEBHOOK_SECRET", "flutterwave-test-webhook-secret");
+      vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_ACCOUNT_ID", providerAccountId);
+      vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_TENANT_ID", tenantId);
+      vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_PROJECT_ID", projectId);
+    }
     const cart = await createCartForTenant(ctx, tenantId, {
       projectId,
       addressCountry: "TZ",
@@ -204,6 +214,137 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe("merchant payment integration", () => {
+  test("private order preparation rejects stale or foreign selections and reserves only once per request", async () => {
+    const t = harness();
+    const shop = await setup(t, "flutterwave");
+    const owner = t.withIdentity({ subject: `${shop.userId}|session` });
+    const fn = makeFunctionReference<"mutation">("merchantPilot:prepareOrder");
+    const input = {
+      projectId: shop.projectId,
+      presentationItemId: "item-one",
+      productId: shop.productId,
+      productRevision: 1,
+      unitMinor: 1000,
+      requestId: crypto.randomUUID(),
+    };
+    const counts = () =>
+      t.run(async (ctx) => ({
+        carts: (await ctx.db.query("tenantCarts").collect()).length,
+        orders: (await ctx.db.query("tenantOrders").collect()).length,
+        holds: (await ctx.db.query("tenantReservations").collect()).length,
+        reserved: (await ctx.db.query("tenantStock").unique())?.reserved,
+      }));
+    const baseline = await counts();
+    const other = await t.run((ctx) =>
+      ctx.db.insert("users", { email: "other-shop@example.test" }),
+    );
+    const foreign = t.withIdentity({ subject: `${other}|session` });
+    await expect(foreign.mutation(fn, input)).rejects.toThrow("MERCHANT_PROJECT_UNAVAILABLE");
+    await expect(owner.mutation(fn, { ...input, requestId: "invalid" })).rejects.toThrow(
+      "PRIVATE_TEST_UNAVAILABLE",
+    );
+    for (const stale of [
+      { presentationItemId: "retired" },
+      { productRevision: 2 },
+      { unitMinor: 900 },
+    ]) {
+      await expect(owner.mutation(fn, { ...input, ...stale })).rejects.toThrow(
+        "TEST_PRICE_CHANGED",
+      );
+    }
+    expect(await counts()).toEqual(baseline);
+    const [first, duplicate] = await Promise.all([
+      owner.mutation(fn, input),
+      owner.mutation(fn, input),
+    ]);
+    expect(first).toEqual(duplicate);
+    expect(first).toMatchObject({ totalMinor: 1000, currency: "TZS", status: "pending" });
+    expect(first.orderId).not.toBe(shop.orderId);
+    await expect(owner.mutation(fn, { ...input, unitMinor: 1200 })).rejects.toThrow(
+      "TEST_ORDER_SELECTION_CHANGED",
+    );
+    expect(await owner.mutation(fn, input)).toEqual(first);
+    expect(await counts()).toEqual({
+      carts: baseline.carts + 1,
+      orders: baseline.orders + 1,
+      holds: baseline.holds + 1,
+      reserved: (baseline.reserved ?? 0) + 1,
+    });
+  });
+  test("Flutterwave private TZ/TZS proof binds the seller, consumes the order once and never opens public checkout", async () => {
+    const t = harness();
+    const a = await setup(t, "flutterwave");
+    const actor = t.withIdentity({ subject: `${a.userId}|session` });
+    const readStatus = () => actor.query(status, { projectId: a.projectId });
+    const initial = await readStatus();
+    expect(initial.publicCheckoutReady).toBe(false);
+    expect(initial.privateFlutterwavePilot).toMatchObject({
+      canStartTest: true,
+      verifiedTestPayment: false,
+      items: [{ productId: a.productId, presentationItemId: "item-one", unitMinor: 1000 }],
+    });
+    const payment = await t.mutation(mutation("prepareCheckout"), {
+      tenantId: a.tenantId,
+      orderId: a.orderId,
+      provider: "flutterwave",
+    });
+    const args = { tenantId: a.tenantId, paymentId: payment._id };
+    const claim = {
+      ...args,
+      providerOrderId: flutterwaveReference(payment.state),
+      buyerTokenHash: "b".repeat(64),
+    };
+    await expect(
+      t.mutation(mutation("claimFlutterwaveCheckout"), {
+        ...claim,
+        providerOrderId: "other-order",
+      }),
+    ).rejects.toThrow("REFERENCE_INVALID");
+    expect(await t.mutation(mutation("claimFlutterwaveCheckout"), claim)).toBe(true);
+    expect(await t.mutation(mutation("claimFlutterwaveCheckout"), claim)).toBe(false);
+    const receipt = {
+      ...payment.state,
+      amountMinor: 1000,
+      outcome: "succeeded",
+      paymentRef: "100099",
+      eventRef: "flutterwave-success-100099",
+      verification: { method: "provider_read", evidenceRef: "flutterwave-transaction-100099" },
+    };
+    const apply = (overrides: Record<string, unknown> = {}) =>
+      t.mutation(mutation("applyPayment"), { ...args, receipt: { ...receipt, ...overrides } });
+    await expect(apply({ providerAccountRef: "999" })).rejects.toThrow("foreign");
+    await expect(apply({ currency: "GBP" })).rejects.toThrow("payment_conflict");
+    await expect(
+      apply({ verification: { method: "signed_webhook", evidenceRef: "webhook-only" } }),
+    ).rejects.toThrow("invalid_receipt");
+    await apply();
+    expect(await apply()).toMatchObject({ duplicate: true, status: "paid" });
+    // A delayed exception on the original /payments request cannot undo confirmed payment.
+    await t.mutation(mutation("updateCheckout"), { ...args, unknown: true });
+    expect(await readStatus()).toMatchObject({
+      privateFlutterwavePilot: { verifiedTestPayment: true },
+      publicCheckoutReady: false,
+    });
+    const stock = await t.run((ctx) =>
+      ctx.db
+        .query("tenantStock")
+        .withIndex("by_tenant_product", (q) =>
+          q.eq("tenantId", a.tenantId).eq("productId", a.productId),
+        )
+        .unique(),
+    );
+    expect(stock).toMatchObject({ reserved: 0, onHand: 1 });
+    vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_ACCOUNT_ID", "999");
+    expect(await readStatus()).toMatchObject({
+      privateFlutterwavePilot: { canStartTest: false, verifiedTestPayment: false },
+      publicCheckoutReady: false,
+    });
+    vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_PROJECT_ID", "different-project");
+    expect((await readStatus()).privateFlutterwavePilot).toBeNull();
+    await expect(t.mutation(mutation("claimFlutterwaveCheckout"), claim)).rejects.toThrow(
+      "UNAVAILABLE",
+    );
+  });
   test.each([
     "active",
     "restricted",
@@ -749,5 +890,102 @@ describe("merchant payment integration", () => {
     const next = await actor.query(status, { projectId: a.projectId, version: 2 });
     expect(next.blockers).toContain("exact_native_shop_setup_review_required");
     expect(next.blockers).toContain("product_policy_currency_mismatch");
+  });
+  test("a private Flutterwave hosted checkout settles once from the bound provider read", async () => {
+    const t = harness();
+    const shop = await setup(t, "flutterwave");
+    const owner = t.withIdentity({ subject: `${shop.userId}|session` });
+    vi.stubEnv("CONVEX_SITE_URL", "https://some.convex.site");
+    let reference = "";
+    let actualAmount = 9;
+    let actualStatus = "pending";
+    const link = "https://checkout.flutterwave.com/v3/hosted/pay/test_example";
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      if (path === "/v3/balances/TZS")
+        return Response.json({ status: "success", data: { currency: "TZS" } });
+      if (path === "/v3/payments") {
+        const body = JSON.parse(String(init?.body));
+        expect(body).toMatchObject({
+          amount: 10,
+          currency: "TZS",
+          customer: { email: "buyer@example.test" },
+        });
+        reference = body.tx_ref;
+        return Response.json({ status: "success", data: { link } });
+      }
+      if (path !== "/v3/transactions/42/verify") throw Error("Unexpected provider call");
+      return Response.json({
+        status: "success",
+        data: {
+          id: 42,
+          account_id: 12345,
+          tx_ref: reference,
+          status: actualStatus,
+          amount: actualAmount,
+          currency: "TZS",
+        },
+      });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const checkout = await owner.action(
+      makeFunctionReference<"action">("merchantProvider:checkout"),
+      {
+        orderId: shop.orderId,
+        provider: "flutterwave",
+        buyerEmail: "buyer@example.test",
+      },
+    );
+    expect(checkout).toMatchObject({ ok: true, url: link });
+    expect(reference).toMatch(/^pikar-flw-[a-f0-9]{64}$/);
+    // Publication closes private checkout link reuse. An already-issued payment must still settle.
+    await t.run((ctx) => ctx.db.patch(shop.projectId, { publishedVersion: 1 }));
+    expect(
+      await owner.action(makeFunctionReference<"action">("merchantProvider:checkout"), {
+        orderId: shop.orderId,
+        provider: "flutterwave",
+        buyerEmail: "buyer@example.test",
+      }),
+    ).toEqual({ ok: false, reason: "merchant_provider_unavailable" });
+    const notify = () =>
+      t.fetch("/merchant/flutterwave/webhook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "verif-hash": "flutterwave-test-webhook-secret",
+        },
+        // The callback claims payment even when the provider read disagrees.
+        body: JSON.stringify({
+          event: "charge.completed",
+          data: {
+            id: 42,
+            account_id: 12345,
+            tx_ref: reference,
+            amount: 10,
+            currency: "TZS",
+            status: "successful",
+          },
+        }),
+      });
+    const readState = () =>
+      t.run(async (ctx) => {
+        const payment = await ctx.db.query("tenantMerchantPayments").unique();
+        const stock = await ctx.db.query("tenantStock").unique();
+        const events = await ctx.db.query("tenantMerchantEvents").collect();
+        return { status: payment?.state.status, onHand: stock?.onHand, events: events.length };
+      });
+    expect((await notify()).status).toBe(503);
+    expect(await readState()).toEqual({ status: "pending", onHand: 2, events: 0 });
+    actualAmount = 10;
+    expect((await notify()).status).toBe(200);
+    expect(await readState()).toEqual({ status: "pending", onHand: 2, events: 1 });
+    actualStatus = "successful";
+    expect((await notify()).status).toBe(200);
+    expect((await notify()).status).toBe(200);
+    expect(await readState()).toEqual({ status: "paid", onHand: 1, events: 2 });
+    expect(await owner.query(status, { projectId: shop.projectId })).toMatchObject({
+      publicCheckoutReady: false,
+      privateFlutterwavePilot: null,
+    });
   });
 });

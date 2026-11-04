@@ -9,6 +9,7 @@ export const EVALUATOR_FILES = [
   // Shared merchant/setup leaves must also retire previously qualified agent evidence.
   "apps/web/app/(app)/dashboard/sites/SiteEditor.tsx",
   "apps/web/app/(app)/dashboard/sites/MerchantWorkspace.tsx",
+  "apps/web/app/(app)/dashboard/sites/FlutterwaveTestOrder.tsx",
   "apps/web/app/(app)/dashboard/sites/ShopSetupReview.tsx",
   "apps/web/app/(app)/dashboard/sites/merchantPresentation.ts",
   "apps/web/app/(app)/dashboard/sites/merchant.module.css",
@@ -18,6 +19,7 @@ export const EVALUATOR_FILES = [
   "packages/backend/convex/merchantOperations.ts",
   "packages/backend/convex/vaultFolders.ts",
   "packages/backend/convex/merchantProvider.ts",
+  "packages/backend/convex/merchantPilot.ts",
   "packages/backend/convex/lib/merchantProviderClient.ts",
   "packages/backend/convex/tenantCatalogue.ts",
   "packages/backend/convex/tenantOrders.ts",

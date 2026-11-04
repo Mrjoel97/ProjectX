@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
+  flutterwaveClient,
+  flutterwavePaymentReceipt,
+  flutterwaveReference,
   merchantClient,
   paypalPaymentReceipt,
   safeMerchantUrl,
@@ -19,6 +22,120 @@ const attempt = {
   totalMinor: 1400,
 };
 describe("merchant provider boundary", () => {
+  function pilot() {
+    vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_TENANT_ID", "tenant");
+    vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_PROJECT_ID", "shop");
+    vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_ACCOUNT_ID", "91234");
+    vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_SECRET_KEY", "FLWSECK_TEST-example-X");
+    vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_WEBHOOK_SECRET", "test-callback-fixture");
+  }
+  const tzAttempt = {
+    ...attempt,
+    providerAccountRef: "91234",
+    currency: "TZS",
+    totalMinor: 150000,
+  };
+  const hostedLink = "https://checkout.flutterwave.com/v3/hosted/pay/flwlnk-test";
+  test("Flutterwave sends checkout only for a whole-shilling quote under this shop's test key", async () => {
+    pilot();
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({ status: "success", data: { link: hostedLink } }),
+    );
+    const client = flutterwaveClient("tenant", "shop", "91234", fetcher);
+    for (const invalid of [
+      { ...tzAttempt, totalMinor: 150001 },
+      { ...tzAttempt, currency: "GBP" },
+      { ...tzAttempt, providerAccountRef: "42" },
+    ])
+      await expect(
+        client.createCheckout(invalid, "buyer@example.test", "https://shop.test/return"),
+      ).rejects.toThrow();
+    await expect(
+      client.createCheckout(tzAttempt, "not-an-email", "https://shop.test/return"),
+    ).rejects.toThrow("EMAIL");
+    expect(fetcher).not.toHaveBeenCalled();
+    await expect(
+      client.createCheckout(tzAttempt, "buyer@example.test", "https://shop.test/return"),
+    ).resolves.toBe(hostedLink);
+    expect(fetcher.mock.calls[0]?.[0]).toBe("https://api.flutterwave.com/v3/payments");
+    const init = fetcher.mock.calls[0]?.[1];
+    expect(init?.headers).toMatchObject({ Authorization: "Bearer FLWSECK_TEST-example-X" });
+    expect(JSON.parse(String(init?.body))).toEqual({
+      amount: 1500,
+      currency: "TZS",
+      tx_ref: flutterwaveReference(tzAttempt),
+      payment_options: "card,mobilemoneytanzania",
+      redirect_url: "https://shop.test/return",
+      customer: { email: "buyer@example.test" },
+    });
+    expect(flutterwaveReference(tzAttempt)).toMatch(/^pikar-flw-[a-f0-9]{64}$/);
+    for (const badLink of [
+      "https://checkout.flutterwave.com.evil.test/v3/hosted/pay/test",
+      "https://checkout.flutterwave.com/login",
+    ])
+      expect(() => safeMerchantUrl(badLink, "flutterwave")).toThrow();
+  });
+  test("Flutterwave refuses another tenant, project, account, missing config, and production credentials before egress", () => {
+    pilot();
+    const fetcher = vi.fn();
+    for (const [tenant, project, account] of [
+      ["different", "shop", "91234"],
+      ["tenant", "another", "91234"],
+      ["tenant", "shop", "10000"],
+    ] as const)
+      expect(() => flutterwaveClient(tenant, project, account, fetcher)).toThrow();
+    for (const key of ["", "FLWSECK-live-X", "FLWSECK_TEST-SANDBOXDEMOKEY-X"]) {
+      vi.stubEnv("MERCHANT_FLUTTERWAVE_TEST_SECRET_KEY", key);
+      expect(() => flutterwaveClient("tenant", "shop", "91234", fetcher)).toThrow();
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  test("Flutterwave reconciles verified transactions against the immutable amount, order and merchant", async () => {
+    pilot();
+    const tx = {
+      id: 456,
+      account_id: 91234,
+      tx_ref: flutterwaveReference(tzAttempt),
+      amount: "1500.00",
+      charged_amount: 1500,
+      currency: "TZS",
+      status: "successful",
+    };
+    const fetcher = vi.fn<typeof fetch>(async () => Response.json({ status: "success", data: tx }));
+    const client = flutterwaveClient("tenant", "shop", "91234", fetcher);
+    const byReference = await client.readPayment(tx.tx_ref);
+    expect(fetcher.mock.calls[0]?.[0]).toBe(
+      `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${tx.tx_ref}`,
+    );
+    await client.readPayment(tx.tx_ref, "456");
+    expect(fetcher.mock.calls[1]?.[0]).toBe(
+      "https://api.flutterwave.com/v3/transactions/456/verify",
+    );
+    expect(flutterwavePaymentReceipt(byReference, tzAttempt, "event", "456")).toMatchObject({
+      outcome: "succeeded",
+      paymentRef: "456",
+      amountMinor: 150000,
+      verification: { method: "provider_read" },
+    });
+    for (const change of [
+      { id: 457 },
+      { account_id: "999" },
+      { amount: 1499 },
+      { amount: "1500.001" },
+      { charged_amount: 1501 },
+      { currency: "GBP" },
+      { tx_ref: flutterwaveReference({ ...tzAttempt, orderId: "other" }) },
+    ])
+      expect(() =>
+        flutterwavePaymentReceipt({ ...tx, ...change }, tzAttempt, "event", "456"),
+      ).toThrow("BINDING");
+    for (const status of ["failed", "pending"]) {
+      const receipt = flutterwavePaymentReceipt({ ...tx, status }, tzAttempt, "event");
+      expect(receipt.outcome).toBe("pending");
+      expect(receipt.paymentRef).toBeUndefined();
+      expect(receipt.eventRef).not.toBe(flutterwavePaymentReceipt(tx, tzAttempt, "event").eventRef);
+    }
+  });
   test("missing or live Stripe key fails before any egress", () => {
     vi.stubEnv("MERCHANT_STRIPE_TEST_SECRET_KEY", "");
     vi.stubEnv("MERCHANT_STRIPE_TEST_WEBHOOK_SECRET", "whsec_test");

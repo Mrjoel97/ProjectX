@@ -362,6 +362,38 @@ describe.each(["stripe", "paypal"] as const)("merchant test-mode protocol: %s", 
   });
 });
 
+test("Flutterwave checkout remains domestic, TZS and checkout-only even if an account advertises broader capabilities", () => {
+  const cap: MerchantCapability = {
+    ...capability(),
+    provider: "flutterwave",
+    flow: "flutterwave_standard",
+    sellerCountry: "TZ",
+    buyerCountries: ["TZ", "GB"],
+    presentmentCurrencies: ["TZS", "GBP"],
+    settlementCurrencies: ["TZS", "GBP"],
+  };
+  const valid = {
+    ...request(),
+    provider: "flutterwave" as const,
+    sellerCountry: "TZ",
+    buyerCountry: "TZ",
+    currency: "TZS",
+    settlementCurrency: "TZS",
+  };
+  expect(admitMerchantCheckout(cap, valid).ok).toBe(true);
+  expect(admitMerchantCheckout(cap, { ...valid, buyerCountry: "GB" })).toEqual({
+    ok: false,
+    reason: "unsupported_country",
+  });
+  expect(admitMerchantCheckout(cap, { ...valid, currency: "GBP" })).toEqual({
+    ok: false,
+    reason: "unsupported_currency",
+  });
+  expect(admitMerchantCheckout(cap, { ...valid, settlementCurrency: "GBP" }).ok).toBe(false);
+  expect(admitMerchantCheckout(cap, { ...valid, operation: "refund" }).ok).toBe(false);
+  expect(admitMerchantCheckout(cap, { ...valid, environment: "live" }).ok).toBe(false);
+});
+
 describe("fulfillment and truthful customer-notice preparation", () => {
   const state = paid();
   const draft = (kind: "physical_shipment" | "digital_entitlement") => {

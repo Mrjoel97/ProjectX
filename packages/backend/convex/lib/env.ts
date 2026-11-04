@@ -34,6 +34,17 @@ export type EnvSpec = {
 };
 
 export const ENV_MANIFEST: readonly EnvSpec[] = [
+  ...[
+    "MERCHANT_FLUTTERWAVE_TEST_ACCOUNT_ID",
+    "MERCHANT_FLUTTERWAVE_TEST_PROJECT_ID",
+    "MERCHANT_FLUTTERWAVE_TEST_TENANT_ID",
+    "MERCHANT_FLUTTERWAVE_TEST_SECRET_KEY",
+    "MERCHANT_FLUTTERWAVE_TEST_WEBHOOK_SECRET",
+  ].map((name) => ({
+    name,
+    tier: "feature" as const,
+    whatBreaks: "The private Flutterwave test shop cannot verify its connection or payments.",
+  })),
   {
     name: "MERCHANT_PAYPAL_PARTNER_ATTRIBUTION_ID",
     tier: "feature",

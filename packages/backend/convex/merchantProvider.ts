@@ -7,6 +7,12 @@ import type { ActionCtx } from "./_generated/server";
 import { internalQuery } from "./_generated/server";
 import { tenantAction } from "./lib/functions";
 import {
+  flutterwaveClient,
+  flutterwaveMerchantBinding,
+  flutterwavePaymentReceipt,
+  flutterwavePilotMatches,
+  flutterwaveReference,
+  flutterwaveWholeShillings,
   makeMerchantCapability,
   merchantClient,
   missingMerchantConfiguration,
@@ -15,11 +21,12 @@ import {
   safeMerchantUrl,
   stripeCapability,
   stripePaymentReceipt,
+  validFlutterwaveBuyerEmail,
   wire,
 } from "./lib/merchantProviderClient";
 import { internalAction } from "./lib/tenantLifecycle";
 
-const provider = v.union(v.literal("stripe"), v.literal("paypal"));
+const provider = v.union(v.literal("stripe"), v.literal("paypal"), v.literal("flutterwave"));
 type Context = {
   project: Doc<"webProjects">;
   account: Doc<"tenantMerchantAccounts"> | null;
@@ -68,6 +75,12 @@ export async function refreshMerchantForTenant(
         providerAccountId: account.providerAccountId,
         ...stripeCapability(value, account.providerAccountId),
       };
+    } else if (name === "flutterwave") {
+      identity = await flutterwaveClient(
+        tenantId,
+        projectId,
+        account.providerAccountId,
+      ).testWallet();
     } else {
       let seller = account.providerAccountId;
       const base = `/v1/customer/partners/${encodeURIComponent(process.env.MERCHANT_PAYPAL_PARTNER_MERCHANT_ID!)}/merchant-integrations`;
@@ -149,6 +162,14 @@ export const connect = tenantAction({
       projectId: args.projectId,
       provider: args.provider,
     })) as Context;
+    if (args.provider === "flutterwave") {
+      if (
+        !flutterwavePilotMatches(ctx.tenantId, args.projectId, context.account?.providerAccountId)
+      )
+        return { ok: false, reason: "merchant_provider_unavailable" };
+      if (args.sellerCountry !== "TZ") return { ok: false, reason: "unsupported_country" };
+      if (args.currency !== "TZS") return { ok: false, reason: "unsupported_currency" };
+    }
     const missingKeyNames = missingMerchantConfiguration(args.provider);
     if (missingKeyNames.length)
       return { ok: false, reason: "provider_configuration_required", missingKeyNames };
@@ -159,6 +180,8 @@ export const connect = tenantAction({
       ...(args.sellerCountry ? { sellerCountry: args.sellerCountry } : {}),
       ...(args.currency ? { currency: args.currency } : {}),
     })) as Doc<"tenantMerchantAccounts">;
+    if (args.provider === "flutterwave")
+      return refreshMerchantForTenant(ctx, ctx.tenantId, args.projectId, args.provider);
     try {
       const client = merchantClient(args.provider),
         origin = siteOrigin();
@@ -275,6 +298,7 @@ export async function startMerchantCheckout(
   tenantId: string,
   orderId: Id<"tenantOrders">,
   name: MerchantProvider,
+  buyerEmail?: string,
 ) {
   const context = (await ctx.runQuery(queryRef("checkoutContext"), {
     tenantId,
@@ -284,8 +308,36 @@ export async function startMerchantCheckout(
     order: Doc<"tenantOrders">;
     account: Doc<"tenantMerchantAccounts"> | null;
     payment: Doc<"tenantMerchantPayments"> | null;
+    privateFlutterwaveProject: boolean;
   };
+  if (
+    name === "flutterwave" &&
+    (!context.privateFlutterwaveProject ||
+      context.account?.status !== "ready" ||
+      !flutterwavePilotMatches(
+        tenantId,
+        context.order.projectId,
+        context.account.providerAccountId,
+      ))
+  )
+    return { ok: false, reason: "merchant_provider_unavailable" };
   if (context.payment) {
+    if (name === "flutterwave") {
+      try {
+        flutterwaveMerchantBinding(
+          tenantId,
+          context.order.projectId,
+          context.payment.state.providerAccountRef,
+        );
+        if (
+          context.payment.state.status !== "pending" ||
+          context.payment.state.expiresAt <= Date.now()
+        )
+          return { ok: false, reason: "merchant_payment_requires_reconciliation" };
+      } catch (error) {
+        return { ok: false, reason: safeFailure(error) };
+      }
+    }
     if (
       context.payment.provider !== name ||
       !context.payment.checkoutUrl ||
@@ -293,6 +345,15 @@ export async function startMerchantCheckout(
     )
       return { ok: false, reason: "merchant_payment_requires_reconciliation" };
     return { ok: true, paymentId: context.payment._id, url: context.payment.checkoutUrl };
+  }
+  if (name === "flutterwave") {
+    if (!validFlutterwaveBuyerEmail(buyerEmail))
+      return { ok: false, reason: "buyer_email_required" };
+    try {
+      flutterwaveWholeShillings(context.order.snapshot.totalMinor);
+    } catch {
+      return { ok: false, reason: "flutterwave_whole_shillings_required" };
+    }
   }
   const refreshed = await refreshMerchantForTenant(ctx, tenantId, context.order.projectId, name);
   if (!refreshed.ok) return refreshed;
@@ -307,17 +368,34 @@ export async function startMerchantCheckout(
     const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
       byte.toString(16).padStart(2, "0"),
     ).join("");
-    await ctx.runMutation(mutationRef("updateCheckout"), {
-      tenantId,
-      paymentId: payment._id,
-      buyerTokenHash: hash(token),
-    });
+    if (name === "flutterwave") {
+      const claimed = await ctx.runMutation(mutationRef("claimFlutterwaveCheckout"), {
+        tenantId,
+        paymentId: payment._id,
+        buyerTokenHash: hash(token),
+        providerOrderId: flutterwaveReference(state),
+      });
+      if (!claimed) return { ok: false, reason: "merchant_payment_requires_reconciliation" };
+    } else {
+      await ctx.runMutation(mutationRef("updateCheckout"), {
+        tenantId,
+        paymentId: payment._id,
+        buyerTokenHash: hash(token),
+      });
+    }
     const site = new URL(process.env.CONVEX_SITE_URL ?? "");
     if (site.protocol !== "https:" || site.username || site.password || site.pathname !== "/")
       throw Error("MERCHANT_PUBLIC_HOST_REQUIRED");
     const returnUrl = `${site.origin}/merchant/order/${payment._id}?access=${token}`;
     let providerOrderId: string, url: string;
-    if (name === "stripe") {
+    if (name === "flutterwave") {
+      providerOrderId = flutterwaveReference(state);
+      url = await flutterwaveClient(
+        tenantId,
+        payment.projectId,
+        state.providerAccountRef,
+      ).createCheckout(state, buyerEmail ?? "", returnUrl);
+    } else if (name === "stripe") {
       const body = new URLSearchParams({
         mode: "payment",
         client_reference_id: orderId,
@@ -415,14 +493,16 @@ export async function startMerchantCheckout(
   }
 }
 export const checkout = tenantAction({
-  args: { orderId: v.id("tenantOrders"), provider },
-  handler: (ctx, args) => startMerchantCheckout(ctx, ctx.tenantId, args.orderId, args.provider),
+  args: { orderId: v.id("tenantOrders"), provider, buyerEmail: v.optional(v.string()) },
+  handler: (ctx, args) =>
+    startMerchantCheckout(ctx, ctx.tenantId, args.orderId, args.provider, args.buyerEmail),
 });
 export async function reconcileMerchantPayment(
   ctx: ActionCtx,
   payment: Doc<"tenantMerchantPayments">,
   eventRef: string,
   capture = false,
+  transactionId?: string,
 ) {
   const state = payment.state as MerchantCheckoutAttempt;
   if (!payment.providerOrderId) throw Error("MERCHANT_PROVIDER_ORDER_REQUIRED");
@@ -435,7 +515,15 @@ export async function reconcileMerchantPayment(
       undefined,
       state.providerAccountRef,
     );
-  else {
+  else if (payment.provider === "flutterwave") {
+    if (payment.providerOrderId !== flutterwaveReference(state))
+      throw Error("MERCHANT_PAYMENT_BINDING_MISMATCH");
+    value = await flutterwaveClient(
+      payment.tenantId,
+      payment.projectId,
+      state.providerAccountRef,
+    ).readPayment(payment.providerOrderId, transactionId);
+  } else {
     value = await client.paypal(
       `/v2/checkout/orders/${encodeURIComponent(payment.providerOrderId)}`,
       "GET",
@@ -451,11 +539,14 @@ export async function reconcileMerchantPayment(
         `capture-${payment._id}`.slice(-38),
       );
   }
-  if (value.id !== payment.providerOrderId) throw Error("MERCHANT_PAYMENT_BINDING_MISMATCH");
+  if (payment.provider !== "flutterwave" && value.id !== payment.providerOrderId)
+    throw Error("MERCHANT_PAYMENT_BINDING_MISMATCH");
   const receipt =
     payment.provider === "stripe"
       ? stripePaymentReceipt(value, state, eventRef)
-      : paypalPaymentReceipt(value, state, eventRef);
+      : payment.provider === "flutterwave"
+        ? flutterwavePaymentReceipt(value, state, eventRef, transactionId)
+        : paypalPaymentReceipt(value, state, eventRef);
   const orderContext = (await ctx.runQuery(queryRef("checkoutContext"), {
     tenantId: payment.tenantId,
     orderId: payment.orderId,
@@ -493,13 +584,18 @@ export const reconcile = tenantAction({
   },
 });
 export const verifiedWebhook = internalAction({
-  args: { tenantId: v.string(), paymentId: v.id("tenantMerchantPayments"), eventRef: v.string() },
+  args: {
+    tenantId: v.string(),
+    paymentId: v.id("tenantMerchantPayments"),
+    eventRef: v.string(),
+    transactionId: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const payment = (await ctx.runQuery(queryRef("paymentForTenant"), {
       tenantId: args.tenantId,
       paymentId: args.paymentId,
     })) as Doc<"tenantMerchantPayments">;
-    return reconcileMerchantPayment(ctx, payment, args.eventRef);
+    return reconcileMerchantPayment(ctx, payment, args.eventRef, false, args.transactionId);
   },
 });
 
@@ -518,7 +614,12 @@ export function verifiedBuyerDetails(
         ? wire(wire(value.collected_information).shipping_details ?? value.shipping_details)
         : wire(unit.shipping),
     address = wire(shipping.address);
-  const email = provider === "stripe" ? details.email : payer.email_address;
+  const email =
+    provider === "stripe"
+      ? details.email
+      : provider === "flutterwave"
+        ? wire(value.customer).email
+        : payer.email_address;
   const result: {
     buyerEmail?: string;
     buyerAddress?: {
@@ -535,6 +636,10 @@ export function verifiedBuyerDetails(
   if (typeof email === "string" && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     result.buyerEmail = email;
   if (!physical) return result;
+  if (provider === "flutterwave") {
+    result.deliveryReviewReason = "buyer_address_missing";
+    return result;
+  }
   const text = (x: unknown) =>
     // biome-ignore lint/suspicious/noControlCharactersInRegex: Reject control characters at the untrusted input boundary.
     typeof x === "string" && x.trim().length > 0 && x.length <= 200 && !/[\u0000-\u001f]/.test(x)
@@ -572,7 +677,7 @@ export const maintenanceCandidates = internalQuery({
   args: {},
   handler: async (ctx) => {
     const rows: Doc<"tenantMerchantAccounts">[] = [];
-    for (const provider of ["stripe", "paypal"] as const) {
+    for (const provider of ["stripe", "paypal", "flutterwave"] as const) {
       if (missingMerchantConfiguration(provider).length) continue;
       for (const status of ["ready", "unavailable", "connecting"] as const) {
         rows.push(
@@ -597,6 +702,12 @@ export const maintenanceCandidates = internalQuery({
       if (
         !lifecycle?.state &&
         account.status !== "revoked" &&
+        (account.provider !== "flutterwave" ||
+          flutterwavePilotMatches(
+            account.tenantId,
+            account.projectId,
+            account.providerAccountId,
+          )) &&
         (account.provider === "paypal" || account.providerAccountId) &&
         missingMerchantConfiguration(account.provider).length === 0
       )

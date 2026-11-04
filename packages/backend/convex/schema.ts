@@ -4655,7 +4655,7 @@ export default defineSchema({
   tenantMerchantAccounts: defineTable({
     tenantId: v.string(),
     projectId: v.id("webProjects"),
-    provider: v.union(v.literal("stripe"), v.literal("paypal")),
+    provider: v.union(v.literal("stripe"), v.literal("paypal"), v.literal("flutterwave")),
     environment: v.literal("test"),
     sellerCountry: v.string(),
     currency: v.string(),
@@ -4685,7 +4685,7 @@ export default defineSchema({
     orderId: v.id("tenantOrders"),
     localAttemptId: v.id("tenantOrderAttempts"),
     merchantAccountId: v.id("tenantMerchantAccounts"),
-    provider: v.union(v.literal("stripe"), v.literal("paypal")),
+    provider: v.union(v.literal("stripe"), v.literal("paypal"), v.literal("flutterwave")),
     state: v.any(),
     providerOrderId: v.optional(v.string()),
     checkoutUrl: v.optional(v.string()),
@@ -4717,7 +4717,7 @@ export default defineSchema({
     .index("by_tenant_project", ["tenantId", "projectId"]),
   tenantMerchantEvents: defineTable({
     tenantId: v.string(),
-    provider: v.union(v.literal("stripe"), v.literal("paypal")),
+    provider: v.union(v.literal("stripe"), v.literal("paypal"), v.literal("flutterwave")),
     eventRef: v.string(),
     paymentId: v.id("tenantMerchantPayments"),
     fingerprint: v.string(),

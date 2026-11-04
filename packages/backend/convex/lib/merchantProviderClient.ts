@@ -1,12 +1,21 @@
 import type {
   MerchantCapability,
+  MerchantCheckoutAttempt,
   MerchantProvider,
   NormalizedMerchantPaymentReceipt,
 } from "@pikar/contracts/tenantCommerce";
+import { sha256Bytes } from "@pikar/core/webRuntime";
 
 /** Separate selling credentials: neither Pikar billing nor read-only finance grants are used. */
 export const MERCHANT_STRIPE_API_VERSION = "2026-09-30.endive";
 const required = {
+  flutterwave: [
+    "MERCHANT_FLUTTERWAVE_TEST_SECRET_KEY",
+    "MERCHANT_FLUTTERWAVE_TEST_ACCOUNT_ID",
+    "MERCHANT_FLUTTERWAVE_TEST_TENANT_ID",
+    "MERCHANT_FLUTTERWAVE_TEST_PROJECT_ID",
+    "MERCHANT_FLUTTERWAVE_TEST_WEBHOOK_SECRET",
+  ],
   stripe: ["MERCHANT_STRIPE_TEST_SECRET_KEY", "MERCHANT_STRIPE_TEST_WEBHOOK_SECRET"],
   paypal: [
     "MERCHANT_PAYPAL_SANDBOX_CLIENT_ID",
@@ -17,6 +26,37 @@ const required = {
 } as const;
 export const missingMerchantConfiguration = (provider: MerchantProvider) =>
   required[provider].filter((name) => !process.env[name]);
+
+export function flutterwavePilotMatches(
+  tenantId: string,
+  projectId: string,
+  expectedAccountId?: string,
+) {
+  return Boolean(
+    tenantId &&
+      projectId &&
+      tenantId === process.env.MERCHANT_FLUTTERWAVE_TEST_TENANT_ID &&
+      projectId === process.env.MERCHANT_FLUTTERWAVE_TEST_PROJECT_ID &&
+      (expectedAccountId === undefined ||
+        expectedAccountId === process.env.MERCHANT_FLUTTERWAVE_TEST_ACCOUNT_ID),
+  );
+}
+export function flutterwaveMerchantBinding(
+  tenantId: string,
+  projectId: string,
+  expectedAccountId?: string,
+) {
+  if (!flutterwavePilotMatches(tenantId, projectId, expectedAccountId))
+    throw Error("MERCHANT_FLUTTERWAVE_PILOT_UNAVAILABLE");
+  const providerAccountId = process.env.MERCHANT_FLUTTERWAVE_TEST_ACCOUNT_ID ?? "";
+  const secretKey = process.env.MERCHANT_FLUTTERWAVE_TEST_SECRET_KEY ?? "";
+  const webhookSecret = process.env.MERCHANT_FLUTTERWAVE_TEST_WEBHOOK_SECRET ?? "";
+  if (!/^FLWSECK_TEST-[A-Za-z0-9_-]+-X$/.test(secretKey) || secretKey.includes("SANDBOXDEMOKEY"))
+    throw Error("MERCHANT_TEST_KEY_REQUIRED");
+  if (!/^[1-9]\d{0,15}$/.test(providerAccountId) || !webhookSecret.trim())
+    throw Error("MERCHANT_CONFIGURATION_REQUIRED");
+  return { providerAccountId, secretKey, webhookSecret };
+}
 export const wire = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -27,16 +67,18 @@ const text = (value: unknown): string => (typeof value === "string" ? value : ""
 const accountId = (value: unknown) => /^acct_[A-Za-z0-9]+$/.test(text(value));
 export function safeMerchantUrl(value: unknown, provider: MerchantProvider): string {
   const url = new URL(text(value));
-  const hosts =
-    provider === "stripe"
-      ? ["accounts.stripe.com", "connect.stripe.com", "checkout.stripe.com"]
-      : ["www.sandbox.paypal.com", "sandbox.paypal.com"];
+  const hosts = {
+    stripe: ["accounts.stripe.com", "connect.stripe.com", "checkout.stripe.com"],
+    paypal: ["www.sandbox.paypal.com", "sandbox.paypal.com"],
+    flutterwave: ["checkout.flutterwave.com"],
+  }[provider];
   if (
     url.protocol !== "https:" ||
     !hosts.includes(url.hostname) ||
     url.port ||
     url.username ||
-    url.password
+    url.password ||
+    (provider === "flutterwave" && !/^\/v3\/hosted\/pay\/[A-Za-z0-9_-]+$/.test(url.pathname))
   )
     throw Error("MERCHANT_PROVIDER_URL_INVALID");
   return url.href;
@@ -100,6 +142,7 @@ export function merchantClient(provider: MerchantProvider, fetcher: typeof fetch
     account?: string,
     idempotency?: string,
   ) {
+    if (provider !== "stripe") throw Error("MERCHANT_PROVIDER_PATH_INVALID");
     if (
       !/^\/v[12]\//.test(path) ||
       path.includes("..") ||
@@ -135,6 +178,7 @@ export function merchantClient(provider: MerchantProvider, fetcher: typeof fetch
     seller?: string,
     idempotency?: string,
   ) {
+    if (provider !== "paypal") throw Error("MERCHANT_PROVIDER_PATH_INVALID");
     if (
       !path.startsWith("/v") ||
       path.includes("..") ||
@@ -198,6 +242,172 @@ export function stripeCapability(value: unknown, expectedAccount: string) {
     throw Error("MERCHANT_ACCOUNT_CURRENCY_UNSUPPORTED");
   return { sellerCountry, currency };
 }
+
+type FlutterwaveAttempt = Pick<
+  MerchantCheckoutAttempt,
+  | "tenantId"
+  | "providerAccountRef"
+  | "merchantAccountRef"
+  | "orderId"
+  | "attemptId"
+  | "quoteHash"
+  | "currency"
+  | "totalMinor"
+>;
+
+export function flutterwaveReference(attempt: FlutterwaveAttempt) {
+  const digest = sha256Bytes(
+    new TextEncoder().encode(
+      JSON.stringify([
+        "flutterwave:test",
+        attempt.tenantId,
+        attempt.merchantAccountRef,
+        attempt.providerAccountRef,
+        attempt.orderId,
+        attempt.attemptId,
+        attempt.quoteHash,
+        attempt.currency,
+        attempt.totalMinor,
+      ]),
+    ),
+  );
+  return `pikar-flw-${digest}`;
+}
+
+export function flutterwaveWholeShillings(totalMinor: number) {
+  // The v3 Standard endpoint specifies an integer major-unit amount (int32).
+  const shillings = totalMinor / 100;
+  if (!Number.isSafeInteger(shillings) || shillings < 1 || shillings > 2147483647)
+    throw Error("MERCHANT_FLUTTERWAVE_AMOUNT_UNSUPPORTED");
+  return shillings;
+}
+
+export function validFlutterwaveBuyerEmail(email: unknown): email is string {
+  return (
+    typeof email === "string" && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  );
+}
+
+export function flutterwaveClient(
+  tenantId: string,
+  projectId: string,
+  expectedAccountId?: string,
+  fetcher = fetch,
+) {
+  const binding = flutterwaveMerchantBinding(tenantId, projectId, expectedAccountId);
+  const request = (path: string, body?: Record<string, unknown>) =>
+    jsonRequest(
+      `https://api.flutterwave.com/v3/${path}`,
+      {
+        method: body ? "POST" : "GET",
+        headers: {
+          Authorization: `Bearer ${binding.secretKey}`,
+          "Content-Type": "application/json",
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      },
+      fetcher,
+    );
+  return {
+    async testWallet() {
+      const response = await request("balances/TZS");
+      if (response.status !== "success" || wire(response.data).currency !== "TZS")
+        throw Error("MERCHANT_ACCOUNT_NOT_READY");
+      // A wallet read confirms a functioning test key. The authenticated transaction
+      // read must independently match the configured merchant ID before giving value.
+      return { providerAccountId: binding.providerAccountId, sellerCountry: "TZ", currency: "TZS" };
+    },
+    async createCheckout(attempt: FlutterwaveAttempt, email: string, returnUrl: string) {
+      if (
+        attempt.providerAccountRef !== binding.providerAccountId ||
+        attempt.tenantId !== tenantId ||
+        attempt.currency !== "TZS"
+      )
+        throw Error("MERCHANT_PAYMENT_BINDING_MISMATCH");
+      if (!validFlutterwaveBuyerEmail(email)) throw Error("MERCHANT_BUYER_EMAIL_REQUIRED");
+      const response = await request("payments", {
+        tx_ref: flutterwaveReference(attempt),
+        amount: flutterwaveWholeShillings(attempt.totalMinor),
+        currency: "TZS",
+        redirect_url: returnUrl,
+        customer: { email },
+        payment_options: "card,mobilemoneytanzania",
+      });
+      if (response.status !== "success") throw Error("MERCHANT_PROVIDER_RESPONSE_INVALID");
+      return safeMerchantUrl(wire(response.data).link, "flutterwave");
+    },
+    async readPayment(reference: string, transactionId?: string) {
+      if (
+        !/^pikar-flw-[a-f0-9]{64}$/.test(reference) ||
+        (transactionId !== undefined && !/^[1-9]\d{0,15}$/.test(transactionId))
+      )
+        throw Error("MERCHANT_PAYMENT_BINDING_MISMATCH");
+      const response = await request(
+        transactionId
+          ? `transactions/${transactionId}/verify`
+          : `transactions/verify_by_reference?tx_ref=${encodeURIComponent(reference)}`,
+      );
+      if (response.status !== "success") throw Error("MERCHANT_PROVIDER_RESPONSE_INVALID");
+      return wire(response.data);
+    },
+  };
+}
+
+export function flutterwavePaymentReceipt(
+  transaction: Record<string, unknown>,
+  attempt: FlutterwaveAttempt,
+  eventRef: string,
+  expectedTransactionId?: string,
+): NormalizedMerchantPaymentReceipt {
+  const id =
+    typeof transaction.id === "number" && Number.isSafeInteger(transaction.id)
+      ? String(transaction.id)
+      : text(transaction.id);
+  const seller =
+    typeof transaction.account_id === "number" && Number.isSafeInteger(transaction.account_id)
+      ? String(transaction.account_id)
+      : text(transaction.account_id);
+  const expectedAmount = flutterwaveWholeShillings(attempt.totalMinor);
+  // Verification returns a number or a decimal string. Never round or coerce a
+  // smaller payment up to the order total.
+  const matchesAmount = (amount: unknown) =>
+    amount === expectedAmount ||
+    (typeof amount === "string" &&
+      /^\d+(\.0+)?$/.test(amount) &&
+      Number(amount) === expectedAmount);
+  if (
+    !/^[1-9]\d{0,15}$/.test(id) ||
+    (expectedTransactionId !== undefined && expectedTransactionId !== id) ||
+    seller !== attempt.providerAccountRef ||
+    transaction.tx_ref !== flutterwaveReference(attempt) ||
+    attempt.currency !== "TZS" ||
+    transaction.currency !== attempt.currency ||
+    !matchesAmount(transaction.amount) ||
+    (transaction.status === "successful" &&
+      transaction.charged_amount !== undefined &&
+      !matchesAmount(transaction.charged_amount))
+  )
+    throw Error("MERCHANT_PAYMENT_BINDING_MISMATCH");
+  // An unsuccessful charge under a hosted link can still be retried by the buyer.
+  // Only a successful, independently verified charge is terminal for this order.
+  const paid = transaction.status === "successful";
+  return {
+    tenantId: attempt.tenantId,
+    merchantAccountRef: attempt.merchantAccountRef,
+    providerAccountRef: attempt.providerAccountRef,
+    orderId: attempt.orderId,
+    attemptId: attempt.attemptId,
+    quoteHash: attempt.quoteHash,
+    currency: attempt.currency,
+    provider: "flutterwave",
+    environment: "test",
+    amountMinor: attempt.totalMinor,
+    eventRef: `${eventRef}:${id}:${paid ? "succeeded" : "pending"}`,
+    outcome: paid ? "succeeded" : "pending",
+    ...(paid ? { paymentRef: id } : {}),
+    verification: { method: "provider_read", evidenceRef: `flutterwave-transaction:${id}` },
+  };
+}
 export function paypalCapability(value: unknown, trackingId: string) {
   const account = wire(value);
   const grants = rows(account.oauth_integrations)
@@ -239,13 +449,19 @@ export function makeMerchantCapability(input: {
     environment: "test",
     merchantAccountRef: input.accountId,
     providerAccountRef: input.providerAccountId,
-    flow: input.provider === "stripe" ? "stripe_connect_direct" : "paypal_merchant_checkout",
+    flow: (
+      {
+        stripe: "stripe_connect_direct",
+        paypal: "paypal_merchant_checkout",
+        flutterwave: "flutterwave_standard",
+      } as const
+    )[input.provider],
     status: "verified",
     sellerCountry: input.sellerCountry,
     buyerCountries: input.buyerCountries,
     presentmentCurrencies: [input.currency],
     settlementCurrencies: [input.currency],
-    operations: ["checkout", "refund"],
+    operations: input.provider === "flutterwave" ? ["checkout"] : ["checkout", "refund"],
     evidenceRef: `provider-read:${input.provider}:${input.accountId}:${input.now}`,
     verifiedAt: input.now,
     expiresAt: input.now + 15 * 60_000,

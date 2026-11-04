@@ -1,3 +1,4 @@
+import { timingSafeEqualHex } from "@pikar/billing/signature";
 import type { MerchantProvider } from "@pikar/contracts/tenantCommerce";
 import type { WebCatalogueItem, WebDocument, WebNode } from "@pikar/contracts/webRuntime";
 import {
@@ -21,7 +22,12 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { verifyStripeSignature } from "./billingWebhook";
-import { merchantClient, missingMerchantConfiguration, wire } from "./lib/merchantProviderClient";
+import {
+  flutterwaveMerchantBinding,
+  merchantClient,
+  missingMerchantConfiguration,
+  wire,
+} from "./lib/merchantProviderClient";
 import { internalMutation } from "./lib/tenantLifecycle";
 import { merchantReadiness } from "./merchantCommerce";
 import { reconcileMerchantPayment, startMerchantCheckout } from "./merchantProvider";
@@ -126,7 +132,8 @@ async function shopContext(ctx: Db, host: string, slug: string) {
   }
   const providers = readiness.providers
     .filter((provider) => provider.blockers.length === 0)
-    .map((provider) => provider.provider);
+    .map((provider) => provider.provider)
+    .filter((provider) => provider === "stripe" || provider === "paypal");
   const accounts = await ctx.db
     .query("tenantMerchantAccounts")
     .withIndex("by_tenant", (q) => q.eq("tenantId", project.tenantId))
@@ -538,6 +545,8 @@ export function registerMerchantRoutes(router: HttpRouter) {
       const url = new URL(req.url),
         parts = url.pathname.split("/").filter(Boolean);
       try {
+        if (url.pathname === "/merchant/flutterwave/webhook")
+          return await flutterwaveWebhook(ctx, req);
         if (
           parts.length === 3 &&
           parts[2] === "webhook" &&
@@ -623,7 +632,67 @@ export function registerMerchantRoutes(router: HttpRouter) {
     }),
   });
 }
-async function webhook(ctx: ActionCtx, req: Request, provider: MerchantProvider) {
+/** An authenticated v3 notification triggers a read with the bound seller's test key.
+ * Amount, currency, customer details and payment state always come from that provider read. */
+async function flutterwaveWebhook(ctx: ActionCtx, req: Request) {
+  const expectedHash = process.env.MERCHANT_FLUTTERWAVE_TEST_WEBHOOK_SECRET;
+  if (!expectedHash || missingMerchantConfiguration("flutterwave").length)
+    return response("unavailable", 503);
+  const presented = req.headers.get("verif-hash");
+  if (!presented || !timingSafeEqualHex(digest(expectedHash), digest(presented)))
+    return response("invalid signature", 401);
+  let event: Record<string, unknown>;
+  try {
+    event = wire(JSON.parse(await boundedMerchantBody(req, 65536)));
+  } catch {
+    return response("invalid event", 400);
+  }
+  if (event.event !== "charge.completed") return response("ignored", 200);
+  const data = wire(event.data);
+  // IDs in v3 webhooks are positive integers; never coerce nested objects, floats or unsafe numbers.
+  const accountId = flutterwaveNumericId(data.account_id);
+  const transactionId = flutterwaveNumericId(data.id);
+  if (!transactionId || !accountId || typeof data.tx_ref !== "string")
+    return response("invalid event", 400);
+  if (
+    !/^pikar-flw-[a-f0-9]{64}$/.test(data.tx_ref) ||
+    accountId !== process.env.MERCHANT_FLUTTERWAVE_TEST_ACCOUNT_ID
+  )
+    return response("ignored", 200);
+  const payment = (await ctx.runQuery(
+    makeFunctionReference<"query">("merchantCommerce:providerPayment"),
+    {
+      provider: "flutterwave",
+      providerOrderId: data.tx_ref,
+      providerAccountId: accountId,
+    },
+  )) as Doc<"tenantMerchantPayments"> | null;
+  // The transaction reference is claimed before creating the hosted link.
+  if (!payment) return response("ignored", 200);
+  try {
+    flutterwaveMerchantBinding(payment.tenantId, payment.projectId, accountId);
+    await ctx.runAction(makeFunctionReference<"action">("merchantProvider:verifiedWebhook"), {
+      tenantId: payment.tenantId,
+      paymentId: payment._id,
+      eventRef: `flutterwave:charge.completed:${transactionId}`,
+      transactionId,
+    });
+  } catch {
+    return response("verification unavailable", 503);
+  }
+  return response("accepted", 200);
+}
+
+function flutterwaveNumericId(value: unknown): string | null {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return String(value);
+  return typeof value === "string" && /^[1-9][0-9]{0,18}$/.test(value) ? value : null;
+}
+
+async function webhook(
+  ctx: ActionCtx,
+  req: Request,
+  provider: Exclude<MerchantProvider, "flutterwave">,
+) {
   if (missingMerchantConfiguration(provider).length) return response("unavailable", 503);
   const raw = await boundedMerchantBody(req, 65536);
   let event: Record<string, unknown>;

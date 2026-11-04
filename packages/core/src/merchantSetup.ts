@@ -418,7 +418,7 @@ export function assessMerchantSetup(
     const body = evidence(p.evidence, `${path}.evidence`);
     if (
       !token(body, p.priceMinor) &&
-      !(["USD", "EUR", "GBP"].includes(setup.currency) && token(body, p.priceMinor / 100))
+      !(["USD", "EUR", "GBP", "TZS"].includes(setup.currency) && token(body, p.priceMinor / 100))
     )
       issue(
         `${path}.priceMinor`,
